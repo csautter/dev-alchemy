@@ -6,3 +6,5 @@
       tags: spotify
     - role: jetbrains
       tags: jetbrains
+    - role: kubelogin
+      tags: kubelogin
