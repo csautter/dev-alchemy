@@ -53,7 +53,7 @@ sudo apt update && sudo apt install ansible
 ### 3. Run the Playbook
 
 ```bash
-ansible-playbook setup.yml -i inventory/localhost.yml
+ansible-playbook playbooks/spotify.yml -i inventory/localhost.yml
 ```
 
 You can customize the inventory or pass variables via CLI.
@@ -70,7 +70,8 @@ devalchemy/
 │   └── languages/
 ├── inventory/
 │   └── localhost.yml
-├── setup.yml
+├── playbooks/
+│   └── setup.yml
 └── README.md
 ```
 
@@ -83,13 +84,13 @@ devalchemy/
 * Use tags to run specific parts:
 
   ```bash
-  ansible-playbook setup.yml --tags "dotfiles,python"
+  ansible-playbook playbooks/setup.yml --tags "dotfiles,python"
   ```
 
 * Pass variables:
 
   ```bash
-  ansible-playbook setup.yml -e "install_docker=true"
+  ansible-playbook playbooks/setup.yml -e "install_docker=true"
   ```
 
 ---

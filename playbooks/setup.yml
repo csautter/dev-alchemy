@@ -1,0 +1,8 @@
+- hosts: localhost
+  connection: local
+  gather_facts: yes
+  roles:
+    - role: spotify
+      tags: spotify
+    - role: jetbrains
+      tags: jetbrains
