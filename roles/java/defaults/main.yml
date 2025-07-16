@@ -1,0 +1,10 @@
+# Versions to install
+jdk_versions:
+  - 8
+  - 11
+  - 17
+  - 21
+  - 23
+
+# Used in fallback downloads for Windows or binary-based installs
+temurin_base_url: "https://github.com/adoptium/temurin{{ item }}-binaries/releases/latest/download"

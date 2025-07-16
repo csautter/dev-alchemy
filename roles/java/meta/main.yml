@@ -1,0 +1,13 @@
+galaxy_info:
+  role_name: openjdk_multi_install
+  author: Carl-Christian Sautter
+  description: Install multiple OpenJDK versions (8, 11, 17, 21, 23) on all platforms
+  license: MIT
+  min_ansible_version: 2.10
+  platforms:
+    - name: MacOSX
+    - name: Debian
+    - name: Ubuntu
+    - name: RedHat
+    - name: Fedora
+    - name: Windows
