@@ -10,3 +10,5 @@
       tags: kubelogin
     - role: kubectl
       tags: kubectl
+    - role: k9s
+      tags: k9s
