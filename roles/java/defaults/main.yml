@@ -4,7 +4,8 @@ jdk_versions:
   - 11
   - 17
   - 21
-  - 23
+  - 24
 
+jdk_default_version: 11
 # Used in fallback downloads for Windows or binary-based installs
 temurin_base_url: "https://github.com/adoptium/temurin{{ item }}-binaries/releases/latest/download"

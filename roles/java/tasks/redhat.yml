@@ -1,0 +1,21 @@
+- name: Install OpenJDK on RedHat/Fedora
+  package:
+    name: "java-{{ item }}-openjdk-devel"
+    state: present
+  loop: "{{ jdk_versions }}"
+
+- name: Register Java alternatives
+  alternatives:
+    name: java
+    link: /usr/bin/java
+    path: "/usr/lib/jvm/java-{{ item }}-openjdk/bin/java"
+    priority: "{{ item }}"
+  loop: "{{ jdk_versions }}"
+
+- name: Register Javac alternatives
+  alternatives:
+    name: javac
+    link: /usr/bin/javac
+    path: "/usr/lib/jvm/java-{{ item }}-openjdk/bin/javac"
+    priority: "{{ item }}"
+  loop: "{{ jdk_versions }}"

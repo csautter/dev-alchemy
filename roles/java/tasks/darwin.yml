@@ -1,0 +1,31 @@
+- name: Install Homebrew Temurin casks
+  community.general.homebrew_cask:
+    name: "{{ 'temurin' if item == 24 else 'temurin@' ~ item }}"
+    state: present
+  loop: "{{ jdk_versions }}"
+
+- name: Install jenv with Homebrew
+  community.general.homebrew:
+    name: jenv
+    state: present
+
+- name: Add jenv init to shell config
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    line: 'eval "$(jenv init -)"'
+    insertafter: EOF
+    create: yes
+
+- name: Add Java versions to jenv
+  shell: |
+    export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+    jenv add "$JAVA_HOME"
+  environment:
+    JAVA_HOME: "{{ lookup('pipe', '/usr/libexec/java_home -v ' ~ item) }}"
+  loop: "{{ jdk_versions }}"
+
+- name: Set global Java version via jenv
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    line: "jenv global {{ jdk_default_version }}"
+    insertafter: EOF

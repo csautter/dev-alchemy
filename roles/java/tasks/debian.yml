@@ -1,0 +1,22 @@
+- name: Install OpenJDK on Debian/Ubuntu
+  apt:
+    name: "openjdk-{{ item }}-jdk"
+    state: present
+    update_cache: yes
+  loop: "{{ jdk_versions }}"
+
+- name: Register Java alternatives
+  alternatives:
+    name: java
+    link: /usr/bin/java
+    path: "/usr/lib/jvm/java-{{ item }}-openjdk-{{ ansible_architecture }}/bin/java"
+    priority: "{{ item }}"
+  loop: "{{ jdk_versions }}"
+
+- name: Register Javac alternatives
+  alternatives:
+    name: javac
+    link: /usr/bin/javac
+    path: "/usr/lib/jvm/java-{{ item }}-openjdk-{{ ansible_architecture }}/bin/javac"
+    priority: "{{ item }}"
+  loop: "{{ jdk_versions }}"

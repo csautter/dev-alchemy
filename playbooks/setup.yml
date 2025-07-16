@@ -12,3 +12,5 @@
       tags: kubectl
     - role: k9s
       tags: k9s
+    - role: java
+      tags: java

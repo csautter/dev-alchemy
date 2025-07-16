@@ -1,0 +1,48 @@
+- name: Check if Chocolatey is available
+  win_command: choco --version
+  register: choco_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Install OpenJDK via Chocolatey
+  win_chocolatey:
+    name: openjdk
+    version: "{{ item }}"
+    state: present
+  loop: "{{ jdk_versions }}"
+  when: choco_check.rc == 0
+
+- name: Create fallback install folder
+  win_file:
+    path: "C:\\Program Files\\Java\\jdk-{{ item }}"
+    state: directory
+  loop: "{{ jdk_versions }}"
+  when: choco_check.rc != 0
+
+- name: Download Temurin JDK zip
+  win_get_url:
+    url: "{{ temurin_base_url | replace('item', item | string) }}/OpenJDK{{ item }}U-jdk_x64_windows_hotspot_latest.zip"
+    dest: "C:\\Program Files\\Java\\jdk-{{ item }}.zip"
+  loop: "{{ jdk_versions }}"
+  when: choco_check.rc != 0
+
+- name: Extract Temurin JDK
+  win_unzip:
+    src: "C:\\Program Files\\Java\\jdk-{{ item }}.zip"
+    dest: "C:\\Program Files\\Java\\jdk-{{ item }}"
+    remote_src: yes
+  loop: "{{ jdk_versions }}"
+  when: choco_check.rc != 0
+
+- name: Create Java switcher scripts
+  win_template:
+    src: switch_java.ps1.j2
+    dest: "C:\\Program Files\\Java\\switch-java-{{ item }}.ps1"
+  loop: "{{ jdk_versions }}"
+
+- name: Add fallback JDK to PATH
+  win_path:
+    elements:
+      - "C:\\Program Files\\Java\\jdk-{{ item }}\\bin"
+  loop: "{{ jdk_versions }}"
+  when: choco_check.rc != 0
