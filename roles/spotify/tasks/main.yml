@@ -16,7 +16,7 @@
 
 - name: Add Spotify APT repository (Linux)
   apt_repository:
-    repo: "deb http://repository.spotify.com stable non-free"
+    repo: "deb https://repository.spotify.com stable non-free"
     state: present
     filename: spotify
   when: ansible_facts['os_family'] == 'Debian'
