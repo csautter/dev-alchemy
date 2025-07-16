@@ -8,3 +8,5 @@
       tags: jetbrains
     - role: kubelogin
       tags: kubelogin
+    - role: kubectl
+      tags: kubectl

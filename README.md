@@ -51,9 +51,12 @@ sudo apt update && sudo apt install ansible
 ---
 
 ### 3. Run the Playbook
-
+Dry run to check for issues:
 ```bash
-ansible-playbook playbooks/spotify.yml -i inventory/localhost.yml
+ansible-playbook playbooks/setup.yml -i inventory/localhost.yml --check
+```
+```bash
+ansible-playbook playbooks/setup.yml -i inventory/localhost.yml
 ```
 
 You can customize the inventory or pass variables via CLI.
