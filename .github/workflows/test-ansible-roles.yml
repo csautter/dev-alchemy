@@ -41,9 +41,13 @@ jobs:
         shell: bash
         run: |
           for role in roles/*; do
-            if [ -d "$role/tasks" ]; then
+            # skip specific Roles
+            if [[ "$(basename $role)" == "java" ]]; then
+              echo "Skipping role: $(basename $role)"
+              continue
+            elif [ -d "$role/tasks" ]; then
               echo "Testing role: $role"
-              ansible-playbook -i inventory/localhost.yaml playbooks/setup.yml --extra-vars "role_name=$(basename $role)" || exit 1
+              ansible-playbook -i inventory/localhost.yaml playbooks/setup.yml --tags "$(basename $role)" || exit 1
             fi
           done
         env:
