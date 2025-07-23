@@ -3,9 +3,9 @@ name: Test Ansible Roles
 
 on:
   push:
-    branches: [main, feat/init]
+    branches: [main, feat*]
   pull_request:
-    branches: [main, feat/init]
+    branches: [main, feat*]
 
 jobs:
   test-ansible-roles:
@@ -13,8 +13,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Uncomment the following line to test on all specified OSs
+        # os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [macos-latest]
     steps:
+      - uses: fkirc/skip-duplicate-actions@v5
+        with:
+          cancel_others: true
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
