@@ -1,0 +1,17 @@
+- name: Fail if architecture is unsupported
+  assert:
+    that:
+      - kind_binary_arch in ['amd64', 'arm64']
+    fail_msg: "Unsupported architecture '{{ ansible_architecture }}'"
+
+- name: Install kind on Linux
+  include_tasks: install_linux.yml
+  when: ansible_os_family == "Debian" or ansible_os_family == "RedHat"
+
+- name: Install kind on macOS
+  include_tasks: install_macos.yml
+  when: ansible_system == "Darwin"
+
+- name: Install kind on Windows
+  include_tasks: install_windows.yml
+  when: ansible_os_family == "Windows"

@@ -1,0 +1,13 @@
+- name: Download kind binary
+  get_url:
+    url: "{{ kind_download_url }}"
+    dest: "/tmp/kind"
+    mode: '0755'
+
+- name: Move kind binary to install path
+  become: yes
+  copy:
+    src: "/tmp/kind"
+    dest: "{{ kind_install_path }}"
+    mode: '0755'
+    remote_src: yes

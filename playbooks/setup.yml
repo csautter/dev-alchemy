@@ -14,3 +14,5 @@
       tags: k9s
     - role: java
       tags: java
+    - role: kind
+      tags: kind

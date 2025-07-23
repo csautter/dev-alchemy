@@ -1,0 +1,14 @@
+kind_version: "0.29.0"
+kind_architecture_map:
+  x86_64: amd64
+  aarch64: arm64
+
+kind_os_map:
+  Darwin: darwin
+  Linux: linux
+
+kind_binary_arch: "{{ kind_architecture_map[ansible_architecture] | default('amd64') }}"
+kind_binary_os: "{{ kind_os_map[ansible_system] | default(ansible_system | lower) }}"
+
+kind_download_url: "https://kind.sigs.k8s.io/dl/{{ kind_version }}/kind-{{ kind_binary_os }}-{{ kind_binary_arch }}"
+kind_install_path: "/usr/local/bin/kind"

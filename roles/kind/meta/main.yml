@@ -1,0 +1,11 @@
+galaxy_info:
+  role_name: kind
+  author: Carl-Christian Sautter
+  description: Multiplatform Ansible role to install kind
+  platforms:
+    - name: Debian
+    - name: RedHat
+    - name: MacOSX
+    - name: Windows
+  license: MIT
+dependencies: []
