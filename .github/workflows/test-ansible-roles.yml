@@ -1,0 +1,44 @@
+# GitHub Actions workflow to test all Ansible roles on Windows, macOS, and Ubuntu
+name: Test Ansible Roles
+
+on:
+  push:
+    branches: [main, feat/init]
+  pull_request:
+    branches: [main, feat/init]
+
+jobs:
+  test-ansible-roles:
+    name: Test Ansible Roles on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible
+
+      - name: Display Ansible version
+        run: ansible --version
+
+      - name: Run all Ansible roles
+        shell: bash
+        run: |
+          for role in roles/*; do
+            if [ -d "$role/tasks" ]; then
+              echo "Testing role: $role"
+              ansible-playbook -i inventory/localhost.yaml playbooks/setup.yml --extra-vars "role_name=$(basename $role)" || exit 1
+            fi
+          done
+        env:
+          ANSIBLE_FORCE_COLOR: "true"

@@ -20,7 +20,7 @@
 
 ### 1. Clone the repo
 
-```bash
+````bash
 git clone https://github.com/csautter/dev-alchemy.git
 cd dev-alchemy
 
@@ -32,7 +32,7 @@ cd dev-alchemy
 
 ```bash
 brew install ansible
-```
+````
 
 #### Ubuntu / Debian:
 
@@ -51,10 +51,13 @@ sudo apt update && sudo apt install ansible
 ---
 
 ### 3. Run the Playbook
+
 Dry run to check for issues:
+
 ```bash
 ansible-playbook playbooks/setup.yml -i inventory/localhost.yml --check
 ```
+
 ```bash
 ansible-playbook playbooks/setup.yml -i inventory/localhost.yml
 ```
@@ -68,9 +71,9 @@ You can customize the inventory or pass variables via CLI.
 ```
 devalchemy/
 ├── roles/
-│   ├── common/
-│   ├── devtools/
-│   └── languages/
+│   ├── role/
+│   ├── role2/
+│   └── role3/
 ├── inventory/
 │   └── localhost.yml
 ├── playbooks/
@@ -82,15 +85,15 @@ devalchemy/
 
 ## 🛠️ Customization
 
-* Add or tweak roles in `roles/`
+- Add or tweak roles in `roles/`
 
-* Use tags to run specific parts:
+- Use tags to run specific parts:
 
   ```bash
   ansible-playbook playbooks/setup.yml --tags "dotfiles,python"
   ```
 
-* Pass variables:
+- Pass variables:
 
   ```bash
   ansible-playbook playbooks/setup.yml -e "install_docker=true"
@@ -102,9 +105,13 @@ devalchemy/
 
 Out-of-the-box roles can install (depending on platform):
 
-* Git, Docker, Python, Node.js, Go
-* Zsh / Oh My Zsh, VS Code, tmux, fzf
-* CLI utilities: `htop`, `jq`, `ripgrep`, etc.
+- java
+- jetbrains
+- k9s
+- kind
+- kubectl
+- kubelogin
+- spotify
 
 > Full list in `roles/` and tagged tasks
 
@@ -112,11 +119,11 @@ Out-of-the-box roles can install (depending on platform):
 
 ## 🌍 Cross-Platform Notes
 
-| Platform | Status      | Notes                             |
-| -------- | ----------- | --------------------------------- |
+| Platform | Status       | Notes                             |
+| -------- | ------------ | --------------------------------- |
 | macOS    | ✅ Supported | via Homebrew                      |
 | Linux    | ✅ Supported | tested on Ubuntu, Debian, Arch    |
-| Windows  | ⚠️ WSL only | tested on WSL2 with Ubuntu/Debian |
+| Windows  | ⚠️ WSL only  | tested on WSL2 with Ubuntu/Debian |
 
 ---
 
@@ -124,9 +131,9 @@ Out-of-the-box roles can install (depending on platform):
 
 Contributions welcome! Feel free to:
 
-* Add new roles (e.g., Rust, Java, etc.)
-* Improve cross-platform support
-* Fix bugs or enhance docs
+- Add new roles (e.g., Rust, Java, etc.)
+- Improve cross-platform support
+- Fix bugs or enhance docs
 
 ---
 
@@ -144,9 +151,9 @@ This project was born from a need to simplify dev environment onboarding across 
 
 ## 🔗 Related Projects
 
-* [geerlingguy/mac-dev-playbook](https://github.com/geerlingguy/mac-dev-playbook)
-* [ansible/ansible-examples](https://github.com/ansible/ansible-examples)
+- [geerlingguy/mac-dev-playbook](https://github.com/geerlingguy/mac-dev-playbook)
+- [ansible/ansible-examples](https://github.com/ansible/ansible-examples)
 
 ---
 
-🧪 *Happy hacking with `devalchemy`!*
+🧪 _Happy hacking with `devalchemy`!_
