@@ -1,0 +1,34 @@
+---
+# roles/spotify/tasks/main.yml
+
+- name: Install Spotify on macOS
+  homebrew:
+    name: spotify
+    state: present
+    install_options: cask
+  when: ansible_facts['os_family'] == 'Darwin'
+
+- name: Add Spotify APT key (Linux)
+  apt_key:
+    url: https://download.spotify.com/debian/pubkey_0D811D58.gpg
+    state: present
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Add Spotify APT repository (Linux)
+  apt_repository:
+    repo: "deb https://repository.spotify.com stable non-free"
+    state: present
+    filename: spotify
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install Spotify (Linux)
+  apt:
+    name: spotify-client
+    state: present
+    update_cache: yes
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Log warning for unsupported platforms
+  debug:
+    msg: "Spotify installation is not supported on this OS."
+  when: ansible_facts['os_family'] not in ['Debian', 'Darwin']

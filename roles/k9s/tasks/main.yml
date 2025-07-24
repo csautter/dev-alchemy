@@ -1,0 +1,107 @@
+- name: Install k9s on macOS using Homebrew
+  community.general.homebrew:
+    name: k9s
+    state: present
+  when: ansible_facts['os_family'] == "Darwin"
+
+- name: Try install k9s from package manager on Debian/Ubuntu
+  apt:
+    name: k9s
+    state: present
+    update_cache: yes
+  register: k9s_apt
+  failed_when: false
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Try install k9s from package manager on RedHat/Fedora
+  package:
+    name: k9s
+    state: present
+  register: k9s_rpm
+  failed_when: false
+  when: ansible_facts['os_family'] in ["RedHat", "Rocky", "AlmaLinux", "Fedora"]
+
+- name: Fallback install on Linux if package manager failed
+  block:
+    - name: Set k9s arch
+      set_fact:
+        k9s_arch: >-
+          {% if ansible_facts['architecture'] == 'x86_64' %}
+            x86_64
+          {% elif ansible_facts['architecture'] == 'arm64' %}
+            arm64
+          {% else %}
+            x86_64
+          {% endif %}
+
+    - name: Set OS suffix for download
+      set_fact:
+        k9s_os: >-
+          {% if ansible_facts['os_family'] == 'Debian' or ansible_facts['os_family'] in ['RedHat', 'Rocky', 'AlmaLinux', 'Fedora'] %}
+            Linux
+          {% else %}
+            Darwin
+          {% endif %}
+
+    - name: Download and extract k9s binary
+      ansible.builtin.unarchive:
+        src: "https://github.com/derailed/k9s/releases/download/v{{ k9s_version }}/k9s_{{ k9s_os }}_{{ k9s_arch }}.tar.gz"
+        dest: /usr/local/bin
+        remote_src: yes
+        mode: '0755'
+      when:
+        - ansible_facts['os_family'] != "Darwin"
+        - (ansible_facts['os_family'] == "Debian" and k9s_apt is failed) or
+          (ansible_facts['os_family'] in ["RedHat", "Rocky", "AlmaLinux", "Fedora"] and k9s_rpm is failed)
+
+# WINDOWS SECTION
+
+- name: Check if Chocolatey is available
+  win_command: choco --version
+  register: choco_check
+  ignore_errors: true
+  changed_when: false
+  when: ansible_facts['os_family'] == "Windows"
+
+- name: Install k9s using Chocolatey
+  win_chocolatey:
+    name: k9s
+    state: present
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc == 0
+
+- name: Set k9s arch for Windows fallback
+  set_fact:
+    k9s_arch: >-
+      {% if ansible_facts['architecture'] == 'x86_64' %}
+        x86_64
+      {% elif ansible_facts['architecture'] == 'arm64' %}
+        arm64
+      {% else %}
+        x86_64
+      {% endif %}
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc != 0
+
+- name: Create fallback install folder
+  win_file:
+    path: 'C:\Program Files\k9s'
+    state: directory
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc != 0
+
+- name: Download k9s binary (Windows fallback)
+  win_get_url:
+    url: "https://github.com/derailed/k9s/releases/download/v{{ k9s_version }}/k9s_Windows_{{ k9s_arch }}.tar.gz"
+    dest: "C:\\Program Files\\k9s\\k9s.tar.gz"
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc != 0
+
+- name: Extract k9s binary (Windows fallback)
+  win_unzip:
+    src: "C:\\Program Files\\k9s\\k9s.tar.gz"
+    dest: "C:\\Program Files\\k9s"
+    remote_src: yes
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc != 0
+
+- name: Add fallback k9s path to PATH
+  win_path:
+    elements:
+      - "C:\\Program Files\\k9s"
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc != 0

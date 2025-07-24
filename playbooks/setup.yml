@@ -1,0 +1,18 @@
+- hosts: localhost
+  connection: local
+  gather_facts: yes
+  roles:
+    - role: spotify
+      tags: spotify
+    - role: jetbrains
+      tags: jetbrains
+    - role: kubelogin
+      tags: kubelogin
+    - role: kubectl
+      tags: kubectl
+    - role: k9s
+      tags: k9s
+    - role: java
+      tags: java
+    - role: kind
+      tags: kind

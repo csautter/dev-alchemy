@@ -1,0 +1,15 @@
+galaxy_info:
+  role_name: kubectl_install
+  author: Carl-Christian Sautter
+  description: Cross-platform kubectl installer for macOS, Linux, and Windows
+  license: MIT
+  platforms:
+    - name: MacOSX
+    - name: Windows
+    - name: Debian
+    - name: Ubuntu
+    - name: EL
+    - name: Fedora
+  min_ansible_version: 2.10
+
+dependencies: []

@@ -1,0 +1,64 @@
+---
+- name: Install JetBrains Toolbox on macOS
+  homebrew:
+    name: jetbrains-toolbox
+    state: present
+    install_options: cask
+  when: ansible_facts['os_family'] == 'Darwin'
+
+- name: Ensure dependencies for JetBrains Toolbox (Linux)
+  apt:
+    name: unzip
+    state: present
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Download JetBrains Toolbox archive (Linux)
+  get_url:
+    url: "https://data.services.jetbrains.com/products/releases?code=TBA&latest=true&type=release"
+    dest: /tmp/jetbrains_toolbox_release.json
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Parse release JSON and get download URL (Linux)
+  set_fact:
+    jetbrains_toolbox_url: "{{ lookup('file', '/tmp/jetbrains_toolbox_release.json') | from_json | dict2items | first.value.downloads.linux.link }}"
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Download JetBrains Toolbox archive from resolved URL (Linux)
+  get_url:
+    url: "{{ jetbrains_toolbox_url }}"
+    dest: "/tmp/jetbrains-toolbox.tar.gz"
+    mode: '0755'
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Extract JetBrains Toolbox archive (Linux)
+  unarchive:
+    src: "/tmp/jetbrains-toolbox.tar.gz"
+    dest: "/opt/"
+    remote_src: yes
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Find extracted JetBrains Toolbox directory (Linux)
+  find:
+    paths: "/opt/"
+    patterns: "jetbrains-toolbox-*"
+    file_type: directory
+    recurse: no
+  register: toolbox_dirs
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Symlink JetBrains Toolbox to /usr/local/bin (Linux)
+  file:
+    src: "{{ toolbox_dirs.files[0].path }}/jetbrains-toolbox"
+    dest: /usr/local/bin/jetbrains-toolbox
+    state: link
+    force: yes
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install JetBrains Toolbox on Windows (via Chocolatey)
+  win_chocolatey:
+    name: jetbrainstoolbox
+    state: present
+  when: ansible_facts['os_family'] == 'Windows'

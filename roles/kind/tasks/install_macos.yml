@@ -1,0 +1,26 @@
+- name: Check if Homebrew is installed
+  stat:
+    path: /opt/homebrew/bin/brew
+  register: brew_check
+
+- name: Install kind via Homebrew (if available)
+  homebrew:
+    name: kind
+    state: present
+  when: brew_check.stat.exists
+
+- name: Download kind binary manually (fallback if Homebrew is not available)
+  get_url:
+    url: "{{ kind_download_url }}"
+    dest: "/tmp/kind"
+    mode: '0755'
+  when: not brew_check.stat.exists
+
+- name: Move kind binary to install path
+  become: yes
+  copy:
+    src: "/tmp/kind"
+    dest: "{{ kind_install_path }}"
+    mode: '0755'
+    remote_src: yes
+  when: not brew_check.stat.exists
