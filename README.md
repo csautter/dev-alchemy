@@ -1,6 +1,8 @@
 # 🧪 devalchemy
 
-**devalchemy** is a cross-platform development environment automation toolkit powered by [Ansible](https://www.ansible.com/). It turns fresh machines into fully-configured dev setups — whether you're on **macOS**, **Linux**, or **Windows** (via WSL).
+**devalchemy** is a cross-platform development environment automation toolkit powered
+by [Ansible](https://www.ansible.com/). It turns fresh machines into fully-configured dev setups — whether you're on *
+*macOS**, **Linux**, or **Windows** (via WSL).
 
 > _"Transform your system into a dev powerhouse — with a touch of automation magic."_
 
@@ -119,11 +121,11 @@ Out-of-the-box roles can install (depending on platform):
 
 ## 🌍 Cross-Platform Notes
 
-| Platform | Status       | Notes                             |
-| -------- | ------------ | --------------------------------- |
+| Platform | Status      | Notes                             |
+|----------|-------------|-----------------------------------|
 | macOS    | ✅ Supported | via Homebrew                      |
 | Linux    | ✅ Supported | tested on Ubuntu, Debian, Arch    |
-| Windows  | ⚠️ WSL only  | tested on WSL2 with Ubuntu/Debian |
+| Windows  | ✅ Supported | tested on WSL2 with Ubuntu/Debian |
 
 ---
 
@@ -145,7 +147,8 @@ MIT License — see [LICENSE](LICENSE) file.
 
 ## 💡 Inspiration
 
-This project was born from a need to simplify dev environment onboarding across multiple systems, without resorting to OS-specific scripts. With Ansible and a touch of Dev Alchemy, setup becomes reproducible and delightful.
+This project was born from a need to simplify dev environment onboarding across multiple systems, without resorting to
+OS-specific scripts. With Ansible and a touch of Dev Alchemy, setup becomes reproducible and delightful.
 
 ---
 

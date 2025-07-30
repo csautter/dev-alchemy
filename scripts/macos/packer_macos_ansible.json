@@ -1,0 +1,31 @@
+{
+  "builders": [
+    {
+      "type": "qemu",
+      "name": "macos-qemu",
+      "iso_url": "macos.iso",                // your local macOS ISO
+      "iso_checksum": "none",
+      "output_directory": "output-macos-qemu",
+      "disk_size": 64000,
+      "format": "qcow2",
+      "headless": false,
+      "accelerator": "hvf",                  // use Apple's native virtualization
+      "ssh_username": "admin",               // depends on what user you create
+      "ssh_password": "password123",         // you must enable remote login
+      "ssh_wait_timeout": "60m",
+      "qemuargs": [
+        ["-cpu", "host"],
+        ["-smp", "4"],
+        ["-m", "4096"],
+        ["-machine", "q35"]
+      ]
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "ansible",
+      "playbook_file": "playbooks/setup.yml",
+      "extra_arguments": ["--connection=ssh", "--ssh-extra-args='-o StrictHostKeyChecking=no'", "-i inventory/localhost.yml","--check"]
+    }
+  ]
+}
