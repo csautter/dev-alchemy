@@ -3,15 +3,15 @@
     {
       "type": "qemu",
       "name": "macos-qemu",
-      "iso_url": "macos.iso",                // your local macOS ISO
+      "iso_url": "./vendor/macos/macos_installer_Sequoia.iso",
       "iso_checksum": "none",
       "output_directory": "output-macos-qemu",
       "disk_size": 64000,
       "format": "qcow2",
       "headless": false,
-      "accelerator": "hvf",                  // use Apple's native virtualization
-      "ssh_username": "admin",               // depends on what user you create
-      "ssh_password": "password123",         // you must enable remote login
+      "accelerator": "hvf",
+      "ssh_username": "admin",
+      "ssh_password": "password123",
       "ssh_wait_timeout": "60m",
       "qemuargs": [
         ["-cpu", "host"],
