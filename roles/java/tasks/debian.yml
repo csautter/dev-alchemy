@@ -4,6 +4,7 @@
     state: present
     update_cache: yes
   loop: "{{ jdk_versions }}"
+  become: true
 
 - name: Register Java alternatives
   alternatives:
