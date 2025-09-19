@@ -15,7 +15,7 @@ jobs:
       matrix:
         # Uncomment the following line to test on all specified OSs
         # os: [ubuntu-latest, windows-latest, macos-latest]
-        os: [macos-latest]
+        os: [macos-latest, ubuntu-latest]
     steps:
       - uses: fkirc/skip-duplicate-actions@v5
         with:
