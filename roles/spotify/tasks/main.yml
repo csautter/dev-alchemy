@@ -14,6 +14,7 @@
     state: present
     keyring: /etc/apt/trusted.gpg.d/spotify.gpg
   when: ansible_facts['os_family'] == 'Debian'
+  become: true
 
 - name: Add Spotify APT repository (Linux)
   apt_repository:
@@ -21,6 +22,7 @@
     state: present
     filename: spotify
   when: ansible_facts['os_family'] == 'Debian'
+  become: true
 
 - name: Install Spotify (Linux)
   apt:
@@ -28,6 +30,7 @@
     state: present
     update_cache: yes
   when: ansible_facts['os_family'] == 'Debian' and ansible_architecture == 'x86_64'
+  become: true
 
 - name: Log warning for unsupported platforms
   debug:

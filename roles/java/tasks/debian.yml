@@ -40,6 +40,7 @@
     path: "/usr/lib/jvm/temurin-{{ item }}-jdk-{{ (ansible_architecture == 'aarch64') | ternary('arm64', (ansible_architecture == 'x86_64') | ternary('amd64', ansible_architecture)) }}/bin/java"
     priority: "{{ item }}"
   loop: "{{ jdk_versions }}"
+  become: true
 
 
 - name: Register Javac alternatives (Temurin)
@@ -49,3 +50,4 @@
     path: "/usr/lib/jvm/temurin-{{ item }}-jdk-{{ (ansible_architecture == 'aarch64') | ternary('arm64', (ansible_architecture == 'x86_64') | ternary('amd64', ansible_architecture)) }}/bin/javac"
     priority: "{{ item }}"
   loop: "{{ jdk_versions }}"
+  become: true
