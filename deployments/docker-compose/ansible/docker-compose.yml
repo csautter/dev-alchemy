@@ -1,9 +1,7 @@
-version: '3.8'
 services:
   ansible-test:
     build:
-      context: ../../../docker/ansible/
-      dockerfile: build/docker/ansible/Dockerfile
+      context: ../../../build/docker/ansible/
     container_name: ansible-test
     volumes:
       - ../../../:/src
