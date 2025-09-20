@@ -1,7 +1,10 @@
 #!/bin/bash
 
+set -ex
+
 # === CONFIG ===
 MACOS_VERSION="Sequoia"  # Adjust for Monterey, Big Sur, etc.
+MACOS_INSTALLER_VERSION_NUMBER="15.7"  # Adjust accordingly
 INSTALLER="/Applications/Install macOS $MACOS_VERSION.app"
 DISK_NAME="macos_installer_$MACOS_VERSION"
 VOLUME_NAME="macOS $MACOS_VERSION"
@@ -12,7 +15,9 @@ BASE_DIR="./vendor/macos/"
 if [ ! -d "$INSTALLER" ]; then
   echo "❌ Installer not found at: $INSTALLER"
   echo "Download it from the Mac App Store first."
-  exit 1
+  # check last version with:
+  # softwareupdate --list-full-installers
+  softwareupdate --fetch-full-installer --full-installer-version "$MACOS_INSTALLER_VERSION_NUMBER"
 fi
 
 echo "🔧 Creating disk image..."
@@ -20,6 +25,7 @@ if [ -f "$BASE_DIR$DISK_NAME.dmg" ]; then
   echo "⚠️ Disk image already exists. Removing it..."
   rm "$BASE_DIR$DISK_NAME.dmg"
 fi
+
 hdiutil create -o "$BASE_DIR$DISK_NAME" -size 17200m -volname "$VOLUME_NAME" -layout SPUD -fs HFS+J || exit 1
 
 echo "🔌 Mounting disk image..."
