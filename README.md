@@ -53,7 +53,7 @@ sudo apt update && sudo apt install ansible
 ---
 
 ### 3. Run the Playbook
-
+#### Run the Playbook on localhost
 Dry run to check for issues:
 
 ```bash
@@ -62,6 +62,24 @@ ansible-playbook playbooks/setup.yml -i inventory/localhost.yml --check
 
 ```bash
 ansible-playbook playbooks/setup.yml -i inventory/localhost.yml
+```
+#### Run the Playbook on a remote host or in a VM
+Dry run to check for issues:
+
+```bash
+HOST="192.168.179.21"
+# write to inventory file
+cat <<EOF > inventory/remote.yml
+all:
+  hosts:
+    $HOST:
+      ansible_user: test
+EOF
+ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --check --ask-pass
+```
+Apply the playbook:
+```bash
+ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass
 ```
 
 You can customize the inventory or pass variables via CLI.

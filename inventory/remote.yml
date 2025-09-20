@@ -1,0 +1,4 @@
+all:
+  hosts:
+    192.168.179.21:
+      ansible_user: test
