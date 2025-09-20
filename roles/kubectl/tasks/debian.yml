@@ -1,0 +1,30 @@
+- name: Create keyrings directory for kubectl
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Download Kubernetes apt GPG key
+  ansible.builtin.apt_key:
+    url: https://pkgs.k8s.io/core:/stable:/v1.34/deb/Release.key
+    keyring: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    state: present
+  become: true
+
+- name: Add Kubernetes apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.34/deb/ /"
+    filename: kubernetes
+    state: present
+    update_cache: yes
+    mode: '0644'
+  become: true
+
+- name: Install kubectl on Debian/Ubuntu
+  apt:
+    name: kubectl
+    state: present
+    update_cache: yes
+  when: ansible_facts['os_family'] == "Debian"
+  become: true

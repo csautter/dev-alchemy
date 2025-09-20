@@ -1,0 +1,10 @@
+services:
+  ansible-test:
+    build:
+      context: ../../../build/docker/ansible/
+    container_name: ansible-test
+    volumes:
+      - ../../../:/src
+    working_dir: /src
+    command: ansible-playbook playbooks/setup.yml -i inventory/localhost.yml # --tags='java'
+    tty: true
