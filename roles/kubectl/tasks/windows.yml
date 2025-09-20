@@ -1,0 +1,57 @@
+- name: Set kubectl architecture for Windows
+  ansible.builtin.set_fact:
+    kubectl_arch: >-
+      {% if ansible_facts['architecture'] == 'x86_64' %}
+        amd64
+      {% elif ansible_facts['architecture'] == 'arm64' %}
+        arm64
+      {% else %}
+        amd64
+      {% endif %}
+  when: ansible_facts['os_family'] == "Windows"
+
+# WINDOWS SECTION
+
+- name: Check if Chocolatey is available
+  win_command: choco --version
+  register: choco_check
+  ignore_errors: true
+  changed_when: false
+  when: ansible_facts['os_family'] == "Windows"
+
+- name: Install kubectl using Chocolatey (if available)
+  win_chocolatey:
+    name: kubernetes-cli
+    state: present
+    version: "{{ kubectl_version }}"
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc == 0
+
+- name: Set kubectl architecture for Windows
+  ansible.builtin.set_fact:
+    kubectl_arch: >-
+      {% if ansible_facts['architecture'] == 'x86_64' %}
+        amd64
+      {% elif ansible_facts['architecture'] == 'arm64' %}
+        arm64
+      {% else %}
+        amd64
+      {% endif %}
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc != 0
+
+- name: Create target directory for kubectl fallback install
+  win_file:
+    path: 'C:\Program Files\kubectl'
+    state: directory
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc != 0
+
+- name: Download kubectl binary for fallback install
+  win_get_url:
+    url: "https://dl.k8s.io/release/v{{ kubectl_version }}/bin/windows/{{ kubectl_arch }}/kubectl.exe"
+    dest: "C:\\Program Files\\kubectl\\kubectl.exe"
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc != 0
+
+- name: Add fallback kubectl path to system PATH
+  win_path:
+    elements:
+      - "C:\\Program Files\\kubectl"
+  when: ansible_facts['os_family'] == "Windows" and choco_check.rc != 0

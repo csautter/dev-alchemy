@@ -8,8 +8,6 @@ galaxy_info:
     - name: Windows
     - name: Debian
     - name: Ubuntu
-    - name: EL
-    - name: Fedora
   min_ansible_version: 2.10
 
 dependencies: []
