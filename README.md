@@ -101,6 +101,19 @@ devalchemy/
   ansible-playbook playbooks/setup.yml -e "install_docker=true"
   ```
 
+### Local tests for ubuntu
+To test changes locally on ubuntu, you can use the provided docker-compose setup:
+
+```bash
+docker compose -f deployments/docker-compose/ansible/docker-compose.yml up
+```
+The container will run the ansible playbook against itself.
+
+To cleanup afterwards, run:
+```bash
+docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
+```
+
 ---
 
 ## 📦 Supported Tools
