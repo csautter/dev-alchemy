@@ -1,0 +1,59 @@
+---
+- name: Ensure required packages for kubelogin installation
+  apt:
+    name:
+      - unzip
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Get latest kubelogin release info from GitHub
+  uri:
+    url: https://api.github.com/repos/int128/kubelogin/releases/latest
+    return_content: yes
+  register: kubelogin_release
+
+- name: Set kubelogin version fact
+  set_fact:
+    kubelogin_version: "{{ kubelogin_release.json.tag_name }}"
+
+- name: Set kubelogin download URL (amd64)
+  set_fact:
+    kubelogin_url: "https://github.com/int128/kubelogin/releases/download/{{ kubelogin_version }}/kubelogin_linux_amd64.zip"
+  when: ansible_architecture == 'x86_64'
+
+- name: Set kubelogin download URL (arm64)
+  set_fact:
+    kubelogin_url: "https://github.com/int128/kubelogin/releases/download/{{ kubelogin_version }}/kubelogin_linux_arm64.zip"
+  when: ansible_architecture == 'aarch64'
+
+- name: Create temporary directory for kubelogin
+  tempfile:
+    state: directory
+    suffix: kubelogin
+  register: kubelogin_tmp
+
+- name: Download kubelogin binary
+  get_url:
+    url: "{{ kubelogin_url }}"
+    dest: "{{ kubelogin_tmp.path }}/kubelogin.zip"
+    mode: '0644'
+
+- name: Unarchive kubelogin
+  unarchive:
+    src: "{{ kubelogin_tmp.path }}/kubelogin.zip"
+    dest: "{{ kubelogin_tmp.path }}"
+    remote_src: yes
+
+- name: Install kubelogin binary
+  copy:
+    src: "{{ kubelogin_tmp.path }}/kubelogin"
+    dest: /usr/local/bin/kubelogin
+    mode: '0755'
+    remote_src: yes
+  become: true
+
+- name: Clean up temporary directory
+  file:
+    path: "{{ kubelogin_tmp.path }}"
+    state: absent

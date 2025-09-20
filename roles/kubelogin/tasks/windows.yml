@@ -1,0 +1,37 @@
+# Windows (assumes PowerShell and administrator rights)
+- name: Set kubelogin download URL for Windows
+  set_fact:
+    kubelogin_windows_url: >-
+      {{
+        kubelogin_release.json.assets
+        | selectattr('name', 'match', 'kubelogin-windows-amd64.zip')
+        | list | first.browser_download_url
+      }}
+  when: ansible_facts['os_family'] == 'Windows'
+
+- name: Download kubelogin archive (Windows)
+  win_get_url:
+    url: "{{ kubelogin_windows_url }}"
+    dest: C:\Temp\kubelogin.zip
+  when: ansible_facts['os_family'] == 'Windows'
+
+- name: Ensure destination directory exists (Windows)
+  win_file:
+    path: C:\Tools\kubelogin
+    state: directory
+  when: ansible_facts['os_family'] == 'Windows'
+
+- name: Unzip kubelogin binary (Windows)
+  win_unzip:
+    src: C:\Temp\kubelogin.zip
+    dest: C:\Tools\kubelogin
+    creates: C:\Tools\kubelogin\kubelogin.exe
+  when: ansible_facts['os_family'] == 'Windows'
+
+- name: Add kubelogin to system PATH (Windows)
+  win_environment:
+    name: Path
+    value: C:\Tools\kubelogin
+    state: present
+    level: machine
+  when: ansible_facts['os_family'] == 'Windows'
