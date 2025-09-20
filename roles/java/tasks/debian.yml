@@ -1,23 +1,51 @@
-- name: Install OpenJDK on Debian/Ubuntu
+
+
+- name: Ensure required packages for Adoptium repo
   apt:
-    name: "openjdk-{{ item }}-jdk"
+    name:
+      - wget
+      - apt-transport-https
+      - gpg
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Add Adoptium GPG key
+  ansible.builtin.shell: |
+    wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor | tee /etc/apt/trusted.gpg.d/adoptium.gpg > /dev/null
+  args:
+    creates: /etc/apt/trusted.gpg.d/adoptium.gpg
+  become: true
+
+- name: Add Adoptium repository
+  ansible.builtin.shell: |
+    echo "deb https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list
+  args:
+    creates: /etc/apt/sources.list.d/adoptium.list
+  become: true
+
+- name: Install Temurin JDK on Debian/Ubuntu
+  apt:
+    name: "temurin-{{ item }}-jdk"
     state: present
     update_cache: yes
   loop: "{{ jdk_versions }}"
   become: true
 
-- name: Register Java alternatives
+
+- name: Register Java alternatives (Temurin)
   alternatives:
     name: java
     link: /usr/bin/java
-    path: "/usr/lib/jvm/java-{{ item }}-openjdk-{{ ansible_architecture }}/bin/java"
+    path: "/usr/lib/jvm/temurin-{{ item }}-jdk-{{ (ansible_architecture == 'aarch64') | ternary('arm64', ansible_architecture) }}/bin/java"
     priority: "{{ item }}"
   loop: "{{ jdk_versions }}"
 
-- name: Register Javac alternatives
+
+- name: Register Javac alternatives (Temurin)
   alternatives:
     name: javac
     link: /usr/bin/javac
-    path: "/usr/lib/jvm/java-{{ item }}-openjdk-{{ ansible_architecture }}/bin/javac"
+    path: "/usr/lib/jvm/temurin-{{ item }}-jdk-{{ (ansible_architecture == 'aarch64') | ternary('arm64', ansible_architecture) }}/bin/javac"
     priority: "{{ item }}"
   loop: "{{ jdk_versions }}"
