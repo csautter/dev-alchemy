@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  ansible-test:
+    build:
+      context: ../../../docker/ansible/
+      dockerfile: build/docker/ansible/Dockerfile
+    container_name: ansible-test
+    volumes:
+      - ../../../:/src
+    working_dir: /src
+    command: ansible-playbook playbooks/setup.yml -i inventory/localhost.yml # --tags='java'
+    tty: true
