@@ -8,10 +8,11 @@
     install_options: cask
   when: ansible_facts['os_family'] == 'Darwin'
 
-- name: Add Spotify APT key (Linux)
-  apt_key:
-    url: https://download.spotify.com/debian/pubkey_0D811D58.gpg
+- name: Add Spotify GPG key (Linux)
+  ansible.builtin.apt_key:
+    url: https://download.spotify.com/debian/pubkey_C85668DF69375001.gpg
     state: present
+    keyring: /etc/apt/trusted.gpg.d/spotify.gpg
   when: ansible_facts['os_family'] == 'Debian'
 
 - name: Add Spotify APT repository (Linux)
@@ -26,7 +27,7 @@
     name: spotify-client
     state: present
     update_cache: yes
-  when: ansible_facts['os_family'] == 'Debian'
+  when: ansible_facts['os_family'] == 'Debian' and ansible_architecture == 'x86_64'
 
 - name: Log warning for unsupported platforms
   debug:
