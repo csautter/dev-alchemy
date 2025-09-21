@@ -23,6 +23,5 @@ RUN Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true; \
 RUN net user ansible 'Secret123!@#' /add; \
     net localgroup Administrators ansible /add
 
-# Default shell inside the container
 ENTRYPOINT ["C:\\cygwin64\\bin\\bash.exe", "-l"]
 CMD ["-c", "while true; do sleep 30; done;"]
