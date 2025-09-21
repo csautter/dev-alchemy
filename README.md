@@ -120,7 +120,7 @@ devalchemy/
   ```
 ---
 ## Testing
-### Local tests for ubuntu
+### Local tests for ubuntu (on linux, wsl, windows or macos)
 To test changes locally on ubuntu, you can use the provided docker-compose setup:
 
 ```bash
@@ -132,7 +132,7 @@ To cleanup afterwards, run:
 ```bash
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 ```
-### Local tests for macOS
+### Local tests for macOS (on macos)
 To test changes locally on macOS, you can use the provided script:
 
 ```bash
@@ -145,6 +145,11 @@ To cleanup afterwards, run to delete the VM:
 tart delete sequoia-base
 ```
 ---
+
+### Local tests for windows (on macos)
+On macOS there is currently no fully automated test setup for ansible on windows.
+I recommend to use a Windows VM.
+Check [Windows on UTM](https://docs.getutm.app/guides/windows/) for a guide to install windows in UTM on macos.
 
 ## 📦 Supported Tools
 
