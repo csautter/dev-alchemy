@@ -1,3 +1,35 @@
+- name: Get current user
+  ansible.builtin.command: whoami
+  register: current_user
+
+- set_fact:
+    ansible_user: "{{ current_user.stdout }}"
+  when: ansible_user is not defined
+
+- name: Ensure passwordless sudo for {{ ansible_user }} user
+  become: true
+  copy:
+    dest: /etc/sudoers.d/{{ ansible_user }}
+    content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: wheel
+    mode: '0440'
+
+- name: Check if Rosetta 2 is installed
+  stat:
+    path: /usr/libexec/rosetta
+  register: rosetta_stat
+
+- set_fact:
+    rosetta_installed: "{{ rosetta_stat.stat.exists }}"
+
+- name: Install Rosetta 2 if JDK 8 is required and Rosetta is not installed
+  become: true
+  command: /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+  when:
+    - 8 in jdk_versions
+    - rosetta_installed is not defined or not rosetta_installed
+
 - name: Install Homebrew Temurin casks
   community.general.homebrew_cask:
     name: "{{ 'temurin' if item == 24 else 'temurin@' ~ item }}"
@@ -24,8 +56,27 @@
     JAVA_HOME: "{{ lookup('pipe', '/usr/libexec/java_home -v ' ~ item) }}"
   loop: "{{ jdk_versions }}"
 
+- name: Check if .zshrc exists
+  stat:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+  register: zshrc_stat
+
+- name: Create .zshrc if it does not exist
+  file:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+    state: touch
+    mode: '0644'
+  when: not zshrc_stat.stat.exists
+
 - name: Set global Java version via jenv
   lineinfile:
     path: "{{ ansible_env.HOME }}/.zshrc"
     line: "jenv global {{ jdk_default_version }}"
     insertafter: EOF
+  when: zshrc_stat.stat.exists
+
+- name: Remove passwordless sudo for {{ ansible_user }} user
+  become: true
+  file:
+    path: /etc/sudoers.d/{{ ansible_user }}
+    state: absent

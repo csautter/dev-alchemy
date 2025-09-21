@@ -53,7 +53,7 @@ sudo apt update && sudo apt install ansible
 ---
 
 ### 3. Run the Playbook
-
+#### Run the Playbook on localhost
 Dry run to check for issues:
 
 ```bash
@@ -62,6 +62,24 @@ ansible-playbook playbooks/setup.yml -i inventory/localhost.yml --check
 
 ```bash
 ansible-playbook playbooks/setup.yml -i inventory/localhost.yml
+```
+#### Run the Playbook on a remote host or in a VM
+Dry run to check for issues:
+
+```bash
+HOST="192.168.179.21"
+# write to inventory file
+cat <<EOF > inventory/remote.yml
+all:
+  hosts:
+    $HOST:
+      ansible_user: admin
+EOF
+ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass --ask-become-pass --check
+```
+Apply the playbook:
+```bash
+ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass --ask-become-pass
 ```
 
 You can customize the inventory or pass variables via CLI.
@@ -100,7 +118,8 @@ devalchemy/
   ```bash
   ansible-playbook playbooks/setup.yml -e "install_docker=true"
   ```
-
+---
+## Testing
 ### Local tests for ubuntu
 To test changes locally on ubuntu, you can use the provided docker-compose setup:
 
@@ -113,7 +132,18 @@ To cleanup afterwards, run:
 ```bash
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 ```
+### Local tests for macOS
+To test changes locally on macOS, you can use the provided script:
 
+```bash
+./scripts/macos/test-ansible-macos.sh
+```
+The script will run the ansible playbook against a temporary virtual machine managed by Tart.
+Tart is a lightweight VM manager for macOS. You can find more information about Tart [here](https://github.com/cirruslabs/tart).
+To cleanup afterwards, run to delete the VM:
+```bash
+tart delete sequoia-base
+```
 ---
 
 ## 📦 Supported Tools

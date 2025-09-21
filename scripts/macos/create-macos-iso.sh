@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# This script creates a bootable macOS installer ISO.
+# It requires the macOS installer app to be downloaded from the App Store.
+# Usage: ./create-macos-iso.sh
+# It can be usefull to create a macOS VM with QEMU/KVM or other virtualization software.
+
 set -ex
 
 # === CONFIG ===
