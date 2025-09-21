@@ -1,3 +1,11 @@
+- name: Get current user
+  ansible.builtin.command: whoami
+  register: current_user
+
+- set_fact:
+    ansible_user: "{{ current_user.stdout }}"
+  when: ansible_user is not defined
+
 - name: Ensure passwordless sudo for {{ ansible_user }} user
   become: true
   copy:

@@ -73,7 +73,7 @@ cat <<EOF > inventory/remote.yml
 all:
   hosts:
     $HOST:
-      ansible_user: test
+      ansible_user: admin
 EOF
 ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass --ask-become-pass --check
 ```

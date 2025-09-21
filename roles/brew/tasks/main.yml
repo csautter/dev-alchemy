@@ -5,6 +5,15 @@
   register: brew_stat
   when: ansible_facts['os_family'] == 'Darwin'
 
+- name: Get current user
+  ansible.builtin.command: whoami
+  register: current_user
+  when: ansible_facts['os_family'] == 'Darwin' and not brew_stat.stat.exists
+
+- set_fact:
+    ansible_user: "{{ current_user.stdout }}"
+  when: ansible_facts['os_family'] == 'Darwin' and not brew_stat.stat.exists and ansible_user is not defined
+
 - name: Clone Homebrew repository to /opt/homebrew
   git:
     repo: https://github.com/Homebrew/brew
