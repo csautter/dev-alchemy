@@ -1,6 +1,8 @@
 - hosts: all
   gather_facts: yes
   roles:
+    - role: brew
+      tags: brew
     - role: spotify
       tags: spotify
     - role: jetbrains

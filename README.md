@@ -75,11 +75,11 @@ all:
     $HOST:
       ansible_user: test
 EOF
-ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --check --ask-pass
+ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass --ask-become-pass --check
 ```
 Apply the playbook:
 ```bash
-ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass
+ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass --ask-become-pass
 ```
 
 You can customize the inventory or pass variables via CLI.
