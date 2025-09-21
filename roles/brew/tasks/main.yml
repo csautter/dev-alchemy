@@ -55,7 +55,7 @@
     path: ~/.bash_profile
     line: 'eval "$(/opt/homebrew/bin/brew shellenv)"'
     state: present
-  when: not brew_stat.stat.exists and ansible_facts['os_family'] == 'Darwin'
+  when:  ansible_facts['os_family'] == 'Darwin' and not brew_stat.stat.exists
 
 - name: Ensure ~/.zshrc exists
   file:

@@ -1,4 +1,6 @@
-- hosts: all
+- hosts:
+    - all
+    - localhost
   gather_facts: yes
   roles:
     - role: brew
