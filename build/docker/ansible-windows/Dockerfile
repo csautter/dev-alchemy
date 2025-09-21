@@ -1,14 +1,18 @@
-# python:3.13-windowsservercore-ltsc2025
-FROM python:3.12-windowsservercore-ltsc2025
-#FROM mcr.microsoft.com/windows-cssc/python:3.13-windows-ltsc2019
+FROM mcr.microsoft.com/windows/servercore:ltsc2025
 
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
 
-# Install Ansible
-RUN python -m pip install ansible-core pywinrm
+# Install Cygwin
+ADD https://cygwin.com/setup-x86_64.exe C:\\cygwin\\setup-x86_64.exe
 
-# Verify Ansible installation
-RUN ansible --version
+# Install Cygwin with base packages + python + pip + openssh
+RUN C:\\cygwin\\setup-x86_64.exe -q -n -N -d -R C:\\cygwin64 \
+    -s https://ftp.fau.de/cygwin/ \
+    -P python39,python39-pip,python39-cryptography,openssh,git,make,gcc-core,gcc-g++,libffi-devel,openssl-devel
 
-ENTRYPOINT [ "ansible-playbook" ]
-CMD [ "--help" ]
+# Install Ansible inside Cygwin
+RUN C:\\cygwin64\\bin\\python3.9.exe -m pip install ansible
+
+# Default shell inside the container
+ENTRYPOINT ["C:\\cygwin64\\bin\\bash.exe", "-l"]
+CMD ["-c", "while true; do sleep 30; done;"]

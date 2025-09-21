@@ -4,10 +4,9 @@ services:
       context: ../../../build/docker/ansible-windows/
     container_name: ansible-windows-test
     volumes:
-      - ../../../:/src
-    working_dir: /src
+      - ../../../:C:\src
     entrypoint: []
-    command: powershell -Command "ansible-playbook playbooks/setup.yml -i inventory/localhost.yml" # --tags='java'
+    command: C:\\cygwin64\\bin\\bash.exe -l -c "cd /cygdrive/c/src/ && ansible-playbook playbooks/setup.yml -i inventory/localhost.yml --check" # --tags='java'
     tty: true
     dns:
       - 8.8.8.8
