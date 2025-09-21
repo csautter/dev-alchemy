@@ -118,7 +118,8 @@ devalchemy/
   ```bash
   ansible-playbook playbooks/setup.yml -e "install_docker=true"
   ```
-
+---
+## Testing
 ### Local tests for ubuntu
 To test changes locally on ubuntu, you can use the provided docker-compose setup:
 
@@ -131,7 +132,18 @@ To cleanup afterwards, run:
 ```bash
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 ```
+### Local tests for macOS
+To test changes locally on macOS, you can use the provided script:
 
+```bash
+./scripts/macos/test-ansible-macos.sh
+```
+The script will run the ansible playbook against a temporary virtual machine managed by Tart.
+Tart is a lightweight VM manager for macOS. You can find more information about Tart [here](https://github.com/cirruslabs/tart).
+To cleanup afterwards, run to delete the VM:
+```bash
+tart delete sequoia-base
+```
 ---
 
 ## 📦 Supported Tools
