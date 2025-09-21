@@ -1,7 +1,7 @@
 ---
 - name: Check if Homebrew is installed
   stat:
-    path: /usr/local/bin/brew
+    path: /opt/homebrew/bin/brew
   register: brew_stat
   when: ansible_facts['os_family'] == 'Darwin'
 
@@ -19,7 +19,6 @@
   file:
     path: /opt/homebrew
     owner: "{{ ansible_user }}"
-    #group: "{{ ansible_user }}"
     recurse: yes
   when: ansible_facts['os_family'] == 'Darwin' and not brew_stat.stat.exists
   become: true
@@ -49,7 +48,7 @@
     path: ~/.bash_profile
     state: touch
     mode: '0644'
-  when: ansible_facts['os_family'] == 'Darwin'
+  when: ansible_facts['os_family'] == 'Darwin' and not brew_stat.stat.exists
 
 - name: Ensure Homebrew is in the PATH
   lineinfile:
@@ -57,3 +56,17 @@
     line: 'eval "$(/opt/homebrew/bin/brew shellenv)"'
     state: present
   when: not brew_stat.stat.exists and ansible_facts['os_family'] == 'Darwin'
+
+- name: Ensure ~/.zshrc exists
+  file:
+    path: ~/.zshrc
+    state: touch
+    mode: '0644'
+  when: ansible_facts['os_family'] == 'Darwin' and not brew_stat.stat.exists
+
+- name: Ensure ~/.zshrc sources ~/.bash_profile
+  lineinfile:
+    path: ~/.zshrc
+    line: '[ -f ~/.bash_profile ] && source ~/.bash_profile'
+    state: present
+  when: ansible_facts['os_family'] == 'Darwin' and not brew_stat.stat.exists
