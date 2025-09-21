@@ -16,7 +16,7 @@ docker exec -it ansible-windows-test C:\cygwin64\bin\bash.exe -l
 
 ```bash
 cd /cygdrive/c/src/
-ansible-playbook playbooks/setup.yml -i inventory/localhost_windows.yml -l windows_host -v
+ansible-playbook playbooks/setup.yml -i inventory/localhost_windows.yml -l windows_host -vvv
 ```
 
 ## Run ansible directly without entering the container
