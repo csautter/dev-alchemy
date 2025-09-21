@@ -12,6 +12,16 @@ RUN C:\\cygwin\\setup-x86_64.exe -q -n -N -d -R C:\\cygwin64 \
 
 # Install Ansible inside Cygwin
 RUN C:\\cygwin64\\bin\\python3.9.exe -m pip install ansible
+RUN C:\\cygwin64\\bin\\python3.9.exe -m pip install pywinrm
+
+# enable winrm
+RUN Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true; \
+    Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true; \
+    Enable-PSRemoting -Force
+
+# hardcoded passwords are bad, but this is just for local testing
+RUN net user ansible 'Secret123!@#' /add; \
+    net localgroup Administrators ansible /add
 
 # Default shell inside the container
 ENTRYPOINT ["C:\\cygwin64\\bin\\bash.exe", "-l"]

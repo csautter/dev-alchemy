@@ -6,7 +6,7 @@ services:
     volumes:
       - ../../../:C:\src
     entrypoint: []
-    command: C:\\cygwin64\\bin\\bash.exe -l -c "cd /cygdrive/c/src/ && ansible-playbook playbooks/setup.yml -i inventory/localhost.yml --check" # --tags='java'
+    command: C:\\cygwin64\\bin\\bash.exe -l -c "cd /cygdrive/c/src/ && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows.yml -l windows_host --check" # --tags='java'
     tty: true
     dns:
       - 8.8.8.8
