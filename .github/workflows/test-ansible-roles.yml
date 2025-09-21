@@ -45,7 +45,7 @@ jobs:
         shell: powershell
         if: runner.os == 'Windows'
         run: |
-          C:\cygwin\setup-x86_64.exe -q -n -N -d -R C:\cygwin64 -s https://ftp.fau.de/cygwin/ -P python39,python39-pip,python39-cryptography,openssh,git,make,gcc-core,gcc-g++,libffi-devel
+          C:\cygwin\setup-x86_64.exe -q -n -N --wait --no-admin -d -R C:\cygwin64 -s https://mirrors.kernel.org/sourceware/cygwin/ -s https://ftp.fau.de/cygwin/ -P python39,python39-pip,python39-cryptography,openssh,git,make,gcc-core,gcc-g++,libffi-devel
 
       - name: Windows install Ansible
         if: runner.os == 'Windows'
