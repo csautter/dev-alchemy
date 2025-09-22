@@ -1,8 +1,8 @@
 services:
-  ansible-windows-test:
+  ansible-windows-winrm:
     build:
       context: ../../../build/docker/ansible-windows/
-    container_name: ansible-windows-test
+    container_name: ansible-windows-winrm
     volumes:
       - ../../../:C:\src
     entrypoint: []

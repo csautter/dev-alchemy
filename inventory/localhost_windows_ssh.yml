@@ -1,0 +1,13 @@
+all:
+  hosts:
+    windows_host:
+      ansible_host: 127.0.0.1
+      ansible_user: ansible
+      # passwords should not be hardcoded, this is just for testing
+      ansible_password: Secret123!@#
+      ansible_connection: ssh
+      ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
+      ansible_ssh_timeout: 120 # timeout in seconds
+      ansible_ssh_retries: 3
+      ansible_shell_type: powershell
+      ansible_shell_executable: powershell.exe

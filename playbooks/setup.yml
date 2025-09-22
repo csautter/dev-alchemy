@@ -3,6 +3,8 @@
     - localhost
   gather_facts: true
   roles:
+    - role: openssh
+      tags: openssh
     - role: brew
       tags: brew
     - role: spotify
