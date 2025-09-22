@@ -3,7 +3,8 @@
     name: chocolatey
     state: present
 
-- name: Install kind using Chocolatey
+- name: Install kind using Chocolatey without dependencies
   win_chocolatey:
     name: kind
     state: present
+    ignore_dependencies: yes
