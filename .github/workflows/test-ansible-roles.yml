@@ -5,11 +5,11 @@ on:
   push:
     branches: [main, feat*]
     paths-ignore:
-      - '**/*.md'
+      - "**/*.md"
   pull_request:
     branches: [main, feat*]
     paths-ignore:
-      - '**/*.md'
+      - "**/*.md"
 
 jobs:
   test-ansible-roles:
@@ -19,11 +19,17 @@ jobs:
       matrix:
         # Uncomment the following line to test on all specified OSs
         # os: [ubuntu-latest, windows-latest, macos-latest]
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     steps:
       - uses: fkirc/skip-duplicate-actions@v5
         with:
           cancel_others: true
+
+      - name: Convert line endings to LF
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,23 +38,53 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+        if: runner.os != 'Windows'
+
+      - name: Windows install cygwin
+        uses: cygwin/cygwin-install-action@v6
+        if: runner.os == 'Windows'
+        with:
+          packages: python39,python39-pip,python39-cryptography,openssh,git,make,gcc-core,gcc-g++,libffi-devel
+
+      - name: Windows install Ansible
+        if: runner.os == 'Windows'
+        run: |
+          echo "current dir: $(pwd)"
+          D:\cygwin\bin\bash.exe -l -c "python -m pip install ansible pywinrm"
 
       - name: Install Ansible
         run: |
           python -m pip install --upgrade pip
           pip install ansible
+        if: runner.os != 'Windows'
 
       - name: Display Ansible version
         run: ansible --version
+        if: runner.os != 'Windows'
+
+      # hardcoded passwords are bad, but this is just for testing
+      - name: Windows enable winrm
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true;
+          Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true;
+          Enable-PSRemoting -Force;
+          net user ansible 'Secret123!@#' /add;
+          net localgroup Administrators ansible /add;
 
       - name: Run all Ansible roles
         shell: bash
         run: |
-          for role in roles/*; do
-            if [ -d "$role/tasks" ]; then
-              echo "Testing role: $role"
-              ansible-playbook -i inventory/localhost.yaml playbooks/setup.yml --tags "$(basename $role)" || exit 1
-            fi
-          done
+          ansible-playbook -i inventory/localhost.yaml playbooks/setup.yml
+        env:
+          ANSIBLE_FORCE_COLOR: "true"
+        if: runner.os != 'Windows'
+
+      - name: Run all Ansible roles on Windows
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          C:\cygwin\bin\bash.exe -l -c "cd /cygdrive/d/a/dev-alchemy/dev-alchemy && ansible-playbook -i inventory/localhost_windows.yml -l windows_host playbooks/setup.yml"
         env:
           ANSIBLE_FORCE_COLOR: "true"

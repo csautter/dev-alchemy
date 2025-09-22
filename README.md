@@ -1,8 +1,8 @@
 # 🧪 devalchemy
 
 **devalchemy** is a cross-platform development environment automation toolkit powered
-by [Ansible](https://www.ansible.com/). It turns fresh machines into fully-configured dev setups — whether you're on *
-*macOS**, **Linux**, or **Windows** (via WSL).
+by [Ansible](https://www.ansible.com/). It turns fresh machines into fully-configured dev setups — whether you're on \*
+\*macOS**, **Linux**, or **Windows\*\* (via WSL).
 
 > _"Transform your system into a dev powerhouse — with a touch of automation magic."_
 
@@ -53,7 +53,9 @@ sudo apt update && sudo apt install ansible
 ---
 
 ### 3. Run the Playbook
+
 #### Run the Playbook on localhost
+
 Dry run to check for issues:
 
 ```bash
@@ -63,7 +65,9 @@ ansible-playbook playbooks/setup.yml -i inventory/localhost.yml --check
 ```bash
 ansible-playbook playbooks/setup.yml -i inventory/localhost.yml
 ```
+
 #### Run the Playbook on a remote host or in a VM
+
 Dry run to check for issues:
 
 ```bash
@@ -77,7 +81,9 @@ all:
 EOF
 ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass --ask-become-pass --check
 ```
+
 Apply the playbook:
+
 ```bash
 ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass --ask-become-pass
 ```
@@ -118,38 +124,66 @@ devalchemy/
   ```bash
   ansible-playbook playbooks/setup.yml -e "install_docker=true"
   ```
+
 ---
+
 ## Testing
+
 ### Local tests for ubuntu (on linux, wsl, windows or macos)
+
 To test changes locally on ubuntu, you can use the provided docker-compose setup:
 
 ```bash
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml up
 ```
+
 The container will run the ansible playbook against itself.
 
 To cleanup afterwards, run:
+
 ```bash
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 ```
+
 ### Local tests for macOS (on macos)
+
 To test changes locally on macOS, you can use the provided script:
 
 ```bash
 ./scripts/macos/test-ansible-macos.sh
 ```
+
 The script will run the ansible playbook against a temporary virtual machine managed by Tart.
 Tart is a lightweight VM manager for macOS. You can find more information about Tart [here](https://github.com/cirruslabs/tart).
 To cleanup afterwards, run to delete the VM:
+
 ```bash
 tart delete sequoia-base
 ```
+
 ---
 
 ### Local tests for windows (on macos)
+
 On macOS there is currently no fully automated test setup for ansible on windows.
 I recommend to use a Windows VM.
 Check [Windows on UTM](https://docs.getutm.app/guides/windows/) for a guide to install windows in UTM on macos.
+
+### Local tests for windows (on windows)
+
+To test changes locally on windows, you can use the provided docker-compose setup:
+
+```bash
+docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml up
+```
+
+The container will run the ansible playbook against itself.
+
+To cleanup afterwards, run:
+
+```bash
+docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml down
+```
 
 ## 📦 Supported Tools
 
@@ -169,8 +203,8 @@ Out-of-the-box roles can install (depending on platform):
 
 ## 🌍 Cross-Platform Notes
 
-| Platform | Status      | Notes                             |
-|----------|-------------|-----------------------------------|
+| Platform | Status       | Notes                             |
+| -------- | ------------ | --------------------------------- |
 | macOS    | ✅ Supported | via Homebrew                      |
 | Linux    | ✅ Supported | tested on Ubuntu, Debian, Arch    |
 | Windows  | ✅ Supported | tested on WSL2 with Ubuntu/Debian |

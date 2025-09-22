@@ -19,10 +19,10 @@
   changed_when: false
   when: ansible_facts['os_family'] == "Windows"
 
-- name: Install kubectl using Chocolatey (if available)
+- name: Install or update kubectl using Chocolatey (if available)
   win_chocolatey:
     name: kubernetes-cli
-    state: present
+    state: latest
     version: "{{ kubectl_version }}"
   when: ansible_facts['os_family'] == "Windows" and choco_check.rc == 0
 

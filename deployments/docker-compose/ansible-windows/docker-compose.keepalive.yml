@@ -1,0 +1,11 @@
+services:
+  ansible-windows-test:
+    build:
+      context: ../../../build/docker/ansible-windows/
+    container_name: ansible-windows-test
+    volumes:
+      - ../../../:C:\src
+    tty: true
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1

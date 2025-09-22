@@ -1,0 +1,10 @@
+all:
+  hosts:
+    windows_host:
+      ansible_host: localhost
+      ansible_user: ansible
+      # passwords should not be hardcoded, this is just for testing
+      ansible_password: Secret123!@#
+      ansible_connection: winrm
+      ansible_winrm_transport: basic
+      ansible_port: 5985
