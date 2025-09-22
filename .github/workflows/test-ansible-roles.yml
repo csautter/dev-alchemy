@@ -25,6 +25,12 @@ jobs:
         with:
           cancel_others: true
 
+      - name: Convert line endings to LF
+        if: runner.os == 'Windows'
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
