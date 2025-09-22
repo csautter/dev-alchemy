@@ -75,12 +75,7 @@ jobs:
       - name: Run all Ansible roles
         shell: bash
         run: |
-          for role in roles/*; do
-            if [ -d "$role/tasks" ]; then
-              echo "Testing role: $role"
-              ansible-playbook -i inventory/localhost.yaml playbooks/setup.yml --tags "$(basename $role)" || exit 1
-            fi
-          done
+          ansible-playbook -i inventory/localhost.yaml playbooks/setup.yml
         env:
           ANSIBLE_FORCE_COLOR: "true"
         if: runner.os != 'Windows'
@@ -90,12 +85,6 @@ jobs:
         shell: C:\cygwin\bin\bash.exe -e {0}
         run: |
           echo "current dir: $(pwd)"
-          echo "starting roles test"
-          for role in roles/*; do
-            if [ -d "$role/tasks" ]; then
-              echo "Testing role: $role"
-              ansible-playbook -i inventory/windows.yaml playbooks/setup.yml --tags "$(basename $role)" || exit 1
-            fi
-          done
+          ansible-playbook -i inventory/localhost_windows.yaml playbooks/setup.yml
         env:
           ANSIBLE_FORCE_COLOR: "true"
