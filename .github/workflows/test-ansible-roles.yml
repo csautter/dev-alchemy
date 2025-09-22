@@ -49,6 +49,7 @@ jobs:
       - name: Windows install Ansible
         if: runner.os == 'Windows'
         run: |
+          echo "current dir: $(pwd)"
           D:\cygwin\bin\bash.exe -l -c "python -m pip install ansible pywinrm"
 
       - name: Install Ansible
@@ -82,9 +83,8 @@ jobs:
 
       - name: Run all Ansible roles on Windows
         if: runner.os == 'Windows'
-        shell: C:\cygwin\bin\bash.exe -e {0}
+        shell: powershell
         run: |
-          echo "current dir: $(pwd)"
-          ansible-playbook -i inventory/localhost_windows.yaml playbooks/setup.yml
+          C:\cygwin\bin\bash.exe -l -c "cd /cygdrive/d/a/dev-alchemy/dev-alchemy && ansible-playbook -i inventory/localhost_windows.yml -l windows_host playbooks/setup.yml"
         env:
           ANSIBLE_FORCE_COLOR: "true"
