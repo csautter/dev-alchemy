@@ -1,2 +1,3 @@
 - name: Include platform-specific tasks
   include_tasks: "{{ ansible_os_family | lower }}.yml"
+  when: ansible_os_family == "Windows"

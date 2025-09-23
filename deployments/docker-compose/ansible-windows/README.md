@@ -33,7 +33,7 @@ ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_winrm.yml -l
 ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_ssh.yml -l windows_host --ask-pass -vvv
 ```
 
-## Run ansible directly without entering the container
+## Run ansible directly without manually entering the container
 
 ```bash
 docker-compose -f deployments/docker-compose/ansible-windows/docker-compose.yml up
