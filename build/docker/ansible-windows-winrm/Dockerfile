@@ -6,11 +6,14 @@ SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
 ADD https://cygwin.com/setup-x86_64.exe C:\\cygwin\\setup-x86_64.exe
 
 # Install Cygwin with base packages + python + pip + openssh
-RUN C:\\cygwin\\setup-x86_64.exe -q -n -N -d -R C:\\cygwin64 \
+RUN C:\\cygwin\\setup-x86_64.exe --quiet-mode --no-shortcuts --no-startmenu --no-desktop --wait --no-admin --verbose \
     -R C:\\cygwin64 \
     -l C:\\cygwin\\packages \
     -s https://mirrors.kernel.org/sourceware/cygwin/ \
+    -s https://ftp-stud.hs-esslingen.de/pub/Mirrors/sources.redhat.com/cygwin/ \
+    -s https://cygwin.mirror.uk.sargasso.net/ \
     -s https://ftp.fau.de/cygwin/ \
+    -s https://ftp.inf.tu-dresden.de/software/windows/cygwin32/ \
     -P python39,python39-pip,python39-cryptography,openssh,git,make,gcc-core,gcc-g++,libffi-devel,openssl-devel
 
 # Install Ansible inside Cygwin
