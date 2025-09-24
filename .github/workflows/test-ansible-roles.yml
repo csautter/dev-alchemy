@@ -87,6 +87,12 @@ jobs:
           net user ansible 'Secret123!@#' /add;
           net localgroup Administrators ansible /add;
 
+      - name: Check if ssh user on windows can connect
+        if: runner.os == 'Windows' && matrix.ansible_protocol == 'ssh'
+        shell: powershell
+        run: |
+          sshpass -p 'Secret123!@#' ssh -o StrictHostKeyChecking=no ansible@localhost -p 22 "whoami"
+
       - name: Run all Ansible roles
         shell: bash
         run: |
