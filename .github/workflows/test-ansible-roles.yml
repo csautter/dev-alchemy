@@ -93,6 +93,13 @@ jobs:
         run: |
           sshpass -p 'Secret123!@#' ssh -o StrictHostKeyChecking=no ansible@localhost -p 22 "whoami"
 
+      # Set default shell for OpenSSH to PowerShell, otherwise Ansible will fail with the default cmd.exe
+      - name: Set default shell for OpenSSH on Windows to PowerShell
+        if: runner.os == 'Windows' && matrix.ansible_protocol == 'ssh'
+        shell: powershell
+        run: |
+          New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name 'DefaultShell' -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -PropertyType String -Force
+
       - name: Run all Ansible roles
         shell: bash
         run: |
