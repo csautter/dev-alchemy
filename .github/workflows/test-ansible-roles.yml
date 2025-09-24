@@ -17,10 +17,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-15, ubuntu-24.04, windows-2025]
         ansible_protocol: [ssh]
         include:
-          - os: windows-latest
+          - os: windows-2025
             ansible_protocol: winrm
     steps:
       - uses: fkirc/skip-duplicate-actions@v5
