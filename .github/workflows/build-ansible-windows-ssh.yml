@@ -1,0 +1,42 @@
+name: Build and Deploy Windows Ansible SSH Container
+
+on:
+  push:
+    branches: [main, feat*]
+    paths:
+      - "build/docker/ansible-windows-ssh/Dockerfile"
+      - ".github/workflows/build-ansible-windows-ssh.yml"
+  pull_request:
+    branches: [main, feat*]
+    paths:
+      - "build/docker/ansible-windows-ssh/Dockerfile"
+      - ".github/workflows/build-ansible-windows-ssh.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: windows-2025
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible-windows-ssh
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push
+        shell: powershell
+        run: |
+          cd build/docker/ansible-windows-ssh
+          docker build . -t ${{ env.IMAGE_NAME }}:latest
+          docker tag ${{ env.IMAGE_NAME }}:latest ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Logout from GitHub Container Registry
+        run: docker logout ghcr.io

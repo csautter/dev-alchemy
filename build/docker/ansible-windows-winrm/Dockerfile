@@ -7,6 +7,8 @@ ADD https://cygwin.com/setup-x86_64.exe C:\\cygwin\\setup-x86_64.exe
 
 # Install Cygwin with base packages + python + pip + openssh
 RUN C:\\cygwin\\setup-x86_64.exe -q -n -N -d -R C:\\cygwin64 \
+    -R C:\\cygwin64 \
+    -l C:\\cygwin\\packages \
     -s https://mirrors.kernel.org/sourceware/cygwin/ \
     -s https://ftp.fau.de/cygwin/ \
     -P python39,python39-pip,python39-cryptography,openssh,git,make,gcc-core,gcc-g++,libffi-devel,openssl-devel
