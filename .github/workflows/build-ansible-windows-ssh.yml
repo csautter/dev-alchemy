@@ -16,6 +16,9 @@ on:
 jobs:
   build-and-push:
     runs-on: windows-2025
+    permissions:
+      contents: read
+      packages: write
     env:
       IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible-windows-ssh
     steps:
@@ -37,6 +40,3 @@ jobs:
           docker tag ${{ env.IMAGE_NAME }}:latest ${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.IMAGE_NAME }}:latest
           docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
-
-      - name: Logout from GitHub Container Registry
-        run: docker logout ghcr.io
