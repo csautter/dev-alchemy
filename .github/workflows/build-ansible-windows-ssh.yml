@@ -20,7 +20,7 @@ jobs:
       contents: read
       packages: write
     env:
-      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible-windows-ssh
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,7 +36,7 @@ jobs:
         shell: powershell
         run: |
           cd build/docker/ansible-windows-ssh
-          docker build . -t ${{ env.IMAGE_NAME }}:latest
-          docker tag ${{ env.IMAGE_NAME }}:latest ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.IMAGE_NAME }}:latest
+          docker build . -t ${{ env.IMAGE_NAME }}:windows-ssh
+          docker tag ${{ env.IMAGE_NAME }}:windows-ssh ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:windows-ssh
           docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}

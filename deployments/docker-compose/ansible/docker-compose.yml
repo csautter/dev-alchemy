@@ -1,5 +1,6 @@
 services:
   ansible-test:
+    image: ghcr.io/csautter/dev-alchemy-ansible:ubuntu
     build:
       context: ../../../build/docker/ansible/
     container_name: ansible-test

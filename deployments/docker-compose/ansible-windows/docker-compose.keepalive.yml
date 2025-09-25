@@ -11,7 +11,7 @@ services:
       - 1.1.1.1
 
   ansible-windows-ssh:
-    image: ghcr.io/csautter/dev-alchemy-ansible-windows-ssh:latest
+    image: ghcr.io/csautter/dev-alchemy-ansible:windows-ssh
     build:
       context: ../../../build/docker/ansible-windows-ssh/
     container_name: ansible-windows-ssh
