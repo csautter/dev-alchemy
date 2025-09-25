@@ -2,13 +2,14 @@ FROM mcr.microsoft.com/windows/servercore:ltsc2025
 
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop';"]
 
-# Install Cygwin
-ADD https://cygwin.com/setup-x86_64.exe C:\\cygwin\\setup-x86_64.exe
+# Install chocolatey
+RUN Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 
-# Install Cygwin with base packages + python + pip + openssh
-RUN C:\\cygwin\\setup-x86_64.exe -q -n -N -d -R C:\\cygwin64 \
-    -s https://ftp.fau.de/cygwin/ \
-    -P python39,python39-pip,python39-cryptography,openssh,git,make,gcc-core,gcc-g++,libffi-devel,openssl-devel
+# Install Cygwin
+RUN choco install -y cygwin --params \"/InstallDir:C:\cygwin64 /NoAdmin /NoStartMenu\"
+
+RUN choco install -y cyg-get
+RUN cyg-get python39 python39-pip python39-cryptography openssh git make gcc-core gcc-g++ libffi-devel openssl-devel
 
 # Install Ansible inside Cygwin
 RUN C:\\cygwin64\\bin\\python3.9.exe -m pip install ansible

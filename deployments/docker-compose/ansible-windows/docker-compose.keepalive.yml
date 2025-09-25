@@ -1,8 +1,20 @@
 services:
-  ansible-windows-test:
+  ansible-windows-winrm:
     build:
-      context: ../../../build/docker/ansible-windows/
-    container_name: ansible-windows-test
+      context: ../../../build/docker/ansible-windows-winrm/
+    container_name: ansible-windows-winrm
+    volumes:
+      - ../../../:C:\src
+    tty: true
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+
+  ansible-windows-ssh:
+    image: ghcr.io/csautter/dev-alchemy-ansible-windows-ssh:latest
+    build:
+      context: ../../../build/docker/ansible-windows-ssh/
+    container_name: ansible-windows-ssh
     volumes:
       - ../../../:C:\src
     tty: true
