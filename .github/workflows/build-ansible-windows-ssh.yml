@@ -1,16 +1,20 @@
-name: Build and Deploy Windows Ansible SSH Container
+name: Build and Push Windows Ansible Container
 
 on:
   push:
     branches: [main, feat*]
     paths:
       - "build/docker/ansible-windows-ssh/Dockerfile"
+      - "build/docker/ansible-windows-winrm/Dockerfile"
       - ".github/workflows/build-ansible-windows-ssh.yml"
+      - ".github/workflows/build-ansible-windows-winrm.yml"
   pull_request:
     branches: [main, feat*]
     paths:
       - "build/docker/ansible-windows-ssh/Dockerfile"
+      - "build/docker/ansible-windows-winrm/Dockerfile"
       - ".github/workflows/build-ansible-windows-ssh.yml"
+      - ".github/workflows/build-ansible-windows-winrm.yml"
   workflow_dispatch:
 
 jobs:
@@ -19,6 +23,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        ansible_protocol: [ssh, winrm]
     env:
       IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible
     steps:
@@ -35,8 +42,7 @@ jobs:
       - name: Build and Push
         shell: powershell
         run: |
-          cd build/docker/ansible-windows-ssh
-          docker build . -t ${{ env.IMAGE_NAME }}:windows-ssh
-          docker tag ${{ env.IMAGE_NAME }}:windows-ssh ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.IMAGE_NAME }}:windows-ssh
-          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cd build/docker/ansible-windows-${{ matrix.ansible_protocol }}
+          docker build . -t ${{ env.IMAGE_NAME }}:windows-${{ matrix.ansible_protocol }}
+          docker manifest annotate ${{ env.IMAGE_NAME }}:windows-${{ matrix.ansible_protocol }} --os windows --arch amd64 --os-version windows-server-core-2025
+          docker push ${{ env.IMAGE_NAME }}:windows-${{ matrix.ansible_protocol }}
