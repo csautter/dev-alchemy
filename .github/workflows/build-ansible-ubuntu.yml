@@ -38,5 +38,11 @@ jobs:
         with:
           context: .
           file: build/docker/ansible/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible:latest, ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible:ubuntu
+          push: false
+          tags: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible:ubuntu
+
+      - name: push container
+        shell: powershell
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible:ubuntu
