@@ -1,5 +1,6 @@
 services:
   ansible-windows-winrm:
+    image: ghcr.io/csautter/dev-alchemy-ansible:windows-winrm
     build:
       context: ../../../build/docker/ansible-windows-winrm/
     container_name: ansible-windows-winrm
