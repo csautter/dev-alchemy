@@ -1,16 +1,20 @@
-name: Build and Deploy Windows Ansible SSH Container
+name: Build and Push Windows Ansible Container
 
 on:
   push:
     branches: [main, feat*]
     paths:
       - "build/docker/ansible-windows-ssh/Dockerfile"
+      - "build/docker/ansible-windows-winrm/Dockerfile"
       - ".github/workflows/build-ansible-windows-ssh.yml"
+      - ".github/workflows/build-ansible-windows-winrm.yml"
   pull_request:
     branches: [main, feat*]
     paths:
       - "build/docker/ansible-windows-ssh/Dockerfile"
+      - "build/docker/ansible-windows-winrm/Dockerfile"
       - ".github/workflows/build-ansible-windows-ssh.yml"
+      - ".github/workflows/build-ansible-windows-winrm.yml"
   workflow_dispatch:
 
 jobs:
@@ -19,8 +23,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        ansible_protocol: [ssh, winrm]
     env:
-      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible-windows-ssh
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,8 +42,11 @@ jobs:
       - name: Build and Push
         shell: powershell
         run: |
-          cd build/docker/ansible-windows-ssh
-          docker build . -t ${{ env.IMAGE_NAME }}:latest
-          docker tag ${{ env.IMAGE_NAME }}:latest ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cd build/docker/ansible-windows-${{ matrix.ansible_protocol }}
+          docker build . -t ${{ env.IMAGE_NAME }}:windows-${{ matrix.ansible_protocol }}
+
+      - name: push container
+        shell: powershell
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:windows-${{ matrix.ansible_protocol }}
