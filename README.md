@@ -50,14 +50,13 @@ cd dev-alchemy
 
 ### 2. Install Ansible
 
-````bash
 > Make sure Ansible is installed on your system.
 
 #### macOS (via Homebrew):
 
 ```bash
 brew install ansible
-````
+```
 
 #### Ubuntu / Debian:
 
@@ -147,7 +146,21 @@ ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pa
 
 You can customize the inventory or pass variables via CLI.
 
----
+#### Run the Playbook on Windows
+
+Apply the playbook via WinRM:
+
+```powershell
+$DevAlchemyPath = "C:\path\to\dev-alchemy"
+C:\\cygwin64\\bin\\bash.exe -l -c "$DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows.yml -l windows_host"
+```
+
+Apply the playbook via SSH:
+
+```powershell
+$DevAlchemyPath = "C:\path\to\dev-alchemy"
+C:\\cygwin64\\bin\\bash.exe -l -c "$DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_ssh.yml -l windows_host --ask-pass -vvv"
+```
 
 ## 🧩 Structure
 
@@ -185,6 +198,23 @@ devalchemy/
 ---
 
 ## Testing
+
+### 🧪 Cross-Platform Testing Matrix
+
+| Host OS     | Test Linux | Test macOS |              Test Windows              |
+| ----------- | :--------: | :--------: | :------------------------------------: |
+| **macOS**   |   Docker   |  Tart VM   |             VM (e.g., UTM)             |
+| **Linux**   |   Docker   |    ---     |         VM (e.g., VirtualBox)          |
+| **Windows** | WSL/Docker |    ---     | Docker Desktop (Windows Containers)/VM |
+
+- **Docker**: Used for lightweight Linux container testing on macOS, Linux, and Windows.
+- **Windows Containers**: Used for lightweight Windows container testing on Windows hosts with Docker Desktop.
+- **Tart VM**: Used for macOS VM testing on macOS hosts.
+- **UTM VM**: Used for Windows VM testing on macOS hosts.
+- **WSL**: Windows Subsystem for Linux, enables Linux testing on Windows.
+- **VM**: Generic virtual machine solutions (e.g., VirtualBox, Hyper-V) for cross-platform testing.
+
+> Note: macOS VM testing is only supported on macOS hosts due to Apple licensing restrictions. There might exist workarounds, but they are not covered here.
 
 ### Local tests for ubuntu (on linux, WSL, windows or macos)
 
@@ -244,6 +274,8 @@ To cleanup afterwards, run:
 ```bash
 docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml down
 ```
+
+Check the [README](deployments/docker-compose/ansible-windows/README.md) in the `deployments/docker-compose/ansible-windows/` folder for more details.
 
 ## 📦 Supported Tools
 
