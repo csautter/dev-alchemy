@@ -1,20 +1,41 @@
 # 🧪 devalchemy
 
 **devalchemy** is a cross-platform development environment automation toolkit powered
-by [Ansible](https://www.ansible.com/). It turns fresh machines into fully-configured dev setups — whether you're on \*
-\*macOS**, **Linux**, or **Windows\*\* (via WSL).
+by [Ansible](https://www.ansible.com/). It turns fresh and also existing machines into fully-configured dev setups — whether you're on **macOS**, **Linux**, or **Windows**.
 
 > _"Transform your system into a dev powerhouse — with a touch of automation magic."_
 
----
-
 ## ✨ Features
 
-- ✅ Unified setup for macOS, Linux, and Windows (WSL)
+- ✅ Unified setup for macOS, Linux, and Windows
 - 📦 Install development tools, CLIs, languages, and more
 - ⚙️ Easily extensible Ansible roles and playbooks
-- 💻 Consistent dev experience across platforms
+- 💻 Consistent dev experience across all platforms
 - 🔒 Minimal privileges needed (no full root where not required)
+- 🐳 Automated cross-platform testing via Docker and VMs
+
+---
+
+## Evolutionary Background
+
+**devalchemy** was born out of the need for a streamlined, consistent development environment across different platforms. As developers ourselves, we understand the pain points of setting up and maintaining development environments. With **devalchemy**, we aim to simplify this process, allowing developers to focus on what they do best: writing code.
+
+Painpoints addressed:
+
+- Inconsistent setups across different OSes
+- Time-consuming manual installations
+- Faster onboarding of new team members
+- Difficulty in maintaining and updating dev environments
+- Failing development setups are not reproducible.
+- Over-reliance on OS-specific scripts
+- Security concerns with elevated privileges
+
+## Base Concepts
+
+The core idea of **devalchemy** is to use Ansible playbooks and roles to define and automate the setup of development environments. This includes installing essential tools, configuring settings, and managing dependencies.<br>
+Every role is platform independent and can be applied to macOS, Linux, and Windows. The playbooks are designed to be modular, allowing users to pick and choose which components they want to install.<br>
+The setup is idempotent, meaning you can run the playbooks multiple times without causing issues or duplications. This ensures that your development environment remains consistent and up-to-date.<br>
+Despite the common use of Ansible in server environments where changes are **pushed** from a central location, **devalchemy** is designed for local **pull** based execution on individual machines. This approach allows developers to maintain control over their own environments while still benefiting from automation. Every ansible run can be simulated with `--check` to see what changes would be applied.
 
 ---
 
@@ -22,12 +43,14 @@ by [Ansible](https://www.ansible.com/). It turns fresh machines into fully-confi
 
 ### 1. Clone the repo
 
-````bash
+```bash
 git clone https://github.com/csautter/dev-alchemy.git
 cd dev-alchemy
+```
 
 ### 2. Install Ansible
 
+````bash
 > Make sure Ansible is installed on your system.
 
 #### macOS (via Homebrew):
@@ -42,13 +65,47 @@ brew install ansible
 sudo apt update && sudo apt install ansible
 ```
 
-#### Windows (WSL):
+#### Windows:
 
-```bash
-sudo apt update && sudo apt install ansible
+For the most native Windows experience, use cygwin and install ansible via pip:
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+choco install -y cygwin --params \"/InstallDir:C:\cygwin64 /NoAdmin /NoStartMenu\"
+choco install -y cyg-get
+cyg-get python39 python39-pip python39-cryptography openssh git make gcc-core gcc-g++ libffi-devel openssl-devel sshpass
+C:\\cygwin64\\bin\\python3.9.exe -m pip install ansible
+C:\\cygwin64\\bin\\python3.9.exe -m pip install pywinrm
 ```
 
-> ⚠️ Native Windows support is limited — use WSL for best results.
+> ℹ️ For Windows there are two options to connect to the target host: via SSH or via WinRM.
+
+The WinRM option is more native to Windows, but requires some additional setup on the target host. It might also be blocked by company policies.
+
+```powershell
+# Enable WinRM
+Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true; \
+Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true; \
+Enable-PSRemoting -Force
+```
+
+The SSH option requires an SSH server to be installed on the target host, but is easier to set up.
+
+```powershell
+# Enable SSH Server
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; \
+Start-Service sshd; Set-Service -Name sshd -StartupType 'Automatic';
+```
+
+In both cases you might need to adjust the firewall settings to allow incoming connections. Also make sure to use a user with admin privileges. Create a new user if needed.
+
+```powershell
+# ⚠️ OPTIONAL - use your existing user if possible
+# Create new user
+# And of course set a secure password!
+net user ansible 'Secret123!@#' /add; \
+net localgroup Administrators ansible /add
+```
 
 ---
 
@@ -129,17 +186,17 @@ devalchemy/
 
 ## Testing
 
-### Local tests for ubuntu (on linux, wsl, windows or macos)
+### Local tests for ubuntu (on linux, WSL, windows or macos)
 
-To test changes locally on ubuntu, you can use the provided docker-compose setup:
+To test ansible roles for ubuntu, you can use the provided docker-compose setup:
 
 ```bash
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml up
 ```
 
-The container will run the ansible playbook against itself.
+The container will run the ansible playbook within itself. This is a good way to test changes locally without affecting your host system.
 
-To cleanup afterwards, run:
+To cleanup afterwards, simply run:
 
 ```bash
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
@@ -155,11 +212,14 @@ To test changes locally on macOS, you can use the provided script:
 
 The script will run the ansible playbook against a temporary virtual machine managed by Tart.
 Tart is a lightweight VM manager for macOS. You can find more information about Tart [here](https://github.com/cirruslabs/tart).
-To cleanup afterwards, run to delete the VM:
+
+To cleanup afterwards, run:
 
 ```bash
 tart delete sequoia-base
 ```
+
+This will delete the temporary VM.
 
 ---
 
@@ -203,11 +263,11 @@ Out-of-the-box roles can install (depending on platform):
 
 ## 🌍 Cross-Platform Notes
 
-| Platform | Status       | Notes                             |
-| -------- | ------------ | --------------------------------- |
-| macOS    | ✅ Supported | via Homebrew                      |
-| Linux    | ✅ Supported | tested on Ubuntu, Debian, Arch    |
-| Windows  | ✅ Supported | tested on WSL2 with Ubuntu/Debian |
+| Platform | Status       | Notes            |
+| -------- | ------------ | ---------------- |
+| macOS    | ✅ Supported | via Homebrew     |
+| Linux    | ✅ Supported | tested on Ubuntu |
+| Windows  | ✅ Supported | via cygwin       |
 
 ---
 
@@ -231,13 +291,6 @@ MIT License — see [LICENSE](LICENSE) file.
 
 This project was born from a need to simplify dev environment onboarding across multiple systems, without resorting to
 OS-specific scripts. With Ansible and a touch of Dev Alchemy, setup becomes reproducible and delightful.
-
----
-
-## 🔗 Related Projects
-
-- [geerlingguy/mac-dev-playbook](https://github.com/geerlingguy/mac-dev-playbook)
-- [ansible/ansible-examples](https://github.com/ansible/ansible-examples)
 
 ---
 
