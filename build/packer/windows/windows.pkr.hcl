@@ -1,0 +1,61 @@
+packer {
+  required_plugins {
+    hyperv = {
+      version = ">= 1.0.0"
+      source  = "github.com/hashicorp/hyperv"
+    }
+  }
+}
+
+variable "iso_url" {
+  type    = string
+  default = "../../../vendor/windows/Win11_24H2_English_x64.iso"
+}
+
+source "hyperv-iso" "win11" {
+  vm_name          = "win11-packer"
+  output_directory = "output-hyperv"
+
+  iso_url      = var.iso_url
+  iso_checksum = "none"
+  # Ensure that the "Default Switch" exists in Hyper-V.
+  # You can check in Hyper-V Manager under "Virtual Switch Manager".
+  # If it does not exist, create a new virtual switch named "Default Switch".
+  switch_name = "Default Switch"
+  memory      = 4096
+  cpus        = 2
+  disk_size   = 61440
+
+  communicator   = "winrm"
+  winrm_username = "Administrator"
+  winrm_password = "P@ssw0rd!"
+
+  enable_secure_boot = true
+  generation        = 2
+  enable_tpm        = true
+
+  boot_command = [
+    "<wait10>",
+    "<ctrlaltdel>",
+    "<wait10>",
+    " "
+  ]
+
+  # The "autounattend.xml" file is an unattended setup configuration for Windows installation.
+  # Place "autounattend.xml" in the same directory as this HCL file or provide the correct relative path.
+  cd_files = [
+    "autounattend.xml"
+  ]
+}
+
+build {
+  sources = ["source.hyperv-iso.win11"]
+
+  # This provisioner creates C:\packer.txt to verify that the VM was successfully provisioned by Packer.
+  provisioner "powershell" {
+    inline = [
+      "Write-Output 'Running inside Windows VM...'",
+      "New-Item -Path C:\\packer.txt -ItemType File -Force"
+    ]
+  }
+}
