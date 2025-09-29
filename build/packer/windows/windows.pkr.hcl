@@ -23,7 +23,7 @@ source "hyperv-iso" "win11" {
   # If it does not exist, create a new virtual switch named "Default Switch".
   switch_name = "Default Switch"
   memory      = 4096
-  cpus        = 2
+  cpus        = 4
   disk_size   = 61440
 
   communicator   = "winrm"
@@ -34,11 +34,9 @@ source "hyperv-iso" "win11" {
   generation        = 2
   enable_tpm        = true
 
+  boot_wait = "2s"
   boot_command = [
-    "<wait10>",
-    "<ctrlaltdel>",
-    "<wait10>",
-    " "
+    "<spacebar>"
   ]
 
   # The "autounattend.xml" file is an unattended setup configuration for Windows installation.
