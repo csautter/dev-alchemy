@@ -14,7 +14,7 @@ variable "iso_url" {
 
 source "hyperv-iso" "win11" {
   vm_name          = "win11-packer"
-  output_directory = "output-hyperv"
+  output_directory = "../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
 
   iso_url      = var.iso_url
   iso_checksum = "none"
@@ -44,6 +44,9 @@ source "hyperv-iso" "win11" {
   cd_files = [
     "autounattend.xml"
   ]
+
+  shutdown_command = "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\""
+  shutdown_timeout = "5m"
 }
 
 build {
@@ -53,7 +56,10 @@ build {
   provisioner "powershell" {
     inline = [
       "Write-Output 'Running inside Windows VM...'",
-      "New-Item -Path C:\\packer.txt -ItemType File -Force"
+      "New-Item -Path C:\\packer.txt -ItemType File -Force",
+      "Write-Output 'Created C:\\packer.txt file.'",
+      # delete the file to keep the image clean
+      "Remove-Item -Path C:\\packer.txt -Force"
     ]
   }
 }

@@ -1,7 +1,6 @@
-
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-	<!--https://schneegans.de/windows/unattend-generator/?LanguageMode=Unattended&UILanguage=en-US&Locale=en-US&Keyboard=00000409&UseKeyboard2=true&Locale2=de-DE&Keyboard2=00000407&GeoLocation=94&ProcessorArchitecture=amd64&BypassRequirementsCheck=true&ComputerNameMode=Random&CompactOsMode=Default&TimeZoneMode=Implicit&PartitionMode=Unattended&PartitionLayout=GPT&EspSize=300&RecoveryMode=None&DiskAssertionMode=Skip&WindowsEditionMode=Generic&WindowsEdition=pro&InstallFromMode=Automatic&PEMode=Default&UserAccountMode=Unattended&AccountName0=Admin&AccountDisplayName0=&AccountPassword0=&AccountGroup0=Administrators&AccountName1=User&AccountDisplayName1=&AccountPassword1=&AccountGroup1=Users&AutoLogonMode=Builtin&BuiltinAdministratorPassword=P%40ssw0rd%21&PasswordExpirationMode=Unlimited&LockoutMode=Default&HideFiles=None&ShowFileExtensions=true&TaskbarSearch=Box&TaskbarIconsMode=Default&StartTilesMode=Default&StartPinsMode=Default&PreventDeviceEncryption=true&EffectsMode=Default&DesktopIconsMode=Default&StartFoldersMode=Default&WifiMode=Interactive&ExpressSettings=DisableAll&LockKeysMode=Skip&StickyKeysMode=Default&ColorMode=Default&WallpaperMode=Default&LockScreenMode=Default&WdacMode=Skip-->
+	<!--https://schneegans.de/windows/unattend-generator/?LanguageMode=Unattended&UILanguage=en-US&Locale=en-US&Keyboard=00000409&UseKeyboard2=true&Locale2=de-DE&Keyboard2=00000407&GeoLocation=94&ProcessorArchitecture=amd64&BypassRequirementsCheck=true&ComputerNameMode=Random&CompactOsMode=Default&TimeZoneMode=Implicit&PartitionMode=Unattended&PartitionLayout=GPT&EspSize=300&RecoveryMode=None&DiskAssertionMode=Skip&WindowsEditionMode=Generic&WindowsEdition=pro&InstallFromMode=Automatic&PEMode=Default&UserAccountMode=Unattended&AccountName0=Admin&AccountDisplayName0=&AccountPassword0=&AccountGroup0=Administrators&AccountName1=User&AccountDisplayName1=&AccountPassword1=&AccountGroup1=Users&AutoLogonMode=Builtin&BuiltinAdministratorPassword=P%40ssw0rd%21&PasswordExpirationMode=Unlimited&LockoutMode=Default&HideFiles=None&ShowFileExtensions=true&TaskbarSearch=Box&TaskbarIconsMode=Default&StartTilesMode=Default&StartPinsMode=Default&PreventDeviceEncryption=true&EffectsMode=Default&DesktopIconsMode=Default&StartFoldersMode=Default&WifiMode=Interactive&ExpressSettings=DisableAll&LockKeysMode=Skip&StickyKeysMode=Default&ColorMode=Default&WallpaperMode=Default&LockScreenMode=Default&FirstLogonScript0=%24logPath+%3D+%22C%3A%5CEnableWinRM.log%22%3B%0D%0AStart-Transcript+-Path+%24logPath+-Append%3B%0D%0A%0D%0Atry+%7B%0D%0A%09Start-Service+WinRM%3B%0D%0A%09%23+Set+all+network+profiles+to+Private+to+avoid+WinRM+firewall+exception+errors%0D%0A%09Get-NetConnectionProfile+%7C+Where-Object+%7B%24_.NetworkCategory+-eq+%27Public%27%7D+%7C+Set-NetConnectionProfile+-NetworkCategory+Private%3B%0D%0A%09Set-Item+-Path+WSMan%3A%5Clocalhost%5CService%5CAllowUnencrypted+-Value+%24true%3B%0D%0A%09Set-Item+-Path+WSMan%3A%5Clocalhost%5CService%5CAuth%5CBasic+-Value+%24true%3B%0D%0A%09%23+This+opens+the+firewall+for+WinRM+HTTP+%28port+5986%29+on+localhost%0D%0A%09Enable-PSRemoting+-Force%3B%0D%0A%09%23+This+opens+the+firewall+for+WinRM+HTTP+%28port+5985%29+from+any+remote+address%0D%0A%09Set-NetFirewallRule+-Name+%27WINRM-HTTP-In-TCP%27+-RemoteAddress+Any%3B%0D%0A%7D+catch+%7B%0D%0A%09Write-Error+%22An+error+occurred+while+enabling+WinRM%3A+%24_%22%3B%0D%0A%7D%0D%0A%0D%0AStop-Transcript%3B&FirstLogonScriptType0=Ps1&WdacMode=Skip-->
 	<settings pass="offlineServicing"></settings>
 	<settings pass="windowsPE">
 		<component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
@@ -247,6 +246,26 @@ $scripts = @(
 	{
 		Set-ItemProperty -LiteralPath 'Registry::HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoLogonCount' -Type 'DWord' -Force -Value 0;
 	};
+    {
+        $logPath = "C:\EnableWinRM.log";
+        Start-Transcript -Path $logPath -Append;
+
+        try {
+            Start-Service WinRM;
+            # Set all network profiles to Private to avoid WinRM firewall exception errors
+            Get-NetConnectionProfile | Where-Object {$_.NetworkCategory -eq 'Public'} | Set-NetConnectionProfile -NetworkCategory Private;
+            Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true;
+            Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true;
+            # This opens the firewall for WinRM HTTP (port 5986) on localhost
+            Enable-PSRemoting -Force;
+            # This opens the firewall for WinRM HTTP (port 5985) from any remote address
+            Set-NetFirewallRule -Name 'WINRM-HTTP-In-TCP' -RemoteAddress Any;
+        } catch {
+            Write-Error "An error occurred while enabling WinRM: $_";
+        }
+
+        Stop-Transcript;
+    };
 );
 
 &amp; {
