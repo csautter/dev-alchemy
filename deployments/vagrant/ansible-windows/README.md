@@ -42,7 +42,10 @@ Write-Output "Inventory file created at ../../../inventory/hyperv_windows_winrm.
 # Run Ansible Playbook
 
 ```bash
-ansible-playbook ../../../playbooks/setup.yml -i ../../../inventory/hyperv_windows_winrm.yml -l windows_host -vvv
+cygwin bash
+cd /cygdrive/c/Users/<your-user>/<your-path>/dev-alchemy/
+ansible-playbook ./playbooks/setup.yml -i ./inventory/hyperv_windows_winrm.yml -l windows_host -vvv --check
+ansible-playbook ./playbooks/setup.yml -i ./inventory/hyperv_windows_winrm.yml -l windows_host -vvv
 ```
 
 # Destroying the Vagrant Box
