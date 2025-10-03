@@ -4,6 +4,10 @@ packer {
       version = ">= 1.0.0"
       source  = "github.com/hashicorp/hyperv"
     }
+    vagrant = {
+      version = ">= 1.0.0"
+      source  = "github.com/hashicorp/vagrant"
+    }
   }
 }
 
@@ -61,5 +65,12 @@ build {
       # delete the file to keep the image clean
       "Remove-Item -Path C:\\packer.txt -Force"
     ]
+  }
+
+  post-processor "vagrant" {
+    output = "../../../vendor/windows/win11-hyperv.box"
+    keep_input_artifact = false
+    provider_override = "hyperv"
+    compression_level = 0
   }
 }
