@@ -13,8 +13,8 @@ variable "iso_url" {
 }
 
 source "hyperv-iso" "win11" {
-  vm_name          = "win11-packer"
-  output_directory = "../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  vm_name            = "win11-packer"
+  output_directory   = "../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
 
   iso_url      = var.iso_url
   iso_checksum = "none"
