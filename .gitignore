@@ -2,3 +2,6 @@
 vendor/*
 *.zip
 .DS_Store
+*packer_cache*
+.vagrant/
+*.box

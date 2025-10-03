@@ -1,0 +1,11 @@
+all:
+    children:
+        windows:
+            hosts:
+                windows_host:
+                    ansible_host: 172.17.3.68
+                    ansible_user: Administrator
+                    ansible_password: P@ssw0rd!
+                    ansible_connection: winrm
+                    ansible_winrm_transport: basic
+                    ansible_port: 5985
