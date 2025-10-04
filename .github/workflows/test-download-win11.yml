@@ -28,5 +28,6 @@ jobs:
       - name: Run download_win_11.ps1
         run: |
           # Run the script
-          powershell -ExecutionPolicy Bypass -File scripts\windows\download_win_11.ps1
+          # GetUrl switch added to avoid downloading the ISO during tests -> dry run
+          powershell -ExecutionPolicy Bypass -File scripts\windows\download_win_11.ps1 -GetUrl
         shell: powershell
