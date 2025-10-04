@@ -342,6 +342,10 @@ Out-of-the-box roles can install (depending on platform):
 
 ---
 
+## Troubleshooting
+
+- On Windows with cygwin, it can happen that the ansible installation within cygwin is shadowed by another ansible python installation on the windows host. Don't try to install ansible directly on your windows host. Uninstall any other ansible installation and make sure to use the cygwin python installation to install ansible via pip.
+
 ## 🤝 Contributing
 
 Contributions welcome! Feel free to:
