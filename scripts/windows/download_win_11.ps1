@@ -39,7 +39,21 @@ if (!(Test-Path $FidoPath) -and (Test-Path $FidoLzma)) {
     & $SevenZip e $FidoLzma | Out-Null
 }
 
+# create vendor/windows directory if it doesn't exist
+if (!(Test-Path "$VendorDir\windows")) {
+    New-Item -ItemType Directory -Path "$VendorDir\windows" | Out-Null
+}
+
 # Run Fido to download Windows 11 ISO with options
 Write-Host "Launching Fido to download Windows 11 ISO..."
 Set-Location .\vendor\windows\
 powershell -ExecutionPolicy Bypass -File $FidoPath -Win 11 -Rel Latest -Ed Pro -Arch x64 -Lang English
+
+# Check if ISO was downloaded
+$IsoPath = Get-ChildItem -Path . -Filter "*.iso" | Select-Object -First 1
+if ($IsoPath) {
+    Write-Host "Windows 11 ISO downloaded successfully: $($IsoPath.FullName)"
+} else {
+    Write-Error "Failed to download Windows 11 ISO."
+    exit 1
+}
