@@ -1,0 +1,33 @@
+name: Test download_win_11.ps1
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/windows/download_win_11.ps1"
+      - ".github/workflows/test-download-win11.yml"
+
+jobs:
+  test-powershell-script:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Chocolatey
+        run: |
+          Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+        shell: powershell
+
+      - name: Set up 7-Zip
+        run: |
+          choco install 7zip -y
+        shell: powershell
+
+      - name: Run download_win_11.ps1
+        run: |
+          # Run the script
+          # GetUrl switch added to avoid downloading the ISO during tests -> dry run
+          powershell -ExecutionPolicy Bypass -File scripts\windows\download_win_11.ps1 -GetUrl
+        shell: powershell

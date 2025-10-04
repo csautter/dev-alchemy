@@ -66,16 +66,32 @@ sudo apt update && sudo apt install ansible
 
 #### Windows:
 
-For the most native Windows experience, use cygwin and install ansible via pip:
+For the most native Windows experience, use cygwin and install ansible via pip.
+
+> ⚠️ Make sure to run the commands in an elevated PowerShell (Run as Administrator).<br>
 
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 choco install -y cygwin --params \"/InstallDir:C:\cygwin64 /NoAdmin /NoStartMenu\"
 choco install -y cyg-get
-cyg-get python39 python39-pip python39-cryptography openssh git make gcc-core gcc-g++ libffi-devel openssl-devel sshpass
+cyg-get python39 python39-pip python39-cryptography openssh git make gcc-core gcc-g++ libffi-devel libssl-devel sshpass
 C:\\cygwin64\\bin\\python3.9.exe -m pip install ansible
 C:\\cygwin64\\bin\\python3.9.exe -m pip install pywinrm
 ```
+
+> ℹ️ Instead of using the powershell snippet above, you can also install all windows dependencies with following powershell script:<br> [dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1)
+
+Run the powershell script in an elevated PowerShell session (Run as Administrator):
+
+```powershell
+./scripts/windows/dev-alchemy-self-setup.ps1
+```
+
+##### Enable ansible remote access on Windows
+
+On Windows you need to enable remote access for ansible to work. Also for local runs ansible needs to connect to the local host via SSH or WinRM. Don't activate the options if you don't need them.
+
+> ⚠️ **Security note:** Enabling unencrypted WinRM and basic auth can expose your system to security risks. Use these settings only in trusted environments or for testing purposes. For production environments, consider using encrypted connections and more secure authentication methods. Keep your firewall settings in mind and only allow connections from trusted networks.
 
 > ℹ️ For Windows there are two options to connect to the target host: via SSH or via WinRM.
 
@@ -201,11 +217,13 @@ devalchemy/
 
 ### 🧪 Cross-Platform Testing Matrix
 
-| Host OS     | Test Linux | Test macOS |              Test Windows              |
-| ----------- | :--------: | :--------: | :------------------------------------: |
-| **macOS**   |   Docker   |  Tart VM   |             VM (e.g., UTM)             |
-| **Linux**   |   Docker   |    ---     |         VM (e.g., VirtualBox)          |
-| **Windows** | WSL/Docker |    ---     | Docker Desktop (Windows Containers)/VM |
+| Host OS     |                                      Test Linux                                       |              Test macOS              |                                                       Test Windows                                                       |
+| ----------- | :-----------------------------------------------------------------------------------: | :----------------------------------: | :----------------------------------------------------------------------------------------------------------------------: |
+| **macOS**   |                          Docker<br><sub>✅ Implemented</sub>                          | Tart VM<br><sub>✅ Implemented</sub> |                                     VM (e.g., UTM)<br><sub>❌ Not implemented</sub>                                      |
+| **Linux**   |                          Docker<br><sub>✅ Implemented</sub>                          |                 ---                  |                                  VM (e.g., VirtualBox)<br><sub>❌ Not implemented</sub>                                  |
+| **Windows** | WSL<br><sub>❌ Not implemented</sub><br>\_\_\_<br>Docker<br><sub>✅ Implemented</sub> |                 ---                  | Docker Desktop (Windows Containers) <br><sub>✅ Implemented</sub><br>\_\_\_<br>VM (Hyper-V)<br><sub>✅ Implemented</sub> |
+
+> <sub>Not implemented</sub> entries indicate solutions not yet implemented in this project. Only solutions marked as **Implemented** are currently available out-of-the-box.
 
 - **Docker**: Used for lightweight Linux container testing on macOS, Linux, and Windows.
 - **Windows Containers**: Used for lightweight Windows container testing on Windows hosts with Docker Desktop.
@@ -213,6 +231,7 @@ devalchemy/
 - **UTM VM**: Used for Windows VM testing on macOS hosts.
 - **WSL**: Windows Subsystem for Linux, enables Linux testing on Windows.
 - **VM**: Generic virtual machine solutions (e.g., VirtualBox, Hyper-V) for cross-platform testing.
+- **Hyper-V**: Used for Windows VM testing on Windows hosts.
 
 > Note: macOS VM testing is only supported on macOS hosts due to Apple licensing restrictions. There might exist workarounds, but they are not covered here.
 
@@ -261,6 +280,8 @@ Check [Windows on UTM](https://docs.getutm.app/guides/windows/) for a guide to i
 
 ### Local tests for windows (on windows)
 
+#### Use Docker Desktop with Windows Containers
+
 To test changes locally on windows, you can use the provided docker-compose setup:
 
 ```bash
@@ -276,6 +297,24 @@ docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml 
 ```
 
 Check the [README](deployments/docker-compose/ansible-windows/README.md) in the `deployments/docker-compose/ansible-windows/` folder for more details.
+
+#### Use Hyper-V VM
+
+To test changes locally on Windows using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
+
+##### Download a Windows .iso file
+
+You will need a Windows .iso file to use as the installation media for your virtual machine. You can download a Windows 10 or Windows Server .iso file from the Microsoft website.
+
+Or use script to download a Windows 11 .iso file: [download_win_11.ps1](./scripts/windows/download_win_11.ps1)
+
+##### Build a Windows VM
+
+Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and Hyper-V.
+
+##### Run the Windows VM
+
+Check [README.md](./deployments/vagrant/ansible-windows/README.md) for a guide to run the built Windows VM with Vagrant and Hyper-V.
 
 ## 📦 Supported Tools
 
@@ -302,6 +341,10 @@ Out-of-the-box roles can install (depending on platform):
 | Windows  | ✅ Supported | via cygwin       |
 
 ---
+
+## Troubleshooting
+
+- On Windows with cygwin, it can happen that the ansible installation within cygwin is shadowed by another ansible python installation on the windows host. Don't try to install ansible directly on your windows host. Uninstall any other ansible installation and make sure to use the cygwin python installation to install ansible via pip.
 
 ## 🤝 Contributing
 
