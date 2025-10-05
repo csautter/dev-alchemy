@@ -29,13 +29,11 @@ source "qemu" "win11" {
   output_directory   = "${path.root}/../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
 
   # UEFI BIOS (required for Win11)
-  firmware {
-    code = "/Applications/UTM.app/Contents/Resources/qemu/edk2-x86_64-code.fd"
-    vars = "/Applications/UTM.app/Contents/Resources/qemu/edk2-x86_64-vars.fd"
-  }
+  efi_boot = true
+  efi_firmware_code = "/Applications/UTM.app/Contents/Resources/qemu/edk2-x86_64-code.fd"
+  efi_firmware_vars = "/Applications/UTM.app/Contents/Resources/qemu/edk2-x86_64-code.fd"
 
-
-  tpm_backend = "emulator"
+  #tpm_backend = "emulator"
 
   # The autounattend.xml will be mounted as a virtual floppy drive
   floppy_files = ["${path.root}/autounattend.xml"]
@@ -63,10 +61,12 @@ build {
     inline = ["echo 'Windows 11 x86 build finished successfully. Image in output-windows11/disk.qcow2'"]
   }
 
+/*
   post-processor "vagrant" {
     output = "${path.root}/../../../vendor/windows/win11-hyperv.box"
     keep_input_artifact = false
     provider_override = "qemu"
     compression_level = 1
   }
+  */
 }
