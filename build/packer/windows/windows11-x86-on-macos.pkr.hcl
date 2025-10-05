@@ -22,6 +22,7 @@ source "qemu" "win11" {
   cpu_model       = "Skylake-Client"
   machine_type    = "q35"
   disk_size       = "64G"
+  disk_interface  = "ide"
   format          = "qcow2"
   #headless        = true
   iso_url         = var.iso_url
@@ -31,6 +32,10 @@ source "qemu" "win11" {
   display         = "cocoa"
   memory          = "4096"
   cores            = 10
+
+  #qemuargs = [
+  #  ["--device", "ich9-ahci,id=sata"],
+  #]
 
   # UEFI BIOS (recommended for Win11, but not strictly required for installation)
   # Windows 11 officially requires UEFI for Secure Boot and TPM, but it can sometimes be installed in legacy BIOS mode,
