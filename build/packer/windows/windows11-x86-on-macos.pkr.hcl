@@ -30,7 +30,7 @@ source "qemu" "win11" {
   #use_default_display = true
   display         = "cocoa"
   memory          = "4096"
-  cores            = 4
+  cores            = 10
 
   # UEFI BIOS (recommended for Win11, but not strictly required for installation)
   # Windows 11 officially requires UEFI for Secure Boot and TPM, but it can sometimes be installed in legacy BIOS mode,
@@ -43,15 +43,15 @@ source "qemu" "win11" {
   tpm_device_type = "emulator"
 
   # The autounattend.xml will be mounted as a virtual floppy drive
-  floppy_files = ["${path.root}/autounattend.xml"]
+  floppy_files = ["${path.root}/qemu/autounattend.xml"]
 
   # Boot configuration
   boot_wait = "5s"
-  boot_command = [
-    "<esc><wait>",
-    "<f12><wait>",
-    "1<enter>"
-  ]
+  #boot_command = [
+  #  "<esc><wait>",
+  #  "<f12><wait>",
+  #  "1<enter>"
+  #]
 
   communicator   = "winrm"
   winrm_username = "Administrator"
