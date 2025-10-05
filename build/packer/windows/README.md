@@ -44,4 +44,4 @@ This directory also contains a Packer template for building Windows images on ma
 
 ```bash
 packer init build/packer/windows/windows11-x86-on-macos.pkr.hcl
-packer build -var "iso_url=../../../vendor/windows/Win11_25H2_English_x64.iso" build/packer/windows/windows11-x86-on-macos.pkr.hcl
+packer build -var "iso_url=./vendor/windows/Win11_25H2_English_x64.iso" build/packer/windows/windows11-x86-on-macos.pkr.hcl
