@@ -8,6 +8,8 @@ brew install hashicorp/tap/hashicorp-vagrant
 
 brew install qemu
 brew install --cask utm
+brew install libvirt
+vagrant plugin install vagrant-libvirt
 
 brew install --cask powershell
 

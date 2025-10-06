@@ -1,0 +1,23 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "win11-packer-qemu" # Change to your QEMU-compatible Windows 11 box name
+
+  config.vm.provider "qemu" do |q|
+    q.memory = 4096
+    q.cpus = 4
+    # Add any additional QEMU-specific options here if needed
+    q.accel = "tcg,thread=multi,tb-size=1024"
+    q.machine_type = "q35"
+    q.cpu_model = "Haswell"
+  end
+
+  config.vm.communicator = "winrm"
+  config.vm.guest = :windows
+  config.vm.boot_timeout = 600
+
+  # Optional: Set up WinRM credentials if needed
+  config.winrm.username = "Administrator"
+  config.winrm.password = "P@ssw0rd!"
+
+  # Disable all synced folders (including default /vagrant)
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+end

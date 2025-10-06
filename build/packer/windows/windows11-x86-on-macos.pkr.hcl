@@ -19,48 +19,32 @@ variable "iso_url" {
 source "qemu" "win11" {
   # Apple Silicon host → x86 guest → needs software emulation
   accelerator     = "tcg"
-  cpu_model       = "Skylake-Client"
+  cpu_model       = "Haswell"
   machine_type    = "q35"
   disk_size       = "64G"
   disk_interface  = "ide"
   format          = "qcow2"
-  #headless        = true
+  # you can enable headless mode by uncommenting the following line
+  # headless        = true
   iso_url         = var.iso_url
   iso_checksum    = "none"
   output_directory   = "${path.root}/../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  #use_default_display = true
   display         = "cocoa"
   memory          = "4096"
-  cores            = 10
-
-  #qemuargs = [
-  #  ["--device", "ich9-ahci,id=sata"],
-  #]
-
-  # UEFI BIOS (recommended for Win11, but not strictly required for installation)
-  # Windows 11 officially requires UEFI for Secure Boot and TPM, but it can sometimes be installed in legacy BIOS mode,
-  # especially if hardware checks are bypassed. UTM may use legacy BIOS by default for x86 VMs.
-  # Uncomment the following lines to enable UEFI if needed:
-  # efi_boot = true
-  # efi_firmware_code = "/Applications/UTM.app/Contents/Resources/qemu/edk2-x86_64-code.fd"
-  # efi_firmware_vars = "/Applications/UTM.app/Contents/Resources/qemu/edk2-x86_64-code.fd"
+  cores           = 4
+  net_device      = "e1000"
 
   tpm_device_type = "emulator"
 
   # The autounattend.xml will be mounted as a virtual floppy drive
   floppy_files = ["${path.root}/qemu/autounattend.xml"]
 
-  # Boot configuration
   boot_wait = "5s"
-  #boot_command = [
-  #  "<esc><wait>",
-  #  "<f12><wait>",
-  #  "1<enter>"
-  #]
 
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "P@ssw0rd!"
+  winrm_timeout  = "6h"
 
   shutdown_command = "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\""
   shutdown_timeout = "5m"
@@ -69,16 +53,21 @@ source "qemu" "win11" {
 build {
   sources = ["source.qemu.win11"]
 
-  provisioner "shell-local" {
-    inline = ["echo 'Windows 11 x86 build finished successfully. Image in output-windows11/disk.qcow2'"]
-  }
+  # This provisioner creates C:\packer.txt to verify that the VM was successfully provisioned by Packer.
+  /*
+  provisioner "powershell" {
+    inline = [
+      "Write-Output 'Running inside Windows VM...'",
+      "New-Item -Path C:\\packer.txt -ItemType File -Force",
+      "Write-Output 'Created C:\\packer.txt file.'",
+      # delete the file to keep the image clean
+      "Remove-Item -Path C:\\packer.txt -Force"
+    ]
+  }*/
 
-/*
   post-processor "vagrant" {
-    output = "${path.root}/../../../vendor/windows/win11-hyperv.box"
+    output = "${path.root}/../../../vendor/windows/win11-qemu.box"
     keep_input_artifact = false
-    provider_override = "qemu"
-    compression_level = 1
+    compression_level = 0
   }
-  */
 }
