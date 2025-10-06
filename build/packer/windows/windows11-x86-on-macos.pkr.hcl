@@ -28,7 +28,9 @@ source "qemu" "win11" {
   # headless        = true
   iso_url         = var.iso_url
   iso_checksum    = "none"
-  output_directory   = "${path.root}/../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  cdrom           = var.iso_url
+  cdrom_files     = [../../../vendor/utm/utm-guest-tools-latest.iso.iso]
+  output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   display         = "cocoa"
   memory          = "4096"
   cores           = 4
@@ -65,9 +67,11 @@ build {
     ]
   }*/
 
+  /*
   post-processor "vagrant" {
     output = "${path.root}/../../../vendor/windows/win11-qemu.box"
     keep_input_artifact = false
     compression_level = 0
   }
+  */
 }
