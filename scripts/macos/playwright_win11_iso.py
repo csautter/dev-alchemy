@@ -78,11 +78,11 @@ async def fetch_win11_iso_link():
         for option in options:
             text = await option.text_content()
             value = await option.get_attribute('value')
-            if text and "English International" in text:
+            if text and "English (United States)" in text:
                 lang_value = value
                 break
         if lang_value is None:
-            raise Exception("Could not find 'English International' language option.")
+            raise Exception("Could not find 'English (United States)' language option.")
         await page.select_option('#product-languages', value=lang_value)
 
         await random_mouse_movements(page)
@@ -91,11 +91,9 @@ async def fetch_win11_iso_link():
 
         await random_mouse_movements(page)
 
-        download_selector = '#download-links > div > div > a.first-child'
+        download_selector = '#download-links > div > div > a:first-child'
+        await page.wait_for_selector(download_selector)
         download_button = page.locator(download_selector)
-        await download_button.wait_for(state='visible', timeout=10000)
-        if not download_button:
-            raise Exception("Download button not found.")
 
         link = await download_button.get_attribute('href')
         if not link:
@@ -105,6 +103,15 @@ async def fetch_win11_iso_link():
         # Get the download link
         #link = await page.get_attribute('#download-links > div > div > a.first-child', 'href')
         print(f"Windows 11 ISO download link: {link}")
+
+        # write link to file for use in packer build
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.join(script_dir, "../../vendor/windows/")
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, "win11-iso-link.txt")
+        with open(output_path, "w") as f:
+            f.write(link)
+
         await browser.close()
 
 if __name__ == "__main__":
