@@ -42,6 +42,15 @@ source "qemu" "win11" {
 
   tpm_device_type = "tpm-tis-device"
 
+  boot_wait = "5s"
+  boot_command = [
+    "<spacebar>",
+    "<wait3>",
+    "<spacebar>",
+    "<wait3>",
+    "<spacebar>",
+  ]
+
   qemuargs = [
     ["-bios", "${path.root}/../../../vendor/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
     ["-device","ramfb"],
@@ -50,13 +59,13 @@ source "qemu" "win11" {
     ["-device","usb-tablet"],
     ["-device", "usb-storage,drive=install"],
     ["-drive", "if=none,id=install,format=raw,media=cdrom,file=${var.iso_url}"],
+    ["-device", "usb-storage,drive=autounattend"],
+    ["-drive", "if=none,id=autounattend,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/autounattend.iso"],
     ["-boot", "order=d,menu=on"]
   ]
 
   # The autounattend.xml will be mounted as a virtual floppy drive
   cd_files = ["${path.root}/qemu/autounattend.xml"]
-
-  boot_wait = "5s"
 
   communicator   = "winrm"
   winrm_username = "Administrator"
