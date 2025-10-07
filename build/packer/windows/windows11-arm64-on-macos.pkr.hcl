@@ -61,6 +61,8 @@ source "qemu" "win11" {
     ["-drive", "if=none,id=install,format=raw,media=cdrom,file=${var.iso_url}"],
     ["-device", "usb-storage,drive=autounattend"],
     ["-drive", "if=none,id=autounattend,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/autounattend.iso"],
+    ["-device", "usb-storage,drive=virtio-drivers"],
+    ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/virtio-win.iso"],
     ["-boot", "order=d,menu=on"]
   ]
 
