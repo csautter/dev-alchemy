@@ -25,9 +25,9 @@ source "qemu" "win11" {
   cpu_model       = "host"
   machine_type    = "virt"
   qemu_binary    = "qemu-system-aarch64"
-  disk_size       = "64G"
-  disk_interface  = "virtio"
-  format          = "qcow2"
+  #disk_size       = "64G"
+  #disk_interface  = "virtio"
+  #format          = "qcow2"
   # you can enable headless mode by uncommenting the following line
   # headless        = true
   iso_url         = var.iso_url
@@ -63,6 +63,7 @@ source "qemu" "win11" {
     ["-drive", "if=none,id=autounattend,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/autounattend.iso"],
     ["-device", "usb-storage,drive=virtio-drivers"],
     ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/virtio-win.iso"],
+    ["-drive", "file=${path.root}/../../../vendor/windows/qemu-windows11-arm64.qcow2,if=virtio,id=system,format=qcow2,cache=writeback"],
     ["-boot", "order=d,menu=on"]
   ]
 

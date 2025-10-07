@@ -6,6 +6,19 @@
 		<component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
 			<UILanguage>en-US</UILanguage>
 		</component>
+		<component name="Microsoft-Windows-PnpCustomizationsWinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+			<DriverPaths>
+				<PathAndCredentials wcm:action="add" wcm:keyValue="1">
+					<Path>D:\viostor\w11\ARM64</Path>
+				</PathAndCredentials>
+				<PathAndCredentials wcm:action="add" wcm:keyValue="2">
+					<Path>E:\viostor\w11\ARM64</Path>
+				</PathAndCredentials>
+				<PathAndCredentials wcm:action="add" wcm:keyValue="3">
+					<Path>F:\viostor\w11\ARM64</Path>
+				</PathAndCredentials>
+			</DriverPaths>
+		</component>
 		<component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
 			<ImageInstall>
 				<OSImage>
@@ -24,22 +37,22 @@
 			</UserData>
 			<UseConfigurationSet>false</UseConfigurationSet>
 			<RunSynchronous>
-			    <RunSynchronousCommand wcm:action="add">
-					<Order>1</Order>
-					<Description>Load drivers from all CD-ROM drives</Description>
-					<Path>cmd /c for /f %%D in ('wmic logicaldisk where "DriveType=5" get DeviceID ^| find ":"') do (for /r %%D\ %%F in (*.inf) do drvload "%%F")</Path>
-				</RunSynchronousCommand>
 				<RunSynchronousCommand wcm:action="add">
-					<Order>2</Order>
+					<Order>1</Order>
 					<Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f</Path>
 				</RunSynchronousCommand>
 				<RunSynchronousCommand wcm:action="add">
-					<Order>3</Order>
+					<Order>2</Order>
 					<Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f</Path>
 				</RunSynchronousCommand>
 				<RunSynchronousCommand wcm:action="add">
-					<Order>4</Order>
+					<Order>3</Order>
 					<Path>reg.exe add "HKLM\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>4</Order>
+					<Description>Load drivers from removable and CD drives</Description>
+          			<Path>cmd.exe /c for /f %%D in ('wmic logicaldisk where "DriveType=2 or DriveType=5" get DeviceID ^| find ":"') do (for /r %%D\viostor\w11\ARM64 %%F in (*.inf) do drvload "%%F")</Path>
 				</RunSynchronousCommand>
 				<RunSynchronousCommand wcm:action="add">
 					<Order>5</Order>
