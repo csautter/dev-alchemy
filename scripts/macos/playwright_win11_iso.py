@@ -5,10 +5,13 @@ import asyncio
 from playwright.async_api import async_playwright
 import random
 import time
+import argparse
+import os
 
 MICROSOFT_WIN11_ISO_URL = "https://www.microsoft.com/en-US/software-download/windows11"
+MICROSOFT_WIN11_ARM_ISO_URL = "https://www.microsoft.com/en-us/software-download/windows11arm64"
 
-async def fetch_win11_iso_link():
+async def fetch_win11_iso_link(arm: bool = False):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
         USER_AGENTS = [
@@ -31,7 +34,8 @@ async def fetch_win11_iso_link():
             user_agent=user_agent
         )
         page = await context.new_page()
-        await page.goto(MICROSOFT_WIN11_ISO_URL)
+        url = MICROSOFT_WIN11_ARM_ISO_URL if arm else MICROSOFT_WIN11_ISO_URL
+        await page.goto(url)
 
         async def random_mouse_movements(page, min_seconds=2, max_seconds=10):
             duration = random.uniform(min_seconds, max_seconds)
@@ -108,11 +112,17 @@ async def fetch_win11_iso_link():
         script_dir = os.path.dirname(os.path.abspath(__file__))
         output_dir = os.path.join(script_dir, "../../vendor/windows/")
         os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, "win11-iso-link.txt")
+        if(arm):
+            output_path = os.path.join(output_dir, "win11_arm_iso_url.txt")
+        else:
+            output_path = os.path.join(output_dir, "win11_iso_url.txt")
         with open(output_path, "w") as f:
             f.write(link)
 
         await browser.close()
 
 if __name__ == "__main__":
-    asyncio.run(fetch_win11_iso_link())
+    parser = argparse.ArgumentParser(description="Fetch latest Windows 11 ISO download link.")
+    parser.add_argument('--arm', action='store_true', help='Fetch Windows 11 ARM version ISO')
+    args = parser.parse_args()
+    asyncio.run(fetch_win11_iso_link(arm=args.arm))

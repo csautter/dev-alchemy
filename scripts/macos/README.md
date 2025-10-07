@@ -24,8 +24,25 @@ Activate your virtual environment if you created one:
 ```bash
 source .venv/bin/activate
 ```
-To run the script, execute the following command in your terminal:
+To get the latest Windows 11 ISO download link, run:
 ```bash
 python playwright_win11_iso.py
 ```
-This will output the latest Windows 11 ISO download link.
+To get the latest Windows 11 ISO arm version download link, use:
+```bash
+python playwright_win11_iso.py --arm
+```
+This will output the latest Windows 11 ISO download link in the terminal.
+Additionally , the script saves the download link to a file named `./vendor/windows/win11_iso_url.txt` or `./vendor/windows/win11_arm_iso_url.txt`.
+
+### Download the ISO
+You can use `curl` or `wget` to download the ISO using the link saved in the file:
+```bash
+cd ./vendor/windows/
+curl --progress-bar -o win11_25h2_english_x64.iso $(cat ./win11_iso_url.txt)
+```
+or for arm:
+```bash
+cd ./vendor/windows/
+curl --progress-bar -o win11_25h2_english_arm64.iso $(cat ./win11_arm_iso_url.txt)
+```
