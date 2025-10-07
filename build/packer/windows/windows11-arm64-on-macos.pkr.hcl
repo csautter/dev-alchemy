@@ -1,3 +1,6 @@
+# Check out this guide for more information on setting up Windows on ARM64 using QEMU on macOS:
+# https://linaro.atlassian.net/wiki/spaces/WOAR/pages/28914909194/windows-arm64+VM+using+qemu-system
+
 packer {
   required_plugins {
     qemu = {
@@ -23,13 +26,14 @@ source "qemu" "win11" {
   machine_type    = "virt"
   qemu_binary    = "qemu-system-aarch64"
   disk_size       = "64G"
-  disk_interface  = "ide"
+  disk_interface  = "virtio"
   format          = "qcow2"
   # you can enable headless mode by uncommenting the following line
   # headless        = true
   iso_url         = var.iso_url
   iso_checksum    = "none"
-  cd_files     = ["${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso"]
+  #cd_files     = ["${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso"]
+  #cdrom_interface = "ide"
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   display         = "cocoa"
   memory          = "4096"
@@ -38,8 +42,19 @@ source "qemu" "win11" {
 
   tpm_device_type = "tpm-tis-device"
 
+  qemuargs = [
+    ["-bios", "${path.root}/../../../vendor/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
+    ["-device","ramfb"],
+    ["-device","qemu-xhci"],
+    ["-device","usb-kbd"],
+    ["-device","usb-tablet"],
+    ["-device", "usb-storage,drive=install"],
+    ["-drive", "if=none,id=install,format=raw,media=cdrom,file=${var.iso_url}"],
+    ["-boot", "order=d,menu=on"]
+  ]
+
   # The autounattend.xml will be mounted as a virtual floppy drive
-  floppy_files = ["${path.root}/qemu/autounattend.xml"]
+  cd_files = ["${path.root}/qemu/autounattend.xml"]
 
   boot_wait = "5s"
 
