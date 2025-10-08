@@ -1,23 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-	<!--https://schneegans.de/windows/unattend-generator/?LanguageMode=Unattended&UILanguage=en-US&Locale=en-US&Keyboard=00000409&UseKeyboard2=true&Locale2=de-DE&Keyboard2=00000407&GeoLocation=94&ProcessorArchitecture=arm64&BypassRequirementsCheck=true&ComputerNameMode=Random&CompactOsMode=Default&TimeZoneMode=Implicit&PartitionMode=Unattended&PartitionLayout=GPT&EspSize=300&RecoveryMode=None&DiskAssertionMode=Skip&WindowsEditionMode=Generic&WindowsEdition=pro&InstallFromMode=Automatic&PEMode=Default&UserAccountMode=Unattended&AccountName0=Admin&AccountDisplayName0=&AccountPassword0=&AccountGroup0=Administrators&AccountName1=User&AccountDisplayName1=&AccountPassword1=&AccountGroup1=Users&AutoLogonMode=Builtin&BuiltinAdministratorPassword=P%40ssw0rd%21&PasswordExpirationMode=Unlimited&LockoutMode=Default&HideFiles=None&ShowFileExtensions=true&TaskbarSearch=Box&TaskbarIconsMode=Default&StartTilesMode=Default&StartPinsMode=Default&PreventDeviceEncryption=true&EffectsMode=Default&DesktopIconsMode=Default&StartFoldersMode=Default&WifiMode=Interactive&ExpressSettings=DisableAll&LockKeysMode=Skip&StickyKeysMode=Default&ColorMode=Default&WallpaperMode=Default&LockScreenMode=Default&FirstLogonScript0=%24logPath+%3D+%22C%3A%5CEnableWinRM.log%22%3B%0D%0AStart-Transcript+-Path+%24logPath+-Append%3B%0D%0A%0D%0Atry+%7B%0D%0A%09Start-Service+WinRM%3B%0D%0A%09%23+Set+all+network+profiles+to+Private+to+avoid+WinRM+firewall+exception+errors%0D%0A%09Get-NetConnectionProfile+%7C+Where-Object+%7B%24_.NetworkCategory+-eq+%27Public%27%7D+%7C+Set-NetConnectionProfile+-NetworkCategory+Private%3B%0D%0A%09Set-Item+-Path+WSMan%3A%5Clocalhost%5CService%5CAllowUnencrypted+-Value+%24true%3B%0D%0A%09Set-Item+-Path+WSMan%3A%5Clocalhost%5CService%5CAuth%5CBasic+-Value+%24true%3B%0D%0A%09%23+This+opens+the+firewall+for+WinRM+HTTP+%28port+5986%29+on+localhost%0D%0A%09Enable-PSRemoting+-Force%3B%0D%0A%09%23+This+opens+the+firewall+for+WinRM+HTTP+%28port+5985%29+from+any+remote+address%0D%0A%09Set-NetFirewallRule+-Name+%27WINRM-HTTP-In-TCP%27+-RemoteAddress+Any%3B%0D%0A%7D+catch+%7B%0D%0A%09Write-Error+%22An+error+occurred+while+enabling+WinRM%3A+%24_%22%3B%0D%0A%7D%0D%0A%0D%0AStop-Transcript%3B&FirstLogonScriptType0=Ps1&WdacMode=Skip-->
+	<!--https://schneegans.de/windows/unattend-generator/?LanguageMode=Unattended&UILanguage=en-US&Locale=en-US&Keyboard=00000409&UseKeyboard2=true&Locale2=de-DE&Keyboard2=00000407&GeoLocation=94&ProcessorArchitecture=arm64&BypassRequirementsCheck=true&ComputerNameMode=Random&CompactOsMode=Default&TimeZoneMode=Implicit&PartitionMode=Interactive&DiskAssertionMode=Skip&WindowsEditionMode=Generic&WindowsEdition=pro&InstallFromMode=Automatic&PEMode=Default&UserAccountMode=Unattended&AccountName0=Admin&AccountDisplayName0=&AccountPassword0=&AccountGroup0=Administrators&AccountName1=User&AccountDisplayName1=&AccountPassword1=&AccountGroup1=Users&AutoLogonMode=Builtin&BuiltinAdministratorPassword=P%40ssw0rd%21&PasswordExpirationMode=Unlimited&LockoutMode=Default&HideFiles=None&ShowFileExtensions=true&TaskbarSearch=Box&TaskbarIconsMode=Default&StartTilesMode=Default&StartPinsMode=Default&PreventDeviceEncryption=true&EffectsMode=Default&DesktopIconsMode=Default&StartFoldersMode=Default&WifiMode=Interactive&ExpressSettings=DisableAll&LockKeysMode=Skip&StickyKeysMode=Default&ColorMode=Default&WallpaperMode=Default&LockScreenMode=Default&FirstLogonScript0=%24logPath+%3D+%22C%3A%5CEnableWinRM.log%22%3B%0D%0AStart-Transcript+-Path+%24logPath+-Append%3B%0D%0A%0D%0Atry+%7B%0D%0A%09Start-Service+WinRM%3B%0D%0A%09%23+Set+all+network+profiles+to+Private+to+avoid+WinRM+firewall+exception+errors%0D%0A%09Get-NetConnectionProfile+%7C+Where-Object+%7B%24_.NetworkCategory+-eq+%27Public%27%7D+%7C+Set-NetConnectionProfile+-NetworkCategory+Private%3B%0D%0A%09Set-Item+-Path+WSMan%3A%5Clocalhost%5CService%5CAllowUnencrypted+-Value+%24true%3B%0D%0A%09Set-Item+-Path+WSMan%3A%5Clocalhost%5CService%5CAuth%5CBasic+-Value+%24true%3B%0D%0A%09%23+This+opens+the+firewall+for+WinRM+HTTP+%28port+5986%29+on+localhost%0D%0A%09Enable-PSRemoting+-Force%3B%0D%0A%09%23+This+opens+the+firewall+for+WinRM+HTTP+%28port+5985%29+from+any+remote+address%0D%0A%09Set-NetFirewallRule+-Name+%27WINRM-HTTP-In-TCP%27+-RemoteAddress+Any%3B%0D%0A%7D+catch+%7B%0D%0A%09Write-Error+%22An+error+occurred+while+enabling+WinRM%3A+%24_%22%3B%0D%0A%7D%0D%0A%0D%0AStop-Transcript%3B&FirstLogonScriptType0=Ps1&WdacMode=Skip-->
 	<settings pass="offlineServicing"></settings>
 	<settings pass="windowsPE">
 		<component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
 			<UILanguage>en-US</UILanguage>
-		</component>
-		<component name="Microsoft-Windows-PnpCustomizationsWinPE" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
-			<DriverPaths>
-				<PathAndCredentials wcm:action="add" wcm:keyValue="1">
-					<Path>D:\viostor\w11\ARM64</Path>
-				</PathAndCredentials>
-				<PathAndCredentials wcm:action="add" wcm:keyValue="2">
-					<Path>E:\viostor\w11\ARM64</Path>
-				</PathAndCredentials>
-				<PathAndCredentials wcm:action="add" wcm:keyValue="3">
-					<Path>F:\viostor\w11\ARM64</Path>
-				</PathAndCredentials>
-			</DriverPaths>
 		</component>
 		<component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
 			<ImageInstall>
@@ -52,7 +39,7 @@
 				<RunSynchronousCommand wcm:action="add">
 					<Order>4</Order>
 					<Description>Load drivers from removable and CD drives</Description>
-          			<Path>cmd.exe /c for /f %%D in ('wmic logicaldisk where "DriveType=2 or DriveType=5" get DeviceID ^| find ":"') do (for /r %%D\viostor\w11\ARM64 %%F in (*.inf) do drvload "%%F")</Path>
+					<Path>cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\viostor\w11\ARM64\viostor.inf drvload %D:\viostor\w11\ARM64\viostor.inf"</Path>
 				</RunSynchronousCommand>
 				<RunSynchronousCommand wcm:action="add">
 					<Order>5</Order>
@@ -92,6 +79,16 @@
 				<RunSynchronousCommand wcm:action="add">
 					<Order>5</Order>
 					<Path>reg.exe unload "HKU\DefaultUser"</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>6</Order>
+					<Description>Inject VirtIO storage drivers persistently</Description>
+					<Path>cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\viostor\w11\ARM64\viostor.inf dism /Image:C:\ /Add-Driver /Driver:%D:\viostor\w11\ARM64\ /Recurse /ForceUnsigned"</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>7</Order>
+					<Description>Inject VirtIO network drivers persistently</Description>
+					<Path>cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\viostor\w11\ARM64\viostor.inf dism /Image:C:\ /Add-Driver /Driver:%D:\NetKVM\w11\ARM64\ /Recurse /ForceUnsigned"</Path>
 				</RunSynchronousCommand>
 			</RunSynchronous>
 		</component>
@@ -157,10 +154,6 @@ foreach( $file in $Document.unattend.Extensions.File ) {
 $scripts = @(
 	{
 		reg.exe add "HKLM\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f;
-	};
-	{
-		ReAgentc.exe /disable;
-		Remove-Item -LiteralPath 'C:\Windows\System32\Recovery\Winre.wim' -Force -ErrorAction 'SilentlyContinue';
 	};
 	{
 		net.exe accounts /maxpwage:UNLIMITED;
@@ -264,7 +257,7 @@ $scripts = @(
 	{
 		Set-ItemProperty -LiteralPath 'Registry::HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoLogonCount' -Type 'DWord' -Force -Value 0;
 	};
-    {
+	{
         $logPath = "C:\EnableWinRM.log";
         Start-Transcript -Path $logPath -Append;
 
@@ -283,7 +276,7 @@ $scripts = @(
         }
 
         Stop-Transcript;
-    };
+	};
 	{
 		Remove-Item -LiteralPath @(
 		  'C:\Windows\Panther\unattend.xml';

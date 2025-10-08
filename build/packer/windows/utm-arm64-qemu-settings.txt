@@ -1,0 +1,56 @@
+# A Windows 11 arm64 machine created by UTM as reference
+# These VM settings are useful configuring the packer build qemu params
+
+
+qemu-system-aarch64
+-L /Users/<username>/Library/Containers/com.utmapp.UTM/Data/Library/Caches/qemu
+-S
+-spice unix=on,addr=BBEF1D33-5B60-40A9-B2DF-57E919EEF921.spice,disable-ticketing=on,image-compression=off,playback-compression=off,streaming-video=off,gl=on
+-chardev spiceport,name=org.qemu.monitor.qmp.0,id=org.qemu.monitor.qmp
+-mon chardev=org.qemu.monitor.qmp,mode=control
+-nodefaults
+-vga none
+-device virtio-net-pci,mac=A6:E5:44:99:7F:A2,netdev=net0
+-netdev vmnet-shared,id=net0
+-device virtio-ramfb-gl
+-cpu host
+-smp cpus=4,sockets=1,cores=4,threads=1
+-machine virt
+-accel hvf
+-drive if=pflash,format=raw,unit=0,file.filename=/Users/<username>/Library/Containers/com.utmapp.UTM/Data/Library/Caches/qemu/edk2-aarch64-secure-code.fd,file.locking=off,readonly=on
+-drive "if=pflash,unit=1,file=/Users/<username>/Library/Containers/com.utmapp.UTM/Data/Documents/Windows arm64.utm/Data/efi_vars.fd"
+-m 8192
+-audiodev spice,id=audio0
+-device intel-hda
+-device hda-duplex,audiodev=audio0
+-device nec-usb-xhci,id=usb-bus
+-device usb-tablet,bus=usb-bus.0
+-device usb-mouse,bus=usb-bus.0
+-device usb-kbd,bus=usb-bus.0
+-device qemu-xhci,id=usb-controller-0
+-chardev spicevmc,name=usbredir,id=usbredirchardev0
+-device usb-redir,chardev=usbredirchardev0,id=usbredirdev0,bus=usb-controller-0.0
+-chardev spicevmc,name=usbredir,id=usbredirchardev1
+-device usb-redir,chardev=usbredirchardev1,id=usbredirdev1,bus=usb-controller-0.0
+-chardev spicevmc,name=usbredir,id=usbredirchardev2
+-device usb-redir,chardev=usbredirchardev2,id=usbredirdev2,bus=usb-controller-0.0
+-device usb-storage,drive=drive8CD34D1B-7A8C-4E74-994C-407917EE15C3,removable=true,bootindex=0,bus=usb-bus.0
+-drive if=none,media=cdrom,id=drive8CD34D1B-7A8C-4E74-994C-407917EE15C3,readonly=on
+-device nvme,drive=driveD4125E99-5FD5-4127-808C-22D165DF4E8F,serial=D4125E99-5FD5-4127-808C-22D165DF4E8F,bootindex=1
+-drive "if=none,media=disk,id=driveD4125E99-5FD5-4127-808C-22D165DF4E8F,file.filename=/Users/<username>/Library/Containers/com.utmapp.UTM/Data/Documents/Windows arm64.utm/Data/D4125E99-5FD5-4127-808C-22D165DF4E8F.qcow2,discard=unmap,detect-zeroes=unmap"
+-device usb-storage,drive=drive8A9FA25B-ADA7-46CB-89BB-1B65B8DBE910,removable=true,bootindex=2,bus=usb-bus.0
+-drive "if=none,media=cdrom,id=drive8A9FA25B-ADA7-46CB-89BB-1B65B8DBE910,file.filename=/Users/<username>/Library/Containers/com.utmapp.UTM/Data/Library/Application Support/GuestSupportTools/utm-guest-tools-latest.iso,file.locking=off,readonly=on"
+-device virtio-serial
+-device virtserialport,chardev=org.qemu.guest_agent,name=org.qemu.guest_agent.0
+-chardev spiceport,name=org.qemu.guest_agent.0,id=org.qemu.guest_agent
+-device virtserialport,chardev=vdagent,name=com.redhat.spice.0
+-chardev spicevmc,id=vdagent,debug=0,name=vdagent
+-device virtserialport,chardev=charchannel1,id=channel1,name=org.spice-space.webdav.0
+-chardev spiceport,name=org.spice-space.webdav.0,id=charchannel1
+-name "Windows arm64"
+-uuid BBEF1D33-5B60-40A9-B2DF-57E919EEF921
+-rtc base=localtime
+-device virtio-rng-pci
+-chardev socket,id=chrtpm0,path=BBEF1D33-5B60-40A9-B2DF-57E919EEF921.swtpm
+-tpmdev emulator,id=tpm0,chardev=chrtpm0
+-device tpm-crb-device,tpmdev=tpm0

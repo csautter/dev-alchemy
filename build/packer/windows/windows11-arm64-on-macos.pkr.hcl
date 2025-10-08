@@ -38,9 +38,9 @@ source "qemu" "win11" {
   display         = "cocoa"
   memory          = "4096"
   cores           = 4
-  net_device      = "e1000"
+  net_device      = "virtio-net-pci"
 
-  tpm_device_type = "tpm-tis-device"
+  #tpm_device_type = "tpm-tis-device"
 
   boot_wait = "5s"
   boot_command = [
@@ -63,8 +63,9 @@ source "qemu" "win11" {
     ["-drive", "if=none,id=autounattend,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/autounattend.iso"],
     ["-device", "usb-storage,drive=virtio-drivers"],
     ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/virtio-win.iso"],
-    ["-drive", "file=${path.root}/../../../vendor/windows/qemu-windows11-arm64.qcow2,if=virtio,id=system,format=qcow2,cache=writeback"],
-    ["-boot", "order=d,menu=on"]
+    ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=1"],
+    ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${path.root}/../../../vendor/windows/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
+    ["-boot", "order=c,menu=on"]
   ]
 
   # The autounattend.xml will be mounted as a virtual floppy drive
