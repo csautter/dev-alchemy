@@ -7,6 +7,7 @@
 			<UILanguage>en-US</UILanguage>
 		</component>
 		<component name="Microsoft-Windows-Setup" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+			<EnableUnsignedDrivers>true</EnableUnsignedDrivers>
 			<ImageInstall>
 				<OSImage>
 					<InstallTo>
@@ -79,16 +80,6 @@
 				<RunSynchronousCommand wcm:action="add">
 					<Order>5</Order>
 					<Path>reg.exe unload "HKU\DefaultUser"</Path>
-				</RunSynchronousCommand>
-				<RunSynchronousCommand wcm:action="add">
-					<Order>6</Order>
-					<Description>Inject VirtIO storage drivers persistently</Description>
-					<Path>cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\viostor\w11\ARM64\viostor.inf dism /Image:C:\ /Add-Driver /Driver:%D:\viostor\w11\ARM64\ /Recurse /ForceUnsigned"</Path>
-				</RunSynchronousCommand>
-				<RunSynchronousCommand wcm:action="add">
-					<Order>7</Order>
-					<Description>Inject VirtIO network drivers persistently</Description>
-					<Path>cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\NetKVM\w11\ARM64\netkvm.inf dism /Image:C:\ /Add-Driver /Driver:%D:\NetKVM\w11\ARM64\ /Recurse /ForceUnsigned"</Path>
 				</RunSynchronousCommand>
 			</RunSynchronous>
 		</component>
@@ -164,6 +155,22 @@ $scripts = @(
 	{
 		ReAgentc.exe /disable;
 		Remove-Item -LiteralPath 'C:\Windows\System32\Recovery\Winre.wim' -Force -ErrorAction 'SilentlyContinue';
+	};
+	{
+		# Enable test signing to allow loading unsigned drivers
+		cmd.exe /c "bcdedit /set testsigning on";
+	};
+	{
+		# Inject VirtIO network drivers persistently and temporarily
+		cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\NetKVM\w11\ARM64\netkvm.inf dism /Image:C:\ /Add-Driver /Driver:%D:\NetKVM\w11\ARM64\ /Recurse /ForceUnsigned";
+		cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\NetKVM\w11\ARM64\netkvm.inf drvload %D:\NetKVM\w11\ARM64\netkvm.inf";
+		cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\NetKVM\w11\ARM64\netkvm.inf pnputil /add-driver %D:\NetKVM\w11\ARM64\netkvm.inf /install";
+	};
+	{
+		# Inject VirtIO storage drivers persistently and temporarily
+		cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\viostor\w11\ARM64\viostor.inf dism /Image:C:\ /Add-Driver /Driver:%D:\viostor\w11\ARM64\ /Recurse /ForceUnsigned";
+		cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\viostor\w11\ARM64\viostor.inf drvload %D:\viostor\w11\ARM64\viostor.inf";
+		cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\viostor\w11\ARM64\viostor.inf pnputil /add-driver %D:\viostor\w11\ARM64\viostor.inf /install";
 	};
 );
 
