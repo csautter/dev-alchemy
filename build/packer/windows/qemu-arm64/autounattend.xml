@@ -88,7 +88,7 @@
 				<RunSynchronousCommand wcm:action="add">
 					<Order>7</Order>
 					<Description>Inject VirtIO network drivers persistently</Description>
-					<Path>cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\viostor\w11\ARM64\viostor.inf dism /Image:C:\ /Add-Driver /Driver:%D:\NetKVM\w11\ARM64\ /Recurse /ForceUnsigned"</Path>
+					<Path>cmd.exe /c "for %D in (D E F G H I J K L M N O P Q R S T U V W X Y Z) do if exist %D:\NetKVM\w11\ARM64\netkvm.inf dism /Image:C:\ /Add-Driver /Driver:%D:\NetKVM\w11\ARM64\ /Recurse /ForceUnsigned"</Path>
 				</RunSynchronousCommand>
 			</RunSynchronous>
 		</component>
@@ -160,6 +160,10 @@ $scripts = @(
 	};
 	{
 		reg.exe add "HKLM\SYSTEM\CurrentControlSet\Control\BitLocker" /v "PreventDeviceEncryption" /t REG_DWORD /d 1 /f;
+	};
+	{
+		ReAgentc.exe /disable;
+		Remove-Item -LiteralPath 'C:\Windows\System32\Recovery\Winre.wim' -Force -ErrorAction 'SilentlyContinue';
 	};
 );
 
@@ -262,7 +266,8 @@ $scripts = @(
         Start-Transcript -Path $logPath -Append;
 
         try {
-            Start-Service WinRM;
+			winrm quickconfig -quiet;
+			Start-Service WinRM;
             # Set all network profiles to Private to avoid WinRM firewall exception errors
             Get-NetConnectionProfile | Where-Object {$_.NetworkCategory -eq 'Public'} | Set-NetConnectionProfile -NetworkCategory Private;
             Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true;
