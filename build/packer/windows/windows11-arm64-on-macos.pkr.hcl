@@ -20,27 +20,19 @@ variable "iso_url" {
 }
 
 source "qemu" "win11" {
-  # Apple Silicon host → x86 guest → needs software emulation
   accelerator     = "hvf"
   cpu_model       = "host"
   machine_type    = "virt"
   qemu_binary    = "qemu-system-aarch64"
-  #disk_size       = "64G"
-  #disk_interface  = "virtio"
-  #format          = "qcow2"
   # you can enable headless mode by uncommenting the following line
   # headless        = true
   iso_url         = var.iso_url
   iso_checksum    = "none"
-  #cd_files     = ["${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso"]
-  #cdrom_interface = "ide"
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   display         = "cocoa"
   memory          = "4096"
   cores           = 4
   net_device      = "virtio-net-pci"
-
-  #tpm_device_type = "tpm-tis-device"
 
   boot_wait = "5s"
   boot_command = [
@@ -68,7 +60,6 @@ source "qemu" "win11" {
     ["-boot", "order=c,menu=on"]
   ]
 
-  # The autounattend.xml will be mounted as a virtual floppy drive
   cd_files = ["${path.root}/qemu/autounattend.xml"]
 
   communicator   = "winrm"
@@ -84,7 +75,6 @@ build {
   sources = ["source.qemu.win11"]
 
   # This provisioner creates C:\packer.txt to verify that the VM was successfully provisioned by Packer.
-  /*
   provisioner "powershell" {
     inline = [
       "Write-Output 'Running inside Windows VM...'",
@@ -93,13 +83,5 @@ build {
       # delete the file to keep the image clean
       "Remove-Item -Path C:\\packer.txt -Force"
     ]
-  }*/
-
-  /*
-  post-processor "vagrant" {
-    output = "${path.root}/../../../vendor/windows/win11-qemu.box"
-    keep_input_artifact = false
-    compression_level = 0
   }
-  */
 }

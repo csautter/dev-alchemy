@@ -56,7 +56,6 @@ build {
   sources = ["source.qemu.win11"]
 
   # This provisioner creates C:\packer.txt to verify that the VM was successfully provisioned by Packer.
-  /*
   provisioner "powershell" {
     inline = [
       "Write-Output 'Running inside Windows VM...'",
@@ -65,13 +64,5 @@ build {
       # delete the file to keep the image clean
       "Remove-Item -Path C:\\packer.txt -Force"
     ]
-  }*/
-
-  /*
-  post-processor "vagrant" {
-    output = "${path.root}/../../../vendor/windows/win11-qemu.box"
-    keep_input_artifact = false
-    compression_level = 0
   }
-  */
 }
