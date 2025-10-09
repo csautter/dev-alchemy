@@ -27,6 +27,9 @@ fi
 if [ ! -f ./vendor/windows/win11_25H2_english_arm64.iso ]; then
   echo "Downloading Windows 11 ARM64 ISO"
   cd ./scripts/macos/
+  if [ ! -d .venv ]; then
+    python3 -m venv .venv
+  fi
   source .venv/bin/activate
   python playwright_win11_iso.py --arm
   cd ./vendor/windows/

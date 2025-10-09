@@ -8,7 +8,7 @@ brew install hashicorp/tap/hashicorp-vagrant
 
 brew install --cask utm
 brew install qemu
-brew install libvirt
-vagrant plugin install vagrant-libvirt
+#brew install libvirt
+#vagrant plugin install vagrant-libvirt
 
 brew install xz
