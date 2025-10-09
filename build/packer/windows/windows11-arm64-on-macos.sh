@@ -59,6 +59,9 @@ bash scripts/macos/download-arm64-uefi.sh
 # builds the autounattend ISO with the current autounattend.xml file
 bash scripts/macos/create-win11-autounattend-iso.sh
 
+# download the virtio-win ISO if not already present
+bash scripts/macos/download-virtio-win-iso.sh
+
 # creates the qcow2 disk image and overwrites it if it already exists
 bash scripts/macos/create-qemu-qcow2-disk.sh
 
