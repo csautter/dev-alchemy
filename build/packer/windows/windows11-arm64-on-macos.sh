@@ -31,6 +31,12 @@ if [ ! -f ./vendor/windows/win11_25H2_english_arm64.iso ]; then
     python3 -m venv .venv
   fi
   source .venv/bin/activate
+
+  if ! python -c "import playwright" &>/dev/null; then
+    pip install playwright
+    python -m playwright install
+  fi
+
   python playwright_win11_iso.py --arm
   cd ./vendor/windows/
   curl --progress-bar -o win11_25h2_english_arm64.iso $(cat ./win11_arm_iso_url.txt)
