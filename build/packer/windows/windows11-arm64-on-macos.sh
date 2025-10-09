@@ -39,7 +39,15 @@ if [ ! -f ./vendor/windows/win11_25H2_english_arm64.iso ]; then
 
   python playwright_win11_iso.py --arm
   cd $PROJECT_ROOT/vendor/windows/
-  curl --progress-bar -o win11_25h2_english_arm64.iso $(cat ./win11_arm_iso_url.txt)
+  
+  if [ $HEADLESS = true ]; then
+    echo "Running in headless mode, skipping ISO download progress bar"
+    curl -o win11_25h2_english_arm64.iso $(cat ./win11_arm_iso_url.txt)
+  else
+    echo "Running in interactive mode, showing ISO download progress bar"
+    curl --progress-bar -o win11_25h2_english_arm64.iso $(cat ./win11_arm_iso_url.txt)
+  fi
+
   cd ${PROJECT_ROOT}
 else
   echo "Windows 11 ARM64 ISO already exists, skipping download"
@@ -54,4 +62,5 @@ bash scripts/macos/create-win11-autounattend-iso.sh
 # creates the qcow2 disk image and overwrites it if it already exists
 bash scripts/macos/create-qemu-qcow2-disk.sh
 
+packer init build/packer/windows/windows11-arm64-on-macos.pkr.hcl
 PACKER_LOG=1 packer build -var "iso_url=./vendor/windows/win11_25H2_english_arm64.iso" -var "headless=$HEADLESS" build/packer/windows/windows11-arm64-on-macos.pkr.hcl
