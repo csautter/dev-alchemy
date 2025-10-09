@@ -19,13 +19,18 @@ variable "iso_url" {
   default = "../../../vendor/windows/Win11_25H2_English_arm64.iso"
 }
 
+# Set to true to run QEMU in headless mode (no GUI)
+variable "headless" {
+  type    = bool
+  default = false
+}
+
 source "qemu" "win11" {
   accelerator     = "hvf"
   cpu_model       = "host"
   machine_type    = "virt"
   qemu_binary    = "qemu-system-aarch64"
-  # you can enable headless mode by uncommenting the following line
-  # headless        = true
+  headless        = var.headless
   iso_url         = var.iso_url
   iso_checksum    = "none"
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"

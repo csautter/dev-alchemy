@@ -1,0 +1,30 @@
+name: Test Packer Build for Windows 11 ARM64 on MacOS
+
+on:
+  pull_request:
+    paths:
+      - "build/packer/windows/*"
+      - "build/packer/windows/**/*"
+      - "scripts/macos/*"
+      - "scripts/macos/**/*"
+      - ".github/workflows/test-packer-build-win11-arm64-on-macos.yml"
+
+jobs:
+  test-packer-build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          bash scripts/macos/install-dependencies.sh
+
+      - name: Run Packer build
+        run: |
+          bash build/packer/windows/windows11-arm64-on-macos.sh --headless

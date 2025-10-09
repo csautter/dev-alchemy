@@ -13,7 +13,7 @@ MICROSOFT_WIN11_ARM_ISO_URL = "https://www.microsoft.com/en-us/software-download
 
 async def fetch_win11_iso_link(arm: bool = False):
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=True)
         USER_AGENTS = [
             # Chrome on Windows
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -103,9 +103,7 @@ async def fetch_win11_iso_link(arm: bool = False):
         if not link:
             raise Exception("Could not retrieve the download link.")
 
-        #await page.wait_for_selector('#download-links > div > div > a.first-child')
         # Get the download link
-        #link = await page.get_attribute('#download-links > div > div > a.first-child', 'href')
         print(f"Windows 11 ISO download link: {link}")
 
         # write link to file for use in packer build
