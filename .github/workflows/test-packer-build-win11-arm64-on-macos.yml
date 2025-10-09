@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          bash scripts/macos/install-dependencies.sh
+          bash scripts/macos/dev-alchemy-install-dependencies.sh
 
       - name: Run Packer build
         run: |
