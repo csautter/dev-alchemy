@@ -42,14 +42,16 @@ The build process will generate a Windows image in Vagrant box format as defined
 ## Build Windows on macOS Hosts
 This directory also contains a Packer template for building Windows images on macOS hosts using QEMU.
 
-for x86_64
+### for x86_64
 ```bash
 packer init build/packer/windows/windows11-x86-on-macos.pkr.hcl
 packer build -var "iso_url=./vendor/windows/Win11_25H2_English_x64.iso" build/packer/windows/windows11-x86-on-macos.pkr.hcl
-````
+```
 
-or for arm64
+### for arm64
+
+There are a lot of customizations for running Windows on ARM, with QEMU and Packer. Therefore there is a script with some preparations.
+
 ```bash
-packer init build/packer/windows/windows11-arm64-on-macos.pkr.hcl
-packer build -var "iso_url=./vendor/windows/win11_25H2_english_arm64.iso" build/packer/windows/windows11-arm64-on-macos.pkr.hcl
+bash build/packer/windows/windows11-arm64-on-macos.sh
 ```
