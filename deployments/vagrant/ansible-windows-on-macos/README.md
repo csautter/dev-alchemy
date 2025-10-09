@@ -1,5 +1,7 @@
 # Run Ansible Windows with Vagrant and QEMU on MacOS
 
+> **⚠️ Warning:** This Guide is experimental and may not work as expected. Use at your own risk.
+
 This guide will help you set up and run Ansible playbooks on a Windows VM using Vagrant with QEMU as the provider.
 All commands are meant to be run in a bash or zsh terminal on a MacOS host machine.
 
@@ -80,7 +82,6 @@ all:
                     ansible_port: 5985
 EOF
 echo "Inventory file created at ./inventory/qemu_windows_winrm.yml"
-```
 ```
 
 ## Run Ansible Playbook
