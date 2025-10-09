@@ -45,9 +45,8 @@ source "hyperv-iso" "win11" {
   ]
 
   # The "autounattend.xml" file is an unattended setup configuration for Windows installation.
-  # Place "autounattend.xml" in the same directory as this HCL file or provide the correct relative path.
   cd_files = [
-    "${path.root}/autounattend.xml"
+    "${path.root}/hyperv/autounattend.xml"
   ]
 
   shutdown_command = "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\""

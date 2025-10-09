@@ -5,3 +5,5 @@ vendor/*
 *packer_cache*
 .vagrant/
 *.box
+.venv/
+__pycache__/
