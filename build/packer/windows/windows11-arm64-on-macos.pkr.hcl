@@ -28,7 +28,7 @@ variable "is_ci" {
 
 source "qemu" "win11" {
   accelerator     = "${var.is_ci ? "tcg" : "hvf"}"
-  cpu_model       = "host"
+  cpu_model       = "${var.is_ci ? "max" : "host"}"
   machine_type    = "virt,highmem=on"
   qemu_binary    = "qemu-system-aarch64"
   headless        = var.headless
