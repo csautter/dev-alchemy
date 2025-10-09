@@ -21,8 +21,13 @@ variable "headless" {
   default = false
 }
 
+variable "is_ci" {
+  type    = bool
+  default = env("CI") == "true"
+}
+
 source "qemu" "win11" {
-  accelerator     = "hvf"
+  accelerator     = "${var.is_ci ? "tcg" : "hvf"}"
   cpu_model       = "host"
   machine_type    = "virt"
   qemu_binary    = "qemu-system-aarch64"
