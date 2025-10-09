@@ -7,3 +7,4 @@ vendor/*
 *.box
 .venv/
 __pycache__/
+.build_tmp/

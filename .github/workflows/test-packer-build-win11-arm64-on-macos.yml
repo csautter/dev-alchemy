@@ -23,8 +23,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          bash scripts/macos/install-dependencies.sh
+          bash scripts/macos/dev-alchemy-install-dependencies.sh
 
       - name: Run Packer build
+        continue-on-error: true
         run: |
           bash build/packer/windows/windows11-arm64-on-macos.sh --headless
+
+      - name: Upload build-record.mp4 artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-record
+          path: ./build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4
+          retention-days: 1

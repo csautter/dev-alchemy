@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -ex
+
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 if [ ! -f ${SCRIPT_DIR}/../../vendor/qemu-efi-aarch64_2025.02-10_all.deb ]; then
   echo "Downloading qemu-efi-aarch64_2025.02-10_all.deb"
