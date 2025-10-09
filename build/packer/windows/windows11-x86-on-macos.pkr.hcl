@@ -16,6 +16,12 @@ variable "iso_url" {
   default = "../../../vendor/windows/Win11_25H2_English_x64.iso"
 }
 
+# Set to true to run QEMU in headless mode (no GUI)
+variable "headless" {
+  type    = bool
+  default = false
+}
+
 source "qemu" "win11" {
   # Apple Silicon host → x86 guest → needs software emulation
   accelerator     = "tcg"
@@ -24,8 +30,7 @@ source "qemu" "win11" {
   disk_size       = "64G"
   disk_interface  = "ide"
   format          = "qcow2"
-  # you can enable headless mode by uncommenting the following line
-  # headless        = true
+  headless        = var.headless
   iso_url         = var.iso_url
   iso_checksum    = "none"
   cdrom           = var.iso_url

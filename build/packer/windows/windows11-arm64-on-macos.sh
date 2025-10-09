@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 
+set -ex
+
+HEADLESS=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --headless)
+      HEADLESS=true
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 SCRIPT_DIR=$(cd $(dirname $0); pwd -P)
 PROJECT_ROOT=$(cd ${SCRIPT_DIR}/../../..; pwd -P)
 
@@ -30,4 +45,4 @@ bash scripts/macos/create-win11-autounattend-iso.sh
 # creates the qcow2 disk image and overwrites it if it already exists
 bash scripts/macos/create-qemu-qcow2-disk.sh
 
-PACKER_LOG=1 packer build -var "iso_url=./vendor/windows/win11_25H2_english_arm64.iso" build/packer/windows/windows11-arm64-on-macos.pkr.hcl
+PACKER_LOG=1 packer build -var "iso_url=./vendor/windows/win11_25H2_english_arm64.iso" -var "headless=$HEADLESS" build/packer/windows/windows11-arm64-on-macos.pkr.hcl
