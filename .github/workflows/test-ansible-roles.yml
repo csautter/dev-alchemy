@@ -4,11 +4,21 @@ name: Test Ansible Roles
 on:
   push:
     branches: [main, feat*]
+    paths:
+      - "roles/**"
+      - "playbooks/**"
+      - "inventory/**"
+      - ".github/workflows/test-ansible-roles.yml"
     paths-ignore:
       - "**/*.md"
       - "*.md"
   pull_request:
     branches: [main, feat*]
+    paths:
+      - "roles/**"
+      - "playbooks/**"
+      - "inventory/**"
+      - ".github/workflows/test-ansible-roles.yml"
     paths-ignore:
       - "**/*.md"
       - "*.md"
