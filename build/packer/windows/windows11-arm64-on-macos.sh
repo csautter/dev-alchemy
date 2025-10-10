@@ -1,6 +1,27 @@
 #!/usr/bin/env bash
 
-set -ex
+set +e
+set -x
+
+keep_alive(){
+  local cmd="$*"
+  local max_runs=2
+  local run_count=0
+  while [ $run_count -lt $max_runs ]; do
+    if [ $run_count -lt $max_runs ]; then
+      sleep 10
+    fi
+    echo "=====[ $(date) ]====="
+    echo "Starting command: $cmd"
+    $cmd &
+    local cmd_pid=$!
+    wait $cmd_pid
+    if [ $run_count -lt $max_runs ]; then
+      echo "Command '$cmd' exited with code $?. Restarting after 10 seconds..."
+    fi
+    run_count=$((run_count + 1))
+  done
+}
 
 HEADLESS=false
 
@@ -66,4 +87,39 @@ bash scripts/macos/download-virtio-win-iso.sh
 bash scripts/macos/create-qemu-qcow2-disk.sh
 
 packer init build/packer/windows/windows11-arm64-on-macos.pkr.hcl
+
+# record video in headless mode
+if [ $HEADLESS = true ]; then
+  mkdir -p $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output
+  # set VNC password to "packer"
+  packer_password="packer"
+  expect <<EOD
+spawn vncpasswd $PROJECT_ROOT/build/packer/windows/.build_tmp/packer-qemu.vnc.pass
+expect "Password:"
+send "$packer_password\n"
+expect "Verify:"
+send "$packer_password\n"
+expect eof
+EOD
+  # https://manpages.ubuntu.com/manpages/jammy/man1/vncsnapshot.1.html
+  keep_alive "vncsnapshot -quiet -passwd $PROJECT_ROOT/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 3600 -fps 1 localhost:1 $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.jpg" &
+  VNCSNAPSHOT_PID=$!
+  echo "Started vncsnapshot with PID $VNCSNAPSHOT_PID"
+
+  trap "echo 'Stopping vncsnapshot process $VNCSNAPSHOT_PID'; kill -SIGINT $VNCSNAPSHOT_PID; wait $VNCSNAPSHOT_PID; echo 'vncsnapshot process $VNCSNAPSHOT_PID has finished'" EXIT
+fi
+
 PACKER_LOG=1 packer build -var "iso_url=./vendor/windows/win11_25H2_english_arm64.iso" -var "headless=$HEADLESS" build/packer/windows/windows11-arm64-on-macos.pkr.hcl
+PACKER_EXIT_CODE=$?
+
+if [ $HEADLESS = true ]; then
+  kill -SIGINT $VNCSNAPSHOT_PID
+  wait $VNCSNAPSHOT_PID
+  echo "vncsnapshot process $VNCSNAPSHOT_PID has finished"
+  # create mp4 video from jpg images
+  ffmpeg -framerate 1 -i $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc%05d.jpg -c:v libx264 -pix_fmt yuv420p $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4
+  echo "Created video $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4"
+  rm -f $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc*.jpg
+fi
+
+exit $PACKER_EXIT_CODE

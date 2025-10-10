@@ -42,6 +42,12 @@ source "qemu" "win11" {
   cores           = "${var.is_ci ? 3 : 4}"
   net_device      = "virtio-net-pci"
 
+  vnc_bind_address = "127.0.0.1"
+  vnc_port_min   = 5901
+  vnc_port_max   = 5901
+  vnc_use_password = true
+  vnc_password     = "packer"
+
   boot_wait = "5s"
   boot_command = [
     "<spacebar>",
