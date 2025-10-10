@@ -37,7 +37,9 @@ source "qemu" "win11" {
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   display         = "cocoa"
   memory          = "4096"
-  cores           = 4
+  # Github Actions macOS runners have 3 CPU cores, so limit to 3 when running in CI
+  # https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories
+  cores           = "${var.is_ci ? 3 : 4}"
   net_device      = "virtio-net-pci"
 
   boot_wait = "5s"
@@ -71,7 +73,7 @@ source "qemu" "win11" {
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "P@ssw0rd!"
-  winrm_timeout  = "6h"
+  winrm_timeout  = "${var.is_ci ? "30m" : "1h"}"
 
   shutdown_command = "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\""
   shutdown_timeout = "5m"
