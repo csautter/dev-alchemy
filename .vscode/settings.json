@@ -1,5 +1,6 @@
 {
   "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
   "files.associations": {
     "*.pkr.hcl": "hcl",
     "*.tf": "terraform",
@@ -16,6 +17,11 @@
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "file"
   },
+  "[yaml]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file"
+  },
   "emeraldwalk.runonsave": {
     "commands": [
       {
@@ -29,5 +35,5 @@
         "cmd": "shfmt -w ${file}"
       }
     ]
-  }
+  },
 }
