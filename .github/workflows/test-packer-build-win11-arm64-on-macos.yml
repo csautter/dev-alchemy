@@ -26,6 +26,7 @@ jobs:
           bash scripts/macos/dev-alchemy-install-dependencies.sh
 
       - name: Run Packer build
+        id: packer_build
         continue-on-error: true
         run: |
           bash build/packer/windows/windows11-arm64-on-macos.sh --headless
@@ -36,3 +37,9 @@ jobs:
           name: build-record
           path: ./build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4
           retention-days: 1
+
+      - name: Fail if Packer build failed
+        if: steps.packer_build.outcome == 'failure'
+        run: |
+          echo "Packer build failed. Failing workflow."
+          exit 1
