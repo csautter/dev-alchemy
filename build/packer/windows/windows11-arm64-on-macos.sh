@@ -102,7 +102,7 @@ send "$packer_password\n"
 expect eof
 EOD
   # https://manpages.ubuntu.com/manpages/jammy/man1/vncsnapshot.1.html
-  keep_alive "vncsnapshot -quiet -passwd $PROJECT_ROOT/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 3600 -fps 1 localhost:1 $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.jpg" &
+  keep_alive "vncsnapshot -quiet -passwd $PROJECT_ROOT/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 10800 -fps 1 localhost:1 $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.jpg" &
   VNCSNAPSHOT_PID=$!
   echo "Started vncsnapshot with PID $VNCSNAPSHOT_PID"
 
