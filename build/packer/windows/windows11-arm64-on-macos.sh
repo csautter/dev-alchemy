@@ -119,7 +119,7 @@ if [ $HEADLESS = true ]; then
   # create mp4 video from jpg images
   ffmpeg -framerate 1 -i $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc%05d.jpg -c:v libx264 -pix_fmt yuv420p $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4
   echo "Created video $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4"
-  rm -f $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc*.jpg
+  find "$PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output" -name 'packer-qemu.vnc*.jpg' -delete
 fi
 
 exit $PACKER_EXIT_CODE
