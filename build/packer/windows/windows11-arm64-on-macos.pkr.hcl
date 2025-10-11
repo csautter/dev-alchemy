@@ -27,9 +27,6 @@ variable "is_ci" {
 }
 
 source "qemu" "win11" {
-  accelerator     = "${var.is_ci ? "tcg" : "hvf"}"
-  cpu_model       = "${var.is_ci ? "max" : "host"}"
-  machine_type    = "virt,highmem=on"
   qemu_binary    = "qemu-system-aarch64"
   headless        = var.headless
   iso_url         = var.iso_url
@@ -58,6 +55,9 @@ source "qemu" "win11" {
   ]
 
   qemuargs = [
+    ["-accel", var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"],
+    ["-machine", var.is_ci ? "virt,highmem=on" : "virt,highmem=off"],
+    ["-cpu", var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"],
     ["-bios", "${path.root}/../../../vendor/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
     ["-device","ramfb"],
     ["-device","qemu-xhci"],
