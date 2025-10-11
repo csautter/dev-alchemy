@@ -79,7 +79,7 @@ source "qemu" "win11" {
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "P@ssw0rd!"
-  winrm_timeout  = "${var.is_ci ? "2h" : "1h"}"
+  winrm_timeout  = "${var.is_ci ? "5h" : "1h"}"
 
   shutdown_command = "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\""
   shutdown_timeout = "5m"
