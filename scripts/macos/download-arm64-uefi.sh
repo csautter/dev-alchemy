@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -ex
+
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 if [ ! -f ${SCRIPT_DIR}/../../vendor/qemu-efi-aarch64_2025.02-10_all.deb ]; then
   echo "Downloading qemu-efi-aarch64_2025.02-10_all.deb"
@@ -20,4 +22,4 @@ if [ ! -d ${SCRIPT_DIR}/../../vendor/qemu-uefi/usr/share/qemu-efi-aarch64 ]; the
   tar -xvf ${SCRIPT_DIR}/../../vendor/qemu-uefi/data.tar.xz -C ${SCRIPT_DIR}/../../vendor/qemu-uefi
 else
   echo "qemu-uefi/usr/share/qemu-efi-aarch64 already exists, skipping extraction"
-
+fi

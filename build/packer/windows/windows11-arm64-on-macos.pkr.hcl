@@ -7,10 +7,6 @@ packer {
       version = ">= 1.1.0"
       source  = "github.com/hashicorp/qemu"
     }
-    vagrant = {
-      version = ">= 1.0.0"
-      source  = "github.com/hashicorp/vagrant"
-    }
   }
 }
 
@@ -19,20 +15,38 @@ variable "iso_url" {
   default = "../../../vendor/windows/Win11_25H2_English_arm64.iso"
 }
 
+# Set to true to run QEMU in headless mode (no GUI)
+variable "headless" {
+  type    = bool
+  default = false
+}
+
+variable "is_ci" {
+  type    = bool
+  default = env("CI") == "true"
+}
+
 source "qemu" "win11" {
-  accelerator     = "hvf"
-  cpu_model       = "host"
-  machine_type    = "virt"
+  accelerator     = "${var.is_ci ? "tcg" : "hvf"}"
+  cpu_model       = "${var.is_ci ? "max" : "host"}"
+  machine_type    = "virt,highmem=on"
   qemu_binary    = "qemu-system-aarch64"
-  # you can enable headless mode by uncommenting the following line
-  # headless        = true
+  headless        = var.headless
   iso_url         = var.iso_url
   iso_checksum    = "none"
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   display         = "cocoa"
   memory          = "4096"
-  cores           = 4
+  # Github Actions macOS runners have 3 CPU cores, so limit to 3 when running in CI
+  # https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories
+  cores           = "${var.is_ci ? 3 : 4}"
   net_device      = "virtio-net-pci"
+
+  vnc_bind_address = "127.0.0.1"
+  vnc_port_min   = 5901
+  vnc_port_max   = 5901
+  vnc_use_password = true
+  vnc_password     = "packer"
 
   boot_wait = "5s"
   boot_command = [
@@ -65,7 +79,7 @@ source "qemu" "win11" {
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "P@ssw0rd!"
-  winrm_timeout  = "6h"
+  winrm_timeout  = "${var.is_ci ? "3h" : "1h"}"
 
   shutdown_command = "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\""
   shutdown_timeout = "5m"

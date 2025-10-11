@@ -4,16 +4,18 @@ packer {
       version = ">= 1.1.0"
       source  = "github.com/hashicorp/qemu"
     }
-    vagrant = {
-      version = ">= 1.0.0"
-      source  = "github.com/hashicorp/vagrant"
-    }
   }
 }
 
 variable "iso_url" {
   type    = string
   default = "../../../vendor/windows/Win11_25H2_English_x64.iso"
+}
+
+# Set to true to run QEMU in headless mode (no GUI)
+variable "headless" {
+  type    = bool
+  default = false
 }
 
 source "qemu" "win11" {
@@ -24,8 +26,7 @@ source "qemu" "win11" {
   disk_size       = "64G"
   disk_interface  = "ide"
   format          = "qcow2"
-  # you can enable headless mode by uncommenting the following line
-  # headless        = true
+  headless        = var.headless
   iso_url         = var.iso_url
   iso_checksum    = "none"
   cdrom           = var.iso_url
