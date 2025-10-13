@@ -26,8 +26,31 @@ if [ ! -f "$project_root/vendor/windows/qemu-windows11-arm64.qcow2" ]; then
 	exit 1
 fi
 
+# Generate a random MAC address
+generate_mac_address() {
+	hexchars="0123456789ABCDEF"
+	echo "A6:$(for i in {1..5}; do
+		echo -n ${hexchars:$((RANDOM % 16)):1}${hexchars:$((RANDOM % 16)):1}
+		[ $i -lt 5 ] && echo -n ":"
+	done)"
+}
+
+mac_address=$(generate_mac_address)
+echo "Generated random MAC address: $mac_address"
+
+# Generate a random UUID with the same schema as BBEF1D33-5B60-40A9-B2DF-57E919EEF921
+generate_uuid() {
+	# Use uuidgen and convert to uppercase
+	uuid=$(uuidgen | tr 'a-f' 'A-F')
+	echo "$uuid"
+}
+
 QCOW_IMAGE="windows11-arm64.qcow2" \
 	VM_NAME="Windows11-ARM64-dev-alchemy" \
+	MAC_ADDRESS="$mac_address" \
+	UUID="$(generate_uuid)" \
+	UUID_CD="$(generate_uuid)" \
+	UUID_DISK="$(generate_uuid)" \
 	envsubst <"$project_root/deployments/utm/windows11-arm64/config.plist" >"$utm_vm_dir/Windows11-ARM64-dev-alchemy.utm/config.plist"
 
 if [ ! -f "$utm_vm_dir/Windows11-ARM64-dev-alchemy.utm/Data/windows11-arm64.qcow2" ]; then

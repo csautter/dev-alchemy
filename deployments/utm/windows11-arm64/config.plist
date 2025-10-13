@@ -25,7 +25,7 @@
 	<array>
 		<dict>
 			<key>Identifier</key>
-			<string>8CD34D1B-7A8C-4E74-994C-407917EE15C3</string>
+			<string>$UUID_CD</string>
 			<key>ImageType</key>
 			<string>CD</string>
 			<key>Interface</key>
@@ -37,7 +37,7 @@
 		</dict>
 		<dict>
 			<key>Identifier</key>
-			<string>D4125E99-5FD5-4127-808C-22D165DF4E8F</string>
+			<string>$UUID_DISK</string>
 			<key>ImageName</key>
 			<string>$QCOW_IMAGE</string>
 			<key>ImageType</key>
@@ -49,18 +49,6 @@
 			<key>ReadOnly</key>
 			<false/>
 		</dict>
-		<dict>
-			<key>Identifier</key>
-			<string>8A9FA25B-ADA7-46CB-89BB-1B65B8DBE910</string>
-			<key>ImageType</key>
-			<string>CD</string>
-			<key>Interface</key>
-			<string>USB</string>
-			<key>InterfaceVersion</key>
-			<integer>1</integer>
-			<key>ReadOnly</key>
-			<true/>
-		</dict>
 	</array>
 	<key>Information</key>
 	<dict>
@@ -71,7 +59,7 @@
 		<key>Name</key>
 		<string>$VM_NAME</string>
 		<key>UUID</key>
-		<string>BBEF1D33-5B60-40A9-B2DF-57E919EEF921</string>
+		<string>$UUID</string>
 	</dict>
 	<key>Input</key>
 	<dict>
@@ -90,9 +78,9 @@
 			<key>IsolateFromHost</key>
 			<false/>
 			<key>MacAddress</key>
-			<string>A6:E5:44:99:7F:A2</string>
+			<string>$MAC_ADDRESS</string>
 			<key>Mode</key>
-			<string>Shared</string>
+			<string>Bridged</string>
 			<key>PortForward</key>
 			<array/>
 		</dict>
