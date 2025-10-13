@@ -302,18 +302,20 @@ $scripts = @(
 	{
 		$guestToolsLog = "C:\UTMGuestToolsInstall.log"
 		try {
-			$cdDrive = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 5 } | Select-Object -First 1
-			if ($cdDrive) {
-				$utmExe = Get-ChildItem -Path "$($cdDrive.DeviceID)\" -Filter "utm-guest-tools-*.exe" | Select-Object -First 1
+			$drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -in 2, 5 }
+			$found = $false
+			foreach ($drive in $drives) {
+				$utmExe = Get-ChildItem -Path "$($drive.DeviceID)\" -Filter "utm-guest-tools-*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
 				if ($utmExe) {
-					Write-Output "Found UTM Guest Tools ISO at $($cdDrive.DeviceID)" | Out-File -Append $guestToolsLog
+					Write-Output "Found UTM Guest Tools on $($drive.DeviceID)" | Out-File -Append $guestToolsLog
 					Start-Process -FilePath $utmExe.FullName -ArgumentList "/S" -Wait -NoNewWindow
 					Write-Output "UTM Guest Tools installation completed." | Out-File -Append $guestToolsLog
-				} else {
-					Write-Output "UTM Guest Tools executable not found on the CD drive." | Out-File -Append $guestToolsLog
+					$found = $true
+					break
 				}
-			} else {
-				Write-Output "UTM Guest Tools ISO not found on any CD drive." | Out-File -Append $guestToolsLog
+			}
+			if (-not $found) {
+				Write-Output "UTM Guest Tools executable not found on any CD or USB drive." | Out-File -Append $guestToolsLog
 			}
 		} catch {
 			Write-Output "Error during UTM Guest Tools installation: $_" | Out-File -Append $guestToolsLog
