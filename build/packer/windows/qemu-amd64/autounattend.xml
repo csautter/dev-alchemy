@@ -266,6 +266,26 @@ $scripts = @(
 
         Stop-Transcript;
 	};
+	{
+		$guestToolsLog = "C:\UTMGuestToolsInstall.log"
+		try {
+			$cdDrive = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 5 } | Select-Object -First 1
+			if ($cdDrive) {
+				$utmExe = Get-ChildItem -Path "$($cdDrive.DeviceID)\" -Filter "utm-guest-tools-*.exe" | Select-Object -First 1
+				if ($utmExe) {
+					Write-Output "Found UTM Guest Tools ISO at $($cdDrive.DeviceID)" | Out-File -Append $guestToolsLog
+					Start-Process -FilePath $utmExe.FullName -ArgumentList "/S" -Wait -NoNewWindow
+					Write-Output "UTM Guest Tools installation completed." | Out-File -Append $guestToolsLog
+				} else {
+					Write-Output "UTM Guest Tools executable not found on the CD drive." | Out-File -Append $guestToolsLog
+				}
+			} else {
+				Write-Output "UTM Guest Tools ISO not found on any CD drive." | Out-File -Append $guestToolsLog
+			}
+		} catch {
+			Write-Output "Error during UTM Guest Tools installation: $_" | Out-File -Append $guestToolsLog
+		}
+	};
 );
 
 &amp; {
