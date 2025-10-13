@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set +e
+set +e # we want to continue on errors
 set -x
 
 keep_alive() {
@@ -14,21 +14,22 @@ keep_alive() {
 		echo "=====[ $(date) ]====="
 		echo "Starting command: $cmd"
 		$cmd &
+		cmd_exit_code=$?
 		local cmd_pid=$!
 		wait $cmd_pid
 		if [ $run_count -lt $max_runs ]; then
-			echo "Command '$cmd' exited with code $?. Restarting after 10 seconds..."
+			echo "Command '$cmd' exited with code $cmd_exit_code. Restarting after 10 seconds..."
 		fi
 		run_count=$((run_count + 1))
 	done
 }
 
-HEADLESS=false
+headless=false
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--headless)
-		HEADLESS=true
+		headless=true
 		shift
 		;;
 	*)
@@ -36,16 +37,18 @@ while [[ $# -gt 0 ]]; do
 		;;
 	esac
 done
-SCRIPT_DIR=$(
-	cd $(dirname $0)
+script_dir=$(
+	# shellcheck disable=SC2164
+	cd "$(dirname "$0")"
 	pwd -P
 )
-PROJECT_ROOT=$(
-	cd ${SCRIPT_DIR}/../../..
+project_root=$(
+	# shellcheck disable=SC2164
+	cd "${script_dir}/../../.."
 	pwd -P
 )
 
-cd ${PROJECT_ROOT}
+cd "${project_root}" || exit 1
 
 # download the Windows 11 ARM64 ISO if not already present
 if [ ! -d ./vendor/windows ]; then
@@ -53,10 +56,11 @@ if [ ! -d ./vendor/windows ]; then
 fi
 if [ ! -f ./vendor/windows/win11_25H2_english_arm64.iso ]; then
 	echo "Downloading Windows 11 ARM64 ISO"
-	cd $PROJECT_ROOT/scripts/macos/
+	cd "${project_root}/scripts/macos/" || exit 1
 	if [ ! -d .venv ]; then
 		python3 -m venv .venv
 	fi
+	# shellcheck disable=SC1091
 	source .venv/bin/activate
 
 	if ! python -c "import playwright" &>/dev/null; then
@@ -65,17 +69,17 @@ if [ ! -f ./vendor/windows/win11_25H2_english_arm64.iso ]; then
 	fi
 
 	python playwright_win11_iso.py --arm
-	cd $PROJECT_ROOT/vendor/windows/
+	cd "${project_root}/vendor/windows/" || exit 1
 
-	if [ $HEADLESS = true ]; then
+	if [ $headless = true ]; then
 		echo "Running in headless mode, skipping ISO download progress bar"
-		curl -o win11_25h2_english_arm64.iso $(cat ./win11_arm_iso_url.txt)
+		curl -o win11_25h2_english_arm64.iso "$(cat ./win11_arm_iso_url.txt)"
 	else
 		echo "Running in interactive mode, showing ISO download progress bar"
-		curl --progress-bar -o win11_25h2_english_arm64.iso $(cat ./win11_arm_iso_url.txt)
+		curl --progress-bar -o win11_25h2_english_arm64.iso "$(cat ./win11_arm_iso_url.txt)"
 	fi
 
-	cd ${PROJECT_ROOT}
+	cd "${project_root}" || exit 1
 else
 	echo "Windows 11 ARM64 ISO already exists, skipping download"
 fi
@@ -95,12 +99,12 @@ bash scripts/macos/create-qemu-qcow2-disk.sh
 packer init build/packer/windows/windows11-arm64-on-macos.pkr.hcl
 
 # record video in headless mode
-if [ $HEADLESS = true ]; then
-	mkdir -p $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output
+if [ $headless = true ]; then
+	mkdir -p "$project_root/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output"
 	# set VNC password to "packer"
 	packer_password="packer"
 	expect <<EOD
-spawn vncpasswd $PROJECT_ROOT/build/packer/windows/.build_tmp/packer-qemu.vnc.pass
+spawn vncpasswd "$project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass"
 expect "Password:"
 send "$packer_password\n"
 expect "Verify:"
@@ -108,24 +112,27 @@ send "$packer_password\n"
 expect eof
 EOD
 	# https://manpages.ubuntu.com/manpages/jammy/man1/vncsnapshot.1.html
-	keep_alive "vncsnapshot -quiet -passwd $PROJECT_ROOT/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 14400 -fps 1 localhost:1 $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.jpg" &
-	VNCSNAPSHOT_PID=$!
-	echo "Started vncsnapshot with PID $VNCSNAPSHOT_PID"
+	keep_alive "vncsnapshot -quiet -passwd $project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 14400 -fps 1 localhost:1 $project_root/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.jpg" &
+	vncsnapshot_pid=$!
+	echo "Started vncsnapshot with PID $vncsnapshot_pid"
 
-	trap "echo 'Stopping vncsnapshot process $VNCSNAPSHOT_PID'; kill -SIGINT $VNCSNAPSHOT_PID; wait $VNCSNAPSHOT_PID; echo 'vncsnapshot process $VNCSNAPSHOT_PID has finished'" EXIT
+	# shellcheck disable=SC2064
+	trap "echo 'Stopping vncsnapshot process '$vncsnapshot_pid'; kill -SIGINT $vncsnapshot_pid; wait $vncsnapshot_pid; echo 'vncsnapshot process $vncsnapshot_pid has finished'" EXIT
 fi
 
-PACKER_LOG=1 packer build -var "iso_url=./vendor/windows/win11_25H2_english_arm64.iso" -var "headless=$HEADLESS" build/packer/windows/windows11-arm64-on-macos.pkr.hcl
-PACKER_EXIT_CODE=$?
+PACKER_LOG=1 packer build -var "iso_url=./vendor/windows/win11_25H2_english_arm64.iso" -var "headless=$headless" build/packer/windows/windows11-arm64-on-macos.pkr.hcl
+packer_exit_code=$?
 
-if [ $HEADLESS = true ]; then
-	kill -SIGINT $VNCSNAPSHOT_PID
-	wait $VNCSNAPSHOT_PID
-	echo "vncsnapshot process $VNCSNAPSHOT_PID has finished"
+if [ $headless = true ]; then
+	# shellcheck disable=SC2086
+	kill -SIGINT $vncsnapshot_pid
+	# shellcheck disable=SC2086
+	wait $vncsnapshot_pid
+	echo "vncsnapshot process $vncsnapshot_pid has finished"
 	# create mp4 video from jpg images
-	ffmpeg -framerate 1 -i $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc%05d.jpg -c:v libx264 -pix_fmt yuv420p $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4
-	echo "Created video $PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4"
-	find "$PROJECT_ROOT/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output" -name 'packer-qemu.vnc*.jpg' -delete
+	ffmpeg -framerate 1 -i "$project_root/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc%05d.jpg" -c:v libx264 -pix_fmt yuv420p "$project_root/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4"
+	echo "Created video $project_root/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4"
+	find "$project_root/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output" -name 'packer-qemu.vnc*.jpg' -delete
 fi
 
-exit $PACKER_EXIT_CODE
+exit $packer_exit_code
