@@ -73,12 +73,12 @@ source "qemu" "win11" {
     ["-drive", "if=none,id=autounattend,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/autounattend.iso,readonly=true"],
     ["-device", "usb-storage,drive=virtio-drivers,removable=true,bootindex=3"],
     ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/virtio-win.iso,readonly=true"],
+    ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=4"],
+    ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso,readonly=true"],
     ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=1"],
     ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${path.root}/../../../vendor/windows/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
     ["-boot", "order=c,menu=on"]
   ]
-
-  cd_files = ["${path.root}/qemu/autounattend.xml"]
 
   communicator   = "winrm"
   winrm_username = "Administrator"

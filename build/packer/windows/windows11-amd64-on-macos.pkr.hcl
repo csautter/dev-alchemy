@@ -43,8 +43,8 @@ source "qemu" "win11" {
   floppy_files = ["${path.root}/qemu-amd64/autounattend.xml"]
 
   vnc_bind_address = "127.0.0.1"
-  vnc_port_min     = 5901
-  vnc_port_max     = 5901
+  vnc_port_min     = 5902
+  vnc_port_max     = 5902
   vnc_use_password = true
   vnc_password     = "packer"
 
