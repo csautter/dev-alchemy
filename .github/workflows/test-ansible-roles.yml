@@ -9,9 +9,6 @@ on:
       - "playbooks/**"
       - "inventory/**"
       - ".github/workflows/test-ansible-roles.yml"
-    paths-ignore:
-      - "**/*.md"
-      - "*.md"
   pull_request:
     branches: [main, feat*]
     paths:
@@ -19,9 +16,6 @@ on:
       - "playbooks/**"
       - "inventory/**"
       - ".github/workflows/test-ansible-roles.yml"
-    paths-ignore:
-      - "**/*.md"
-      - "*.md"
 
 jobs:
   test-ansible-roles:
