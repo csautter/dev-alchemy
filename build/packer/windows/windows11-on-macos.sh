@@ -116,6 +116,8 @@ else
 	echo "Windows 11 $arch ISO already exists, skipping download"
 fi
 
+bash scripts/macos/download-utm-guest-tools.sh
+
 if [ "$arch" = "arm64" ]; then
 	# download the qemu-uefi files if not already present
 	bash scripts/macos/download-arm64-uefi.sh
@@ -145,8 +147,20 @@ expect "Verify:"
 send "$packer_password\n"
 expect eof
 EOD
-	# https://manpages.ubuntu.com/manpages/jammy/man1/vncsnapshot.1.html
-	keep_alive "vncsnapshot -quiet -passwd $project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 14400 -fps 1 localhost:1 $project_root/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.jpg" &
+
+	# use different VNC ports for amd64 and arm64 builds to allow parallel execution
+	if [ "$arch" = "amd64" ]; then
+		# on amd64 we use the standard localhost:2 display
+		echo "Using VNC display localhost:2 for amd64 build"
+		echo "You can connect to it using a VNC viewer with password '$packer_password' on localhost:5902"
+		vnc_port=2
+	else
+		# on arm64 we use the localhost:1 display
+		echo "Using VNC display localhost:1 for arm64 build"
+		echo "You can connect to it using a VNC viewer with password '$packer_password' on localhost:5901"
+		vnc_port=1
+	fi
+	keep_alive "vncsnapshot -quiet -passwd $project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 14400 -fps 1 localhost:$vnc_port $project_root/build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.jpg" &
 	vncsnapshot_pid=$!
 	echo "Started vncsnapshot with PID $vncsnapshot_pid"
 
