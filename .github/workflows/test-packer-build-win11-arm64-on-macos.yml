@@ -1,0 +1,45 @@
+name: Test Packer Build for Windows 11 ARM64 on MacOS
+
+on:
+  pull_request:
+    paths:
+      - "build/packer/windows/*"
+      - "build/packer/windows/**/*"
+      - "scripts/macos/*"
+      - "scripts/macos/**/*"
+      - ".github/workflows/test-packer-build-win11-arm64-on-macos.yml"
+
+jobs:
+  test-packer-build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          bash scripts/macos/dev-alchemy-install-dependencies.sh
+
+      - name: Run Packer build
+        id: packer_build
+        continue-on-error: true
+        run: |
+          bash build/packer/windows/windows11-arm64-on-macos.sh --headless
+
+      - name: Upload build-record.mp4 artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-record
+          path: ./build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4
+          retention-days: 1
+
+      - name: Fail if Packer build failed
+        if: steps.packer_build.outcome == 'failure'
+        run: |
+          echo "Packer build failed. Failing workflow."
+          exit 1
