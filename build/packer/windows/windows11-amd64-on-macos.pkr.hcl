@@ -30,7 +30,7 @@ source "qemu" "win11" {
   iso_url         = var.iso_url
   iso_checksum    = "none"
   cdrom           = var.iso_url
-  cdrom_files     = [../../../vendor/utm/utm-guest-tools-latest.iso.iso]
+  cdrom_files     = [../../../vendor/utm/utm-guest-tools-latest.iso]
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   display         = "cocoa"
   memory          = "4096"
@@ -40,7 +40,7 @@ source "qemu" "win11" {
   tpm_device_type = "emulator"
 
   # The autounattend.xml will be mounted as a virtual floppy drive
-  floppy_files = ["${path.root}/qemu/autounattend.xml"]
+  floppy_files = ["${path.root}/qemu-amd64/autounattend.xml"]
 
   vnc_bind_address = "127.0.0.1"
   vnc_port_min     = 5901
