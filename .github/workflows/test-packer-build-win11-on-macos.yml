@@ -1,4 +1,4 @@
-name: Test Packer Build for Windows 11 ARM64 on MacOS
+name: Test Packer Build for Windows 11 on MacOS
 
 on:
   pull_request:
@@ -7,11 +7,19 @@ on:
       - "build/packer/windows/**/*"
       - "scripts/macos/*"
       - "scripts/macos/**/*"
-      - ".github/workflows/test-packer-build-win11-arm64-on-macos.yml"
+      - ".github/workflows/test-packer-build-win11-on-macos.yml"
 
 jobs:
   test-packer-build:
-    runs-on: macos-latest
+    name: Packer build Windows 11 on ${{ matrix.os }} arch ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-15, macos-15-intel]
+        arch: [arm64]
+        include:
+          - os: macos-15-intel
+            arch: amd64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,7 +27,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
@@ -29,13 +37,13 @@ jobs:
         id: packer_build
         continue-on-error: true
         run: |
-          bash build/packer/windows/windows11-arm64-on-macos.sh --headless
+          bash build/packer/windows/windows11-on-macos.sh --headless --arch ${{ matrix.arch }}
 
       - name: Upload build-record.mp4 artifact (always)
         uses: actions/upload-artifact@v4
         with:
           name: build-record
-          path: ./build/packer/windows/.build_tmp/windows11-arm64-on-macos-output/packer-qemu.vnc.mp4
+          path: ./build/packer/windows/.build_tmp/windows11-${{ matrix.arch }}-on-macos-output/packer-qemu.vnc.mp4
           retention-days: 1
 
       - name: Fail if Packer build failed
