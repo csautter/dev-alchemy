@@ -13,7 +13,7 @@
     content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
     owner: root
     group: wheel
-    mode: '0440'
+    mode: "0440"
 
 - name: Check if Rosetta 2 is installed
   stat:
@@ -65,7 +65,7 @@
   file:
     path: "{{ ansible_env.HOME }}/.zshrc"
     state: touch
-    mode: '0644'
+    mode: "0644"
   when: not zshrc_stat.stat.exists
 
 - name: Set global Java version via jenv
@@ -74,6 +74,11 @@
     line: "jenv global {{ jdk_default_version }}"
     insertafter: EOF
   when: zshrc_stat.stat.exists
+
+- name: Enable jenv plugin maven
+  command: jenv enable-plugin maven
+  args:
+    creates: "{{ ansible_env.HOME }}/.jenv/plugins/maven"
 
 - name: Remove passwordless sudo for {{ ansible_user }} user
   become: true
