@@ -75,7 +75,24 @@ async def fetch_win11_iso_link(arm: bool = False):
             if text and "Windows 11" in text:
                 await page.select_option("#product-edition", value=value)
                 break
-        await page.click("#submit-product-edition")
+
+        for _ in range(10):
+            await page.wait_for_selector("#submit-product-edition", timeout=30000)
+            submit_product_edition = page.locator("#submit-product-edition")
+            if submit_product_edition and await submit_product_edition.is_visible(
+                timeout=60000
+            ):
+                await page.click("#submit-product-edition")
+                break
+            else:
+                print("#submit-product-edition button is not visible.")
+
+            await page.wait_for_selector("#modal-dismiss", timeout=30000)
+            modal_dismiss = page.locator("#modal-dismiss")
+            if modal_dismiss and await modal_dismiss.is_visible(timeout=60000):
+                print("Dismissing modal...")
+                await page.click("#modal-dismiss")
+
         await page.wait_for_selector("#product-languages")
 
         await random_mouse_movements(page)
@@ -95,12 +112,25 @@ async def fetch_win11_iso_link(arm: bool = False):
 
         await random_mouse_movements(page)
 
-        await page.click("#submit-sku")
+        for _ in range(10):
+            await page.wait_for_selector("#submit-sku", timeout=30000)
+            submit_sku = page.locator("#submit-sku")
+            if submit_sku and await submit_sku.is_visible(timeout=60000):
+                await page.click("#submit-sku")
+                break
+            else:
+                print("#submit-sku button is not visible.")
+
+            await page.wait_for_selector("#modal-dismiss", timeout=30000)
+            modal_dismiss = page.locator("#modal-dismiss")
+            if modal_dismiss and await modal_dismiss.is_visible(timeout=60000):
+                print("Dismissing modal...")
+                await page.click("#modal-dismiss")
 
         await random_mouse_movements(page)
 
         download_selector = "#download-links > div > div > a:first-child"
-        await page.wait_for_selector(download_selector)
+        await page.wait_for_selector(download_selector, timeout=60000)
         download_button = page.locator(download_selector)
 
         link = await download_button.get_attribute("href")
