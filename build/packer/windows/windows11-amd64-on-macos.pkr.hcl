@@ -20,22 +20,22 @@ variable "headless" {
 
 source "qemu" "win11" {
   # Apple Silicon host → x86 guest → needs software emulation
-  accelerator     = "tcg"
-  cpu_model       = "Haswell"
-  machine_type    = "q35"
-  disk_size       = "64G"
-  disk_interface  = "ide"
-  format          = "qcow2"
-  headless        = var.headless
-  iso_url         = var.iso_url
-  iso_checksum    = "none"
-  cdrom           = var.iso_url
-  cdrom_files     = [../../../vendor/utm/utm-guest-tools-latest.iso]
+  accelerator      = "tcg"
+  cpu_model        = "Haswell"
+  machine_type     = "q35"
+  disk_size        = "64G"
+  disk_interface   = "ide"
+  format           = "qcow2"
+  headless         = var.headless
+  iso_url          = var.iso_url
+  iso_checksum     = "none"
+  cdrom            = var.iso_url
+  cdrom_files      = ["${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso"]
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  display         = "cocoa"
-  memory          = "4096"
-  cores           = 4
-  net_device      = "e1000"
+  display          = "cocoa"
+  memory           = "4096"
+  cores            = 4
+  net_device       = "e1000"
 
   tpm_device_type = "emulator"
 
