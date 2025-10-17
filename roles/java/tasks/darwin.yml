@@ -41,6 +41,11 @@
     name: jenv
     state: present
 
+- name: Check if .zshrc exists
+  stat:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+  register: zshrc_stat
+
 - name: Add jenv init to shell config
   lineinfile:
     path: "{{ ansible_env.HOME }}/.zshrc"
@@ -55,11 +60,6 @@
   environment:
     JAVA_HOME: "{{ lookup('pipe', '/usr/libexec/java_home -v ' ~ item) }}"
   loop: "{{ jdk_versions }}"
-
-- name: Check if .zshrc exists
-  stat:
-    path: "{{ ansible_env.HOME }}/.zshrc"
-  register: zshrc_stat
 
 - name: Create .zshrc if it does not exist
   file:
@@ -76,7 +76,9 @@
   when: zshrc_stat.stat.exists
 
 - name: Enable jenv plugin maven
-  command: jenv enable-plugin maven
+  shell: |
+    eval "$(jenv init -)"
+    jenv enable-plugin maven
   args:
     creates: "{{ ansible_env.HOME }}/.jenv/plugins/maven"
 
