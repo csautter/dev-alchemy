@@ -20,27 +20,33 @@ variable "headless" {
 
 source "qemu" "win11" {
   # Apple Silicon host → x86 guest → needs software emulation
-  accelerator     = "tcg"
-  cpu_model       = "Haswell"
-  machine_type    = "q35"
-  disk_size       = "64G"
-  disk_interface  = "ide"
-  format          = "qcow2"
-  headless        = var.headless
-  iso_url         = var.iso_url
-  iso_checksum    = "none"
-  cdrom           = var.iso_url
-  cdrom_files     = [../../../vendor/utm/utm-guest-tools-latest.iso.iso]
+  accelerator      = "tcg"
+  cpu_model        = "Haswell"
+  machine_type     = "q35"
+  disk_size        = "64G"
+  disk_interface   = "ide"
+  format           = "qcow2"
+  headless         = var.headless
+  iso_url          = var.iso_url
+  iso_checksum     = "none"
+  cdrom            = var.iso_url
+  cdrom_files      = ["${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso"]
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  display         = "cocoa"
-  memory          = "4096"
-  cores           = 4
-  net_device      = "e1000"
+  display          = "cocoa"
+  memory           = "4096"
+  cores            = 4
+  net_device       = "e1000"
 
   tpm_device_type = "emulator"
 
   # The autounattend.xml will be mounted as a virtual floppy drive
-  floppy_files = ["${path.root}/qemu/autounattend.xml"]
+  floppy_files = ["${path.root}/qemu-amd64/autounattend.xml"]
+
+  vnc_bind_address = "127.0.0.1"
+  vnc_port_min     = 5902
+  vnc_port_max     = 5902
+  vnc_use_password = true
+  vnc_password     = "packer"
 
   boot_wait = "5s"
 

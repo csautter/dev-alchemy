@@ -40,12 +40,13 @@ Default for packer is `6`.
 The build process will generate a Windows image in Vagrant box format as defined in [windows.pkr.hcl](windows.pkr.hcl).
 
 ## Build Windows on macOS Hosts
+
 This directory also contains a Packer template for building Windows images on macOS hosts using QEMU.
 
 ### for x86_64
+
 ```bash
-packer init build/packer/windows/windows11-x86-on-macos.pkr.hcl
-packer build -var "iso_url=./vendor/windows/Win11_25H2_English_x64.iso" build/packer/windows/windows11-x86-on-macos.pkr.hcl
+bash build/packer/windows/windows11-on-macos.sh --arch amd64
 ```
 
 ### for arm64
@@ -53,5 +54,5 @@ packer build -var "iso_url=./vendor/windows/Win11_25H2_English_x64.iso" build/pa
 There are a lot of customizations for running Windows on ARM, with QEMU and Packer. Therefore there is a script with some preparations.
 
 ```bash
-bash build/packer/windows/windows11-arm64-on-macos.sh
+bash build/packer/windows/windows11-on-macos.sh --arch arm64
 ```

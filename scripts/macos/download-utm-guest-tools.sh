@@ -7,5 +7,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="$SCRIPT_DIR/../../vendor/utm"
 OUTPUT_PATH="$OUTPUT_DIR/utm-guest-tools-latest.iso"
 
+if [ -f "$OUTPUT_PATH" ]; then
+	echo "UTM Guest Tools ISO already exists at $OUTPUT_PATH, skipping download."
+	exit 0
+fi
+
 mkdir -p "$OUTPUT_DIR"
 curl --progress-bar -L -o "$OUTPUT_PATH" "https://getutm.app/downloads/utm-guest-tools-latest.iso"
