@@ -28,27 +28,14 @@ keep_alive() {
 	done
 }
 
-# Use getopt for argument parsing
-PARSED_ARGS=$(getopt -o "" --long headless -- "$@")
-if [[ $? -ne 0 ]]; then
-	echo "Failed to parse arguments." >&2
-	exit 1
-fi
-
-eval set -- "$PARSED_ARGS"
-
-# default values
+# Manual argument parsing for portability
 arch="arm64"
 headless=false
 
-while true; do
+while [[ $# -gt 0 ]]; do
 	case "$1" in
-	--headless)
-		headless=true
-		shift
-		;;
 	--arch)
-		if [[ "$2" == "amd64" || "$2" == "arm64" ]]; then
+		if [[ -n "$2" && ("$2" == "amd64" || "$2" == "arm64") ]]; then
 			arch="$2"
 			shift 2
 		else
@@ -56,15 +43,20 @@ while true; do
 			exit 1
 		fi
 		;;
-	--)
+	--headless)
+		headless=true
 		shift
-		break
 		;;
 	*)
-		break
+		echo "Unknown option: $1" >&2
+		exit 1
 		;;
 	esac
 done
+
+echo "Using architecture: $arch"
+echo "Headless mode: $headless"
+
 script_dir=$(
 	# shellcheck disable=SC2164
 	cd "$(dirname "$0")"
