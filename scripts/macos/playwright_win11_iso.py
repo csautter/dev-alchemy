@@ -155,7 +155,7 @@ async def fetch_win11_iso_link(arm: bool = False, headless: bool = False):
         output_dir = os.path.join(script_dir, "../../vendor/windows/")
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(
-            output_dir, "win11_arm_iso_url.txt" if arm else "win11_iso_url.txt"
+            output_dir, "win11_arm64_iso_url.txt" if arm else "win11_amd64_iso_url.txt"
         )
         with open(output_path, "w") as f:
             f.write(link)

@@ -97,10 +97,10 @@ if [ ! -f "./vendor/windows/win11_25H2_english_$arch.iso" ]; then
 
 	if [ $headless = true ]; then
 		echo "Running in headless mode, skipping ISO download progress bar"
-		curl -o "win11_25h2_english_$arch.iso" "$(cat ./win11_arm_iso_url.txt)"
+		curl -o "win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
 	else
 		echo "Running in interactive mode, showing ISO download progress bar"
-		curl --progress-bar -o "win11_25h2_english_$arch.iso" "$(cat ./win11_arm_iso_url.txt)"
+		curl --progress-bar -o "win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
 	fi
 
 	cd "${project_root}" || exit 1
@@ -120,9 +120,10 @@ if [ "$arch" = "arm64" ]; then
 	# download the virtio-win ISO if not already present
 	bash scripts/macos/download-virtio-win-iso.sh
 
-	# creates the qcow2 disk image and overwrites it if it already exists
-	bash scripts/macos/create-qemu-qcow2-disk.sh
 fi
+
+# creates the qcow2 disk image and overwrites it if it already exists
+bash scripts/macos/create-qemu-qcow2-disk.sh --arch $arch
 
 packer init "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
 
@@ -160,7 +161,7 @@ EOD
 	trap "echo 'Stopping vncsnapshot process '$vncsnapshot_pid'; kill -SIGINT $vncsnapshot_pid; wait $vncsnapshot_pid; echo 'vncsnapshot process $vncsnapshot_pid has finished'" EXIT
 fi
 
-PACKER_LOG=1 packer build -var "iso_url=./vendor/windows/win11_25H2_english_$arch.iso" -var "headless=$headless" "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
+PACKER_LOG=1 packer build -var "iso_url=${project_root}/vendor/windows/win11_25H2_english_$arch.iso" -var "headless=$headless" "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
 packer_exit_code=$?
 
 if [ $headless = true ]; then

@@ -9,7 +9,7 @@ packer {
 
 variable "iso_url" {
   type    = string
-  default = "../../../vendor/windows/Win11_25H2_English_x64.iso"
+  default = "../../../vendor/windows/win11_25h2_english_amd64.iso"
 }
 
 # Set to true to run QEMU in headless mode (no GUI)
@@ -29,8 +29,6 @@ source "qemu" "win11" {
   headless         = var.headless
   iso_url          = var.iso_url
   iso_checksum     = "none"
-  cdrom            = var.iso_url
-  cdrom_files      = ["${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso"]
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   display          = "cocoa"
   memory           = "4096"
@@ -57,6 +55,17 @@ source "qemu" "win11" {
 
   shutdown_command = "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\""
   shutdown_timeout = "5m"
+
+  qemuargs = [
+    ["-device", "qemu-xhci,id=usb"],
+    ["-device", "usb-storage,drive=install,removable=true,bootindex=0"],
+    ["-drive", "if=none,id=install,format=raw,media=cdrom,file=${var.iso_url},readonly=true"],
+    ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=2"],
+    ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso,readonly=true"],
+    ["-device", "ide-hd,drive=ide0,bootindex=1"],
+    ["-drive", "if=none,media=disk,id=ide0,format=qcow2,file.filename=${path.root}/../../../vendor/windows/qemu-windows11-amd64.qcow2,discard=unmap,detect-zeroes=unmap"],
+    ["-boot", "order=c,menu=on"]
+  ]
 }
 
 build {
