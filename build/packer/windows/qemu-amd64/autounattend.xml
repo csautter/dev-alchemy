@@ -247,26 +247,6 @@ $scripts = @(
 		Set-ItemProperty -LiteralPath 'Registry::HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoLogonCount' -Type 'DWord' -Force -Value 0;
 	};
 	{
-        $logPath = "C:\EnableWinRM.log";
-        Start-Transcript -Path $logPath -Append;
-
-        try {
-            Start-Service WinRM;
-            # Set all network profiles to Private to avoid WinRM firewall exception errors
-            Get-NetConnectionProfile | Where-Object {$_.NetworkCategory -eq 'Public'} | Set-NetConnectionProfile -NetworkCategory Private;
-            Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true;
-            Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true;
-            # This opens the firewall for WinRM HTTP (port 5986) on localhost
-            Enable-PSRemoting -Force;
-            # This opens the firewall for WinRM HTTP (port 5985) from any remote address
-            Set-NetFirewallRule -Name 'WINRM-HTTP-In-TCP' -RemoteAddress Any;
-        } catch {
-            Write-Error "An error occurred while enabling WinRM: $_";
-        }
-
-        Stop-Transcript;
-	};
-	{
 		$guestToolsLog = "C:\UTMGuestToolsInstall.log"
 		try {
 			$drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -in 2, 5 }
@@ -287,6 +267,26 @@ $scripts = @(
 		} catch {
 			Write-Output "Error during UTM Guest Tools installation: $_" | Out-File -Append $guestToolsLog
 		}
+	};
+	{
+        $logPath = "C:\EnableWinRM.log";
+        Start-Transcript -Path $logPath -Append;
+
+        try {
+            Start-Service WinRM;
+            # Set all network profiles to Private to avoid WinRM firewall exception errors
+            Get-NetConnectionProfile | Where-Object {$_.NetworkCategory -eq 'Public'} | Set-NetConnectionProfile -NetworkCategory Private;
+            Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true;
+            Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true;
+            # This opens the firewall for WinRM HTTP (port 5986) on localhost
+            Enable-PSRemoting -Force;
+            # This opens the firewall for WinRM HTTP (port 5985) from any remote address
+            Set-NetFirewallRule -Name 'WINRM-HTTP-In-TCP' -RemoteAddress Any;
+        } catch {
+            Write-Error "An error occurred while enabling WinRM: $_";
+        }
+
+        Stop-Transcript;
 	};
 );
 
