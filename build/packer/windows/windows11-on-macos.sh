@@ -30,7 +30,7 @@ keep_alive() {
 
 # Manual argument parsing for portability
 arch="arm64"
-headless=false
+headless="false"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
 		fi
 		;;
 	--headless)
-		headless=true
+		headless="true"
 		shift
 		;;
 	*)
@@ -95,7 +95,7 @@ if [ ! -f "./vendor/windows/win11_25H2_english_$arch.iso" ]; then
 	fi
 	cd "${project_root}/vendor/windows/" || exit 1
 
-	if [ $headless = true ]; then
+	if [ "$headless" = "true" ]; then
 		echo "Running in headless mode, skipping ISO download progress bar"
 		curl -o "win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
 	else
@@ -128,7 +128,7 @@ bash scripts/macos/create-qemu-qcow2-disk.sh --arch $arch
 packer init "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
 
 # record video in headless mode
-if [ $headless = true ]; then
+if [ "$headless" = "true" ]; then
 	mkdir -p "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output"
 	# set VNC password to "packer"
 	packer_password="packer"
@@ -161,10 +161,18 @@ EOD
 	trap "echo 'Stopping vncsnapshot process '$vncsnapshot_pid'; kill -SIGINT $vncsnapshot_pid; wait $vncsnapshot_pid; echo 'vncsnapshot process $vncsnapshot_pid has finished'" EXIT
 fi
 
-PACKER_LOG=1 packer build -var "iso_url=${project_root}/vendor/windows/win11_25H2_english_$arch.iso" -var "headless=$headless" "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
+# determine the Windows 11 ISO path to use
+if [ "$arch" = "amd64" ]; then
+	win11_iso_path="${project_root}/vendor/windows/win11_25h2_english_$arch.iso"
+elif [ "$arch" = "arm64" ]; then
+	# use the unattended ISO we created earlier
+	win11_iso_path="${project_root}/vendor/windows/Win11_ARM64_Unattended.iso"
+fi
+
+PACKER_LOG=1 packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
 packer_exit_code=$?
 
-if [ $headless = true ]; then
+if [ "$headless" = "true" ]; then
 	# shellcheck disable=SC2086
 	kill -SIGINT $vncsnapshot_pid
 	# shellcheck disable=SC2086

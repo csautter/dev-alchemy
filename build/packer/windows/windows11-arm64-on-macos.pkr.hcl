@@ -69,11 +69,9 @@ source "qemu" "win11" {
     ["-device", "usb-tablet"],
     ["-device", "usb-storage,drive=install,removable=true,bootindex=0"],
     ["-drive", "if=none,id=install,format=raw,media=cdrom,file=${var.iso_url},readonly=true"],
-    ["-device", "usb-storage,drive=autounattend,removable=true,bootindex=2"],
-    ["-drive", "if=none,id=autounattend,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/autounattend.iso,readonly=true"],
-    ["-device", "usb-storage,drive=virtio-drivers,removable=true,bootindex=3"],
+    ["-device", "usb-storage,drive=virtio-drivers,removable=true,bootindex=2"],
     ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/virtio-win.iso,readonly=true"],
-    ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=4"],
+    ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=3"],
     ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso,readonly=true"],
     ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=1"],
     ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${path.root}/../../../vendor/windows/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
@@ -91,15 +89,4 @@ source "qemu" "win11" {
 
 build {
   sources = ["source.qemu.win11"]
-
-  # This provisioner creates C:\packer.txt to verify that the VM was successfully provisioned by Packer.
-  provisioner "powershell" {
-    inline = [
-      "Write-Output 'Running inside Windows VM...'",
-      "New-Item -Path C:\\packer.txt -ItemType File -Force",
-      "Write-Output 'Created C:\\packer.txt file.'",
-      # delete the file to keep the image clean
-      "Remove-Item -Path C:\\packer.txt -Force"
-    ]
-  }
 }
