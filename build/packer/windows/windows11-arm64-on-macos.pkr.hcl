@@ -78,13 +78,13 @@ source "qemu" "win11" {
     ["-boot", "order=c,menu=on"]
   ]
 
-  communicator   = "winrm"
-  winrm_username = "Administrator"
-  winrm_password = "P@ssw0rd!"
-  winrm_timeout  = var.is_ci ? "4h" : "1h"
-
-  shutdown_command = "shutdown /s /t 60 /f /d p:4:1 /c \"Packer Shutdown\""
-  shutdown_timeout = "10m"
+  communicator            = "winrm"
+  pause_before_connecting = var.is_ci ? "10m" : "1m"
+  winrm_username          = "Administrator"
+  winrm_password          = "P@ssw0rd!"
+  winrm_timeout           = var.is_ci ? "4h" : "1h"
+  shutdown_command        = "shutdown /s /t 60 /f /d p:4:1 /c \"Packer Shutdown\""
+  shutdown_timeout        = "10m"
 }
 
 build {

@@ -18,6 +18,11 @@ variable "headless" {
   default = false
 }
 
+variable "is_ci" {
+  type    = bool
+  default = env("CI") == "true"
+}
+
 source "qemu" "win11" {
   # Apple Silicon host → x86 guest → needs software emulation
   accelerator      = "tcg"
@@ -48,10 +53,11 @@ source "qemu" "win11" {
 
   boot_wait = "5s"
 
-  communicator   = "winrm"
-  winrm_username = "Administrator"
-  winrm_password = "P@ssw0rd!"
-  winrm_timeout  = "5h"
+  communicator            = "winrm"
+  pause_before_connecting = var.is_ci ? "10m" : "1m"
+  winrm_username          = "Administrator"
+  winrm_password          = "P@ssw0rd!"
+  winrm_timeout           = "5h"
 
   shutdown_command = "shutdown /s /t 60 /f /d p:4:1 /c \"Packer Shutdown\""
   shutdown_timeout = "10m"
