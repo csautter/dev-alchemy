@@ -11,7 +11,7 @@ mac=$(cat "$plist" | grep -A1 'MacAddress' | grep string | awk -F'[<>]' '{print 
 echo "Looking for IP address associated with MAC address: $mac"
 
 # Find the IP address associated with the MAC address
-ip=$(arp -a | grep -i "$mac" | grep ifscope | awk '{print $12}' | tr -d '()')
+ip=$(arp -a | grep -i "$mac" | grep ifscope | awk '{print $2}' | tr -d '()')
 
 if [ -z "$ip" ]; then
 	echo "Could not find the IP address for MAC address $mac. Is the VM running?"
