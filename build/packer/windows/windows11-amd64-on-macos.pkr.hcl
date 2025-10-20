@@ -53,8 +53,8 @@ source "qemu" "win11" {
   winrm_password = "P@ssw0rd!"
   winrm_timeout  = "5h"
 
-  shutdown_command = "shutdown /s /t 10 /f /d p:4:1 /c \"Packer Shutdown\""
-  shutdown_timeout = "5m"
+  shutdown_command = "shutdown /s /t 60 /f /d p:4:1 /c \"Packer Shutdown\""
+  shutdown_timeout = "10m"
 
   qemuargs = [
     ["-device", "qemu-xhci,id=usb"],
