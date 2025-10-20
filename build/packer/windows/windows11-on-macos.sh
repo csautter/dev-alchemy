@@ -153,7 +153,7 @@ EOD
 		echo "You can connect to it using a VNC viewer with password '$packer_password' on localhost:5901"
 		vnc_port=1
 	fi
-	keep_alive "vncsnapshot -quiet -passwd $project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 14400 -fps 1 localhost:$vnc_port $project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc.jpg" &
+	keep_alive "vncsnapshot -quiet -passwd $project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 21600 -fps 1 localhost:$vnc_port $project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc.jpg" &
 	vncsnapshot_pid=$!
 	echo "Started vncsnapshot with PID $vncsnapshot_pid"
 
