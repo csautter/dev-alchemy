@@ -179,8 +179,8 @@ if [ "$headless" = "true" ]; then
 	wait $vncsnapshot_pid
 	echo "vncsnapshot process $vncsnapshot_pid has finished"
 	# create mp4 video from jpg images
-	ffmpeg -framerate 1 -i "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc%05d.jpg" -c:v libx264 -pix_fmt yuv420p "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc.mp4"
-	echo "Created video $project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc.mp4"
+	ffmpeg -framerate 1 -i "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc%05d.jpg" -c:v libx264 -pix_fmt yuv420p "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu-windows11-$arch.vnc.mp4"
+	echo "Created video $project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu-windows11-$arch.vnc.mp4"
 	find "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output" -name 'packer-qemu.vnc*.jpg' -delete
 fi
 

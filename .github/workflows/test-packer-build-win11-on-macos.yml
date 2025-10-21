@@ -39,11 +39,11 @@ jobs:
         run: |
           bash build/packer/windows/windows11-on-macos.sh --headless --arch ${{ matrix.arch }}
 
-      - name: Upload build-record.mp4 artifact (always)
+      - name: Upload packer-qemu-windows11-${{ matrix.arch }}.vnc.mp4 artifact (always)
         uses: actions/upload-artifact@v4
         with:
-          name: build-record
-          path: ./build/packer/windows/.build_tmp/windows11-${{ matrix.arch }}-on-macos-output/packer-qemu.vnc.mp4
+          name: packer-qemu-windows11-${{ matrix.arch }}.vnc.mp4
+          path: ./build/packer/windows/.build_tmp/windows11-${{ matrix.arch }}-on-macos-output/packer-qemu-windows11-${{ matrix.arch }}.vnc.mp4
           retention-days: 1
 
       - name: Fail if Packer build failed
