@@ -108,6 +108,9 @@
 				<HideEULAPage>true</HideEULAPage>
 				<HideWirelessSetupInOOBE>false</HideWirelessSetupInOOBE>
 				<HideOnlineAccountScreens>false</HideOnlineAccountScreens>
+				<NetworkLocation>Work</NetworkLocation>
+				<SkipMachineOOBE>true</SkipMachineOOBE>
+  				<SkipUserOOBE>true</SkipUserOOBE>
 			</OOBE>
 			<FirstLogonCommands>
 				<SynchronousCommand wcm:action="add">
@@ -273,9 +276,11 @@ $scripts = @(
         Start-Transcript -Path $logPath -Append;
 
         try {
-            Start-Service WinRM;
-            # Set all network profiles to Private to avoid WinRM firewall exception errors
+			# Set all network profiles to Private to avoid WinRM firewall exception errors
             Get-NetConnectionProfile | Where-Object {$_.NetworkCategory -eq 'Public'} | Set-NetConnectionProfile -NetworkCategory Private;
+			# Enable WinRM
+			winrm quickconfig -quiet;
+			Start-Service WinRM;
             Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true;
             Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true;
             # This opens the firewall for WinRM HTTP (port 5986) on localhost
