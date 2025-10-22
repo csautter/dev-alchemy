@@ -114,10 +114,23 @@ jobs:
           ANSIBLE_FORCE_COLOR: "true"
         if: runner.os != 'Windows'
 
-      - name: Run all Ansible roles on Windows
+      - name: Run all Ansible roles on Windows (with retries)
         if: runner.os == 'Windows'
         shell: powershell
-        run: |
-          C:\cygwin\bin\bash.exe -l -c "cd /cygdrive/d/a/dev-alchemy/dev-alchemy && ansible-playbook -i inventory/localhost_windows_${{ matrix.ansible_protocol }}.yml -l windows_host playbooks/setup.yml"
         env:
           ANSIBLE_FORCE_COLOR: "true"
+        run: |
+          $maxRetries = 6
+          $count = 0
+          do {
+            $count++
+            try {
+              C:\cygwin\bin\bash.exe -l -c "cd /cygdrive/d/a/dev-alchemy/dev-alchemy && ansible-playbook -i inventory/localhost_windows_${{ matrix.ansible_protocol }}.yml -l windows_host playbooks/setup.yml"
+              $success = $true
+            } catch {
+              $success = $false
+              Write-Host "Attempt $count failed."
+              if ($count -lt $maxRetries) { Start-Sleep -Seconds 10 }
+            }
+          } until ($success -or $count -ge $maxRetries)
+          if (-not $success) { throw "All $maxRetries attempts failed." }
