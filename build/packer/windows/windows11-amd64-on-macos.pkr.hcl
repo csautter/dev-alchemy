@@ -37,8 +37,10 @@ source "qemu" "win11" {
   output_directory = "${path.root}/../../../vendor/windows/qemu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   display          = "cocoa"
   memory           = "4096"
-  cores            = 4
-  net_device       = "e1000"
+  # Github Actions macOS runners have 3 CPU cores, so limit to 3 when running in CI
+  # https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories
+  cores      = var.is_ci ? 3 : 4
+  net_device = "e1000"
 
   tpm_device_type = "emulator"
 
