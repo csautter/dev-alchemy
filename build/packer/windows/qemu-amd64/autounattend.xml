@@ -108,6 +108,9 @@
 				<HideEULAPage>true</HideEULAPage>
 				<HideWirelessSetupInOOBE>false</HideWirelessSetupInOOBE>
 				<HideOnlineAccountScreens>false</HideOnlineAccountScreens>
+				<NetworkLocation>Work</NetworkLocation>
+				<SkipMachineOOBE>true</SkipMachineOOBE>
+  				<SkipUserOOBE>true</SkipUserOOBE>
 			</OOBE>
 			<FirstLogonCommands>
 				<SynchronousCommand wcm:action="add">
@@ -247,13 +250,37 @@ $scripts = @(
 		Set-ItemProperty -LiteralPath 'Registry::HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoLogonCount' -Type 'DWord' -Force -Value 0;
 	};
 	{
+		$guestToolsLog = "C:\UTMGuestToolsInstall.log"
+		try {
+			$drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -in 2, 5 }
+			$found = $false
+			foreach ($drive in $drives) {
+				$utmExe = Get-ChildItem -Path "$($drive.DeviceID)\" -Filter "utm-guest-tools-*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+				if ($utmExe) {
+					Write-Output "Found UTM Guest Tools on $($drive.DeviceID)" | Out-File -Append $guestToolsLog
+					Start-Process -FilePath $utmExe.FullName -ArgumentList "/S" -Wait -NoNewWindow
+					Write-Output "UTM Guest Tools installation completed." | Out-File -Append $guestToolsLog
+					$found = $true
+					break
+				}
+			}
+			if (-not $found) {
+				Write-Output "UTM Guest Tools executable not found on any CD or USB drive." | Out-File -Append $guestToolsLog
+			}
+		} catch {
+			Write-Output "Error during UTM Guest Tools installation: $_" | Out-File -Append $guestToolsLog
+		}
+	};
+	{
         $logPath = "C:\EnableWinRM.log";
         Start-Transcript -Path $logPath -Append;
 
         try {
-            Start-Service WinRM;
-            # Set all network profiles to Private to avoid WinRM firewall exception errors
+			# Set all network profiles to Private to avoid WinRM firewall exception errors
             Get-NetConnectionProfile | Where-Object {$_.NetworkCategory -eq 'Public'} | Set-NetConnectionProfile -NetworkCategory Private;
+			# Enable WinRM
+			winrm quickconfig -quiet;
+			Start-Service WinRM;
             Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true;
             Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true;
             # This opens the firewall for WinRM HTTP (port 5986) on localhost

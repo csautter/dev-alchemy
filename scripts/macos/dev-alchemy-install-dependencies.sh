@@ -11,3 +11,4 @@ brew install qemu
 brew install xz
 brew install ffmpeg
 brew install vncsnapshot
+brew install xorriso

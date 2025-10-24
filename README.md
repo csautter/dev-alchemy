@@ -219,7 +219,7 @@ devalchemy/
 
 | Host OS     |                                      Test Linux                                       |              Test macOS              |                                                       Test Windows                                                       |
 | ----------- | :-----------------------------------------------------------------------------------: | :----------------------------------: | :----------------------------------------------------------------------------------------------------------------------: |
-| **macOS**   |                          Docker<br><sub>✅ Implemented</sub>                          | Tart VM<br><sub>✅ Implemented</sub> |                                     VM (e.g., UTM)<br><sub>❌ Not implemented</sub>                                      |
+| **macOS**   |                          Docker<br><sub>✅ Implemented</sub>                          | Tart VM<br><sub>✅ Implemented</sub> |                                         UTM Qemu VM<br><sub>✅ Implemented</sub>                                         |
 | **Linux**   |                          Docker<br><sub>✅ Implemented</sub>                          |                 ---                  |                                  VM (e.g., VirtualBox)<br><sub>❌ Not implemented</sub>                                  |
 | **Windows** | WSL<br><sub>❌ Not implemented</sub><br>\_\_\_<br>Docker<br><sub>✅ Implemented</sub> |                 ---                  | Docker Desktop (Windows Containers) <br><sub>✅ Implemented</sub><br>\_\_\_<br>VM (Hyper-V)<br><sub>✅ Implemented</sub> |
 
@@ -274,9 +274,46 @@ This will delete the temporary VM.
 
 ### Local tests for windows (on macos)
 
-On macOS there is currently no fully automated test setup for ansible on windows.
-I recommend to use a Windows VM.
-Check [Windows on UTM](https://docs.getutm.app/guides/windows/) for a guide to install windows in UTM on macos.
+On macOS you can use UTM to run a Windows VM for testing ansible changes on windows. UTM is a powerful and easy-to-use virtual machine manager for macOS.
+Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and qemu on macos.
+
+After the VM is built, you can add it to UTM and start it. This step is currently automated just for Windows arm64. For x86_64 you need to add the VM manually to UTM.
+See script [create-windows11-utm-vm.sh](./deployments/utm/windows11-arm64/create-windows11-utm-vm.sh) for details about the UTM VM creation.
+You can use following scripts to create the UTM VM and determine its IP address:
+
+```bash
+bash ./deployments/utm/windows11-arm64/create-windows11-utm-vm.sh
+bash ./deployments/utm/windows11-arm64/determine-vm-ip-address.sh
+```
+
+You can create the inventory file using a Bash script and the `$vagrant_ip` variable:
+
+```bash
+vagrant_ip="YOUR_VM_IP_HERE"
+cat <<EOF > ./inventory/utm_windows_winrm.yml
+all:
+  children:
+    windows:
+      hosts:
+        windows_host:
+          ansible_host: $vagrant_ip
+          ansible_user: Administrator
+          ansible_password: P@ssw0rd!
+          ansible_connection: winrm
+          ansible_winrm_transport: basic
+          ansible_port: 5985
+EOF
+```
+
+Now you can run the ansible playbook against the UTM Windows VM:
+
+```bash
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+ansible-playbook ./playbooks/setup.yml -i ./inventory/utm_windows_winrm.yml -l windows_host -vvv --check
+ansible-playbook ./playbooks/setup.yml -i ./inventory/utm_windows_winrm.yml -l windows_host -vvv
+```
+
+> ℹ️ Note: there is a known issue, that ansible might fail to connect via winrm when the VM has configured the Network interface as Public network. Switching it to Private network should resolve the issue.
 
 ### Local tests for windows (on windows)
 

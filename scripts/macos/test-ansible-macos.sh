@@ -43,7 +43,8 @@ all:
       ansible_user: admin
 EOF
 
-ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$VM_IP" --ask-pass --ask-become-pass -v
+ANSIBLE_ASK_PASS=false ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$VM_IP" \
+	--extra-vars "ansible_ssh_pass=admin ansible_become_pass=admin" -v
 
 tart stop sequoia-base
 

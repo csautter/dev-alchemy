@@ -13,7 +13,7 @@
     content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"
     owner: root
     group: wheel
-    mode: '0440'
+    mode: "0440"
 
 - name: Check if Rosetta 2 is installed
   stat:
@@ -41,6 +41,11 @@
     name: jenv
     state: present
 
+- name: Check if .zshrc exists
+  stat:
+    path: "{{ ansible_env.HOME }}/.zshrc"
+  register: zshrc_stat
+
 - name: Add jenv init to shell config
   lineinfile:
     path: "{{ ansible_env.HOME }}/.zshrc"
@@ -56,16 +61,11 @@
     JAVA_HOME: "{{ lookup('pipe', '/usr/libexec/java_home -v ' ~ item) }}"
   loop: "{{ jdk_versions }}"
 
-- name: Check if .zshrc exists
-  stat:
-    path: "{{ ansible_env.HOME }}/.zshrc"
-  register: zshrc_stat
-
 - name: Create .zshrc if it does not exist
   file:
     path: "{{ ansible_env.HOME }}/.zshrc"
     state: touch
-    mode: '0644'
+    mode: "0644"
   when: not zshrc_stat.stat.exists
 
 - name: Set global Java version via jenv
@@ -73,7 +73,20 @@
     path: "{{ ansible_env.HOME }}/.zshrc"
     line: "jenv global {{ jdk_default_version }}"
     insertafter: EOF
-  when: zshrc_stat.stat.exists
+
+- name: Ensure jenv plugins directory exists
+  file:
+    path: "{{ ansible_env.HOME }}/.jenv/plugins"
+    state: directory
+    mode: "0755"
+
+- name: Enable jenv plugin maven
+  shell: |
+    export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+    eval "$(jenv init -)"
+    jenv enable-plugin maven
+  args:
+    executable: /bin/zsh
 
 - name: Remove passwordless sudo for {{ ansible_user }} user
   become: true
