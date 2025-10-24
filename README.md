@@ -278,12 +278,12 @@ On macOS you can use UTM to run a Windows VM for testing ansible changes on wind
 Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and qemu on macos.
 
 After the VM is built, you can add it to UTM and start it. This step is currently automated just for Windows arm64. For x86_64 you need to add the VM manually to UTM.
-See script [create-windows11-utm-vm.sh](./deployments/utm/windows11-arm64/create-windows11-utm-vm.sh) for details about the UTM VM creation.
+See script [create-windows11-utm-vm.sh](./deployments/utm/create-windows11-utm-vm.sh) for details about the UTM VM creation.
 You can use following scripts to create the UTM VM and determine its IP address:
 
 ```bash
-bash ./deployments/utm/windows11-arm64/create-windows11-utm-vm.sh
-bash ./deployments/utm/windows11-arm64/determine-vm-ip-address.sh
+bash ./deployments/utm/create-windows11-utm-vm.sh
+bash ./deployments/utm/determine-vm-ip-address.sh
 ```
 
 You can create the inventory file using a Bash script and the `$vagrant_ip` variable:
