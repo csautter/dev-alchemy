@@ -1,0 +1,21 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    hostname: ubuntu-server
+    username: packer
+    password: "$6$K0/99yci1FVwggFy$/v7bEfr0MBcNq6teIkKkTjHMzJo9UE8q0IdrIORqycbldC.WgYtDhVdlEfqNgM7kN/zEuJX1KAr4kRAgHKn/.." # mkpasswd --method=SHA-512
+  ssh:
+    install-server: true
+  storage:
+    layout:
+      name: direct
+  language: de
+  locale: de_DE.UTF-8
+  keyboard:
+    layout: de
+  packages:
+    - openssh-server
+  late-commands:
+    - curtin in-target -- apt-get update
+    - curtin in-target -- apt-get upgrade -y

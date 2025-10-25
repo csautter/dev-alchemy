@@ -24,7 +24,7 @@ variable "iso_checksum" {
 
 source "hyperv-iso" "linuxmint" {
   vm_name          = "linux-mint-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory = "${path.root}/../../../vendor/linux/hyperv-mint-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  output_directory = "${path.root}/../../../../vendor/linux/hyperv-mint-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
 
   iso_url          = var.iso_url
   iso_checksum     = var.iso_checksum
@@ -64,7 +64,7 @@ build {
   }
 
   post-processor "vagrant" {
-    output              = "${path.root}/../../../vendor/windows/linux-mint-hyperv.box"
+    output              = "${path.root}/../../../../vendor/windows/linux-mint-hyperv.box"
     keep_input_artifact = false
     provider_override   = "hyperv"
     compression_level   = 1
