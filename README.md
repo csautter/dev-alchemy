@@ -255,11 +255,11 @@ docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 
 To test changes locally on Ubuntu with a Windows Host System using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
 
-##### Build a Windows VM
+##### Build a Ubuntu VM
 
 Check [README.md](./build/packer/linux/ubuntu/README.md) for a guide to build an Ubuntu VM with packer and Hyper-V.
 
-##### Run the Windows VM
+##### Run the Ubuntu VM
 
 Check [README.md](./deployments/vagrant/linux-ubuntu-hyperv/README.md) for a guide to run the Ubuntu VM with Vagrant and Hyper-V.
 

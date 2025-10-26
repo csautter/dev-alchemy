@@ -87,6 +87,8 @@ ansible-playbook ./playbooks/setup.yml -i ./inventory/hyperv_ubuntu.yml -l ubunt
 When you are done, you can destroy the Vagrant box and remove the box from your system:
 
 ```bash
+cd deployments\vagrant\linux-ubuntu-hyperv
 vagrant destroy
 vagrant box remove linux-ubuntu --provider hyperv
+cd ..\..\..
 ```
