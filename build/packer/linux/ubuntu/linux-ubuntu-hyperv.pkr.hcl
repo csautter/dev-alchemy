@@ -29,33 +29,38 @@ source "hyperv-iso" "ubuntu" {
   switch_name        = "Default Switch"
   enable_secure_boot = false
 
+  # Cloud-init seed ISO
+  cd_label = "cidata"
+  cd_files = [
+    "${path.root}/cloud-init/meta-data",
+    "${path.root}/cloud-init/user-data"
+  ]
+
   communicator = "ssh"
   ssh_username = "packer"
   ssh_password = "P@ssw0rd!"
-  ssh_timeout  = "20m"
+  ssh_timeout  = "30m"
 
   boot_wait = "2s"
 
   boot_command = [
     "e<wait2>",
     "<leftShiftOn><down><down><down><end><leftShiftOff><wait2>",
-    "<leftShiftOn><left><left><left><leftShiftOff><wait> autoinstall ds=nocloud-net;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ ",
+    "<leftShiftOn><left><left><left><leftShiftOff><wait> autoinstall ds=nocloud ",
     "<wait10>",
     "<f10><wait>",
   ]
 
-  http_directory = "${path.root}/http"
-
-  shutdown_command = "echo 'packer' | sudo -S shutdown -P now"
+  shutdown_command = "echo 'P@ssw0rd!' | sudo -S shutdown -P now"
 }
 
 build {
   sources = ["source.hyperv-iso.ubuntu"]
 
-  provisioner "shell" {
-    inline = [
-      "sudo apt-get update",
-      "sudo apt-get upgrade -y"
-    ]
+  post-processor "vagrant" {
+    output              = "${path.root}/../../../../internal/vagrant/linux-ubuntu-hyperv.box"
+    keep_input_artifact = false
+    provider_override   = "hyperv"
+    compression_level   = 1
   }
 }

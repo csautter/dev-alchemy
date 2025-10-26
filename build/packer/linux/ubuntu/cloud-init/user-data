@@ -16,6 +16,12 @@ autoinstall:
     layout: de
   packages:
     - openssh-server
+    - linux-virtual
+    - linux-cloud-tools-virtual
+    - linux-tools-virtual
+    - linux-cloud-tools-common
+    - net-tools
+    - cloud-init
   late-commands:
     - curtin in-target -- apt-get update
     - curtin in-target -- apt-get upgrade -y

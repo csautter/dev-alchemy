@@ -235,7 +235,7 @@ devalchemy/
 
 > Note: macOS VM testing is only supported on macOS hosts due to Apple licensing restrictions. There might exist workarounds, but they are not covered here.
 
-### Local tests for ubuntu (on linux, WSL, windows or macos)
+### Local tests for Ubuntu (on linux, WSL, windows or macos)
 
 To test ansible roles for ubuntu, you can use the provided docker-compose setup:
 
@@ -250,6 +250,18 @@ To cleanup afterwards, simply run:
 ```bash
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 ```
+
+#### Local tests for Ubuntu on Windows with Hyper-v
+
+To test changes locally on Ubuntu with a Windows Host System using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
+
+##### Build a Windows VM
+
+Check [README.md](./build/packer/linux/ubuntu/README.md) for a guide to build an Ubuntu VM with packer and Hyper-V.
+
+##### Run the Windows VM
+
+Check [README.md](./deployments/vagrant/linux-ubuntu-hyperv/README.md) for a guide to run the Ubuntu VM with Vagrant and Hyper-V.
 
 ### Local tests for macOS (on macos)
 
