@@ -1,8 +1,8 @@
 # Ubuntu Packer Template
 
-## Build Ubuntu on Windows Hosts
+This directory contains Packer templates for building Ubuntu images.
 
-This directory contains a Packer template for building Ubuntu images.
+## Build Ubuntu on Windows Hosts
 
 ### Prerequisites
 
@@ -27,3 +27,16 @@ Default for packer is `6`.
 ### Output
 
 The build process will generate a Ubuntu image in Vagrant box format as defined in [linux-ubuntu-hyperv.pkr.hcl](linux-ubuntu-hyperv.pkr.hcl).
+
+## Build Ubuntu on MacOS Hosts
+
+### Usage
+
+To build the Ubuntu image, run:
+
+```powershell
+# build ubuntu server
+packer build -var "desktop_version=false" build/packer/linux/ubuntu/linux-ubuntu-amd64-on-macos.pkr.hcl
+# build ubuntu desktop
+packer build -var "desktop_version=true" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
+```
