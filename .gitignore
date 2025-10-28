@@ -1,5 +1,6 @@
 .idea/*
 vendor/*
+internal/*
 *.zip
 .DS_Store
 *packer_cache*

@@ -34,7 +34,7 @@ locals {
 
 source "qemu" "ubuntu" {
   vm_name          = "linux-ubuntu-${local.type_name}-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory = "${path.root}/../../../../vendor/linux/hyperv-ubuntu-${local.type_name}-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  output_directory = "${path.root}/../../../../internal/linux/qemu-ubuntu-${local.type_name}-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   iso_url          = local.ubuntu_iso_url
   iso_checksum     = local.ubuntu_iso_checksum
   memory           = 4096
@@ -82,4 +82,13 @@ source "qemu" "ubuntu" {
 
 build {
   sources = ["source.qemu.ubuntu"]
+
+  post-processor "shell-local" {
+    inline = [
+      "echo 'Exporting QCOW2 image...'",
+      "mkdir -p ${path.root}/../../../../internal/linux/hyperv-ubuntu-${local.type_name}-qemu",
+      "cp ${self.output_directory}/linux-ubuntu-${local.type_name}-packer-* ${path.root}/../../../../internal/linux/linux-ubuntu-${local.type_name}-qemu-amd64/linux-ubuntu-${local.type_name}-qemu-amd64.qcow2",
+      "echo 'Export completed.'"
+    ]
+  }
 }

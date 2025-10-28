@@ -74,7 +74,7 @@ source "qemu" "win11" {
     ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=3"],
     ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso,readonly=true"],
     ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=1"],
-    ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${path.root}/../../../vendor/windows/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
+    ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${path.root}/../../../internal/windows/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
     ["-boot", "order=c,menu=on"]
   ]
 
