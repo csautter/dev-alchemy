@@ -37,6 +37,7 @@ To build the Ubuntu image, run:
 ```powershell
 # build ubuntu server
 packer build -var "desktop_version=false" build/packer/linux/ubuntu/linux-ubuntu-amd64-on-macos.pkr.hcl
+PACKER_LOG=1 packer build -var "desktop_version=false" build/packer/linux/ubuntu/linux-ubuntu-amd64-on-macos.pkr.hcl
 # build ubuntu desktop
-packer build -var "desktop_version=true" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
+PACKER_LOG=1 packer build -var "desktop_version=true" build/packer/linux/ubuntu/linux-ubuntu-amd64-on-macos.pkr.hcl
 ```
