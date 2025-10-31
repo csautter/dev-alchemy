@@ -12,9 +12,14 @@ variable "ubuntu_version" {
   default = "24.04.3"
 }
 
-variable "desktop_version" {
-  type    = bool
-  default = false
+variable "ubuntu_type" {
+  type        = string
+  default     = "server"
+  description = "The type of Ubuntu image to build (server or desktop)."
+  validation {
+    condition     = var.ubuntu_type == "server" || var.ubuntu_type == "desktop"
+    error_message = "The variable ubuntu_type must be either 'server' or 'desktop'."
+  }
 }
 
 locals {
@@ -27,14 +32,14 @@ locals {
     "<wait2>",
     "<f10><wait>",
   ]
-  boot_command = local.boot_command_server
-  type_name    = var.desktop_version ? "desktop" : "server"
-  left_list    = join("", [for i in range(0, 16) : "<left>"])
+  boot_command     = local.boot_command_server
+  left_list        = join("", [for i in range(0, 16) : "<left>"])
+  output_directory = "${path.root}/../../../../internal/linux/qemu-ubuntu-${var.ubuntu_type}-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
 }
 
 source "qemu" "ubuntu" {
-  vm_name          = "linux-ubuntu-${local.type_name}-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory = "${path.root}/../../../../internal/linux/qemu-ubuntu-${local.type_name}-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  vm_name          = "linux-ubuntu-${var.ubuntu_type}-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  output_directory = local.output_directory
   iso_url          = local.ubuntu_iso_url
   iso_checksum     = local.ubuntu_iso_checksum
   memory           = 4096
@@ -51,8 +56,8 @@ source "qemu" "ubuntu" {
   # Cloud-init seed ISO
   cd_label = "cidata"
   cd_files = [
-    "${path.root}/cloud-init/qemu-${local.type_name}/meta-data",
-    "${path.root}/cloud-init/qemu-${local.type_name}/user-data"
+    "${path.root}/cloud-init/qemu-${var.ubuntu_type}/meta-data",
+    "${path.root}/cloud-init/qemu-${var.ubuntu_type}/user-data"
   ]
 
   communicator = "ssh"
@@ -86,8 +91,8 @@ build {
   post-processor "shell-local" {
     inline = [
       "echo 'Exporting QCOW2 image...'",
-      "mkdir -p ${path.root}/../../../../internal/linux/hyperv-ubuntu-${local.type_name}-qemu",
-      "cp ${self.output_directory}/linux-ubuntu-${local.type_name}-packer-* ${path.root}/../../../../internal/linux/linux-ubuntu-${local.type_name}-qemu-amd64/linux-ubuntu-${local.type_name}-qemu-amd64.qcow2",
+      "mkdir -p ${path.root}/../../../../internal/linux/linux-ubuntu-${var.ubuntu_type}-qemu-amd64",
+      "cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${path.root}/../../../../internal/linux/linux-ubuntu-${var.ubuntu_type}-qemu-amd64/linux-ubuntu-${var.ubuntu_type}-packer.qcow2",
       "echo 'Export completed.'"
     ]
   }
