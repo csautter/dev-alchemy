@@ -9,3 +9,4 @@ internal/*
 .venv/
 __pycache__/
 .build_tmp/
+*cidata.iso

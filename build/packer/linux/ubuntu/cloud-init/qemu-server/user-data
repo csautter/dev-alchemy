@@ -1,4 +1,12 @@
 #cloud-config
+
+# removes interactive prompt during autoinstall
+runcmd:
+  - [eval, 'echo $(cat /proc/cmdline) "autoinstall" > /root/cmdline']
+  - [eval, "mount -n --bind -o ro /root/cmdline /proc/cmdline"]
+  - [eval, "snap restart subiquity.subiquity-server"]
+  - [eval, "snap restart subiquity.subiquity-service"]
+
 autoinstall:
   version: 1
   identity:
@@ -17,8 +25,8 @@ autoinstall:
   packages:
     - openssh-server
     - linux-virtual
-    - linux-cloud-tools-virtual
     - linux-tools-virtual
+    - linux-tools-generic
     - linux-cloud-tools-common
     - net-tools
     - cloud-init
