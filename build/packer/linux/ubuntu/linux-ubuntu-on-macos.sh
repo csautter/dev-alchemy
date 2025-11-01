@@ -52,7 +52,7 @@ project_root=$(
 
 # Download the Ubuntu ISO if it doesn't exist
 if [ "$arch" = "arm64" ]; then
-	iso_path="$project_root/vendor/linux/ubuntu-24.04.3-live-${ubuntu_type}-${arch}.iso"
+	iso_path="$project_root/vendor/linux/ubuntu-24.04.3-live-server-arm64.iso"
 	iso_url="https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso"
 	iso_checksum="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
 	mkdir -p "$(dirname "$iso_path")"
@@ -84,6 +84,7 @@ fi
 # create cidata iso
 if [ "$arch" = "arm64" ]; then
 	cd "$script_dir/cloud-init/qemu-${ubuntu_type}" || exit 1
+	rm -f cidata.iso
 	xorriso -as mkisofs -V cidata -o cidata.iso user-data meta-data
 	cd "$project_root" || exit 1
 fi

@@ -10,6 +10,14 @@ autoinstall:
   storage:
     layout:
       name: direct
+  network:
+    version: 2
+    ethernets:
+      default:
+        dhcp4: true
+        dhcp6: true
+        match:
+          name: en*
   language: de
   locale: de_DE.UTF-8
   keyboard:
@@ -20,7 +28,6 @@ autoinstall:
     - linux-tools-virtual
     - linux-cloud-tools-common
     - net-tools
-    - cloud-init
     - qemu-guest-agent
     - spice-vdagent
   late-commands:
