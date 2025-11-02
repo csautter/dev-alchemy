@@ -28,6 +28,11 @@ variable "headless" {
   default = false
 }
 
+variable "vnc_port" {
+  type    = number
+  default = 5901
+}
+
 variable "is_ci" {
   type    = bool
   default = env("CI") == "true"
@@ -55,7 +60,7 @@ locals {
 source "qemu" "ubuntu" {
   qemu_binary      = "qemu-system-aarch64"
   headless         = var.headless
-  vm_name          = "linux-ubuntu-${var.ubuntu_type}-packer"
+  vm_name          = "linux-ubuntu-${var.ubuntu_type}-packer-arm64"
   output_directory = local.output_directory
   memory           = 4096
   cores            = var.is_ci ? 3 : 4
@@ -66,8 +71,8 @@ source "qemu" "ubuntu" {
   iso_checksum = "none"
 
   vnc_bind_address = "127.0.0.1"
-  vnc_port_min     = 5901
-  vnc_port_max     = 5901
+  vnc_port_min     = var.vnc_port
+  vnc_port_max     = var.vnc_port
   vnc_use_password = true
   vnc_password     = "packer"
 

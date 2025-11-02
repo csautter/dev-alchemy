@@ -3,6 +3,7 @@ package build
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"os/exec"
 	"runtime"
 	"testing"
@@ -13,6 +14,7 @@ type VirtualMachineConfig struct {
 	OS         string
 	Arch       string
 	UbuntuType string
+	VncPort    int
 }
 
 func TestPrintSystemOsArch(t *testing.T) {
@@ -20,14 +22,15 @@ func TestPrintSystemOsArch(t *testing.T) {
 }
 
 func RunQemuUbuntuBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
-	scriptPath := "../../build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh"
-	args := []string{"--arch", config.Arch, "--ubuntu-type", config.UbuntuType}
+	scriptPath := "./build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh"
+	args := []string{"--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
 
 	// Set a timeout for the script execution (adjust as needed)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "bash", append([]string{scriptPath}, args...)...)
+	cmd.Dir = "../../"
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -47,14 +50,14 @@ func RunQemuUbuntuBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			t.Logf("stdout: %s", scanner.Text())
+			t.Logf("%s:%s stdout:  %s", config.UbuntuType, config.Arch, scanner.Text())
 		}
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			t.Logf("stderr: %s", scanner.Text())
+			t.Logf("%s:%s stderr:  %s", config.UbuntuType, config.Arch, scanner.Text())
 		}
 	}()
 
@@ -76,37 +79,49 @@ func RunQemuUbuntuBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
 }
 
 func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
+	t.Parallel()
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:         "debian",
 		Arch:       "arm64",
 		UbuntuType: "server",
+		VncPort:    5901,
 	}
 	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
 }
 
 func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
+	t.Parallel()
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:         "debian",
 		Arch:       "amd64",
 		UbuntuType: "server",
+		VncPort:    5902,
 	}
 	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
 }
 
 func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
+	t.Parallel()
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:         "debian",
 		Arch:       "arm64",
 		UbuntuType: "desktop",
+		VncPort:    5903,
 	}
 	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
 }
 
 func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
+	t.Parallel()
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:         "debian",
 		Arch:       "amd64",
 		UbuntuType: "desktop",
+		VncPort:    5904,
 	}
 	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
 }

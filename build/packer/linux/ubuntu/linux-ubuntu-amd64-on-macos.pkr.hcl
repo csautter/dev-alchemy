@@ -12,6 +12,17 @@ variable "ubuntu_version" {
   default = "24.04.3"
 }
 
+# Set to true to run QEMU in headless mode (no GUI)
+variable "headless" {
+  type    = bool
+  default = false
+}
+
+variable "vnc_port" {
+  type    = number
+  default = 5901
+}
+
 variable "ubuntu_type" {
   type        = string
   default     = "server"
@@ -38,7 +49,8 @@ locals {
 }
 
 source "qemu" "ubuntu" {
-  vm_name          = "linux-ubuntu-${var.ubuntu_type}-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  vm_name          = "linux-ubuntu-${var.ubuntu_type}-packer-amd64"
+  headless         = var.headless
   output_directory = local.output_directory
   iso_url          = local.ubuntu_iso_url
   iso_checksum     = local.ubuntu_iso_checksum
@@ -59,6 +71,12 @@ source "qemu" "ubuntu" {
     "${path.root}/cloud-init/qemu-${var.ubuntu_type}/meta-data",
     "${path.root}/cloud-init/qemu-${var.ubuntu_type}/user-data"
   ]
+
+  vnc_bind_address = "127.0.0.1"
+  vnc_port_min     = var.vnc_port
+  vnc_port_max     = var.vnc_port
+  vnc_use_password = true
+  vnc_password     = "packer"
 
   communicator = "ssh"
   ssh_username = "packer"

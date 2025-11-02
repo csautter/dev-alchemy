@@ -7,6 +7,7 @@ set -x
 arch="arm64"
 headless="false"
 ubuntu_type="server"
+vnc_port="5901"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -22,6 +23,15 @@ while [[ $# -gt 0 ]]; do
 	--headless)
 		headless="true"
 		shift
+		;;
+	--vnc-port)
+		if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+			vnc_port="$2"
+			shift 2
+		else
+			echo "Invalid value for --vnc-port: $2. It must be a number." >&2
+			exit 1
+		fi
 		;;
 	--ubuntu-type)
 		if [[ -n "$2" && ("$2" == "server" || "$2" == "desktop") ]]; then
@@ -91,4 +101,4 @@ fi
 
 packer init "build/packer/linux/ubuntu/linux-ubuntu-$arch-on-macos.pkr.hcl"
 
-PACKER_LOG=1 packer build -var "ubuntu_type=$ubuntu_type" "build/packer/linux/ubuntu/linux-ubuntu-$arch-on-macos.pkr.hcl"
+PACKER_LOG=1 packer build -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" "build/packer/linux/ubuntu/linux-ubuntu-$arch-on-macos.pkr.hcl"

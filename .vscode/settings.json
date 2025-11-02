@@ -25,6 +25,7 @@
   "[go]": {
     "editor.formatOnSave": true
   },
+  "go.testTimeout": "300m",
   "emeraldwalk.runonsave": {
     "commands": [
       {
