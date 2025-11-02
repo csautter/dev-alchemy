@@ -1,9 +1,8 @@
-package build
+package deploy
 
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"os/exec"
 	"runtime"
 	"testing"
@@ -14,12 +13,12 @@ func TestPrintSystemOsArch(t *testing.T) {
 	t.Logf("Running on OS: %s, ARCH: %s", runtime.GOOS, runtime.GOARCH)
 }
 
-func RunQemuUbuntuBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
-	scriptPath := "./build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh"
-	args := []string{"--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
+func RunUtmUbuntuDeployOnMacOS(t *testing.T, config VirtualMachineConfig) {
+	scriptPath := "./deployments/utm/create-utm-vm.sh"
+	args := []string{"--arch", config.Arch, "--os", config.OS + "-" + config.UbuntuType}
 
 	// Set a timeout for the script execution (adjust as needed)
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "bash", append([]string{scriptPath}, args...)...)
@@ -71,50 +70,41 @@ func RunQemuUbuntuBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
 	}
 }
 
-func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
-	t.Parallel()
+func TestDeployUtmUbuntuServerArm64OnMacos(t *testing.T) {
 
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:         "ubuntu",
 		Arch:       "arm64",
 		UbuntuType: "server",
-		VncPort:    5901,
 	}
-	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
+	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
 }
 
-func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
-	t.Parallel()
+func TestDeployUtmUbuntuServerAmd64OnMacos(t *testing.T) {
 
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:         "ubuntu",
 		Arch:       "amd64",
 		UbuntuType: "server",
-		VncPort:    5902,
 	}
-	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
+	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
 }
 
-func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
-	t.Parallel()
+func TestDeployUtmUbuntuDesktopArm64OnMacos(t *testing.T) {
 
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:         "ubuntu",
 		Arch:       "arm64",
 		UbuntuType: "desktop",
-		VncPort:    5903,
 	}
-	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
+	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
 }
 
-func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
-	t.Parallel()
-
+func TestDeployUtmUbuntuDesktopAmd64OnMacos(t *testing.T) {
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:         "ubuntu",
 		Arch:       "amd64",
 		UbuntuType: "desktop",
-		VncPort:    5904,
 	}
-	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
+	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
 }

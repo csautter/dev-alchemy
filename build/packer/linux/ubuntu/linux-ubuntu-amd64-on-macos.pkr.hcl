@@ -100,6 +100,7 @@ source "qemu" "ubuntu" {
     ["-device", "usb-kbd"],
     ["-device", "usb-tablet"],
     ["-device", "usb-mouse"],
+    ["-k", "de"],
   ]
 }
 

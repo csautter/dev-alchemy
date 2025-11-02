@@ -1,4 +1,4 @@
-package build
+package deploy
 
 type VirtualMachineConfig struct {
 	OS         string

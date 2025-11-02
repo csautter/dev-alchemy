@@ -116,7 +116,8 @@ source "qemu" "ubuntu" {
     # Cloud-init seed ISO
     ["-drive", "if=none,id=cidata,format=raw,file=${path.root}/cloud-init/qemu-${var.ubuntu_type}/cidata.iso,readonly=true"],
     ["-device", "virtio-blk-pci,drive=cidata"],
-    ["-boot", "order=d,menu=on"]
+    ["-boot", "order=d,menu=on"],
+    ["-k", "de"],
   ]
 }
 
