@@ -22,6 +22,9 @@
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "file"
   },
+  "[go]": {
+    "editor.formatOnSave": true
+  },
   "emeraldwalk.runonsave": {
     "commands": [
       {
@@ -33,6 +36,11 @@
         // Run when a .sh file is saved
         "match": "\\.sh$",
         "cmd": "shfmt -w ${file}"
+      },
+      {
+        // Run when a .tf or .tfvars file is saved
+        "match": "\\.(go)$",
+        "cmd": "go fmt ${file}"
       }
     ]
   },
