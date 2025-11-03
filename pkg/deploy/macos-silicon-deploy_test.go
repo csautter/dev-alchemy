@@ -1,5 +1,8 @@
 package deploy
 
+// When this tests are executed by VS Code integration it might be that bash scripts are not working as intended.
+// Issues with bash expressions have been observed. Running the tests directly with `go test` should work as expected.
+
 import (
 	"bufio"
 	"context"

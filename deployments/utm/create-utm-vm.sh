@@ -87,13 +87,17 @@ generate_uuid() {
 os_lower=$(echo "$os" | awk '{print tolower()}')
 os_lower_first_part=$(echo "$os_lower" | cut -d'-' -f1)
 
-QCOW_IMAGE="$os-$arch.qcow2" \
-	VM_NAME="$os-$arch-dev-alchemy" \
-	MAC_ADDRESS="$mac_address" \
-	UUID="$(generate_uuid)" \
-	UUID_CD="$(generate_uuid)" \
-	UUID_DISK="$(generate_uuid)" \
-	envsubst <"$project_root/deployments/utm/$os_lower_first_part-$arch/config.plist" >"$utm_vm_dir/$os-$arch-dev-alchemy.utm/config.plist"
+if [ ! -f "$utm_vm_dir/$os-$arch-dev-alchemy.utm/config.plist" ]; then
+	echo "Creating UTM VM config..."
+
+	QCOW_IMAGE="$os-$arch.qcow2" \
+		VM_NAME="$os-$arch-dev-alchemy" \
+		MAC_ADDRESS="$mac_address" \
+		UUID="$(generate_uuid)" \
+		UUID_CD="$(generate_uuid)" \
+		UUID_DISK="$(generate_uuid)" \
+		envsubst <"$project_root/deployments/utm/$os_lower_first_part-$arch/config.plist" >"$utm_vm_dir/$os-$arch-dev-alchemy.utm/config.plist"
+fi
 
 if [ ! -f "$utm_vm_dir/$os-$arch-dev-alchemy.utm/Data/$os_lower-$arch.qcow2" ]; then
 	echo "Copying the qcow2 image to UTM VM directory..."
