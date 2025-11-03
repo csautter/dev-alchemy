@@ -18,12 +18,18 @@ variable "headless" {
   default = false
 }
 
+variable "vnc_port" {
+  type    = number
+  default = 5901
+}
+
 variable "is_ci" {
   type    = bool
   default = env("CI") == "true"
 }
 
 source "qemu" "win11" {
+  vm_name = "windows11-packer-amd64"
   # Apple Silicon host → x86 guest → needs software emulation
   accelerator      = "tcg"
   cpu_model        = "Haswell"
@@ -48,8 +54,8 @@ source "qemu" "win11" {
   floppy_files = ["${path.root}/qemu-amd64/autounattend.xml"]
 
   vnc_bind_address = "127.0.0.1"
-  vnc_port_min     = 5902
-  vnc_port_max     = 5902
+  vnc_port_min     = var.vnc_port
+  vnc_port_max     = var.vnc_port
   vnc_use_password = true
   vnc_password     = "packer"
 
@@ -72,7 +78,8 @@ source "qemu" "win11" {
     ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso,readonly=true"],
     ["-device", "ide-hd,drive=ide0,bootindex=1"],
     ["-drive", "if=none,media=disk,id=ide0,format=qcow2,file.filename=${path.root}/../../../internal/windows/qemu-windows11-amd64.qcow2,discard=unmap,detect-zeroes=unmap"],
-    ["-boot", "order=c,menu=on"]
+    ["-boot", "order=c,menu=on"],
+    ["-k", "de"]
   ]
 }
 

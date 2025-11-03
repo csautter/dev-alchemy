@@ -31,6 +31,7 @@ keep_alive() {
 # Manual argument parsing for portability
 arch="arm64"
 headless="false"
+vnc_port="5901"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -40,6 +41,15 @@ while [[ $# -gt 0 ]]; do
 			shift 2
 		else
 			echo "Invalid value for --arch: $2. Allowed values are 'amd64' or 'arm64'." >&2
+			exit 1
+		fi
+		;;
+	--vnc-port)
+		if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+			vnc_port="$2"
+			shift 2
+		else
+			echo "Invalid value for --vnc-port: $2. It must be a number." >&2
 			exit 1
 		fi
 		;;
@@ -141,19 +151,10 @@ send "$packer_password\n"
 expect eof
 EOD
 
-	# use different VNC ports for amd64 and arm64 builds to allow parallel execution
-	if [ "$arch" = "amd64" ]; then
-		# on amd64 we use the standard localhost:2 display
-		echo "Using VNC display localhost:2 for amd64 build"
-		echo "You can connect to it using a VNC viewer with password '$packer_password' on localhost:5902"
-		vnc_port=2
-	else
-		# on arm64 we use the localhost:1 display
-		echo "Using VNC display localhost:1 for arm64 build"
-		echo "You can connect to it using a VNC viewer with password '$packer_password' on localhost:5901"
-		vnc_port=1
-	fi
-	keep_alive "vncsnapshot -quiet -passwd $project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 21600 -fps 1 localhost:$vnc_port $project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc.jpg" &
+	echo "Using VNC display localhost:$((vnc_port - 5900)) for $arch build"
+	echo "You can connect to it using a VNC viewer with password '$packer_password' on localhost:$vnc_port"
+
+	keep_alive "vncsnapshot -quiet -passwd $project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 21600 -fps 1 localhost:$((vnc_port - 5900)) $project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc.jpg" &
 	vncsnapshot_pid=$!
 	echo "Started vncsnapshot with PID $vncsnapshot_pid"
 
@@ -169,7 +170,7 @@ elif [ "$arch" = "arm64" ]; then
 	win11_iso_path="${project_root}/vendor/windows/Win11_ARM64_Unattended.iso"
 fi
 
-PACKER_LOG=1 packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
+PACKER_LOG=1 packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
 packer_exit_code=$?
 
 if [ "$headless" = "true" ]; then

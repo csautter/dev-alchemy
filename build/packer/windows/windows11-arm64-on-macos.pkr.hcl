@@ -21,12 +21,18 @@ variable "headless" {
   default = false
 }
 
+variable "vnc_port" {
+  type    = number
+  default = 5901
+}
+
 variable "is_ci" {
   type    = bool
   default = env("CI") == "true"
 }
 
 source "qemu" "win11" {
+  vm_name          = "windows11-packer-arm64"
   qemu_binary      = "qemu-system-aarch64"
   headless         = var.headless
   iso_url          = var.iso_url
@@ -40,8 +46,8 @@ source "qemu" "win11" {
   net_device = "virtio-net-pci"
 
   vnc_bind_address = "127.0.0.1"
-  vnc_port_min     = 5901
-  vnc_port_max     = 5901
+  vnc_port_min     = var.vnc_port
+  vnc_port_max     = var.vnc_port
   vnc_use_password = true
   vnc_password     = "packer"
 
@@ -75,7 +81,8 @@ source "qemu" "win11" {
     ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso,readonly=true"],
     ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=1"],
     ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${path.root}/../../../internal/windows/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
-    ["-boot", "order=c,menu=on"]
+    ["-boot", "order=c,menu=on"],
+    ["-k", "de"]
   ]
 
   communicator            = "winrm"

@@ -17,7 +17,16 @@ func TestPrintSystemOsArch(t *testing.T) {
 func RunQemuUbuntuBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
 	scriptPath := "./build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh"
 	args := []string{"--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
+	RunBashScript(t, config, scriptPath, args)
+}
 
+func RunQemuWindowsBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
+	scriptPath := "./build/packer/windows/windows11-on-macos.sh"
+	args := []string{"--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
+	RunBashScript(t, config, scriptPath, args)
+}
+
+func RunBashScript(t *testing.T, config VirtualMachineConfig, scriptPath string, args []string) {
 	// Set a timeout for the script execution (adjust as needed)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
@@ -117,4 +126,26 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 		VncPort:    5904,
 	}
 	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
+}
+
+func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
+	t.Parallel()
+
+	VirtualMachineConfig := VirtualMachineConfig{
+		OS:      "windows11",
+		Arch:    "arm64",
+		VncPort: 5911,
+	}
+	RunQemuWindowsBuildOnMacOS(t, VirtualMachineConfig)
+}
+
+func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
+	t.Parallel()
+
+	VirtualMachineConfig := VirtualMachineConfig{
+		OS:      "windows11",
+		Arch:    "amd64",
+		VncPort: 5912,
+	}
+	RunQemuWindowsBuildOnMacOS(t, VirtualMachineConfig)
 }

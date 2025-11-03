@@ -15,7 +15,14 @@ func TestPrintSystemOsArch(t *testing.T) {
 
 func RunUtmUbuntuDeployOnMacOS(t *testing.T, config VirtualMachineConfig) {
 	scriptPath := "./deployments/utm/create-utm-vm.sh"
-	args := []string{"--arch", config.Arch, "--os", config.OS + "-" + config.UbuntuType}
+
+	var os string
+	if config.OsType != "" {
+		os = config.OS + "-" + config.OsType
+	} else {
+		os = config.OS
+	}
+	args := []string{"--arch", config.Arch, "--os", os}
 
 	// Set a timeout for the script execution (adjust as needed)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
@@ -42,14 +49,14 @@ func RunUtmUbuntuDeployOnMacOS(t *testing.T, config VirtualMachineConfig) {
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			t.Logf("%s:%s stdout:  %s", config.UbuntuType, config.Arch, scanner.Text())
+			t.Logf("%s:%s stdout:  %s", config.OsType, config.Arch, scanner.Text())
 		}
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			t.Logf("%s:%s stderr:  %s", config.UbuntuType, config.Arch, scanner.Text())
+			t.Logf("%s:%s stderr:  %s", config.OsType, config.Arch, scanner.Text())
 		}
 	}()
 
@@ -73,9 +80,9 @@ func RunUtmUbuntuDeployOnMacOS(t *testing.T, config VirtualMachineConfig) {
 func TestDeployUtmUbuntuServerArm64OnMacos(t *testing.T) {
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "arm64",
-		UbuntuType: "server",
+		OS:     "ubuntu",
+		Arch:   "arm64",
+		OsType: "server",
 	}
 	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
 }
@@ -83,9 +90,9 @@ func TestDeployUtmUbuntuServerArm64OnMacos(t *testing.T) {
 func TestDeployUtmUbuntuServerAmd64OnMacos(t *testing.T) {
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "amd64",
-		UbuntuType: "server",
+		OS:     "ubuntu",
+		Arch:   "amd64",
+		OsType: "server",
 	}
 	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
 }
@@ -93,18 +100,36 @@ func TestDeployUtmUbuntuServerAmd64OnMacos(t *testing.T) {
 func TestDeployUtmUbuntuDesktopArm64OnMacos(t *testing.T) {
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "arm64",
-		UbuntuType: "desktop",
+		OS:     "ubuntu",
+		Arch:   "arm64",
+		OsType: "desktop",
 	}
 	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
 }
 
 func TestDeployUtmUbuntuDesktopAmd64OnMacos(t *testing.T) {
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "amd64",
-		UbuntuType: "desktop",
+		OS:     "ubuntu",
+		Arch:   "amd64",
+		OsType: "desktop",
+	}
+	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
+}
+
+func TestDeployUtmWindows11Arm64OnMacos(t *testing.T) {
+
+	VirtualMachineConfig := VirtualMachineConfig{
+		OS:   "windows11",
+		Arch: "arm64",
+	}
+	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
+}
+
+func TestDeployUtmWindows11Amd64OnMacos(t *testing.T) {
+
+	VirtualMachineConfig := VirtualMachineConfig{
+		OS:   "windows11",
+		Arch: "amd64",
 	}
 	RunUtmUbuntuDeployOnMacOS(t, VirtualMachineConfig)
 }

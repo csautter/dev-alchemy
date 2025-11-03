@@ -27,6 +27,8 @@ SCRIPT_DIR=$(
 	cd "$(dirname "$0")"
 	pwd
 )
+
+mkdir -p "$SCRIPT_DIR/../../internal/windows/"
 rm -f "$SCRIPT_DIR/../../internal/windows/qemu-windows11-$arch.qcow2"
 qemu-img create -f qcow2 -o compression_type=zstd "$SCRIPT_DIR/../../internal/windows/qemu-windows11-$arch.qcow2" 64G
 qemu-img info "$SCRIPT_DIR/../../internal/windows/qemu-windows11-$arch.qcow2"
