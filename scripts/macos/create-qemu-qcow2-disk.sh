@@ -23,12 +23,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 # create a qcow2 disk image for QEMU
-SCRIPT_DIR=$(
+script_dir=$(
 	cd "$(dirname "$0")"
 	pwd
 )
 
-mkdir -p "$SCRIPT_DIR/../../internal/windows/"
-rm -f "$SCRIPT_DIR/../../internal/windows/qemu-windows11-$arch.qcow2"
-qemu-img create -f qcow2 -o compression_type=zstd "$SCRIPT_DIR/../../internal/windows/qemu-windows11-$arch.qcow2" 64G
-qemu-img info "$SCRIPT_DIR/../../internal/windows/qemu-windows11-$arch.qcow2"
+cache_dir="$script_dir/../../internal" # TODO: update to cache
+
+mkdir -p "$cache_dir/windows/"
+rm -f "$cache_dir/windows/qemu-windows11-$arch.qcow2"
+qemu-img create -f qcow2 -o compression_type=zstd "$cache_dir/windows/qemu-windows11-$arch.qcow2" 64G
+qemu-img info "$cache_dir/windows/qemu-windows11-$arch.qcow2"

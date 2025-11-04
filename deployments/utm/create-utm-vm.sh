@@ -46,11 +46,13 @@ project_root=$(
 	pwd
 )
 
+cache_dir="$project_root/internal" # TODO: update to cache
+
 utm_vm_dir="/Users/$(whoami)/Library/Containers/com.utmapp.UTM/Data/Documents"
 
-qemu_img="$project_root/internal/windows/qemu-windows11-$arch.qcow2"
+qemu_img="$cache_dir/windows/qemu-windows11-$arch.qcow2"
 if [[ "$os" == ubuntu* ]]; then
-	qemu_img="$project_root/internal/linux/linux-$os-qemu-$arch/linux-$os-packer.qcow2"
+	qemu_img="$cache_dir/linux/linux-$os-qemu-$arch/linux-$os-packer.qcow2"
 fi
 
 if [ -d "$utm_vm_dir" ] && [ ! -d "$utm_vm_dir/$os-$arch-dev-alchemy.utm/Data" ]; then

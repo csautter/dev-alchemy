@@ -55,10 +55,9 @@ variable "ubuntu_type" {
 }
 
 locals {
-  iso_url = var.arch == "amd64" ? "https://releases.ubuntu.com/${var.ubuntu_version}/ubuntu-${var.ubuntu_version}-live-${var.ubuntu_type}-amd64.iso" : "${path.root}/${var.iso_url}"
-
+  iso_url             = var.arch == "amd64" ? "https://releases.ubuntu.com/${var.ubuntu_version}/ubuntu-${var.ubuntu_version}-live-${var.ubuntu_type}-amd64.iso" : "${path.root}/${var.iso_url}"
   ubuntu_iso_checksum = var.arch == "amd64" ? "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b" : "none"
-
+  cache_directory     = "${path.root}/../../../../internal"
   boot_command = {
     "amd64" = [
       "e<wait2>",
@@ -106,7 +105,7 @@ locals {
       ["-drive", "if=none,id=cdrom,media=cdrom,file=${local.iso_url},readonly=true"],
       # Main disk
       ["-device", "virtio-blk-pci,drive=disk,serial=deadbeef,bootindex=0"],
-      ["-drive", "if=none,media=disk,id=disk,format=qcow2,file.filename=${path.root}/../../../../internal/linux/linux-ubuntu-${var.ubuntu_type}-qemu-arm64/linux-ubuntu-${var.ubuntu_type}-packer.qcow2,discard=unmap,detect-zeroes=unmap"],
+      ["-drive", "if=none,media=disk,id=disk,format=qcow2,file.filename=${local.cache_directory}/linux/linux-ubuntu-${var.ubuntu_type}-qemu-arm64/linux-ubuntu-${var.ubuntu_type}-packer.qcow2,discard=unmap,detect-zeroes=unmap"],
       # Cloud-init seed ISO
       ["-drive", "if=none,id=cidata,format=raw,file=${path.root}/cloud-init/qemu-${var.ubuntu_type}/cidata.iso,readonly=true"],
       ["-device", "virtio-blk-pci,drive=cidata"],
@@ -115,7 +114,7 @@ locals {
     ]
   }
   left_list        = join("", [for i in range(0, 16) : "<left>"])
-  output_directory = "${path.root}/../../../../internal/linux/qemu-ubuntu-${var.ubuntu_type}-out-${var.arch}"
+  output_directory = "${local.cache_directory}/linux/qemu-ubuntu-${var.ubuntu_type}-out-${var.arch}"
 }
 
 source "qemu" "ubuntu" {
@@ -167,8 +166,8 @@ build {
   post-processor "shell-local" {
     inline = var.arch == "amd64" ? [
       "echo 'Exporting QCOW2 image...'",
-      "mkdir -p ${path.root}/../../../../internal/linux/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}",
-      "cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${path.root}/../../../../internal/linux/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}/linux-ubuntu-${var.ubuntu_type}-packer.qcow2",
+      "mkdir -p ${local.cache_directory}/linux/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}",
+      "cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${local.cache_directory}/linux/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}/linux-ubuntu-${var.ubuntu_type}-packer.qcow2",
       "echo 'Export completed.'"
       ] : [
       "echo 'No export needed for arm64 architecture.'"
