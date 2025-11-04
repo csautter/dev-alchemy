@@ -34,6 +34,30 @@ func RunBashScript(t *testing.T, config VirtualMachineConfig, scriptPath string,
 	cmd := exec.CommandContext(ctx, "bash", append([]string{scriptPath}, args...)...)
 	cmd.Dir = "../../"
 
+	go func() {
+		time.Sleep(3 * time.Minute) // Wait for 3 minutes before starting Screen Sharing
+		// Retry starting Screen Sharing for up to 5 minutes, every 20 seconds
+		screenSharingStarted := false
+		startTime := time.Now()
+		// Retry starting Screen Sharing for up to 5 minutes, every 60 seconds
+		// This is to handle cases where the VNC server might take time to become available
+		// Unfortunately, there's no direct way to check if the VNC client can connect, so we rely on retries
+		for time.Since(startTime) < 5*time.Minute {
+			cmdVNC := exec.CommandContext(ctx, "open", "-a", "Screen Sharing", fmt.Sprintf("vnc://localhost:%d", config.VncPort))
+			if err := cmdVNC.Start(); err != nil {
+				t.Logf("Failed to start Screen Sharing: %v. Retrying in 60s...", err)
+				time.Sleep(60 * time.Second)
+			} else {
+				t.Logf("Started Screen Sharing on port %d", config.VncPort)
+				defer cmdVNC.Process.Kill()
+				screenSharingStarted = true
+			}
+		}
+		if !screenSharingStarted {
+			t.Logf("Could not start Screen Sharing after 5 minutes of retries.")
+		}
+	}()
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("Failed to get stdout: %v", err)
