@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
 # This script creates a Windows 11 ARM64 UTM VM on macOS using the specified configuration.
 
 # Manual argument parsing for portability
@@ -29,6 +29,10 @@ while [[ $# -gt 0 ]]; do
 			echo "Invalid value for --os: $2. Allowed values are 'windows11', 'ubuntu-desktop', or 'ubuntu-server'." >&2
 			exit 1
 		fi
+		;;
+	--verbose)
+		set -x
+		shift
 		;;
 	*)
 		echo "Unknown option: $1" >&2
