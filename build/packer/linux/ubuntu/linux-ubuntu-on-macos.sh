@@ -8,6 +8,7 @@ arch="arm64"
 headless="false"
 ubuntu_type="server"
 vnc_port="5901"
+verbose="false"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -41,6 +42,11 @@ while [[ $# -gt 0 ]]; do
 			echo "Invalid value for --ubuntu-type: $2. Allowed values are 'server' or 'desktop'." >&2
 			exit 1
 		fi
+		;;
+	--verbose)
+		set -x
+		verbose="true"
+		shift
 		;;
 	*)
 		echo "Unknown option: $1" >&2
@@ -99,6 +105,16 @@ if [ "$arch" = "arm64" ]; then
 	cd "$project_root" || exit 1
 fi
 
+# remove packer output directory if it exists
+output_dir="$project_root/internal/linux/qemu-ubuntu-${ubuntu_type}-out-${arch}"
+if [ -d "$output_dir" ]; then
+	echo "Removing existing Packer output directory..."
+	rm -rf "$output_dir"
+fi
+
 packer init "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
 
-PACKER_LOG=1 packer build -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
+if [ "$verbose" = "true" ]; then
+	export PACKER_LOG=1
+fi
+packer build -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"

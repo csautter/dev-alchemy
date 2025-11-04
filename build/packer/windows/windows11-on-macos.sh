@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set +e # we want to continue on errors
-set -x
 
 # Function to keep a command alive by restarting it if it exits
 # Usage: keep_alive <command>
@@ -32,6 +31,7 @@ keep_alive() {
 arch="arm64"
 headless="false"
 vnc_port="5901"
+verbose="false"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -55,6 +55,11 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--headless)
 		headless="true"
+		shift
+		;;
+	--verbose)
+		set -x
+		verbose="true"
 		shift
 		;;
 	*)
@@ -170,7 +175,17 @@ elif [ "$arch" = "arm64" ]; then
 	win11_iso_path="${project_root}/vendor/windows/Win11_ARM64_Unattended.iso"
 fi
 
-PACKER_LOG=1 packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/windows/windows11-on-macos.pkr.hcl"
+# remove packer output directory if it exists
+output_dir="$project_root/cache/windows/qemu-windows-out-${arch}"
+if [ -d "$output_dir" ]; then
+	echo "Removing existing Packer output directory..."
+	rm -rf "$output_dir"
+fi
+
+if [ "$verbose" = "true" ]; then
+	export PACKER_LOG=1
+fi
+packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/windows/windows11-on-macos.pkr.hcl"
 packer_exit_code=$?
 
 if [ "$headless" = "true" ]; then
