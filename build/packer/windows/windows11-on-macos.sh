@@ -170,7 +170,7 @@ elif [ "$arch" = "arm64" ]; then
 	win11_iso_path="${project_root}/vendor/windows/Win11_ARM64_Unattended.iso"
 fi
 
-PACKER_LOG=1 packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
+PACKER_LOG=1 packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/windows/windows11-on-macos.pkr.hcl"
 packer_exit_code=$?
 
 if [ "$headless" = "true" ]; then

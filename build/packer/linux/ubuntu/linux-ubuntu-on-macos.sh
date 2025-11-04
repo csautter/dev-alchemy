@@ -99,6 +99,6 @@ if [ "$arch" = "arm64" ]; then
 	cd "$project_root" || exit 1
 fi
 
-packer init "build/packer/linux/ubuntu/linux-ubuntu-$arch-on-macos.pkr.hcl"
+packer init "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
 
-PACKER_LOG=1 packer build -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" "build/packer/linux/ubuntu/linux-ubuntu-$arch-on-macos.pkr.hcl"
+PACKER_LOG=1 packer build -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
