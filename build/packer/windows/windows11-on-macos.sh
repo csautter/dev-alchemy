@@ -140,7 +140,7 @@ fi
 # creates the qcow2 disk image and overwrites it if it already exists
 bash scripts/macos/create-qemu-qcow2-disk.sh --arch $arch
 
-packer init "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
+packer init "build/packer/windows/windows11-on-macos.pkr.hcl"
 
 # record video in headless mode
 if [ "$headless" = "true" ]; then

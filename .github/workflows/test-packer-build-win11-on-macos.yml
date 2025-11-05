@@ -37,7 +37,7 @@ jobs:
         id: packer_build
         continue-on-error: true
         run: |
-          bash build/packer/windows/windows11-on-macos.sh --headless --arch ${{ matrix.arch }}
+          bash build/packer/windows/windows11-on-macos.sh --headless --arch ${{ matrix.arch }} --verbose
 
       - name: Upload packer-qemu-windows11-${{ matrix.arch }}.vnc.mp4 artifact (always)
         uses: actions/upload-artifact@v4

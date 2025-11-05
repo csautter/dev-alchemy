@@ -40,7 +40,7 @@ variable "is_ci" {
 }
 
 locals {
-  cache_directory = "${path.root}/../../../../cache"
+  cache_directory = "${path.root}/../../../cache"
   win11_default_iso = {
     amd64 = "../../../vendor/windows/win11_25h2_english_amd64.iso"
     arm64 = "../../../vendor/windows/Win11_25H2_English_arm64.iso"
