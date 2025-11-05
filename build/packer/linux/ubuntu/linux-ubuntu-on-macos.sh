@@ -65,7 +65,7 @@ project_root=$(
 	cd "${script_dir}/../../../.."
 	pwd -P
 )
-cache_dir="$project_root/internal" # TODO: update to cache
+cache_dir="$project_root/cache"
 
 # Download the Ubuntu ISO if it doesn't exist
 if [ "$arch" = "arm64" ]; then

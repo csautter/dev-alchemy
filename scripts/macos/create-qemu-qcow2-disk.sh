@@ -28,7 +28,7 @@ script_dir=$(
 	pwd
 )
 
-cache_dir="$script_dir/../../internal" # TODO: update to cache
+cache_dir="$script_dir/../../cache"
 
 mkdir -p "$cache_dir/windows/"
 rm -f "$cache_dir/windows/qemu-windows11-$arch.qcow2"

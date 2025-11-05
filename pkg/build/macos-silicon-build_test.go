@@ -4,8 +4,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -31,12 +34,16 @@ func RunBashScript(t *testing.T, config VirtualMachineConfig, scriptPath string,
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
+	defer signal.Stop(sigs)
+
 	cmd := exec.CommandContext(ctx, "bash", append([]string{scriptPath}, args...)...)
 	cmd.Dir = "../../"
 
 	go func() {
-		time.Sleep(3 * time.Minute) // Wait for 3 minutes before starting Screen Sharing
-		// Retry starting Screen Sharing for up to 5 minutes, every 20 seconds
+		time.Sleep(1 * time.Minute) // Wait for 1 minute before starting Screen Sharing
+
 		screenSharingStarted := false
 		startTime := time.Now()
 		// Retry starting Screen Sharing for up to 5 minutes, every 60 seconds
@@ -46,12 +53,12 @@ func RunBashScript(t *testing.T, config VirtualMachineConfig, scriptPath string,
 			cmdVNC := exec.CommandContext(ctx, "open", "-a", "Screen Sharing", fmt.Sprintf("vnc://localhost:%d", config.VncPort))
 			if err := cmdVNC.Start(); err != nil {
 				t.Logf("Failed to start Screen Sharing: %v. Retrying in 60s...", err)
-				time.Sleep(60 * time.Second)
 			} else {
 				t.Logf("Started Screen Sharing on port %d", config.VncPort)
 				defer cmdVNC.Process.Kill()
 				screenSharingStarted = true
 			}
+			time.Sleep(60 * time.Second)
 		}
 		if !screenSharingStarted {
 			t.Logf("Could not start Screen Sharing after 5 minutes of retries.")
@@ -101,6 +108,9 @@ func RunBashScript(t *testing.T, config VirtualMachineConfig, scriptPath string,
 		// Kill the process if context is done (timeout or cancellation)
 		_ = cmd.Process.Kill()
 		t.Fatalf("Script terminated due to timeout or interruption: %v", ctx.Err())
+	case sig := <-sigs:
+		_ = cmd.Process.Kill()
+		t.Fatalf("Script terminated due to signal: %v", sig)
 	}
 }
 

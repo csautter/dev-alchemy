@@ -50,7 +50,7 @@ project_root=$(
 	pwd
 )
 
-cache_dir="$project_root/internal" # TODO: update to cache
+cache_dir="$project_root/cache"
 
 utm_vm_dir="/Users/$(whoami)/Library/Containers/com.utmapp.UTM/Data/Documents"
 

@@ -40,7 +40,7 @@ variable "is_ci" {
 }
 
 locals {
-  cache_directory = "${path.root}/../../../../internal"
+  cache_directory = "${path.root}/../../../../cache"
   win11_default_iso = {
     amd64 = "../../../vendor/windows/win11_25h2_english_amd64.iso"
     arm64 = "../../../vendor/windows/Win11_25H2_English_arm64.iso"
@@ -95,7 +95,7 @@ source "qemu" "win11" {
   headless         = var.headless
   iso_url          = var.iso_url != "" ? var.iso_url : local.win11_iso[var.arch]
   iso_checksum     = "none"
-  output_directory = "${path.root}/../../../cache/windows/qemu-windows-out-${var.arch}"
+  output_directory = "${local.cache_directory}/windows/qemu-windows-out-${var.arch}"
   display          = "cocoa"
   memory           = "4096"
   cores            = var.is_ci ? 3 : 4
