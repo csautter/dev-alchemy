@@ -42,6 +42,8 @@ jobs:
       - name: Run Ubuntu Packer build for OS=${{ matrix.vm_os }} TEST_NAME=${{ matrix.go_test_name }}
         if: matrix.vm_os == 'ubuntu'
         continue-on-error: false
+        env:
+          PACKER_LOG: 1
         run: |
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
