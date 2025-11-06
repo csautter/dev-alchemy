@@ -1,4 +1,4 @@
-name: Test Packer Build for Windows 11 on MacOS
+name: Test Packer Build for VMs on macOS Runners
 
 on:
   pull_request:
@@ -11,15 +11,21 @@ on:
 
 jobs:
   test-packer-build:
-    name: Packer build Windows 11 on ${{ matrix.os }} arch ${{ matrix.arch }}
-    runs-on: ${{ matrix.os }}
+    name: Packer build ${{ matrix.vm_os }} on ${{ matrix.runner_os }} arch ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner_os }}
     strategy:
       matrix:
         include:
-          - os: macos-15
+          # - runner_os: macos-15
+          #   vm_os: windows11
+          #   arch: amd64
+          # - runner_os: macos-15
+          #   vm_os: windows11
+          #   arch: arm64
+          - runner_os: macos-15
+            vm_os: ubuntu
             arch: amd64
-          - os: macos-15
-            arch: arm64
+            go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,13 +39,21 @@ jobs:
         run: |
           bash scripts/macos/dev-alchemy-install-dependencies.sh
 
-      - name: Run Packer build
+      - name: Run Ubuntu Packer build for OS=${{ matrix.vm_os }} TEST_NAME=${{ matrix.go_test_name }}
+        if: matrix.vm_os == 'ubuntu'
+        continue-on-error: false
+        run: |
+          make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
+
+      - name: Run Windows11 Packer build
+        if: matrix.vm_os == 'windows11'
         id: packer_build
         continue-on-error: true
         run: |
           bash build/packer/windows/windows11-on-macos.sh --headless --arch ${{ matrix.arch }} --verbose
 
       - name: Upload packer-qemu-windows11-${{ matrix.arch }}.vnc.mp4 artifact (always)
+        if: matrix.vm_os == 'windows11'
         uses: actions/upload-artifact@v4
         with:
           name: packer-qemu-windows11-${{ matrix.arch }}.vnc.mp4
