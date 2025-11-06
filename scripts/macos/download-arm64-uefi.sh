@@ -8,6 +8,9 @@ SCRIPT_DIR=$(
 )
 qemu_efi_version="2025.05-1"
 
+# Ensure vendor directory exists before downloading
+mkdir -p "${SCRIPT_DIR}"/../../vendor
+
 if [ ! -f "${SCRIPT_DIR}"/../../vendor/qemu-efi-aarch64_${qemu_efi_version}_all.deb ]; then
 	echo "Downloading qemu-efi-aarch64_${qemu_efi_version}_all.deb"
 	curl -o "${SCRIPT_DIR}"/../../vendor/qemu-efi-aarch64_${qemu_efi_version}_all.deb -L http://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_${qemu_efi_version}_all.deb
