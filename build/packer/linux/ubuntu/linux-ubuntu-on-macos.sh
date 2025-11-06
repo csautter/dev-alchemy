@@ -67,6 +67,11 @@ project_root=$(
 )
 cache_dir="$project_root/cache"
 
+# Download uefi-firmware if it doesn't exist
+if [ "$arch" = "arm64" ]; then
+	bash "$project_root/scripts/macos/download-arm64-uefi.sh"
+fi
+
 # Download the Ubuntu ISO if it doesn't exist
 if [ "$arch" = "arm64" ]; then
 	iso_path="$project_root/vendor/linux/ubuntu-24.04.3-live-server-arm64.iso"
