@@ -20,16 +20,16 @@ func TestPrintSystemOsArch(t *testing.T) {
 func RunQemuUbuntuBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
 	scriptPath := "./build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh"
 	args := []string{"--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
-	RunBashScript(t, config, scriptPath, args)
+	RunBuildScript(t, config, scriptPath, args)
 }
 
 func RunQemuWindowsBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
 	scriptPath := "./build/packer/windows/windows11-on-macos.sh"
 	args := []string{"--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
-	RunBashScript(t, config, scriptPath, args)
+	RunBuildScript(t, config, scriptPath, args)
 }
 
-func RunBashScript(t *testing.T, config VirtualMachineConfig, scriptPath string, args []string) {
+func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string, args []string) {
 	// Set a timeout for the script execution (adjust as needed)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
