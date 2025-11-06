@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -81,4 +82,28 @@ func RunMacOsSiliconBuildHelperScript(t *testing.T, scriptPath string, args ...s
 	output, err := cmd.CombinedOutput()
 	t.Logf("Output of %s:\n%s", scriptPath, string(output))
 	return err
+}
+
+func TestRunVncSnapshotProcess(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Skipping VNC snapshot process test on non-MacOS host")
+	}
+
+	vmConfig := VirtualMachineConfig{
+		OS:         "ubuntu",
+		Arch:       "arm64",
+		UbuntuType: "server",
+		VncPort:    5901,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	ctx_sub := RunVncSnapshotProcess(vmConfig, ctx, RunProcessConfig{Timeout: 2 * time.Second, Retries: 20, RetryInterval: time.Second})
+	if ctx_sub == nil {
+		t.Fatalf("Expected context deadline to be exceeded, but got no error")
+	}
+	if !errors.Is(ctx_sub.Err(), context.Canceled) {
+		t.Fatalf("Expected context canceled to be exceeded, got: %v, error: %v", ctx_sub.Err(), ctx_sub)
+	}
 }

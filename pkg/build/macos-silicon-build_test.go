@@ -31,7 +31,8 @@ func RunQemuWindowsBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
 
 func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string, args []string) {
 	// Set a timeout for the script execution (adjust as needed)
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
+	timeout := 120 * time.Minute
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	sigs := make(chan os.Signal, 1)
@@ -41,6 +42,7 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 	cmd := exec.CommandContext(ctx, "bash", append([]string{scriptPath}, args...)...)
 	cmd.Dir = "../../"
 
+	// Start Screen Sharing to monitor the VM build process via VNC
 	go func() {
 		time.Sleep(1 * time.Minute) // Wait for 1 minute before starting Screen Sharing
 
@@ -62,6 +64,14 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 		}
 		if !screenSharingStarted {
 			t.Logf("Could not start Screen Sharing after 5 minutes of retries.")
+		}
+	}()
+
+	// Start Screen Capture to record the VM build process
+	go func() {
+		vnc_snapshot_ctx := RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout})
+		if vnc_snapshot_ctx != nil {
+			<-vnc_snapshot_ctx.Done()
 		}
 	}()
 
