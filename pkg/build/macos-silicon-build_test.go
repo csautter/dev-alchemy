@@ -44,27 +44,17 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 
 	// Start Screen Sharing to monitor the VM build process via VNC
 	go func() {
-		time.Sleep(1 * time.Minute) // Wait for 1 minute before starting Screen Sharing
-
-		screenSharingStarted := false
-		startTime := time.Now()
-		// Retry starting Screen Sharing for up to 5 minutes, every 60 seconds
-		// This is to handle cases where the VNC server might take time to become available
-		// Unfortunately, there's no direct way to check if the VNC client can connect, so we rely on retries
-		for time.Since(startTime) < 5*time.Minute {
-			cmdVNC := exec.CommandContext(ctx, "open", "-a", "Screen Sharing", fmt.Sprintf("vnc://localhost:%d", config.VncPort))
-			if err := cmdVNC.Start(); err != nil {
-				t.Logf("Failed to start Screen Sharing: %v. Retrying in 60s...", err)
-			} else {
-				t.Logf("Started Screen Sharing on port %d", config.VncPort)
-				defer cmdVNC.Process.Kill()
-				screenSharingStarted = true
-			}
-			time.Sleep(60 * time.Second)
+		config := RunProcessConfig{
+			ExecutablePath: "open",
+			Args:           []string{"-a", "Screen Sharing", fmt.Sprintf("vnc://localhost:%d", config.VncPort)},
+			Timeout:        5 * time.Minute,
+			WorkingDir:     "",
+			Context:        ctx,
+			FailOnError:    false,
+			Retries:        5,
+			RetryInterval:  60 * time.Second,
 		}
-		if !screenSharingStarted {
-			t.Logf("Could not start Screen Sharing after 5 minutes of retries.")
-		}
+		RunExternalProcessWithRetries(config)
 	}()
 
 	// Start Screen Capture to record the VM build process

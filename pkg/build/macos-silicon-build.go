@@ -125,6 +125,36 @@ func RunExternalProcess(config RunProcessConfig) context.Context {
 	return ctx
 }
 
+func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
+	var lastErr error
+	startTime := time.Now()
+
+	for attempt := 0; attempt <= config.Retries && time.Since(startTime) < config.Timeout; attempt++ {
+		if attempt > 0 {
+			log.Printf("Retrying process %s (attempt %d/%d) after error: %v", config.ExecutablePath, attempt, config.Retries, lastErr)
+			time.Sleep(config.RetryInterval)
+		}
+		ctx := RunExternalProcess(config)
+		if ctx.Err() == nil {
+			return ctx
+		}
+		lastErr = ctx.Err()
+
+		// Check if we received an interrupt signal to stop retries
+		if config.InterruptRetryChan != nil {
+			select {
+			case <-config.InterruptRetryChan:
+				log.Printf("Received interrupt signal, stopping retries for process %s", config.ExecutablePath)
+				return ctx
+			default:
+				// No interrupt signal, continue
+			}
+		}
+	}
+	log.Printf("Process %s failed after %d attempts: %v", config.ExecutablePath, config.Retries+1, lastErr)
+	return context.Background()
+}
+
 func RunBashScript(config RunProcessConfig) {
 	scriptPath := config.ExecutablePath
 	config.ExecutablePath = "bash"
@@ -186,25 +216,8 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	if process_config.InterruptRetryChan != nil {
 		config.InterruptRetryChan = process_config.InterruptRetryChan
 	}
-	startTime := time.Now()
 
-	var lastErr error
-	interrupt_retry := false
-	go func() {
-		interrupt_retry = <-config.InterruptRetryChan
-	}()
-	for retries := 0; retries < config.Retries && time.Since(startTime) < config.Timeout && !interrupt_retry; retries++ {
-		ctx = RunExternalProcess(config)
-		// Check if context was done due to error or timeout
-		if ctx.Err() == nil {
-			// Success
-			return ctx
-		}
-		lastErr = ctx.Err()
-		log.Printf("VNC snapshot process failed (attempt %d/%d): %v. Retrying in %v...", retries+1, config.Retries, lastErr, config.RetryInterval)
-		time.Sleep(config.RetryInterval)
-	}
-	log.Printf("VNC snapshot process failed after %d retries or %v: %v", config.Retries, config.Timeout, lastErr)
+	ctx = RunExternalProcessWithRetries(config)
 	return ctx
 }
 
