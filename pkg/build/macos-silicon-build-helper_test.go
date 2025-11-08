@@ -99,7 +99,7 @@ func TestRunVncSnapshotProcess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	ctx_sub := RunVncSnapshotProcess(vmConfig, ctx, RunProcessConfig{Timeout: 2 * time.Second, Retries: 20, RetryInterval: time.Second})
+	ctx_sub := RunVncSnapshotProcess(vmConfig, ctx, RunProcessConfig{Timeout: 2 * time.Second, Retries: 20, RetryInterval: time.Second}, &VncRecordingConfig{})
 	if ctx_sub == nil {
 		t.Fatalf("Expected context deadline to be exceeded, but got no error")
 	}

@@ -17,7 +17,6 @@ test-clean-testcache:
 
 test-build-specific:
 	# Usage: make test-build-specific TEST_NAME=<name of the test>
-	sudo -v
 	go test -timeout 300m -v ./pkg/build/*.go -run $(TEST_NAME)
 	# Terminate any lingering packer and qemu processes started by packer
 	pkill -f "packer.*ubuntu.*" || true

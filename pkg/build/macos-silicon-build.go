@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -17,6 +18,7 @@ type VirtualMachineConfig struct {
 	Arch       string
 	UbuntuType string
 	VncPort    int
+	Slug       string
 }
 
 type RunProcessConfig struct {
@@ -30,7 +32,26 @@ type RunProcessConfig struct {
 	RetryInterval  time.Duration
 }
 
+type VncRecordingConfig struct {
+	OutputFile   string
+	OutputFolder string
+}
+
 const vncsnapshot_base_path = "./cache"
+
+func GenerateVirtualMachineSlug(config *VirtualMachineConfig) string {
+	if config.Slug != "" {
+		return config.Slug
+	}
+
+	slug := strings.ToLower(config.OS)
+	if config.UbuntuType != "" {
+		slug += "-" + strings.ToLower(config.UbuntuType)
+	}
+	slug += "-" + strings.ToLower(config.Arch)
+	config.Slug = slug
+	return slug
+}
 
 func RunExternalProcess(config RunProcessConfig) context.Context {
 	var ctx context.Context
@@ -67,14 +88,14 @@ func RunExternalProcess(config RunProcessConfig) context.Context {
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			log.Printf("stdout:  %s", scanner.Text())
+			log.Printf("stdout:%s:  %s", config.ExecutablePath, scanner.Text())
 		}
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log.Printf("stderr: %s", scanner.Text())
+			log.Printf("stderr:%s:  %s", config.ExecutablePath, scanner.Text())
 		}
 	}()
 
@@ -110,14 +131,21 @@ func RunBashScript(config RunProcessConfig) {
 	RunExternalProcess(config)
 }
 
-func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, process_config RunProcessConfig) context.Context {
+func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, process_config RunProcessConfig, recording_config *VncRecordingConfig) context.Context {
 	vnc_display := strconv.Itoa(vm_config.VncPort - 5900)
 
 	snapshot_dir := vncsnapshot_base_path + "/" + vm_config.OS + "/qemu-" + vm_config.OS + "-out-" + vm_config.Arch + "/vncsnapshot"
+	recording_config.OutputFolder = snapshot_dir
+
+	if err := os.RemoveAll("../../" + snapshot_dir); err != nil {
+		log.Fatalf("Failed to remove snapshot directory: %v", err)
+	}
+
 	if err := os.MkdirAll("../../"+snapshot_dir, 0755); err != nil {
 		log.Fatalf("Failed to create snapshot directory: %v", err)
 	}
 	snapshot_file := snapshot_dir + "/qemu.vnc.jpg"
+	recording_config.OutputFile = snapshot_file
 
 	config := RunProcessConfig{
 		ExecutablePath: "vncsnapshot",
@@ -169,5 +197,58 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 		time.Sleep(config.RetryInterval)
 	}
 	log.Printf("VNC snapshot process failed after %d retries or %v: %v", config.Retries, config.Timeout, lastErr)
+	return ctx
+}
+
+func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context.Context, process_config RunProcessConfig, recording_config *VncRecordingConfig) context.Context {
+	// Modify the OutputFile to use ffmpeg's sequence pattern (e.g., qemu.vnc%05d.jpg)
+	inputPattern := recording_config.OutputFile
+	if len(inputPattern) > 4 && inputPattern[len(inputPattern)-4:] == ".jpg" {
+		inputPattern = inputPattern[:len(inputPattern)-4] + "%05d.jpg"
+	}
+
+	config := RunProcessConfig{
+		ExecutablePath: "ffmpeg",
+		Args: []string{
+			"-framerate", "1",
+			"-i", inputPattern, // e.g., qemu.vnc%05d.jpg
+			"-c:v", "libx264",
+			"-pix_fmt", "yuv420p",
+			recording_config.OutputFolder + "/qemu.vnc.mp4",
+		},
+		WorkingDir:    "../../",
+		Timeout:       10 * time.Minute,
+		Context:       ctx,
+		Retries:       3,
+		RetryInterval: 1 * time.Minute,
+	}
+
+	// Overwrite config fields with process_config if set (non-zero values)
+	if process_config.ExecutablePath != "" {
+		config.ExecutablePath = process_config.ExecutablePath
+	}
+	if len(process_config.Args) > 0 {
+		config.Args = process_config.Args
+	}
+	if process_config.WorkingDir != "" {
+		config.WorkingDir = process_config.WorkingDir
+	}
+	if process_config.Timeout != 0 {
+		config.Timeout = process_config.Timeout
+	}
+	if process_config.Context != nil {
+		config.Context = process_config.Context
+	}
+	if process_config.FailOnError {
+		config.FailOnError = process_config.FailOnError
+	}
+	if process_config.Retries != 0 {
+		config.Retries = process_config.Retries
+	}
+	if process_config.RetryInterval != 0 {
+		config.RetryInterval = process_config.RetryInterval
+	}
+
+	ctx = RunExternalProcess(config)
 	return ctx
 }

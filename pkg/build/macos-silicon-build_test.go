@@ -68,11 +68,16 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 	}()
 
 	// Start Screen Capture to record the VM build process
+	vnc_recording_config := VncRecordingConfig{}
+	var vnc_snapshot_ctx context.Context
+	var ffmpeg_ctx context.Context
+	vnc_snapshot_done := make(chan struct{})
 	go func() {
-		vnc_snapshot_ctx := RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout})
+		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout}, &vnc_recording_config)
 		if vnc_snapshot_ctx != nil {
 			<-vnc_snapshot_ctx.Done()
 		}
+		close(vnc_snapshot_done)
 	}()
 
 	stdout, err := cmd.StdoutPipe()
@@ -88,8 +93,6 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 		t.Fatalf("Failed to start command: %v", err)
 	}
 
-	done := make(chan error, 1)
-
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
@@ -104,8 +107,18 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 		}
 	}()
 
+	done := make(chan error, 1)
+
 	go func() {
-		done <- cmd.Wait()
+		err := cmd.Wait()
+		// Wait for vnc_snapshot to finish
+		<-vnc_snapshot_done
+		// Always run ffmpeg after vnc_snapshot is done
+		ffmpeg_ctx = RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: 10 * time.Minute}, &vnc_recording_config)
+		if ffmpeg_ctx != nil {
+			<-ffmpeg_ctx.Done()
+		}
+		done <- err
 	}()
 
 	select {
