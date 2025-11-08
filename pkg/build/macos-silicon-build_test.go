@@ -72,8 +72,9 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 	var vnc_snapshot_ctx context.Context
 	var ffmpeg_ctx context.Context
 	vnc_snapshot_done := make(chan struct{})
+	vnc_interrupt_retry_chan := make(chan bool)
 	go func() {
-		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout}, &vnc_recording_config)
+		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, InterruptRetryChan: vnc_interrupt_retry_chan}, &vnc_recording_config)
 		if vnc_snapshot_ctx != nil {
 			<-vnc_snapshot_ctx.Done()
 		}
@@ -111,6 +112,13 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 
 	go func() {
 		err := cmd.Wait()
+		if vnc_snapshot_ctx != nil {
+			vnc_snapshot_ctx.Done()
+		}
+		done <- err
+	}()
+
+	var ffmpeg_run = func() {
 		// Wait for vnc_snapshot to finish
 		<-vnc_snapshot_done
 		// Always run ffmpeg after vnc_snapshot is done
@@ -118,21 +126,27 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 		if ffmpeg_ctx != nil {
 			<-ffmpeg_ctx.Done()
 		}
-		done <- err
-	}()
+	}
 
 	select {
 	case err := <-done:
+		vnc_interrupt_retry_chan <- true
 		if err != nil {
+			ffmpeg_run()
 			t.Fatalf("Script failed: %v", err)
 		}
+		ffmpeg_run()
 		t.Logf("Script finished successfully.")
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
 		_ = cmd.Process.Kill()
+		vnc_interrupt_retry_chan <- true
+		ffmpeg_run()
 		t.Fatalf("Script terminated due to timeout or interruption: %v", ctx.Err())
 	case sig := <-sigs:
 		_ = cmd.Process.Kill()
+		vnc_interrupt_retry_chan <- true
+		ffmpeg_run()
 		t.Fatalf("Script terminated due to signal: %v", sig)
 	}
 }

@@ -22,14 +22,15 @@ type VirtualMachineConfig struct {
 }
 
 type RunProcessConfig struct {
-	ExecutablePath string
-	Args           []string
-	WorkingDir     string
-	Timeout        time.Duration
-	Context        context.Context
-	FailOnError    bool
-	Retries        int
-	RetryInterval  time.Duration
+	ExecutablePath     string
+	Args               []string
+	WorkingDir         string
+	Timeout            time.Duration
+	Context            context.Context
+	FailOnError        bool
+	Retries            int
+	RetryInterval      time.Duration
+	InterruptRetryChan chan bool
 }
 
 type VncRecordingConfig struct {
@@ -116,10 +117,10 @@ func RunExternalProcess(config RunProcessConfig) context.Context {
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
 		_ = cmd.Process.Kill()
-		log.Fatalf("Process %s terminated due to timeout or interruption: %v", config.ExecutablePath, ctx.Err())
+		log.Printf("Process %s terminated due to timeout or interruption: %v", config.ExecutablePath, ctx.Err())
 	case sig := <-sigs:
 		_ = cmd.Process.Kill()
-		log.Fatalf("Process %s terminated due to signal: %v", config.ExecutablePath, sig)
+		log.Printf("Process %s terminated due to signal: %v", config.ExecutablePath, sig)
 	}
 	return ctx
 }
@@ -182,10 +183,17 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	if process_config.RetryInterval != 0 {
 		config.RetryInterval = process_config.RetryInterval
 	}
+	if process_config.InterruptRetryChan != nil {
+		config.InterruptRetryChan = process_config.InterruptRetryChan
+	}
 	startTime := time.Now()
 
 	var lastErr error
-	for retries := 0; retries < config.Retries && time.Since(startTime) < config.Timeout; retries++ {
+	interrupt_retry := false
+	go func() {
+		interrupt_retry = <-config.InterruptRetryChan
+	}()
+	for retries := 0; retries < config.Retries && time.Since(startTime) < config.Timeout && !interrupt_retry; retries++ {
 		ctx = RunExternalProcess(config)
 		// Check if context was done due to error or timeout
 		if ctx.Err() == nil {
