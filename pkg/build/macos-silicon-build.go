@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/KarpelesLab/vncpasswd"
 )
 
 type VirtualMachineConfig struct {
@@ -38,6 +40,7 @@ type RunProcessConfig struct {
 type VncRecordingConfig struct {
 	OutputFile   string
 	OutputFolder string
+	Password     string
 }
 
 const vncsnapshot_base_path = "./cache"
@@ -74,6 +77,8 @@ func RunExternalProcess(config RunProcessConfig) context.Context {
 		log.Printf("Delaying start of process %s by %s", config.ExecutablePath, config.DelayBeforeStart)
 		select {
 		case <-time.After(config.DelayBeforeStart):
+			// Reset DelayBeforeStart to 0 after the delay
+			config.DelayBeforeStart = 0
 			// continue
 		case sig := <-sigs:
 			log.Printf("Process %s start interrupted by signal: %v", config.ExecutablePath, sig)
@@ -183,7 +188,7 @@ func RunBashScript(config RunProcessConfig) {
 func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, process_config RunProcessConfig, recording_config *VncRecordingConfig) context.Context {
 	vnc_display := strconv.Itoa(vm_config.VncPort - 5900)
 
-	snapshot_dir := vncsnapshot_base_path + "/" + vm_config.OS + "/qemu-" + vm_config.OS + "-out-" + vm_config.Arch + "/vncsnapshot"
+	snapshot_dir := vncsnapshot_base_path + "/" + vm_config.OS + "/qemu-out-" + GenerateVirtualMachineSlug(&vm_config) + "/vncsnapshot"
 	recording_config.OutputFolder = snapshot_dir
 
 	if err := os.RemoveAll("../../" + snapshot_dir); err != nil {
@@ -196,14 +201,22 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	snapshot_file := snapshot_dir + "/qemu.vnc.jpg"
 	recording_config.OutputFile = snapshot_file
 
+	vnc_passwd_file := snapshot_dir + "/.packer-qemu.vnc.pass"
+	if _, err := os.Stat("../../" + vnc_passwd_file); err == nil {
+		if err := os.Remove("../../" + vnc_passwd_file); err != nil {
+			log.Fatalf("Failed to remove existing VNC password file: %v", err)
+		}
+	}
+
 	config := RunProcessConfig{
-		ExecutablePath: "vncsnapshot",
-		Args:           []string{"-quiet", "-passwd", "./build/packer/windows/.build_tmp/packer-qemu.vnc.pass", "-compresslevel", "9", "-count", "21600", "-fps", "1", "localhost:" + vnc_display, snapshot_file},
-		WorkingDir:     "../../",
-		Timeout:        10 * time.Minute,
-		Context:        ctx,
-		Retries:        5,
-		RetryInterval:  time.Minute,
+		ExecutablePath:   "vncsnapshot",
+		Args:             []string{"-quiet", "-passwd", vnc_passwd_file, "-compresslevel", "9", "-count", "21600", "-fps", "1", "localhost:" + vnc_display, snapshot_file},
+		WorkingDir:       "../../",
+		Timeout:          10 * time.Minute,
+		Context:          ctx,
+		Retries:          5,
+		RetryInterval:    time.Minute,
+		DelayBeforeStart: time.Minute,
 	}
 
 	// Overwrite config fields with process_config if set (non-zero values)
@@ -234,8 +247,28 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	if process_config.InterruptRetryChan != nil {
 		config.InterruptRetryChan = process_config.InterruptRetryChan
 	}
+	if process_config.DelayBeforeStart != 0 {
+		config.DelayBeforeStart = process_config.DelayBeforeStart
+	}
+
+	// Write VNC password file
+	vnc_password := "packer"
+	if recording_config.Password != "" {
+		vnc_password = recording_config.Password
+	}
+
+	encrypted := vncpasswd.Crypt(vnc_password)
+	if err := os.WriteFile("../../"+vnc_passwd_file, encrypted, 0600); err != nil {
+		log.Fatalf("Failed to write VNC password file: %v", err)
+	}
 
 	ctx = RunExternalProcessWithRetries(config)
+
+	// Remove VNC password file
+	if err := os.Remove("../../" + vnc_passwd_file); err != nil {
+		log.Printf("Failed to remove VNC password file: %v", err)
+	}
+
 	return ctx
 }
 

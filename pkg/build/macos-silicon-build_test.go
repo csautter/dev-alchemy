@@ -45,10 +45,11 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 	// VNC integration:
 	// - Opening a VNC viewer (Screen Sharing) is useful for observing the VM build process in real time.
 	// - VNC recording enables capturing the build process for later review or debugging.
+	vnc_recording_config := VncRecordingConfig{Password: "packer"}
 	go func() {
 		config := RunProcessConfig{
 			ExecutablePath:   "open",
-			Args:             []string{"-a", "Screen Sharing", fmt.Sprintf("vnc://localhost:%d", config.VncPort)},
+			Args:             []string{"-a", "Screen Sharing", fmt.Sprintf("vnc://:%s@localhost:%d", vnc_recording_config.Password, config.VncPort)},
 			Timeout:          5 * time.Minute,
 			WorkingDir:       "",
 			Context:          ctx,
@@ -61,7 +62,6 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 	}()
 
 	// Start Screen Capture to record the VM build process
-	vnc_recording_config := VncRecordingConfig{}
 	var vnc_snapshot_ctx context.Context
 	vnc_snapshot_done := make(chan struct{})
 	vnc_interrupt_retry_chan := make(chan bool)
@@ -114,7 +114,13 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 	// - FFmpeg is useful for generating a video from the VNC recording, allowing playback and sharing of the build process.
 	var ffmpeg_run = func() {
 		// Wait for vnc_snapshot to finish
-		<-vnc_snapshot_done
+		select {
+		case <-vnc_snapshot_done:
+			// vnc_snapshot_done closed, proceed
+		default:
+			// Channel not closed, wait for it
+			<-vnc_snapshot_done
+		}
 		// Always run ffmpeg after vnc_snapshot is done
 		RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: 10 * time.Minute}, &vnc_recording_config)
 	}
