@@ -188,7 +188,7 @@ func RunBashScript(config RunProcessConfig) {
 func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, process_config RunProcessConfig, recording_config *VncRecordingConfig) context.Context {
 	vnc_display := strconv.Itoa(vm_config.VncPort - 5900)
 
-	snapshot_dir := vncsnapshot_base_path + "/" + vm_config.OS + "/qemu-out-" + GenerateVirtualMachineSlug(&vm_config) + "/vncsnapshot"
+	snapshot_dir := vncsnapshot_base_path + "/" + vm_config.OS + "/qemu-out-" + GenerateVirtualMachineSlug(&vm_config) + "-vncsnapshot"
 	recording_config.OutputFolder = snapshot_dir
 
 	if err := os.RemoveAll("../../" + snapshot_dir); err != nil {

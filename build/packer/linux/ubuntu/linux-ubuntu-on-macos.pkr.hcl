@@ -105,7 +105,7 @@ locals {
       ["-drive", "if=none,id=cdrom,media=cdrom,file=${local.iso_url},readonly=true"],
       # Main disk
       ["-device", "virtio-blk-pci,drive=disk,serial=deadbeef,bootindex=0"],
-      ["-drive", "if=none,media=disk,id=disk,format=qcow2,file.filename=${local.cache_directory}/linux/linux-ubuntu-${var.ubuntu_type}-qemu-arm64/linux-ubuntu-${var.ubuntu_type}-packer.qcow2,discard=unmap,detect-zeroes=unmap"],
+      ["-drive", "if=none,media=disk,id=disk,format=qcow2,file.filename=${local.cache_directory}/ubuntu/linux-ubuntu-${var.ubuntu_type}-qemu-arm64/linux-ubuntu-${var.ubuntu_type}-packer.qcow2,discard=unmap,detect-zeroes=unmap"],
       # Cloud-init seed ISO
       ["-drive", "if=none,id=cidata,format=raw,file=${path.root}/cloud-init/qemu-${var.ubuntu_type}/cidata.iso,readonly=true"],
       ["-device", "virtio-blk-pci,drive=cidata"],
@@ -166,8 +166,8 @@ build {
   post-processor "shell-local" {
     inline = var.arch == "amd64" ? [
       "echo 'Exporting QCOW2 image...'",
-      "mkdir -p ${local.cache_directory}/linux/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}",
-      "cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${local.cache_directory}/linux/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}/linux-ubuntu-${var.ubuntu_type}-packer.qcow2",
+      "mkdir -p ${local.cache_directory}/ubuntu/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}",
+      "cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${local.cache_directory}/ubuntu/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}/linux-ubuntu-${var.ubuntu_type}-packer.qcow2",
       "echo 'Export completed.'"
       ] : [
       "echo 'No export needed for arm64 architecture.'"

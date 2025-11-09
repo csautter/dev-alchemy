@@ -1,6 +1,4 @@
 test-build:
-	# Prompt for sudo rights at the beginning
-	sudo -v
 	# sudo is required to generate a customized Windows 11 iso
 	cd ./pkg/build && go test -parallel 4 -timeout 300m -v *.go
 	# Terminate any lingering packer and qemu processes started by packer

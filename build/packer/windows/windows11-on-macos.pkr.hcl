@@ -46,7 +46,7 @@ locals {
     arm64 = "../../../vendor/windows/Win11_25H2_English_arm64.iso"
   }
   win11_iso         = var.iso_url != "" ? var.iso_url : local.win11_default_iso[var.arch]
-  win11_qcow2       = "${local.cache_directory}/windows/qemu-windows11-${var.arch}.qcow2"
+  win11_qcow2       = "${local.cache_directory}/windows11/qemu-windows11-${var.arch}.qcow2"
   win11_guest_tools = "${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso"
   win11_virtio_iso  = "${path.root}/../../../vendor/windows/virtio-win.iso"
   win11_uefi_bios   = "${path.root}/../../../vendor/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
@@ -82,7 +82,7 @@ locals {
       ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=3"],
       ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso,readonly=true"],
       ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=1"],
-      ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${local.cache_directory}/windows/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
+      ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${local.cache_directory}/windows11/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
       ["-boot", "order=c,menu=on"],
       ["-k", "de"]
     ]
@@ -95,7 +95,7 @@ source "qemu" "win11" {
   headless         = var.headless
   iso_url          = var.iso_url != "" ? var.iso_url : local.win11_iso[var.arch]
   iso_checksum     = "none"
-  output_directory = "${local.cache_directory}/windows/qemu-windows-out-${var.arch}"
+  output_directory = "${local.cache_directory}/windows11/qemu-out-windows11-${var.arch}"
   display          = "cocoa"
   memory           = "4096"
   cores            = var.is_ci ? 3 : 4

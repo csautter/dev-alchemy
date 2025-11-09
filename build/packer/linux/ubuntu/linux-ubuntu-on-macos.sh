@@ -95,7 +95,7 @@ fi
 # creates the qcow2 disk image and overwrites it if it already exists
 if [ "$arch" = "arm64" ]; then
 	echo "Creating QCOW2 disk image..."
-	output_directory="$cache_dir/linux/linux-ubuntu-${ubuntu_type}-qemu-${arch}"
+	output_directory="$cache_dir/ubuntu/linux-ubuntu-${ubuntu_type}-qemu-${arch}"
 	mkdir -p "$output_directory"
 	echo "Removing existing QCOW2 disk image if it exists..."
 	rm -f "$output_directory/linux-ubuntu-${ubuntu_type}-packer.qcow2"
@@ -112,7 +112,7 @@ if [ "$arch" = "arm64" ]; then
 fi
 
 # remove packer output directory if it exists
-output_dir="$cache_dir/linux/qemu-ubuntu-${ubuntu_type}-out-${arch}"
+output_dir="$cache_dir/ubuntu/qemu-ubuntu-${ubuntu_type}-out-${arch}"
 if [ -d "$output_dir" ]; then
 	echo "Removing existing Packer output directory..."
 	rm -rf "$output_dir"

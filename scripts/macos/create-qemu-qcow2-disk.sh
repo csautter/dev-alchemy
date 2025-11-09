@@ -30,7 +30,7 @@ script_dir=$(
 
 cache_dir="$script_dir/../../cache"
 
-mkdir -p "$cache_dir/windows/"
-rm -f "$cache_dir/windows/qemu-windows11-$arch.qcow2"
-qemu-img create -f qcow2 -o compression_type=zstd "$cache_dir/windows/qemu-windows11-$arch.qcow2" 64G
-qemu-img info "$cache_dir/windows/qemu-windows11-$arch.qcow2"
+mkdir -p "$cache_dir/windows11/"
+rm -f "$cache_dir/windows11/qemu-windows11-$arch.qcow2"
+qemu-img create -f qcow2 -o compression_type=zstd "$cache_dir/windows11/qemu-windows11-$arch.qcow2" 64G
+qemu-img info "$cache_dir/windows11/qemu-windows11-$arch.qcow2"

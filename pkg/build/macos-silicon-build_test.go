@@ -114,10 +114,10 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 	// - FFmpeg is useful for generating a video from the VNC recording, allowing playback and sharing of the build process.
 	var ffmpeg_run = func() {
 		// Wait for vnc_snapshot to finish
-		select {
-		case <-vnc_snapshot_done:
-			// vnc_snapshot_done closed, proceed
-		default:
+		_, ok := <-vnc_snapshot_done
+		if !ok {
+			// Channel is closed, proceed
+		} else {
 			// Channel not closed, wait for it
 			<-vnc_snapshot_done
 		}
