@@ -105,7 +105,7 @@ locals {
       ["-drive", "if=none,id=cdrom,media=cdrom,file=${local.iso_url},readonly=true"],
       # Main disk
       ["-device", "virtio-blk-pci,drive=disk,serial=deadbeef,bootindex=0"],
-      ["-drive", "if=none,media=disk,id=disk,format=qcow2,file.filename=${local.cache_directory}/ubuntu/linux-ubuntu-${var.ubuntu_type}-qemu-arm64/linux-ubuntu-${var.ubuntu_type}-packer.qcow2,discard=unmap,detect-zeroes=unmap"],
+      ["-drive", "if=none,media=disk,id=disk,format=qcow2,file.filename=${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2,discard=unmap,detect-zeroes=unmap"],
       # Cloud-init seed ISO
       ["-drive", "if=none,id=cidata,format=raw,file=${path.root}/cloud-init/qemu-${var.ubuntu_type}/cidata.iso,readonly=true"],
       ["-device", "virtio-blk-pci,drive=cidata"],
@@ -114,7 +114,7 @@ locals {
     ]
   }
   left_list        = join("", [for i in range(0, 16) : "<left>"])
-  output_directory = "${local.cache_directory}/linux/qemu-ubuntu-${var.ubuntu_type}-out-${var.arch}"
+  output_directory = "${local.cache_directory}/ubuntu/qemu-out-ubuntu-${var.ubuntu_type}-${var.arch}"
 }
 
 source "qemu" "ubuntu" {
@@ -167,7 +167,7 @@ build {
     inline = var.arch == "amd64" ? [
       "echo 'Exporting QCOW2 image...'",
       "mkdir -p ${local.cache_directory}/ubuntu/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}",
-      "cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${local.cache_directory}/ubuntu/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}/linux-ubuntu-${var.ubuntu_type}-packer.qcow2",
+      "cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2",
       "echo 'Export completed.'"
       ] : [
       "echo 'No export needed for arm64 architecture.'"

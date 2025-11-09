@@ -95,12 +95,12 @@ fi
 # creates the qcow2 disk image and overwrites it if it already exists
 if [ "$arch" = "arm64" ]; then
 	echo "Creating QCOW2 disk image..."
-	output_directory="$cache_dir/ubuntu/linux-ubuntu-${ubuntu_type}-qemu-${arch}"
+	output_directory="$cache_dir/ubuntu"
 	mkdir -p "$output_directory"
 	echo "Removing existing QCOW2 disk image if it exists..."
-	rm -f "$output_directory/linux-ubuntu-${ubuntu_type}-packer.qcow2"
-	qemu-img create -f qcow2 -o compression_type=zstd "$output_directory/linux-ubuntu-${ubuntu_type}-packer.qcow2" 64G
-	qemu-img info "$output_directory/linux-ubuntu-${ubuntu_type}-packer.qcow2"
+	rm -f "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2"
+	qemu-img create -f qcow2 -o compression_type=zstd "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2" 64G
+	qemu-img info "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2"
 fi
 
 # create cidata iso
@@ -112,7 +112,7 @@ if [ "$arch" = "arm64" ]; then
 fi
 
 # remove packer output directory if it exists
-output_dir="$cache_dir/ubuntu/qemu-ubuntu-${ubuntu_type}-out-${arch}"
+output_dir="$cache_dir/ubuntu/qemu-out-ubuntu-${ubuntu_type}-${arch}"
 if [ -d "$output_dir" ]; then
 	echo "Removing existing Packer output directory..."
 	rm -rf "$output_dir"
