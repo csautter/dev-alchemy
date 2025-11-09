@@ -1,153 +1,12 @@
 package build
 
 import (
-	"bufio"
-	"context"
-	"fmt"
-	"os"
-	"os/exec"
-	"os/signal"
 	"runtime"
-	"syscall"
 	"testing"
-	"time"
 )
 
 func TestPrintSystemOsArch(t *testing.T) {
 	t.Logf("Running on OS: %s, ARCH: %s", runtime.GOOS, runtime.GOARCH)
-}
-
-func RunQemuUbuntuBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
-	scriptPath := "./build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh"
-	args := []string{"--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
-	RunBuildScript(t, config, scriptPath, args)
-}
-
-func RunQemuWindowsBuildOnMacOS(t *testing.T, config VirtualMachineConfig) {
-	scriptPath := "./build/packer/windows/windows11-on-macos.sh"
-	args := []string{"--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
-	RunBuildScript(t, config, scriptPath, args)
-}
-
-func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string, args []string) {
-	// Set a timeout for the script execution (adjust as needed)
-	timeout := 120 * time.Minute
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
-	defer signal.Stop(sigs)
-
-	cmd := exec.CommandContext(ctx, "bash", append([]string{scriptPath}, args...)...)
-	cmd.Dir = "../../"
-
-	// VNC integration:
-	// - Opening a VNC viewer (Screen Sharing) is useful for observing the VM build process in real time.
-	// - VNC recording enables capturing the build process for later review or debugging.
-	vnc_recording_config := VncRecordingConfig{Password: "packer"}
-	go func() {
-		config := RunProcessConfig{
-			ExecutablePath:   "open",
-			Args:             []string{"-a", "Screen Sharing", fmt.Sprintf("vnc://:%s@localhost:%d", vnc_recording_config.Password, config.VncPort)},
-			Timeout:          5 * time.Minute,
-			WorkingDir:       "",
-			Context:          ctx,
-			FailOnError:      false,
-			Retries:          5,
-			RetryInterval:    time.Minute,
-			DelayBeforeStart: time.Minute,
-		}
-		RunExternalProcessWithRetries(config)
-	}()
-
-	// Start Screen Capture to record the VM build process
-	var vnc_snapshot_ctx context.Context
-	vnc_snapshot_done := make(chan struct{})
-	vnc_interrupt_retry_chan := make(chan bool)
-	go func() {
-		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, InterruptRetryChan: vnc_interrupt_retry_chan}, &vnc_recording_config)
-		if vnc_snapshot_ctx != nil {
-			<-vnc_snapshot_ctx.Done()
-		}
-		close(vnc_snapshot_done)
-	}()
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatalf("Failed to get stdout: %v", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		t.Fatalf("Failed to get stderr: %v", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("Failed to start command: %v", err)
-	}
-
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			t.Logf("%s:%s stdout:  %s", config.UbuntuType, config.Arch, scanner.Text())
-		}
-	}()
-
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			t.Logf("%s:%s stderr:  %s", config.UbuntuType, config.Arch, scanner.Text())
-		}
-	}()
-
-	done := make(chan error, 1)
-
-	go func() {
-		err := cmd.Wait()
-		if vnc_snapshot_ctx != nil {
-			vnc_snapshot_ctx.Done()
-		}
-		done <- err
-	}()
-
-	// FFmpeg integration:
-	// - FFmpeg is useful for generating a video from the VNC recording, allowing playback and sharing of the build process.
-	var ffmpeg_run = func() {
-		// Wait for vnc_snapshot to finish
-		_, ok := <-vnc_snapshot_done
-		if !ok {
-			// Channel is closed, proceed
-		} else {
-			// Channel not closed, wait for it
-			<-vnc_snapshot_done
-		}
-		// Always run ffmpeg after vnc_snapshot is done
-		RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: 10 * time.Minute}, &vnc_recording_config)
-	}
-
-	select {
-	case err := <-done:
-		vnc_interrupt_retry_chan <- true
-		if err != nil {
-			ffmpeg_run()
-			t.Fatalf("Script failed: %v", err)
-		}
-		ffmpeg_run()
-		t.Logf("Script finished successfully.")
-	case <-ctx.Done():
-		// Kill the process if context is done (timeout or cancellation)
-		_ = cmd.Process.Kill()
-		vnc_interrupt_retry_chan <- true
-		ffmpeg_run()
-		t.Fatalf("Script terminated due to timeout or interruption: %v", ctx.Err())
-	case sig := <-sigs:
-		_ = cmd.Process.Kill()
-		vnc_interrupt_retry_chan <- true
-		ffmpeg_run()
-		t.Fatalf("Script terminated due to signal: %v", sig)
-	}
-
-	// TODO: check for vnc recording files and video generation success
 }
 
 func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
@@ -159,7 +18,7 @@ func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 		UbuntuType: "server",
 		VncPort:    5901,
 	}
-	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
+	RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 }
 
 func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
@@ -171,7 +30,7 @@ func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 		UbuntuType: "server",
 		VncPort:    5902,
 	}
-	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
+	RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 }
 
 func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
@@ -183,7 +42,7 @@ func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 		UbuntuType: "desktop",
 		VncPort:    5903,
 	}
-	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
+	RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 }
 
 func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
@@ -195,7 +54,7 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 		UbuntuType: "desktop",
 		VncPort:    5904,
 	}
-	RunQemuUbuntuBuildOnMacOS(t, VirtualMachineConfig)
+	RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 }
 
 func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
@@ -206,7 +65,7 @@ func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 		Arch:    "arm64",
 		VncPort: 5911,
 	}
-	RunQemuWindowsBuildOnMacOS(t, VirtualMachineConfig)
+	RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 }
 
 func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
@@ -217,5 +76,5 @@ func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
 		Arch:    "amd64",
 		VncPort: 5912,
 	}
-	RunQemuWindowsBuildOnMacOS(t, VirtualMachineConfig)
+	RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 }
