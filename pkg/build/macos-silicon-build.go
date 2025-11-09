@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -26,6 +27,7 @@ type RunProcessConfig struct {
 	Args               []string
 	WorkingDir         string
 	Timeout            time.Duration
+	DelayBeforeStart   time.Duration
 	Context            context.Context
 	FailOnError        bool
 	Retries            int
@@ -67,6 +69,22 @@ func RunExternalProcess(config RunProcessConfig) context.Context {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 	defer signal.Stop(sigs)
+
+	if config.DelayBeforeStart > 0 {
+		log.Printf("Delaying start of process %s by %s", config.ExecutablePath, config.DelayBeforeStart)
+		select {
+		case <-time.After(config.DelayBeforeStart):
+			// continue
+		case sig := <-sigs:
+			log.Printf("Process %s start interrupted by signal: %v", config.ExecutablePath, sig)
+			return ctx
+		case <-ctx.Done():
+			log.Printf("Process %s start cancelled due to timeout or interruption: %v", config.ExecutablePath, ctx.Err())
+			return ctx
+		}
+	}
+
+	log.Printf("Starting process: %s %s", config.ExecutablePath, strings.Join(config.Args, " "))
 
 	cmd := exec.CommandContext(ctx, config.ExecutablePath, config.Args...)
 	cmd.Dir = config.WorkingDir
@@ -271,5 +289,23 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 	}
 
 	ctx = RunExternalProcess(config)
+
+	// remove the snapshot images after video generation
+	removePattern := recording_config.OutputFile
+	if len(removePattern) > 4 && removePattern[len(removePattern)-4:] == ".jpg" {
+		removePattern = "../../" + removePattern[:len(removePattern)-4] + "*.jpg"
+	}
+
+	matches, err := filepath.Glob(removePattern)
+	if err != nil {
+		log.Fatalf("Failed to glob snapshot images for removal: %v", err)
+	}
+	for _, path := range matches {
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Printf("Failed to remove snapshot image %v: %v", path, err)
+		}
+	}
+
 	return ctx
 }

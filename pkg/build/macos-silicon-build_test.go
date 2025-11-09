@@ -42,17 +42,20 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 	cmd := exec.CommandContext(ctx, "bash", append([]string{scriptPath}, args...)...)
 	cmd.Dir = "../../"
 
-	// Start Screen Sharing to monitor the VM build process via VNC
+	// VNC integration:
+	// - Opening a VNC viewer (Screen Sharing) is useful for observing the VM build process in real time.
+	// - VNC recording enables capturing the build process for later review or debugging.
 	go func() {
 		config := RunProcessConfig{
-			ExecutablePath: "open",
-			Args:           []string{"-a", "Screen Sharing", fmt.Sprintf("vnc://localhost:%d", config.VncPort)},
-			Timeout:        5 * time.Minute,
-			WorkingDir:     "",
-			Context:        ctx,
-			FailOnError:    false,
-			Retries:        5,
-			RetryInterval:  60 * time.Second,
+			ExecutablePath:   "open",
+			Args:             []string{"-a", "Screen Sharing", fmt.Sprintf("vnc://localhost:%d", config.VncPort)},
+			Timeout:          5 * time.Minute,
+			WorkingDir:       "",
+			Context:          ctx,
+			FailOnError:      false,
+			Retries:          5,
+			RetryInterval:    time.Minute,
+			DelayBeforeStart: time.Minute,
 		}
 		RunExternalProcessWithRetries(config)
 	}()
@@ -60,7 +63,6 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 	// Start Screen Capture to record the VM build process
 	vnc_recording_config := VncRecordingConfig{}
 	var vnc_snapshot_ctx context.Context
-	var ffmpeg_ctx context.Context
 	vnc_snapshot_done := make(chan struct{})
 	vnc_interrupt_retry_chan := make(chan bool)
 	go func() {
@@ -108,14 +110,13 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 		done <- err
 	}()
 
+	// FFmpeg integration:
+	// - FFmpeg is useful for generating a video from the VNC recording, allowing playback and sharing of the build process.
 	var ffmpeg_run = func() {
 		// Wait for vnc_snapshot to finish
 		<-vnc_snapshot_done
 		// Always run ffmpeg after vnc_snapshot is done
-		ffmpeg_ctx = RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: 10 * time.Minute}, &vnc_recording_config)
-		if ffmpeg_ctx != nil {
-			<-ffmpeg_ctx.Done()
-		}
+		RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: 10 * time.Minute}, &vnc_recording_config)
 	}
 
 	select {
@@ -139,6 +140,8 @@ func RunBuildScript(t *testing.T, config VirtualMachineConfig, scriptPath string
 		ffmpeg_run()
 		t.Fatalf("Script terminated due to signal: %v", sig)
 	}
+
+	// TODO: check for vnc recording files and video generation success
 }
 
 func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
