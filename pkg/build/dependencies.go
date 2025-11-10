@@ -8,8 +8,43 @@ import (
 	"os"
 	"path/filepath"
 
-	getter "github.com/hashicorp/go-getter"
+	"github.com/hashicorp/go-getter"
+	"github.com/schollz/progressbar/v3"
 )
+
+// ProgressBarListener implements getter.ProgressListener to show a progress bar
+type ProgressBarListener struct {
+	bar *progressbar.ProgressBar
+}
+
+func (p *ProgressBarListener) TrackProgress(src string, current, total int64, r io.ReadCloser) io.ReadCloser {
+	if p.bar == nil {
+		p.bar = progressbar.DefaultBytes(total, fmt.Sprintf("downloading %s", src))
+	}
+
+	// Wrap the reader so the bar updates as data is read
+	return &progressReader{
+		reader: r,
+		bar:    p.bar,
+	}
+}
+
+type progressReader struct {
+	reader io.ReadCloser
+	bar    *progressbar.ProgressBar
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	if n > 0 {
+		_ = pr.bar.Add(n)
+	}
+	return n, err
+}
+
+func (pr *progressReader) Close() error {
+	return pr.reader.Close()
+}
 
 type WebFileDependency struct {
 	LocalPath        string
@@ -17,6 +52,8 @@ type WebFileDependency struct {
 	Source           string
 	RelatedVmConfigs []VirtualMachineConfig
 }
+
+const qemu_efi_version = "2025.05-1"
 
 func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	for _, dep := range getWebFileDependencies() {
@@ -54,6 +91,28 @@ func getWebFileDependencies() []WebFileDependency {
 				},
 			},
 		},
+		{
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, fmt.Sprintf("./vendor/qemu-efi-aarch64_%s_all.deb", qemu_efi_version)),
+			Checksum:  "",
+			Source:    fmt.Sprintf("http://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_%s_all.deb", qemu_efi_version),
+			RelatedVmConfigs: []VirtualMachineConfig{
+				{
+					OS:   "windows11",
+					Arch: "arm64",
+				},
+			},
+		},
+		{
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/virtio-win.iso"),
+			Checksum:  "",
+			Source:    "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.266-1/virtio-win-0.1.266.iso",
+			RelatedVmConfigs: []VirtualMachineConfig{
+				{
+					OS:   "windows11",
+					Arch: "arm64",
+				},
+			},
+		},
 	}
 }
 
@@ -63,11 +122,19 @@ func downloadWebFileDependency(dep WebFileDependency) error {
 		src = src + "?checksum=" + dep.Checksum
 	}
 
-	err := getter.GetFile(dep.LocalPath, src)
+	listener := &ProgressBarListener{}
+	client := &getter.Client{
+		Src:              src,
+		Dst:              dep.LocalPath,
+		Mode:             getter.ClientModeFile,
+		ProgressListener: listener,
+	}
+	err := client.Get()
 	if err != nil {
 		log.Printf("Failed to download web file dependency from %s to %s: %v", dep.Source, dep.LocalPath, err)
 		return err
 	}
+	listener.bar.Finish()
 	log.Printf("Successfully downloaded web file dependency from %s to %s", dep.Source, dep.LocalPath)
 	return nil
 }

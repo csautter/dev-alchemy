@@ -5,10 +5,38 @@ import (
 )
 
 func TestIntegrationDependencyReconciliation(t *testing.T) {
-	vmconfig := VirtualMachineConfig{
-		OS:   "windows11",
-		Arch: "amd64",
+	tests := []VirtualMachineConfig{
+		{
+			OS:   "windows11",
+			Arch: "amd64",
+		},
+		{
+			OS:   "windows11",
+			Arch: "arm64",
+		},
+		{
+			OS:         "ubuntu",
+			Arch:       "amd64",
+			UbuntuType: "desktop",
+		},
+		{
+			OS:         "ubuntu",
+			Arch:       "arm64",
+			UbuntuType: "desktop",
+		},
+		{
+			OS:         "ubuntu",
+			Arch:       "amd64",
+			UbuntuType: "server",
+		},
+		{
+			OS:         "ubuntu",
+			Arch:       "arm64",
+			UbuntuType: "server",
+		},
 	}
 
-	DependencyReconciliation(vmconfig)
+	for _, vmconfig := range tests {
+		DependencyReconciliation(vmconfig)
+	}
 }
