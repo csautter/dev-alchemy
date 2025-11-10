@@ -44,8 +44,6 @@ type VncRecordingConfig struct {
 	Password     string
 }
 
-const vncsnapshot_base_path = "./cache"
-
 func GenerateVirtualMachineSlug(config *VirtualMachineConfig) string {
 	if config.Slug != "" {
 		return config.Slug
@@ -189,22 +187,22 @@ func RunBashScript(config RunProcessConfig) {
 func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, process_config RunProcessConfig, recording_config *VncRecordingConfig) context.Context {
 	vnc_display := strconv.Itoa(vm_config.VncPort - 5900)
 
-	snapshot_dir := vncsnapshot_base_path + "/" + vm_config.OS + "/qemu-out-" + GenerateVirtualMachineSlug(&vm_config) + "-vncsnapshot"
+	snapshot_dir := filepath.Join(GetDirectoriesInstance().GetDirectories().CacheDir, vm_config.OS, "qemu-out-"+GenerateVirtualMachineSlug(&vm_config)+"-vncsnapshot")
 	recording_config.OutputFolder = snapshot_dir
 
-	if err := os.RemoveAll("../../" + snapshot_dir); err != nil {
+	if err := os.RemoveAll(snapshot_dir); err != nil {
 		log.Fatalf("Failed to remove snapshot directory: %v", err)
 	}
 
-	if err := os.MkdirAll("../../"+snapshot_dir, 0755); err != nil {
+	if err := os.MkdirAll(snapshot_dir, 0755); err != nil {
 		log.Fatalf("Failed to create snapshot directory: %v", err)
 	}
-	snapshot_file := snapshot_dir + "/qemu.vnc.jpg"
+	snapshot_file := filepath.Join(snapshot_dir, "qemu.vnc.jpg")
 	recording_config.OutputFile = snapshot_file
 
-	vnc_passwd_file := snapshot_dir + "/.packer-qemu.vnc.pass"
-	if _, err := os.Stat("../../" + vnc_passwd_file); err == nil {
-		if err := os.Remove("../../" + vnc_passwd_file); err != nil {
+	vnc_passwd_file := filepath.Join(snapshot_dir, ".packer-qemu.vnc.pass")
+	if _, err := os.Stat(vnc_passwd_file); err == nil {
+		if err := os.Remove(vnc_passwd_file); err != nil {
 			log.Fatalf("Failed to remove existing VNC password file: %v", err)
 		}
 	}
@@ -212,7 +210,7 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	config := RunProcessConfig{
 		ExecutablePath:   "vncsnapshot",
 		Args:             []string{"-quiet", "-passwd", vnc_passwd_file, "-compresslevel", "9", "-count", "21600", "-fps", "1", "localhost:" + vnc_display, snapshot_file},
-		WorkingDir:       "../../",
+		WorkingDir:       GetDirectoriesInstance().GetDirectories().ProjectDir,
 		Timeout:          10 * time.Minute,
 		Context:          ctx,
 		Retries:          5,
@@ -259,14 +257,14 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	}
 
 	encrypted := vncpasswd.Crypt(vnc_password)
-	if err := os.WriteFile("../../"+vnc_passwd_file, encrypted, 0600); err != nil {
+	if err := os.WriteFile(vnc_passwd_file, encrypted, 0600); err != nil {
 		log.Fatalf("Failed to write VNC password file: %v", err)
 	}
 
 	ctx = RunExternalProcessWithRetries(config)
 
 	// Remove VNC password file
-	if err := os.Remove("../../" + vnc_passwd_file); err != nil {
+	if err := os.Remove(vnc_passwd_file); err != nil {
 		log.Printf("Failed to remove VNC password file: %v", err)
 	}
 
@@ -289,7 +287,7 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 			"-pix_fmt", "yuv420p",
 			recording_config.OutputFolder + "/qemu.vnc.mp4",
 		},
-		WorkingDir:    "../../",
+		WorkingDir:    GetDirectoriesInstance().GetDirectories().ProjectDir,
 		Timeout:       10 * time.Minute,
 		Context:       ctx,
 		Retries:       3,
@@ -327,8 +325,10 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 	// remove the snapshot images after video generation
 	removePattern := recording_config.OutputFile
 	if len(removePattern) > 4 && removePattern[len(removePattern)-4:] == ".jpg" {
-		removePattern = "../../" + removePattern[:len(removePattern)-4] + "*.jpg"
+		removePattern = removePattern[:len(removePattern)-4] + "*.jpg"
 	}
+
+	log.Printf("Removing vncsnapshot images with pattern: %s", removePattern)
 
 	matches, err := filepath.Glob(removePattern)
 	if err != nil {
@@ -345,13 +345,13 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 }
 
 func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) {
-	scriptPath := "./build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh"
-	args := []string{"--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
+	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh")
+	args := []string{"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
 	RunBuildScript(config, scriptPath, args)
 }
 
 func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) {
-	scriptPath := "./build/packer/windows/windows11-on-macos.sh"
+	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/windows/windows11-on-macos.sh")
 	args := []string{"--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
 	RunBuildScript(config, scriptPath, args)
 }
@@ -366,8 +366,14 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 	defer signal.Stop(sigs)
 
+	// print current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current working directory: %v", err)
+	}
+	log.Printf("Current working directory: %s", cwd)
 	cmd := exec.CommandContext(ctx, "bash", append([]string{scriptPath}, args...)...)
-	cmd.Dir = "../../"
+	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
 
 	// VNC integration:
 	// - Opening a VNC viewer (Screen Sharing) is useful for observing the VM build process in real time.

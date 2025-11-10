@@ -10,6 +10,17 @@ ubuntu_type="server"
 vnc_port="5901"
 verbose="false"
 
+script_dir=$(
+	# shellcheck disable=SC2164
+	cd "$(dirname "$0")"
+	pwd -P
+)
+project_root=$(
+	# shellcheck disable=SC2164
+	cd "${script_dir}/../../../.."
+	pwd -P
+)
+
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--arch)
@@ -43,6 +54,15 @@ while [[ $# -gt 0 ]]; do
 			exit 1
 		fi
 		;;
+	--project-root)
+		if [[ -n "$2" ]]; then
+			project_root="$2"
+			shift 2
+		else
+			echo "Invalid value for --project-root: $2." >&2
+			exit 1
+		fi
+		;;
 	--verbose)
 		set -x
 		verbose="true"
@@ -55,16 +75,6 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-script_dir=$(
-	# shellcheck disable=SC2164
-	cd "$(dirname "$0")"
-	pwd -P
-)
-project_root=$(
-	# shellcheck disable=SC2164
-	cd "${script_dir}/../../../.."
-	pwd -P
-)
 cache_dir="$project_root/cache"
 
 # Download uefi-firmware if it doesn't exist
@@ -79,15 +89,20 @@ if [ "$arch" = "arm64" ]; then
 	iso_checksum="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
 	mkdir -p "$(dirname "$iso_path")"
 
-	if [[ ! -f "$iso_path" ]]; then
-		echo "Downloading Ubuntu ISO..."
-		curl -L -o "$iso_path" "$iso_url"
+	if [[ ! -f "$iso_path" || $(stat -c%s "$iso_path") -lt 2500000000 ]]; then
+		echo "Downloading Ubuntu ISO (supports resume)..."
+		if ! curl --no-buffer --retry 10 --continue-at - -L -# -o "$iso_path" "$iso_url"; then
+			echo "Failed to download Ubuntu ISO." >&2
+			exit 1
+		fi
 	fi
 
 	echo "Verifying ISO checksum..."
 	downloaded_checksum=$(sha256sum "$iso_path" | awk '{print $1}')
 	if [[ "$downloaded_checksum" != "$iso_checksum" ]]; then
 		echo "Checksum mismatch for $iso_path" >&2
+		echo "Removing corrupted file..." >&2
+		#rm -f "$iso_path"
 		exit 1
 	fi
 fi
@@ -105,7 +120,7 @@ fi
 
 # create cidata iso
 if [ "$arch" = "arm64" ]; then
-	cd "$script_dir/cloud-init/qemu-${ubuntu_type}" || exit 1
+	cd "$project_root/build/packer/linux/ubuntu/cloud-init/qemu-${ubuntu_type}" || exit 1
 	rm -f cidata.iso
 	xorriso -as mkisofs -V cidata -o cidata.iso user-data meta-data
 	cd "$project_root" || exit 1
