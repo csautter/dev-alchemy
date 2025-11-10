@@ -352,7 +352,7 @@ func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) {
 
 func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) {
 	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/windows/windows11-on-macos.sh")
-	args := []string{"--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
+	args := []string{"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
 	RunBuildScript(config, scriptPath, args)
 }
 
@@ -399,7 +399,7 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 	vnc_snapshot_done := make(chan struct{})
 	vnc_interrupt_retry_chan := make(chan bool)
 	go func() {
-		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, InterruptRetryChan: vnc_interrupt_retry_chan}, &vnc_recording_config)
+		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, Retries: 30, InterruptRetryChan: vnc_interrupt_retry_chan}, &vnc_recording_config)
 		if vnc_snapshot_ctx != nil {
 			<-vnc_snapshot_ctx.Done()
 		}

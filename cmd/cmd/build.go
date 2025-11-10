@@ -33,7 +33,12 @@ Example:
 			UbuntuType: osType,
 			VncPort:    5901,
 		}
-		alchemy_build.RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+		if osName == "ubuntu" {
+			alchemy_build.RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+		}
+		if osName == "windows11" {
+			alchemy_build.RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
+		}
 	},
 }
 

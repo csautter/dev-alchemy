@@ -8,6 +8,17 @@ headless="false"
 vnc_port="5901"
 verbose="false"
 
+script_dir=$(
+	# shellcheck disable=SC2164
+	cd "$(dirname "$0")"
+	pwd -P
+)
+project_root=$(
+	# shellcheck disable=SC2164
+	cd "${script_dir}/../../.."
+	pwd -P
+)
+
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--arch)
@@ -37,6 +48,15 @@ while [[ $# -gt 0 ]]; do
 		verbose="true"
 		shift
 		;;
+	--project-root)
+		if [[ -n "$2" ]]; then
+			project_root="$2"
+			shift 2
+		else
+			echo "Invalid value for --project-root: $2." >&2
+			exit 1
+		fi
+		;;
 	*)
 		echo "Unknown option: $1" >&2
 		exit 1
@@ -46,17 +66,6 @@ done
 
 echo "Using architecture: $arch"
 echo "Headless mode: $headless"
-
-script_dir=$(
-	# shellcheck disable=SC2164
-	cd "$(dirname "$0")"
-	pwd -P
-)
-project_root=$(
-	# shellcheck disable=SC2164
-	cd "${script_dir}/../../.."
-	pwd -P
-)
 
 cd "${project_root}" || exit 1
 
