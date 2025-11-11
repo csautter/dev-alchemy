@@ -83,6 +83,7 @@ if [ "$arch" = "arm64" ]; then
 fi
 
 # Download the Ubuntu ISO if it doesn't exist
+iso_path="$project_root/vendor/linux/ubuntu-24.04.3-live-server-amd64.iso"
 if [ "$arch" = "arm64" ]; then
 	iso_path="$project_root/vendor/linux/ubuntu-24.04.3-live-server-arm64.iso"
 	iso_url="https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso"
@@ -138,4 +139,4 @@ packer init "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
 if [ "$verbose" = "true" ]; then
 	export PACKER_LOG=1
 fi
-packer build -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
+packer build -var "iso_url=$iso_path" -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"

@@ -35,8 +35,7 @@ variable "vnc_port" {
 }
 
 variable "iso_url" {
-  type    = string
-  default = "../../../../vendor/linux/ubuntu-24.04.3-live-server-arm64.iso"
+  type = string
 }
 
 variable "is_ci" {
@@ -55,7 +54,7 @@ variable "ubuntu_type" {
 }
 
 locals {
-  iso_url             = var.arch == "amd64" ? "https://releases.ubuntu.com/${var.ubuntu_version}/ubuntu-${var.ubuntu_version}-live-${var.ubuntu_type}-amd64.iso" : "${path.root}/${var.iso_url}"
+  iso_url             = var.iso_url
   ubuntu_iso_checksum = var.arch == "amd64" ? "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b" : "none"
   cache_directory     = "${path.root}/../../../../cache"
   boot_command = {

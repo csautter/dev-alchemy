@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"math/rand"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 
@@ -27,11 +28,13 @@ Example:
 		osName := args[0]
 		fmt.Printf("🔧 Building VM for OS: %s, Type: %s, Architecture: %s\n", osName, osType, arch)
 
+		port := 5900 + (rand.Intn(100) + 1)
+
 		VirtualMachineConfig := alchemy_build.VirtualMachineConfig{
 			OS:         osName,
 			Arch:       arch,
 			UbuntuType: osType,
-			VncPort:    5901,
+			VncPort:    port,
 		}
 		if osName == "ubuntu" {
 			alchemy_build.RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)

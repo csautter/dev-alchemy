@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -357,6 +358,21 @@ func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) {
 }
 
 func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []string) {
+	// Ensure all required dependencies are present
+	DependencyReconciliation(config)
+	// Check if VNC port is free, if not, increment until a free port is found
+	port := config.VncPort
+	for {
+		addr := fmt.Sprintf("127.0.0.1:%d", port)
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			ln.Close()
+			break
+		}
+		port++
+	}
+	config.VncPort = port
+	log.Printf("Using VNC port: %d", config.VncPort)
 	// Set a timeout for the script execution (adjust as needed)
 	timeout := 120 * time.Minute
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -399,7 +415,7 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 	vnc_snapshot_done := make(chan struct{})
 	vnc_interrupt_retry_chan := make(chan bool)
 	go func() {
-		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, Retries: 30, InterruptRetryChan: vnc_interrupt_retry_chan}, &vnc_recording_config)
+		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, Retries: 30, InterruptRetryChan: vnc_interrupt_retry_chan, RetryInterval: 10 * time.Second}, &vnc_recording_config)
 		if vnc_snapshot_ctx != nil {
 			<-vnc_snapshot_ctx.Done()
 		}
