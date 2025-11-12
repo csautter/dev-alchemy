@@ -18,14 +18,6 @@ import (
 	"github.com/KarpelesLab/vncpasswd"
 )
 
-type VirtualMachineConfig struct {
-	OS         string
-	Arch       string
-	UbuntuType string
-	VncPort    int
-	Slug       string
-}
-
 type RunProcessConfig struct {
 	ExecutablePath     string
 	Args               []string
@@ -358,6 +350,9 @@ func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) {
 }
 
 func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []string) {
+	// Ensure that the build artifact does not already exist
+	// TODO: implement artifact existence check
+
 	// Ensure all required dependencies are present
 	DependencyReconciliation(config)
 	// Check if VNC port is free, if not, increment until a free port is found
