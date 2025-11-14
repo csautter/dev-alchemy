@@ -3,6 +3,8 @@
     - localhost
   gather_facts: true
   roles:
+    - role: python
+      tags: python
     - role: openssh
       tags: openssh
     - role: brew
