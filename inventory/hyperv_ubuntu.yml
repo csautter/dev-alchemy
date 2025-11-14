@@ -1,0 +1,12 @@
+all:
+  children:
+    windows:
+      hosts:
+        ubuntu_host:
+          ansible_host: 172.24.78.254
+          ansible_user: packer
+          ansible_password: P@ssw0rd!
+          ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
+          ansible_ssh_timeout: 120 # timeout in seconds
+          ansible_ssh_retries: 3
+          ansible_become_password: P@ssw0rd!

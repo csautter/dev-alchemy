@@ -57,7 +57,8 @@ $packages = @(
     "gcc-core",
     "gcc-g\+\+",
     "libffi-devel",
-    "libssl-devel"
+    "libssl-devel",
+    "sshpass"
 )
 foreach ($package in $packages) {
     if (Test-CygwinPackageInstalled -PackageName $package) {

@@ -235,7 +235,7 @@ devalchemy/
 
 > Note: macOS VM testing is only supported on macOS hosts due to Apple licensing restrictions. There might exist workarounds, but they are not covered here.
 
-### Local tests for ubuntu (on linux, WSL, windows or macos)
+### Local tests for Ubuntu (on linux, WSL, windows or macos)
 
 To test ansible roles for ubuntu, you can use the provided docker-compose setup:
 
@@ -250,6 +250,18 @@ To cleanup afterwards, simply run:
 ```bash
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 ```
+
+#### Local tests for Ubuntu on Windows with Hyper-v
+
+To test changes locally on Ubuntu with a Windows Host System using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
+
+##### Build a Ubuntu VM
+
+Check [README.md](./build/packer/linux/ubuntu/README.md) for a guide to build an Ubuntu VM with packer and Hyper-V.
+
+##### Run the Ubuntu VM
+
+Check [README.md](./deployments/vagrant/linux-ubuntu-hyperv/README.md) for a guide to run the Ubuntu VM with Vagrant and Hyper-V.
 
 ### Local tests for macOS (on macos)
 
@@ -278,12 +290,12 @@ On macOS you can use UTM to run a Windows VM for testing ansible changes on wind
 Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and qemu on macos.
 
 After the VM is built, you can add it to UTM and start it. This step is currently automated just for Windows arm64. For x86_64 you need to add the VM manually to UTM.
-See script [create-windows11-utm-vm.sh](./deployments/utm/windows11-arm64/create-windows11-utm-vm.sh) for details about the UTM VM creation.
+See script [create-windows11-utm-vm.sh](./deployments/utm/create-windows11-utm-vm.sh) for details about the UTM VM creation.
 You can use following scripts to create the UTM VM and determine its IP address:
 
 ```bash
-bash ./deployments/utm/windows11-arm64/create-windows11-utm-vm.sh
-bash ./deployments/utm/windows11-arm64/determine-vm-ip-address.sh
+bash ./deployments/utm/create-windows11-utm-vm.sh
+bash ./deployments/utm/determine-vm-ip-address.sh
 ```
 
 You can create the inventory file using a Bash script and the `$vagrant_ip` variable:
@@ -382,6 +394,20 @@ Out-of-the-box roles can install (depending on platform):
 ## Troubleshooting
 
 - On Windows with cygwin, it can happen that the ansible installation within cygwin is shadowed by another ansible python installation on the windows host. Don't try to install ansible directly on your windows host. Uninstall any other ansible installation and make sure to use the cygwin python installation to install ansible via pip.
+- Running Ansible on MacOS can cause forking issues:
+
+```bash
+TASK [Gathering Facts] ***************************************************************************************************************************************
+objc[9473]: +[NSNumber initialize] may have been in progress in another thread when fork() was called.
+objc[9473]: +[NSNumber initialize] may have been in progress in another thread when fork() was called. We cannot safely call it or ignore it in the fork() child process. Crashing instead. Set a breakpoint on objc_initializeAfterForkError to debug.
+ERROR! A worker was found in a dead state
+```
+
+To avoid this, set the following environment variable before running ansible:
+
+```bash
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+```
 
 ## 🤝 Contributing
 
