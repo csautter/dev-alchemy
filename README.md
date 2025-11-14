@@ -394,6 +394,20 @@ Out-of-the-box roles can install (depending on platform):
 ## Troubleshooting
 
 - On Windows with cygwin, it can happen that the ansible installation within cygwin is shadowed by another ansible python installation on the windows host. Don't try to install ansible directly on your windows host. Uninstall any other ansible installation and make sure to use the cygwin python installation to install ansible via pip.
+- Running Ansible on MacOS can cause forking issues:
+
+```bash
+TASK [Gathering Facts] ***************************************************************************************************************************************
+objc[9473]: +[NSNumber initialize] may have been in progress in another thread when fork() was called.
+objc[9473]: +[NSNumber initialize] may have been in progress in another thread when fork() was called. We cannot safely call it or ignore it in the fork() child process. Crashing instead. Set a breakpoint on objc_initializeAfterForkError to debug.
+ERROR! A worker was found in a dead state
+```
+
+To avoid this, set the following environment variable before running ansible:
+
+```bash
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+```
 
 ## 🤝 Contributing
 
