@@ -289,13 +289,20 @@ This will delete the temporary VM.
 On macOS you can use UTM to run a Windows VM for testing ansible changes on windows. UTM is a powerful and easy-to-use virtual machine manager for macOS.
 Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and qemu on macos.
 
-After the VM is built, you can add it to UTM and start it. This step is currently automated just for Windows arm64. For x86_64 you need to add the VM manually to UTM.
-See script [create-windows11-utm-vm.sh](./deployments/utm/create-windows11-utm-vm.sh) for details about the UTM VM creation.
-You can use following scripts to create the UTM VM and determine its IP address:
+You can run the following commands to build and create the Windows 11 VM in UTM:
 
 ```bash
-bash ./deployments/utm/create-windows11-utm-vm.sh
-bash ./deployments/utm/determine-vm-ip-address.sh
+arch=arm64 # or amd64
+go run cmd/main.go build windows11 --arch $arch
+go run cmd/main.go create windows11 --arch $arch
+```
+
+Open UTM and start the created Windows VM.
+
+Get the IP address of the created UTM VM
+
+```bash
+bash ./deployments/utm/determine-vm-ip-address.sh --arch $arch --os windows11
 ```
 
 You can create the inventory file using a Bash script and the `$vagrant_ip` variable:

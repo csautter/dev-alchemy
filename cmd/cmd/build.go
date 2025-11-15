@@ -33,6 +33,10 @@ Example:
 	Run: func(cmd *cobra.Command, args []string) {
 		osName := args[0]
 
+		if osName != "ubuntu" {
+			osType = ""
+		}
+
 		if osName == "all" {
 			fmt.Printf("🔧 Building all available VM configurations with %d parallel builds\n", parallel)
 			available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigs()

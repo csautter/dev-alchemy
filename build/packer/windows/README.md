@@ -37,22 +37,25 @@ Default for packer is `6`.
 
 ### Output
 
-The build process will generate a Windows image in Vagrant box format as defined in [windows.pkr.hcl](windows.pkr.hcl).
-
 ## Build Windows on macOS Hosts
 
-This directory also contains a Packer template for building Windows images on macOS hosts using QEMU.
+The windows VM build process is fully automated and includes installation of:
 
-### for x86_64
+- Download Windows iso
+- Unattended Windows installation
+- Qemu Guest Additions
+- WinRM enabled
+- SSH server installed
+- UTM VM
+
+### run build and create
+
+After running following commands, the Windows 11 VM will be available in UTM.
+Every command may take a while to finish. If something goes wrong, please check the logs and retry.
+The process is idempotent, so you can re-run commands without issues.
 
 ```bash
-bash build/packer/windows/windows11-on-macos.sh --arch amd64
-```
-
-### for arm64
-
-There are a lot of customizations for running Windows on ARM, with QEMU and Packer. Therefore there is a script with some preparations.
-
-```bash
-bash build/packer/windows/windows11-on-macos.sh --arch arm64
+arch=arm64 # or amd64
+go run cmd/main.go build windows11 --arch $arch
+go run cmd/main.go create windows11 --arch $arch
 ```
