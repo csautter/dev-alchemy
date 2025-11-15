@@ -30,7 +30,6 @@ Example:
 			OS:         osName,
 			Arch:       arch,
 			UbuntuType: osType,
-			VncPort:    5901,
 		}
 		if osName == "ubuntu" {
 			alchemy_deploy.RunUtmDeployOnMacOS(VirtualMachineConfig)

@@ -37,20 +37,6 @@ type VncRecordingConfig struct {
 	Password     string
 }
 
-func GenerateVirtualMachineSlug(config *VirtualMachineConfig) string {
-	if config.Slug != "" {
-		return config.Slug
-	}
-
-	slug := strings.ToLower(config.OS)
-	if config.UbuntuType != "" {
-		slug += "-" + strings.ToLower(config.UbuntuType)
-	}
-	slug += "-" + strings.ToLower(config.Arch)
-	config.Slug = slug
-	return slug
-}
-
 func RunExternalProcess(config RunProcessConfig) context.Context {
 	var ctx context.Context
 	var cancel context.CancelFunc

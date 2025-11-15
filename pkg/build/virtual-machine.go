@@ -1,6 +1,9 @@
 package build
 
-import "path"
+import (
+	"path"
+	"strings"
+)
 
 type VirtualMachineConfig struct {
 	OS                     string
@@ -65,5 +68,33 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 				path.Join(GetDirectoriesInstance().CacheDir, "windows11/qemu-windows11-amd64.qcow2"),
 			},
 		},
+	}
+}
+
+func GenerateVirtualMachineSlug(config *VirtualMachineConfig) string {
+	if config.Slug != "" {
+		return config.Slug
+	}
+
+	slug := strings.ToLower(config.OS)
+	if config.UbuntuType != "" {
+		slug += "-" + strings.ToLower(config.UbuntuType)
+	}
+	slug += "-" + strings.ToLower(config.Arch)
+	config.Slug = slug
+	return slug
+}
+
+func GetVirtualMachineNameWithType(config VirtualMachineConfig) string {
+	switch config.OS {
+	case "ubuntu":
+		if config.UbuntuType != "" {
+			return config.OS + "-" + config.UbuntuType
+		}
+		return config.OS
+	case "windows11":
+		return config.OS
+	default:
+		return "Unknown OS"
 	}
 }
