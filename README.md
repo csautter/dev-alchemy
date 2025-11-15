@@ -217,11 +217,11 @@ devalchemy/
 
 ### 🧪 Cross-Platform Testing Matrix
 
-| Host OS     |                                      Test Linux                                       |              Test macOS              |                                                       Test Windows                                                       |
-| ----------- | :-----------------------------------------------------------------------------------: | :----------------------------------: | :----------------------------------------------------------------------------------------------------------------------: |
-| **macOS**   |                          Docker<br><sub>✅ Implemented</sub>                          | Tart VM<br><sub>✅ Implemented</sub> |                                         UTM Qemu VM<br><sub>✅ Implemented</sub>                                         |
-| **Linux**   |                          Docker<br><sub>✅ Implemented</sub>                          |                 ---                  |                                  VM (e.g., VirtualBox)<br><sub>❌ Not implemented</sub>                                  |
-| **Windows** | WSL<br><sub>❌ Not implemented</sub><br>\_\_\_<br>Docker<br><sub>✅ Implemented</sub> |                 ---                  | Docker Desktop (Windows Containers) <br><sub>✅ Implemented</sub><br>\_\_\_<br>VM (Hyper-V)<br><sub>✅ Implemented</sub> |
+| Host OS     |                                        Test Linux                                         |              Test macOS              |                                                       Test Windows                                                       |
+| ----------- | :---------------------------------------------------------------------------------------: | :----------------------------------: | :----------------------------------------------------------------------------------------------------------------------: |
+| **macOS**   | Docker<br><sub>✅ Implemented</sub><br>\_\_\_<br>UTM Qemu VM<br><sub>✅ Implemented</sub> | Tart VM<br><sub>✅ Implemented</sub> |                                         UTM Qemu VM<br><sub>✅ Implemented</sub>                                         |
+| **Linux**   |                            Docker<br><sub>✅ Implemented</sub>                            |                 ---                  |                                  VM (e.g., VirtualBox)<br><sub>❌ Not implemented</sub>                                  |
+| **Windows** |   WSL<br><sub>❌ Not implemented</sub><br>\_\_\_<br>Docker<br><sub>✅ Implemented</sub>   |                 ---                  | Docker Desktop (Windows Containers) <br><sub>✅ Implemented</sub><br>\_\_\_<br>VM (Hyper-V)<br><sub>✅ Implemented</sub> |
 
 > <sub>Not implemented</sub> entries indicate solutions not yet implemented in this project. Only solutions marked as **Implemented** are currently available out-of-the-box.
 
@@ -234,6 +234,8 @@ devalchemy/
 - **Hyper-V**: Used for Windows VM testing on Windows hosts.
 
 > Note: macOS VM testing is only supported on macOS hosts due to Apple licensing restrictions. There might exist workarounds, but they are not covered here.
+
+## System agnostic test approaches
 
 ### Local tests for Ubuntu (on linux, WSL, windows or macos)
 
@@ -251,6 +253,8 @@ To cleanup afterwards, simply run:
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 ```
 
+## Windows specific test approaches
+
 #### Local tests for Ubuntu on Windows with Hyper-v
 
 To test changes locally on Ubuntu with a Windows Host System using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
@@ -262,6 +266,48 @@ Check [README.md](./build/packer/linux/ubuntu/README.md) for a guide to build an
 ##### Run the Ubuntu VM
 
 Check [README.md](./deployments/vagrant/linux-ubuntu-hyperv/README.md) for a guide to run the Ubuntu VM with Vagrant and Hyper-V.
+
+### Local tests for windows (on windows)
+
+#### Use Docker Desktop with Windows Containers
+
+To test changes locally on windows, you can use the provided docker-compose setup:
+
+```bash
+docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml up
+```
+
+The container will run the ansible playbook against itself.
+
+To cleanup afterwards, run:
+
+```bash
+docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml down
+```
+
+Check the [README](deployments/docker-compose/ansible-windows/README.md) in the `deployments/docker-compose/ansible-windows/` folder for more details.
+
+---
+
+#### Use Hyper-V VM
+
+To test changes locally on Windows using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
+
+##### Download a Windows .iso file
+
+You will need a Windows .iso file to use as the installation media for your virtual machine. You can download a Windows 10 or Windows Server .iso file from the Microsoft website.
+
+Or use script to download a Windows 11 .iso file: [download_win_11.ps1](./scripts/windows/download_win_11.ps1)
+
+##### Build a Windows VM
+
+Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and Hyper-V.
+
+##### Run the Windows VM
+
+Check [README.md](./deployments/vagrant/ansible-windows/README.md) for a guide to run the built Windows VM with Vagrant and Hyper-V.
+
+## macOS specific test approaches
 
 ### Local tests for macOS (on macos)
 
@@ -334,43 +380,7 @@ ansible-playbook ./playbooks/setup.yml -i ./inventory/utm_windows_winrm.yml -l w
 
 > ℹ️ Note: there is a known issue, that ansible might fail to connect via winrm when the VM has configured the Network interface as Public network. Switching it to Private network should resolve the issue.
 
-### Local tests for windows (on windows)
-
-#### Use Docker Desktop with Windows Containers
-
-To test changes locally on windows, you can use the provided docker-compose setup:
-
-```bash
-docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml up
-```
-
-The container will run the ansible playbook against itself.
-
-To cleanup afterwards, run:
-
-```bash
-docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml down
-```
-
-Check the [README](deployments/docker-compose/ansible-windows/README.md) in the `deployments/docker-compose/ansible-windows/` folder for more details.
-
-#### Use Hyper-V VM
-
-To test changes locally on Windows using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
-
-##### Download a Windows .iso file
-
-You will need a Windows .iso file to use as the installation media for your virtual machine. You can download a Windows 10 or Windows Server .iso file from the Microsoft website.
-
-Or use script to download a Windows 11 .iso file: [download_win_11.ps1](./scripts/windows/download_win_11.ps1)
-
-##### Build a Windows VM
-
-Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and Hyper-V.
-
-##### Run the Windows VM
-
-Check [README.md](./deployments/vagrant/ansible-windows/README.md) for a guide to run the built Windows VM with Vagrant and Hyper-V.
+---
 
 ## 📦 Supported Tools
 
