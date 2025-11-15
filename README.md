@@ -382,6 +382,31 @@ ansible-playbook ./playbooks/setup.yml -i ./inventory/utm_windows_winrm.yml -l w
 
 ---
 
+### Local tests for Ubuntu (on macos)
+
+On macOS you can use UTM to run a Ubuntu VM for testing ansible changes on Ubuntu. UTM is a powerful and easy-to-use virtual machine manager for macOS.
+
+You can run the following commands to build and create the Ubuntu VM in UTM:
+
+```bash
+arch=arm64 # or amd64
+type=desktop # or server
+go run cmd/main.go build ubuntu --arch $arch --type $type
+go run cmd/main.go create ubuntu --arch $arch --type $type
+```
+
+Open UTM and start the created Ubuntu VM.
+
+Get the IP address of the created UTM VM
+
+```bash
+bash ./deployments/utm/determine-vm-ip-address.sh --arch $arch --os "ubuntu-$type"
+```
+
+Setting up the inventory file and running the ansible playbook is similar to the Windows UTM VM approach.
+
+---
+
 ## 📦 Supported Tools
 
 Out-of-the-box roles can install (depending on platform):
