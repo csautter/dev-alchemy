@@ -177,6 +177,21 @@ func RunBashScript(config RunProcessConfig) {
 	RunExternalProcess(config)
 }
 
+func RemoveBuildArtifacts(artifacts []string) {
+	for _, artifact := range artifacts {
+		if _, err := os.Stat(artifact); err == nil {
+			log.Printf("Removing existing build artifact: %s", artifact)
+			if err := os.RemoveAll(artifact); err != nil {
+				log.Fatalf("Failed to remove build artifact %s: %v", artifact, err)
+			}
+		}
+	}
+}
+
+func RemoveBuildArtifactsForConfig(config VirtualMachineConfig) {
+	RemoveBuildArtifacts(config.ExpectedBuildArtifacts)
+}
+
 func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, process_config RunProcessConfig, recording_config *VncRecordingConfig) context.Context {
 	vnc_display := strconv.Itoa(vm_config.VncPort - 5900)
 
@@ -351,7 +366,38 @@ func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) {
 
 func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []string) {
 	// Ensure that the build artifact does not already exist
-	// TODO: implement artifact existence check
+
+	// if no ExpectedBuildArtifacts are provided, use the defaults for the given config
+	if len(config.ExpectedBuildArtifacts) == 0 {
+		for _, vm := range AvailableVirtualMachineConfigs() {
+			if vm.OS == config.OS && vm.UbuntuType == config.UbuntuType && vm.Arch == config.Arch {
+				config.ExpectedBuildArtifacts = vm.ExpectedBuildArtifacts
+				break
+			}
+		}
+	}
+
+	if len(config.ExpectedBuildArtifacts) == 0 {
+		//log.Fatalf("No build artifacts defined. Aborting build.")
+		//return
+	}
+
+	if len(config.ExpectedBuildArtifacts) > 0 {
+		artifacts_exist := true
+		for _, artifact := range config.ExpectedBuildArtifacts {
+			log.Printf("Checking artifact: %s", artifact)
+			if _, err := os.Stat(artifact); os.IsNotExist(err) {
+				artifacts_exist = false
+				log.Printf("Expected build artifact does not exist: %s", artifact)
+				log.Printf("Proceeding with build...")
+				break
+			}
+		}
+		if artifacts_exist {
+			log.Printf("Build artifacts already exist, skipping build: %v", config.ExpectedBuildArtifacts)
+			return
+		}
+	}
 
 	// Ensure all required dependencies are present
 	DependencyReconciliation(config)
@@ -466,15 +512,19 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 			<-vnc_snapshot_done
 		}
 		// Always run ffmpeg after vnc_snapshot is done
-		RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: 10 * time.Minute}, &vnc_recording_config)
+		timeout := 2 * time.Minute
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: 2 * time.Minute}, &vnc_recording_config)
 	}
 
 	select {
 	case err := <-done:
 		vnc_interrupt_retry_chan <- true
 		if err != nil {
+			RemoveBuildArtifactsForConfig(config)
 			ffmpeg_run()
-			log.Fatalf("Script failed: %v", err)
+			log.Printf("Script failed: %v", err)
 		}
 		ffmpeg_run()
 		log.Printf("Script finished successfully.")
@@ -482,13 +532,15 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 		// Kill the process if context is done (timeout or cancellation)
 		_ = cmd.Process.Kill()
 		vnc_interrupt_retry_chan <- true
+		RemoveBuildArtifactsForConfig(config)
 		ffmpeg_run()
-		log.Fatalf("Script terminated due to timeout or interruption: %v", ctx.Err())
+		log.Printf("Script terminated due to timeout or interruption: %v", ctx.Err())
 	case sig := <-sigs:
 		_ = cmd.Process.Kill()
 		vnc_interrupt_retry_chan <- true
+		RemoveBuildArtifactsForConfig(config)
 		ffmpeg_run()
-		log.Fatalf("Script terminated due to signal: %v", sig)
+		log.Printf("Script terminated due to signal: %v", sig)
 	}
 
 	// TODO: check for vnc recording files and video generation success
