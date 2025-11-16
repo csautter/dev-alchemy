@@ -498,10 +498,10 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 			<-vnc_snapshot_done
 		}
 		// Always run ffmpeg after vnc_snapshot is done
-		timeout := 2 * time.Minute
+		timeout := 10 * time.Minute
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
-		RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: 2 * time.Minute}, &vnc_recording_config)
+		RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: timeout}, &vnc_recording_config)
 	}
 
 	select {
