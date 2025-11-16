@@ -55,11 +55,16 @@ jobs:
         run: |
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
+      - name: Move .vnc.mp4 files to artifact directory
+        run: |
+          mkdir -p artifact
+          find ./cache -name '*.vnc.mp4' -exec cp {} artifact/ \;
+
       - name: Upload packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
         uses: actions/upload-artifact@v4
         with:
           name: packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4
-          path: ./cache/**/*.vnc.mp4
+          path: artifact/*.vnc.mp4
           retention-days: 1
 
       - name: Fail if Packer build failed
