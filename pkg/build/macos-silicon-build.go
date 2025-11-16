@@ -381,7 +381,7 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 		}
 		if artifacts_exist {
 			log.Printf("Build artifacts already exist, skipping build: %v", config.ExpectedBuildArtifacts)
-			return
+			return nil
 		}
 	}
 
