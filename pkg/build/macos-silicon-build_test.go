@@ -18,7 +18,10 @@ func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 		UbuntuType: "server",
 		VncPort:    5901,
 	}
-	RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+	if err != nil {
+		t.Fatalf("Failed to build QEMU Ubuntu Server Arm64 on macOS: %v", err)
+	}
 }
 
 func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
@@ -30,7 +33,10 @@ func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 		UbuntuType: "server",
 		VncPort:    5902,
 	}
-	RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+	if err != nil {
+		t.Fatalf("Failed to build QEMU Ubuntu Server Amd64 on macOS: %v", err)
+	}
 }
 
 func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
@@ -42,7 +48,10 @@ func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 		UbuntuType: "desktop",
 		VncPort:    5903,
 	}
-	RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+	if err != nil {
+		t.Fatalf("Failed to build QEMU Ubuntu Desktop Arm64 on macOS: %v", err)
+	}
 }
 
 func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
@@ -54,7 +63,10 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 		UbuntuType: "desktop",
 		VncPort:    5904,
 	}
-	RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
+	if err != nil {
+		t.Fatalf("Failed to build QEMU Ubuntu Desktop Amd64 on macOS: %v", err)
+	}
 }
 
 func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
@@ -65,7 +77,10 @@ func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 		Arch:    "arm64",
 		VncPort: 5911,
 	}
-	RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
+	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
+	if err != nil {
+		t.Fatalf("Failed to build QEMU Windows 11 Arm64 on macOS: %v", err)
+	}
 }
 
 func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
@@ -76,5 +91,8 @@ func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
 		Arch:    "amd64",
 		VncPort: 5912,
 	}
-	RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
+	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
+	if err != nil {
+		t.Fatalf("Failed to build QEMU Windows 11 Amd64 on macOS: %v", err)
+	}
 }

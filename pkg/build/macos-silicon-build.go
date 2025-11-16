@@ -338,19 +338,19 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 	return ctx
 }
 
-func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) {
+func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) error {
 	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh")
 	args := []string{"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
-	RunBuildScript(config, scriptPath, args)
+	return RunBuildScript(config, scriptPath, args)
 }
 
-func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) {
+func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) error {
 	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/windows/windows11-on-macos.sh")
 	args := []string{"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
-	RunBuildScript(config, scriptPath, args)
+	return RunBuildScript(config, scriptPath, args)
 }
 
-func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []string) {
+func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []string) error {
 	// Ensure that the build artifact does not already exist
 
 	// if no ExpectedBuildArtifacts are provided, use the defaults for the given config
@@ -401,7 +401,7 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 	config.VncPort = port
 	log.Printf("Using VNC port: %d", config.VncPort)
 	// Set a timeout for the script execution (adjust as needed)
-	timeout := 120 * time.Minute
+	timeout := 240 * time.Minute
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -511,6 +511,7 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 			RemoveBuildArtifactsForConfig(config)
 			ffmpeg_run()
 			log.Printf("Script failed: %v", err)
+			return err
 		}
 		ffmpeg_run()
 		log.Printf("Script finished successfully.")
@@ -521,13 +522,17 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 		RemoveBuildArtifactsForConfig(config)
 		ffmpeg_run()
 		log.Printf("Script terminated due to timeout or interruption: %v", ctx.Err())
+		return ctx.Err()
 	case sig := <-sigs:
 		_ = cmd.Process.Kill()
 		vnc_interrupt_retry_chan <- true
 		RemoveBuildArtifactsForConfig(config)
 		ffmpeg_run()
 		log.Printf("Script terminated due to signal: %v", sig)
+		return fmt.Errorf("script terminated due to signal: %v", sig)
 	}
+
+	return nil
 
 	// TODO: check for vnc recording files and video generation success
 }
