@@ -97,7 +97,7 @@
 			<AutoLogon>
 				<Username>Administrator</Username>
 				<Enabled>true</Enabled>
-				<LogonCount>1</LogonCount>
+				<LogonCount>2</LogonCount>
 				<Password>
 					<Value>P@ssw0rd!</Value>
 					<PlainText>true</PlainText>
@@ -247,9 +247,6 @@ $scripts = @(
 		<File path="C:\Windows\Setup\Scripts\FirstLogon.ps1">
 $scripts = @(
 	{
-		Set-ItemProperty -LiteralPath 'Registry::HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoLogonCount' -Type 'DWord' -Force -Value 0;
-	};
-	{
 		$guestToolsLog = "C:\UTMGuestToolsInstall.log"
 		try {
 			$drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -in 2, 5 }
@@ -292,6 +289,9 @@ $scripts = @(
         }
 
         Stop-Transcript;
+	};
+	{
+		Set-ItemProperty -LiteralPath 'Registry::HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'AutoLogonCount' -Type 'DWord' -Force -Value 0;
 	};
 );
 

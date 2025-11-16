@@ -1,5 +1,6 @@
 .idea/*
 vendor/*
+internal/*
 *.zip
 .DS_Store
 *packer_cache*
@@ -8,3 +9,5 @@ vendor/*
 .venv/
 __pycache__/
 .build_tmp/
+*cidata.iso
+cache/*

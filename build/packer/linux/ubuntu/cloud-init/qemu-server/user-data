@@ -1,0 +1,44 @@
+#cloud-config
+
+# removes interactive prompt during autoinstall
+runcmd:
+  - [eval, 'echo $(cat /proc/cmdline) "autoinstall" > /root/cmdline']
+  - [eval, "mount -n --bind -o ro /root/cmdline /proc/cmdline"]
+  - [eval, "snap restart subiquity.subiquity-server"]
+  - [eval, "snap restart subiquity.subiquity-service"]
+
+autoinstall:
+  version: 1
+  identity:
+    hostname: ubuntu-server
+    username: packer
+    password: "$6$K0/99yci1FVwggFy$/v7bEfr0MBcNq6teIkKkTjHMzJo9UE8q0IdrIORqycbldC.WgYtDhVdlEfqNgM7kN/zEuJX1KAr4kRAgHKn/.." # mkpasswd --method=SHA-512
+  ssh:
+    install-server: true
+  storage:
+    layout:
+      name: direct
+  network:
+    version: 2
+    ethernets:
+      default:
+        dhcp4: true
+        dhcp6: true
+        match:
+          name: en*
+  language: de
+  locale: de_DE.UTF-8
+  keyboard:
+    layout: de
+  packages:
+    - openssh-server
+    - linux-virtual
+    - linux-tools-virtual
+    - linux-tools-generic
+    - linux-cloud-tools-common
+    - net-tools
+    - qemu-guest-agent
+    - spice-vdagent
+  late-commands:
+    - curtin in-target -- apt-get update
+    - curtin in-target -- apt-get upgrade -y

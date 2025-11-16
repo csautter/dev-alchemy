@@ -20,8 +20,14 @@
   when: ansible_facts['os_family'] == 'Debian'
 
 - name: Load JetBrains Toolbox release JSON (Linux)
+  slurp:
+    src: /tmp/jetbrains_toolbox_release.json
+  register: toolbox_release_json_raw
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Parse JetBrains Toolbox release JSON (Linux)
   set_fact:
-    jetbrains_toolbox_release_json: "{{ lookup('file', '/tmp/jetbrains_toolbox_release.json') | from_json }}"
+    jetbrains_toolbox_release_json: "{{ toolbox_release_json_raw.content | b64decode | from_json }}"
   when: ansible_facts['os_family'] == 'Debian'
 
 - name: Parse release JSON and get download URL (Linux) - x86_64
@@ -38,7 +44,7 @@
   get_url:
     url: "{{ jetbrains_toolbox_url }}"
     dest: "/tmp/jetbrains-toolbox.tar.gz"
-    mode: '0755'
+    mode: "0755"
   when: ansible_facts['os_family'] == 'Debian'
 
 - name: Extract JetBrains Toolbox archive (Linux)

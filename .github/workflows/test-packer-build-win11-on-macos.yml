@@ -1,4 +1,4 @@
-name: Test Packer Build for Windows 11 on MacOS
+name: Test Packer Build for VMs on macOS Runners
 
 on:
   pull_request:
@@ -11,15 +11,29 @@ on:
 
 jobs:
   test-packer-build:
-    name: Packer build Windows 11 on ${{ matrix.os }} arch ${{ matrix.arch }}
-    runs-on: ${{ matrix.os }}
+    name: build ${{ matrix.go_test_name }} VM_OS ${{ matrix.vm_os }} runner_os ${{ matrix.runner_os }}
+    runs-on: ${{ matrix.runner_os }}
     strategy:
       matrix:
         include:
-          - os: macos-15
-            arch: amd64
-          - os: macos-15
-            arch: arm64
+          - runner_os: macos-15
+            vm_os: windows11
+            go_test_name: TestBuildQemuWindows11Arm64OnMacos
+          - runner_os: macos-15
+            vm_os: windows11
+            go_test_name: TestBuildQemuWindows11Amd64OnMacos
+          - runner_os: macos-15
+            vm_os: ubuntu
+            go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
+          - runner_os: macos-15
+            vm_os: ubuntu
+            go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
+          - runner_os: macos-15
+            vm_os: ubuntu
+            go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
+          - runner_os: macos-15
+            vm_os: ubuntu
+            go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,17 +47,24 @@ jobs:
         run: |
           bash scripts/macos/dev-alchemy-install-dependencies.sh
 
-      - name: Run Packer build
+      - name: Run build for OS=${{ matrix.vm_os }} TEST_NAME=${{ matrix.go_test_name }}
         id: packer_build
-        continue-on-error: true
+        continue-on-error: false
+        env:
+          PACKER_LOG: 1
         run: |
-          bash build/packer/windows/windows11-on-macos.sh --headless --arch ${{ matrix.arch }}
+          make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
-      - name: Upload packer-qemu-windows11-${{ matrix.arch }}.vnc.mp4 artifact (always)
+      - name: Move .vnc.mp4 files to artifact directory
+        run: |
+          mkdir -p artifact
+          find ./cache -name '*.vnc.mp4' -exec cp {} artifact/ \;
+
+      - name: Upload packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
         uses: actions/upload-artifact@v4
         with:
-          name: packer-qemu-windows11-${{ matrix.arch }}.vnc.mp4
-          path: ./build/packer/windows/.build_tmp/windows11-${{ matrix.arch }}-on-macos-output/packer-qemu-windows11-${{ matrix.arch }}.vnc.mp4
+          name: packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4
+          path: artifact/*.vnc.mp4
           retention-days: 1
 
       - name: Fail if Packer build failed

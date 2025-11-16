@@ -1,36 +1,23 @@
 #!/usr/bin/env bash
 
 set +e # we want to continue on errors
-set -x
-
-# Function to keep a command alive by restarting it if it exits
-# Usage: keep_alive <command>
-# This is necessary because vncsnapshot sometimes cannot connect to the VNC server in the first attempt
-# and exits with an error. We want to retry a few times before giving up.
-keep_alive() {
-	local cmd="$*"
-	local max_runs=2
-	local run_count=0
-	while [ $run_count -lt $max_runs ]; do
-		if [ $run_count -lt $max_runs ]; then
-			sleep 10
-		fi
-		echo "=====[ $(date) ]====="
-		echo "Starting command: $cmd"
-		$cmd &
-		cmd_exit_code=$?
-		local cmd_pid=$!
-		wait $cmd_pid
-		if [ $run_count -lt $max_runs ]; then
-			echo "Command '$cmd' exited with code $cmd_exit_code. Restarting after 10 seconds..."
-		fi
-		run_count=$((run_count + 1))
-	done
-}
 
 # Manual argument parsing for portability
 arch="arm64"
 headless="false"
+vnc_port="5901"
+verbose="false"
+
+script_dir=$(
+	# shellcheck disable=SC2164
+	cd "$(dirname "$0")"
+	pwd -P
+)
+project_root=$(
+	# shellcheck disable=SC2164
+	cd "${script_dir}/../../.."
+	pwd -P
+)
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -43,9 +30,32 @@ while [[ $# -gt 0 ]]; do
 			exit 1
 		fi
 		;;
+	--vnc-port)
+		if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+			vnc_port="$2"
+			shift 2
+		else
+			echo "Invalid value for --vnc-port: $2. It must be a number." >&2
+			exit 1
+		fi
+		;;
 	--headless)
 		headless="true"
 		shift
+		;;
+	--verbose)
+		set -x
+		verbose="true"
+		shift
+		;;
+	--project-root)
+		if [[ -n "$2" ]]; then
+			project_root="$2"
+			shift 2
+		else
+			echo "Invalid value for --project-root: $2." >&2
+			exit 1
+		fi
 		;;
 	*)
 		echo "Unknown option: $1" >&2
@@ -56,17 +66,6 @@ done
 
 echo "Using architecture: $arch"
 echo "Headless mode: $headless"
-
-script_dir=$(
-	# shellcheck disable=SC2164
-	cd "$(dirname "$0")"
-	pwd -P
-)
-project_root=$(
-	# shellcheck disable=SC2164
-	cd "${script_dir}/../../.."
-	pwd -P
-)
 
 cd "${project_root}" || exit 1
 
@@ -125,41 +124,7 @@ fi
 # creates the qcow2 disk image and overwrites it if it already exists
 bash scripts/macos/create-qemu-qcow2-disk.sh --arch $arch
 
-packer init "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
-
-# record video in headless mode
-if [ "$headless" = "true" ]; then
-	mkdir -p "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output"
-	# set VNC password to "packer"
-	packer_password="packer"
-	expect <<EOD
-spawn vncpasswd "$project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass"
-expect "Password:"
-send "$packer_password\n"
-expect "Verify:"
-send "$packer_password\n"
-expect eof
-EOD
-
-	# use different VNC ports for amd64 and arm64 builds to allow parallel execution
-	if [ "$arch" = "amd64" ]; then
-		# on amd64 we use the standard localhost:2 display
-		echo "Using VNC display localhost:2 for amd64 build"
-		echo "You can connect to it using a VNC viewer with password '$packer_password' on localhost:5902"
-		vnc_port=2
-	else
-		# on arm64 we use the localhost:1 display
-		echo "Using VNC display localhost:1 for arm64 build"
-		echo "You can connect to it using a VNC viewer with password '$packer_password' on localhost:5901"
-		vnc_port=1
-	fi
-	keep_alive "vncsnapshot -quiet -passwd $project_root/build/packer/windows/.build_tmp/packer-qemu.vnc.pass -compresslevel 9 -count 21600 -fps 1 localhost:$vnc_port $project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc.jpg" &
-	vncsnapshot_pid=$!
-	echo "Started vncsnapshot with PID $vncsnapshot_pid"
-
-	# shellcheck disable=SC2064
-	trap "echo 'Stopping vncsnapshot process '$vncsnapshot_pid'; kill -SIGINT $vncsnapshot_pid; wait $vncsnapshot_pid; echo 'vncsnapshot process $vncsnapshot_pid has finished'" EXIT
-fi
+packer init "build/packer/windows/windows11-on-macos.pkr.hcl"
 
 # determine the Windows 11 ISO path to use
 if [ "$arch" = "amd64" ]; then
@@ -169,19 +134,17 @@ elif [ "$arch" = "arm64" ]; then
 	win11_iso_path="${project_root}/vendor/windows/Win11_ARM64_Unattended.iso"
 fi
 
-PACKER_LOG=1 packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" "build/packer/windows/windows11-$arch-on-macos.pkr.hcl"
-packer_exit_code=$?
-
-if [ "$headless" = "true" ]; then
-	# shellcheck disable=SC2086
-	kill -SIGINT $vncsnapshot_pid
-	# shellcheck disable=SC2086
-	wait $vncsnapshot_pid
-	echo "vncsnapshot process $vncsnapshot_pid has finished"
-	# create mp4 video from jpg images
-	ffmpeg -framerate 1 -i "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu.vnc%05d.jpg" -c:v libx264 -pix_fmt yuv420p "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu-windows11-$arch.vnc.mp4"
-	echo "Created video $project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output/packer-qemu-windows11-$arch.vnc.mp4"
-	find "$project_root/build/packer/windows/.build_tmp/windows11-$arch-on-macos-output" -name 'packer-qemu.vnc*.jpg' -delete
+# remove packer output directory if it exists
+output_dir="$project_root/cache/windows11/qemu-out-windows11-${arch}"
+if [ -d "$output_dir" ]; then
+	echo "Removing existing Packer output directory..."
+	rm -rf "$output_dir"
 fi
+
+if [ "$verbose" = "true" ]; then
+	export PACKER_LOG=1
+fi
+packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/windows/windows11-on-macos.pkr.hcl"
+packer_exit_code=$?
 
 exit $packer_exit_code
