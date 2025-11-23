@@ -34,6 +34,9 @@ jobs:
           - runner_os: macos-15
             vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
+          - runner_os: windows-2025
+            vm_os: windows11
+            go_test_name: TestBuildHypervWindows11Amd64OnWindows
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,6 +47,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies
+        if: matrix.runner_os == 'macos-15'
         run: |
           bash scripts/macos/dev-alchemy-install-dependencies.sh
 
@@ -56,11 +60,13 @@ jobs:
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
       - name: Move .vnc.mp4 files to artifact directory
+        if: matrix.runner_os == 'macos-15'
         run: |
           mkdir -p artifact
           find ./cache -name '*.vnc.mp4' -exec cp {} artifact/ \;
 
       - name: Upload packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
+        if: matrix.runner_os == 'macos-15'
         uses: actions/upload-artifact@v4
         with:
           name: packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4
