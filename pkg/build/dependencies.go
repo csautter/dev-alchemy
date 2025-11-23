@@ -115,7 +115,7 @@ func getWindows11DownloadUrl(arch string, args []string) (string, error) {
 	if runtime.GOOS != "windows" {
 		venvPython = filepath.Join(workdir, ".venv", "bin", "python3")
 	}
-	_, err = RunCliCommand(workdir, venvPython, []string{"-c", "\"import playwright\""})
+	_, err = RunCliCommand(workdir, venvPython, []string{"-c", "import playwright"})
 	if err != nil {
 		RunCliCommand(workdir, pipPath, []string{"install", "playwright"})
 	}
