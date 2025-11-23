@@ -12,6 +12,19 @@ import (
 	"time"
 )
 
+type RunProcessConfig struct {
+	ExecutablePath     string
+	Args               []string
+	WorkingDir         string
+	Timeout            time.Duration
+	DelayBeforeStart   time.Duration
+	Context            context.Context
+	FailOnError        bool
+	Retries            int
+	RetryInterval      time.Duration
+	InterruptRetryChan chan bool
+}
+
 func RunExternalProcess(config RunProcessConfig) context.Context {
 	var ctx context.Context
 	var cancel context.CancelFunc
