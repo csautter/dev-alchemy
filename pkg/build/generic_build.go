@@ -47,32 +47,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Fatalf("Failed to get stdout: %v", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		log.Fatalf("Failed to get stderr: %v", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		log.Fatalf("Failed to start command: %v", err)
-	}
-
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			log.Printf("%s:%s:%s stdout:  %s", config.OS, config.UbuntuType, config.Arch, scanner.Text())
-		}
-	}()
-
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			log.Printf("%s:%s:%s stderr:  %s", config.OS, config.UbuntuType, config.Arch, scanner.Text())
-		}
-	}()
+	readAndPrintStdoutStderr(cmd, config)
 
 	// VNC integration:
 	// - Opening a VNC viewer (Screen Sharing) is useful for observing the VM build process in real time.
@@ -164,6 +139,35 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	return nil
 
 	// TODO: check for vnc recording files and video generation success
+}
+
+func readAndPrintStdoutStderr(cmd *exec.Cmd, config VirtualMachineConfig) {
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatalf("Failed to get stdout: %v", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		log.Fatalf("Failed to get stderr: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Failed to start command: %v", err)
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			log.Printf("%s:%s:%s stdout:  %s", config.OS, config.UbuntuType, config.Arch, scanner.Text())
+		}
+	}()
+
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			log.Printf("%s:%s:%s stderr:  %s", config.OS, config.UbuntuType, config.Arch, scanner.Text())
+		}
+	}()
 }
 
 func printCurrentWorkingDirectory() {
