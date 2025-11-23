@@ -3,6 +3,7 @@ package build
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -18,35 +19,12 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 	// Ensure that the build artifact does not already exist
 
 	// if no ExpectedBuildArtifacts are provided, use the defaults for the given config
-	if len(config.ExpectedBuildArtifacts) == 0 {
-		for _, vm := range AvailableVirtualMachineConfigs() {
-			if string(vm.HostOs) == string(config.HostOs) && vm.OS == config.OS && vm.UbuntuType == config.UbuntuType && vm.Arch == config.Arch {
-				config.ExpectedBuildArtifacts = vm.ExpectedBuildArtifacts
-				break
-			}
-		}
+	build_artifact_exists, err := checkIfBuildArtifactsExist(config)
+	if err != nil {
+		return err
 	}
-
-	if len(config.ExpectedBuildArtifacts) == 0 {
-		log.Printf("No build artifacts defined. Aborting build.")
-		//return errors.New("no build artifacts defined for the given configuration")
-	}
-
-	if len(config.ExpectedBuildArtifacts) > 0 {
-		artifacts_exist := true
-		for _, artifact := range config.ExpectedBuildArtifacts {
-			log.Printf("Checking artifact: %s", artifact)
-			if _, err := os.Stat(artifact); os.IsNotExist(err) {
-				artifacts_exist = false
-				log.Printf("Expected build artifact does not exist: %s", artifact)
-				log.Printf("Proceeding with build...")
-				break
-			}
-		}
-		if artifacts_exist {
-			log.Printf("Build artifacts already exist, skipping build: %v", config.ExpectedBuildArtifacts)
-			return nil
-		}
+	if build_artifact_exists {
+		return nil
 	}
 
 	// Ensure all required dependencies are present
@@ -215,6 +193,40 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 	return nil
 
 	// TODO: check for vnc recording files and video generation success
+}
+
+func checkIfBuildArtifactsExist(config VirtualMachineConfig) (bool, error) {
+	if len(config.ExpectedBuildArtifacts) == 0 {
+		for _, vm := range AvailableVirtualMachineConfigs() {
+			if string(vm.HostOs) == string(config.HostOs) && vm.OS == config.OS && vm.UbuntuType == config.UbuntuType && vm.Arch == config.Arch {
+				config.ExpectedBuildArtifacts = vm.ExpectedBuildArtifacts
+				break
+			}
+		}
+	}
+
+	if len(config.ExpectedBuildArtifacts) == 0 {
+		log.Printf("No build artifacts defined. Aborting build.")
+		return false, errors.New("no build artifacts defined for the given configuration")
+	}
+
+	if len(config.ExpectedBuildArtifacts) > 0 {
+		artifacts_exist := true
+		for _, artifact := range config.ExpectedBuildArtifacts {
+			log.Printf("Checking artifact: %s", artifact)
+			if _, err := os.Stat(artifact); os.IsNotExist(err) {
+				artifacts_exist = false
+				log.Printf("Expected build artifact does not exist: %s", artifact)
+				log.Printf("Proceeding with build...")
+				break
+			}
+		}
+		if artifacts_exist {
+			log.Printf("Build artifacts already exist, skipping build: %v", config.ExpectedBuildArtifacts)
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func RemoveBuildArtifacts(artifacts []string) {
