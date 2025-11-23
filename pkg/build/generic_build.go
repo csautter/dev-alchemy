@@ -10,12 +10,11 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 )
 
-func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []string) error {
+func RunBuildScript(config VirtualMachineConfig, executable string, args []string) error {
 	// Ensure that the build artifact does not already exist
 
 	// if no ExpectedBuildArtifacts are provided, use the defaults for the given config
@@ -44,22 +43,8 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 
 	printCurrentWorkingDirectory()
 
-	scriptExt := filepath.Ext(scriptPath)
-	var executable string
-	var cmd *exec.Cmd
-	switch scriptExt {
-	case ".ps1":
-		executable = "powershell"
-		args = append([]string{"-File"}, args...) // Prepend -File for PowerShell scripts
-		cmd = exec.CommandContext(ctx, executable, append([]string{scriptPath}, args...)...)
-	case ".sh":
-		executable = "bash"
-		cmd = exec.CommandContext(ctx, executable, append([]string{scriptPath}, args...)...)
-	default:
-		executable = scriptPath // Assume it's directly executable
-		cmd = exec.CommandContext(ctx, executable, args...)
-	}
-	fmt.Printf("Running Script %s with executable %s\n", scriptPath, executable)
+	fmt.Printf("Running Build with executable %s and args %v\n", executable, args)
+	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
 
 	// VNC integration:

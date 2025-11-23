@@ -191,12 +191,12 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 
 func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) error {
 	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh")
-	args := []string{"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
-	return RunBuildScript(config, scriptPath, args)
+	args := []string{scriptPath, "--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
+	return RunBuildScript(config, "bash", args)
 }
 
 func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) error {
 	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/windows/windows11-on-macos.sh")
-	args := []string{"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
-	return RunBuildScript(config, scriptPath, args)
+	args := []string{scriptPath, "--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--headless"}
+	return RunBuildScript(config, "bash", args)
 }
