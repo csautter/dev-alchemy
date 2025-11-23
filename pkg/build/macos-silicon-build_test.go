@@ -20,6 +20,7 @@ func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 		Arch:       "arm64",
 		UbuntuType: "server",
 		VncPort:    5901,
+		HostOs:     HostOsDarwin,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -35,6 +36,7 @@ func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 		Arch:       "amd64",
 		UbuntuType: "server",
 		VncPort:    5902,
+		HostOs:     HostOsDarwin,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -50,6 +52,7 @@ func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 		Arch:       "arm64",
 		UbuntuType: "desktop",
 		VncPort:    5903,
+		HostOs:     HostOsDarwin,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -65,6 +68,7 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 		Arch:       "amd64",
 		UbuntuType: "desktop",
 		VncPort:    5904,
+		HostOs:     HostOsDarwin,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -79,6 +83,7 @@ func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 		OS:      "windows11",
 		Arch:    "arm64",
 		VncPort: 5911,
+		HostOs:  HostOsDarwin,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -93,6 +98,7 @@ func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
 		OS:      "windows11",
 		Arch:    "amd64",
 		VncPort: 5912,
+		HostOs:  HostOsDarwin,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
