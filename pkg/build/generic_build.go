@@ -50,6 +50,18 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 
 	readAndPrintStdoutStderr(cmd, config)
 
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Failed to start command: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		log.Printf("Waiting for command to finish...")
+		err := cmd.Wait()
+		log.Printf("Command finished.")
+		done <- err
+	}()
+
 	vnc_recording_config := VncRecordingConfig{Password: "packer"}
 	openVncViewerOnMacosDarwin(ctx, config, vnc_recording_config)
 
@@ -57,12 +69,12 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	vnc_snapshot_done := make(chan struct{})
 	vnc_interrupt_retry_chan := make(chan bool)
 
-	done := make(chan error, 1)
 	startVncScreenCaptureOnMacosDarwin(ctx, config, timeout, vnc_interrupt_retry_chan, vnc_recording_config, vnc_snapshot_done, cmd, done)
 
 	select {
 	case err := <-done:
-		vnc_interrupt_retry_chan <- true
+		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
+
 		if err != nil {
 			RemoveBuildArtifactsForConfig(config)
 			runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
@@ -74,14 +86,18 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
 		_ = cmd.Process.Kill()
-		vnc_interrupt_retry_chan <- true
+
+		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
+
 		RemoveBuildArtifactsForConfig(config)
 		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script terminated due to timeout or interruption: %v", ctx.Err())
 		return ctx.Err()
 	case sig := <-sigs:
 		_ = cmd.Process.Kill()
-		vnc_interrupt_retry_chan <- true
+
+		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
+
 		RemoveBuildArtifactsForConfig(config)
 		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script terminated due to signal: %v", sig)
@@ -89,6 +105,15 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	}
 
 	return nil
+}
+
+func stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan chan bool) {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	log.Printf("stopping VNC snapshot...")
+	vnc_interrupt_retry_chan <- true
+	log.Printf("VNC snapshot stopped.")
 }
 
 // FFmpeg integration:
@@ -164,10 +189,6 @@ func readAndPrintStdoutStderr(cmd *exec.Cmd, config VirtualMachineConfig) {
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		log.Fatalf("Failed to get stderr: %v", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		log.Fatalf("Failed to start command: %v", err)
 	}
 
 	go func() {

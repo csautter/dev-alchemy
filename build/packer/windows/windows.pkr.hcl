@@ -56,17 +56,6 @@ source "hyperv-iso" "win11" {
 build {
   sources = ["source.hyperv-iso.win11"]
 
-  # This provisioner creates C:\packer.txt to verify that the VM was successfully provisioned by Packer.
-  provisioner "powershell" {
-    inline = [
-      "Write-Output 'Running inside Windows VM...'",
-      "New-Item -Path C:\\packer.txt -ItemType File -Force",
-      "Write-Output 'Created C:\\packer.txt file.'",
-      # delete the file to keep the image clean
-      "Remove-Item -Path C:\\packer.txt -Force"
-    ]
-  }
-
   post-processor "vagrant" {
     output              = "${path.root}/../../../cache/windows11/hyperv-windows11-amd64.box"
     keep_input_artifact = false
