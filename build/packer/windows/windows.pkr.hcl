@@ -18,8 +18,8 @@ variable "iso_url" {
 }
 
 source "hyperv-iso" "win11" {
-  vm_name            = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory   = "${path.root}/../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  vm_name          = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  output_directory = "${path.root}/../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
 
   iso_url      = var.iso_url
   iso_checksum = "none"
@@ -36,8 +36,8 @@ source "hyperv-iso" "win11" {
   winrm_password = "P@ssw0rd!"
 
   enable_secure_boot = true
-  generation        = 2
-  enable_tpm        = true
+  generation         = 2
+  enable_tpm         = true
 
   boot_wait = "2s"
   boot_command = [
@@ -68,9 +68,9 @@ build {
   }
 
   post-processor "vagrant" {
-    output = "${path.root}/../../../vendor/windows/win11-hyperv.box"
+    output              = "${path.root}/../../../cache/windows11/hyperv-windows11-amd64.box"
     keep_input_artifact = false
-    provider_override = "hyperv"
-    compression_level = 1
+    provider_override   = "hyperv"
+    compression_level   = 1
   }
 }

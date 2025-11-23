@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+type HostOsType string
+
+const (
+	HostOsLinux   HostOsType = "debian"
+	HostOsWindows HostOsType = "windows"
+	HostOsDarwin  HostOsType = "darwin"
+)
+
 type VirtualMachineConfig struct {
 	OS                     string
 	Arch                   string
@@ -12,6 +20,7 @@ type VirtualMachineConfig struct {
 	VncPort                int
 	Slug                   string
 	ExpectedBuildArtifacts []string
+	HostOs                 HostOsType
 }
 
 func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
@@ -24,6 +33,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-server-packer-arm64.qcow2"),
 			},
+			HostOs: HostOsDarwin,
 		},
 		{
 			OS:         "ubuntu",
@@ -33,6 +43,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-server-packer-amd64.qcow2"),
 			},
+			HostOs: HostOsDarwin,
 		},
 		{
 			OS:         "ubuntu",
@@ -42,6 +53,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-desktop-packer-arm64.qcow2"),
 			},
+			HostOs: HostOsDarwin,
 		},
 		{
 			OS:         "ubuntu",
@@ -51,6 +63,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-desktop-packer-amd64.qcow2"),
 			},
+			HostOs: HostOsDarwin,
 		},
 		{
 			OS:      "windows11",
@@ -59,6 +72,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "windows11/qemu-windows11-arm64.qcow2"),
 			},
+			HostOs: HostOsDarwin,
 		},
 		{
 			OS:      "windows11",
@@ -67,6 +81,18 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "windows11/qemu-windows11-amd64.qcow2"),
 			},
+			HostOs: HostOsDarwin,
+		},
+		// Host OS Windows builds
+		{
+			OS:      "windows11",
+			Arch:    "amd64",
+			VncPort: 5912,
+
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "windows11/hyperv-windows11-amd64.box"),
+			},
+			HostOs: HostOsWindows,
 		},
 	}
 }

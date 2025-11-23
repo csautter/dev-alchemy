@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/hashicorp/go-getter"
@@ -62,7 +63,7 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	for _, dep := range getWebFileDependencies() {
 		needsDownload := false
 		for _, relatedConfig := range dep.RelatedVmConfigs {
-			if relatedConfig.OS == vmconfig.OS && relatedConfig.Arch == vmconfig.Arch && relatedConfig.UbuntuType == vmconfig.UbuntuType {
+			if string(relatedConfig.HostOs) == string(vmconfig.HostOs) && relatedConfig.OS == vmconfig.OS && relatedConfig.Arch == vmconfig.Arch && relatedConfig.UbuntuType == vmconfig.UbuntuType {
 				if !checkIfWebFileDependencyExists(dep) {
 					needsDownload = true
 				}
@@ -86,23 +87,54 @@ func getWindows11DownloadUrl(arch string, args []string) (string, error) {
 		url_file = "win11_arm64_iso_url.txt"
 	}
 
-	args = append(args, "--arch", arch, "--project-root", GetDirectoriesInstance().ProjectDir)
-
-	RunProcessConfig := RunProcessConfig{
-		ExecutablePath: "bash",
-		WorkingDir:     filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos"),
-		Args:           append([]string{filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos/playwright_win11_iso.sh")}, args...),
-		Timeout:        20 * time.Minute,
+	// if running on windows
+	var python_executable string
+	if runtime.GOOS == "windows" {
+		python_executable = "python"
+	} else {
+		python_executable = "python3"
 	}
 
-	ctx := RunExternalProcess(RunProcessConfig)
-	ctxDone := ctx.Done()
-	select {
-	case <-ctxDone:
-		// Process completed
-	case <-time.After(RunProcessConfig.Timeout):
-		return "", fmt.Errorf("timeout reached while getting Windows 11 download URL")
+	workdir := filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos")
+	_, err := os.Stat(filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos/.venv"))
+	if err != nil && os.IsNotExist(err) {
+		log.Printf("Creating Python virtual environment for Windows 11 download script")
+		RunCliCommand(workdir, python_executable, []string{"-m", "venv", ".venv"})
+	} else if err == nil {
+		log.Printf("Python virtual environment for Windows 11 download script already exists")
+	} else {
+		return "", err
 	}
+
+	log.Printf("Installing required Python packages for Windows 11 download script")
+	pipPath := filepath.Join(workdir, ".venv", "Scripts", "pip.exe")
+	if runtime.GOOS != "windows" {
+		pipPath = filepath.Join(workdir, ".venv", "bin", "pip")
+	}
+	venvPython := filepath.Join(workdir, ".venv", "Scripts", "python.exe")
+	if runtime.GOOS != "windows" {
+		venvPython = filepath.Join(workdir, ".venv", "bin", "python3")
+	}
+	_, err = RunCliCommand(workdir, venvPython, []string{"-c", "\"import playwright\""})
+	if err != nil {
+		RunCliCommand(workdir, pipPath, []string{"install", "playwright"})
+	}
+
+	log.Printf("Installing Playwright browsers for Windows 11 download script")
+	RunCliCommand(workdir, venvPython, []string{"-m", "playwright", "install", "chromium"})
+
+	args = []string{"playwright_win11_iso.py"}
+	// if arch is arm64, add --arm flag
+	if arch == "arm64" {
+		args = append(args, "--arm")
+	}
+	config := RunProcessConfig{
+		WorkingDir:     workdir,
+		ExecutablePath: venvPython,
+		Args:           args,
+		Timeout:        10 * time.Minute,
+	}
+	RunExternalProcess(config)
 
 	content, err := os.ReadFile(filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/"+url_file))
 	if err != nil {
@@ -121,12 +153,14 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://getutm.app/downloads/utm-guest-tools-latest.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:   "windows11",
-					Arch: "amd64",
+					OS:     "windows11",
+					Arch:   "amd64",
+					HostOs: HostOsDarwin,
 				},
 				{
-					OS:   "windows11",
-					Arch: "arm64",
+					OS:     "windows11",
+					Arch:   "arm64",
+					HostOs: HostOsDarwin,
 				},
 			},
 		},
@@ -136,8 +170,14 @@ func getWebFileDependencies() []WebFileDependency {
 			BeforeHook: func() (string, error) { return getWindows11DownloadUrl("amd64", nil) },
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:   "windows11",
-					Arch: "amd64",
+					OS:     "windows11",
+					Arch:   "amd64",
+					HostOs: HostOsDarwin,
+				},
+				{
+					OS:     "windows11",
+					Arch:   "amd64",
+					HostOs: HostOsWindows,
 				},
 			},
 		},
@@ -147,8 +187,9 @@ func getWebFileDependencies() []WebFileDependency {
 			BeforeHook: func() (string, error) { return getWindows11DownloadUrl("arm64", nil) },
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:   "windows11",
-					Arch: "arm64",
+					OS:     "windows11",
+					Arch:   "arm64",
+					HostOs: HostOsDarwin,
 				},
 			},
 		},
@@ -158,8 +199,9 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    fmt.Sprintf("http://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_%s_all.deb", qemu_efi_version),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:   "windows11",
-					Arch: "arm64",
+					OS:     "windows11",
+					Arch:   "arm64",
+					HostOs: HostOsDarwin,
 				},
 			},
 		},
@@ -169,8 +211,9 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.266-1/virtio-win-0.1.266.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:   "windows11",
-					Arch: "arm64",
+					OS:     "windows11",
+					Arch:   "arm64",
+					HostOs: HostOsDarwin,
 				},
 			},
 		},
@@ -183,6 +226,7 @@ func getWebFileDependencies() []WebFileDependency {
 					OS:         "ubuntu",
 					UbuntuType: "server",
 					Arch:       "arm64",
+					HostOs:     HostOsDarwin,
 				},
 			},
 		},
@@ -195,6 +239,7 @@ func getWebFileDependencies() []WebFileDependency {
 					OS:         "ubuntu",
 					UbuntuType: "server",
 					Arch:       "amd64",
+					HostOs:     HostOsDarwin,
 				},
 			},
 		},
@@ -207,6 +252,7 @@ func getWebFileDependencies() []WebFileDependency {
 					OS:         "ubuntu",
 					UbuntuType: "desktop",
 					Arch:       "arm64",
+					HostOs:     HostOsDarwin,
 				},
 			},
 		},
@@ -219,6 +265,7 @@ func getWebFileDependencies() []WebFileDependency {
 					OS:         "ubuntu",
 					UbuntuType: "desktop",
 					Arch:       "amd64",
+					HostOs:     HostOsDarwin,
 				},
 			},
 		},
@@ -231,6 +278,7 @@ func getWebFileDependencies() []WebFileDependency {
 					OS:         "ubuntu",
 					UbuntuType: "server",
 					Arch:       "arm64",
+					HostOs:     HostOsDarwin,
 				},
 			},
 		},
