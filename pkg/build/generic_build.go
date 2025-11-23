@@ -60,55 +60,55 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	done := make(chan error, 1)
 	startVncScreenCaptureOnMacosDarwin(ctx, config, timeout, vnc_interrupt_retry_chan, vnc_recording_config, vnc_snapshot_done, cmd, done)
 
-	// FFmpeg integration:
-	// - FFmpeg is useful for generating a video from the VNC recording, allowing playback and sharing of the build process.
-	var ffmpeg_run = func() {
-		// Wait for vnc_snapshot to finish
-		_, ok := <-vnc_snapshot_done
-		if !ok {
-			// Channel is closed, proceed
-		} else {
-			// Channel not closed, wait for it
-			<-vnc_snapshot_done
-		}
-		// Always run ffmpeg after vnc_snapshot is done
-		timeout := 10 * time.Minute
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: timeout}, &vnc_recording_config)
-	}
-
 	select {
 	case err := <-done:
 		vnc_interrupt_retry_chan <- true
 		if err != nil {
 			RemoveBuildArtifactsForConfig(config)
-			ffmpeg_run()
+			runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 			log.Printf("Script failed: %v", err)
 			return err
 		}
-		ffmpeg_run()
+		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script finished successfully.")
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
 		_ = cmd.Process.Kill()
 		vnc_interrupt_retry_chan <- true
 		RemoveBuildArtifactsForConfig(config)
-		ffmpeg_run()
+		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script terminated due to timeout or interruption: %v", ctx.Err())
 		return ctx.Err()
 	case sig := <-sigs:
 		_ = cmd.Process.Kill()
 		vnc_interrupt_retry_chan <- true
 		RemoveBuildArtifactsForConfig(config)
-		ffmpeg_run()
+		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script terminated due to signal: %v", sig)
 		return fmt.Errorf("script terminated due to signal: %v", sig)
 	}
 
 	return nil
+}
 
-	// TODO: check for vnc recording files and video generation success
+// FFmpeg integration:
+// - FFmpeg is useful for generating a video from the VNC recording, allowing playback and sharing of the build process.
+func runFfmpegOnMacosDarwin(vnc_snapshot_done chan struct{}, config VirtualMachineConfig, vnc_recording_config *VncRecordingConfig) {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	_, ok := <-vnc_snapshot_done
+	if !ok {
+		// Channel is closed, proceed
+	} else {
+		// Channel not closed, wait for it
+		<-vnc_snapshot_done
+	}
+	// Always run ffmpeg after vnc_snapshot is done
+	timeout := 10 * time.Minute
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: timeout}, vnc_recording_config)
 }
 
 func startVncScreenCaptureOnMacosDarwin(ctx context.Context, config VirtualMachineConfig, timeout time.Duration, vnc_interrupt_retry_chan chan bool, vnc_recording_config VncRecordingConfig, vnc_snapshot_done chan struct{}, cmd *exec.Cmd, done chan error) {
