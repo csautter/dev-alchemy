@@ -29,19 +29,10 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 
 	// Ensure all required dependencies are present
 	DependencyReconciliation(config)
+
 	// Check if VNC port is free, if not, increment until a free port is found
-	port := config.VncPort
-	for {
-		addr := fmt.Sprintf("127.0.0.1:%d", port)
-		ln, err := net.Listen("tcp", addr)
-		if err == nil {
-			ln.Close()
-			break
-		}
-		port++
-	}
-	config.VncPort = port
-	log.Printf("Using VNC port: %d", config.VncPort)
+	_ = getFreeVncPort(&config)
+
 	// Set a timeout for the script execution (adjust as needed)
 	timeout := 240 * time.Minute
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -51,12 +42,7 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 	defer signal.Stop(sigs)
 
-	// print current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("Failed to get current working directory: %v", err)
-	}
-	log.Printf("Current working directory: %s", cwd)
+	printCurrentWorkingDirectory()
 
 	scriptExt := filepath.Ext(scriptPath)
 	var executable string
@@ -193,6 +179,30 @@ func RunBuildScript(config VirtualMachineConfig, scriptPath string, args []strin
 	return nil
 
 	// TODO: check for vnc recording files and video generation success
+}
+
+func printCurrentWorkingDirectory() {
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current working directory: %v", err)
+	}
+	log.Printf("Current working directory: %s", cwd)
+}
+
+func getFreeVncPort(config *VirtualMachineConfig) int {
+	port := config.VncPort
+	for {
+		addr := fmt.Sprintf("127.0.0.1:%d", port)
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			ln.Close()
+			break
+		}
+		port++
+	}
+	config.VncPort = port
+	log.Printf("Using VNC port: %d", config.VncPort)
+	return port
 }
 
 func checkIfBuildArtifactsExist(config VirtualMachineConfig) (bool, error) {
