@@ -46,10 +46,19 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install dependencies
+      - name: Install dependencies macos
         if: matrix.runner_os == 'macos-15'
         run: |
           bash scripts/macos/dev-alchemy-install-dependencies.sh
+
+      - name: Install dependencies windows
+        if: matrix.runner_os == 'windows-2025'
+        shell: powershell
+        run: |
+          powershell -File scripts/windows/install_oscdimg.ps1
+          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          echo "$oscdimgPath" # Optional: debug output
+          echo "$($oscdimgPath | Split-Path)" | Out-File -Append $env:GITHUB_PATH
 
       - name: Run build for OS=${{ matrix.vm_os }} TEST_NAME=${{ matrix.go_test_name }}
         id: packer_build
