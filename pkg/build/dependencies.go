@@ -57,7 +57,9 @@ type WebFileDependency struct {
 	BeforeHook func() (string, error)
 }
 
-const qemu_efi_version = "2025.05-1"
+// TODO: Automate version updates by checking Debian package repository
+// https://packages.debian.org/trixie/qemu-efi-aarch64
+const qemu_efi_version = "2025.02-8"
 
 func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	for _, dep := range getWebFileDependencies() {
