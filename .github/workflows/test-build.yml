@@ -34,9 +34,11 @@ jobs:
           - runner_os: macos-15
             vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
-          - runner_os: windows-2025
-            vm_os: windows11
-            go_test_name: TestBuildHypervWindows11Amd64OnWindows
+          # Disabled Windows build with Hyper-V, because github actions runners do not support nested virtualization.
+          # TODO: Create a self-hosted Windows runner with nested virtualization enabled to run these tests.
+          #- runner_os: windows-2025
+          #  vm_os: windows11
+          #  go_test_name: TestBuildHypervWindows11Amd64OnWindows
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
