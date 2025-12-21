@@ -9,10 +9,11 @@ func TestBuildHypervWindows11Amd64OnWindows(t *testing.T) {
 	t.Parallel()
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:      "windows11",
-		Arch:    "amd64",
-		VncPort: 5912,
-		HostOs:  HostOsWindows,
+		OS:                   "windows11",
+		Arch:                 "amd64",
+		VncPort:              5912,
+		HostOs:               HostOsWindows,
+		VirtualizationEngine: VirtualizationEngineHyperv,
 	}
 	err := RunHypervWindowsBuildOnWindows(VirtualMachineConfig)
 	if err != nil {
@@ -24,10 +25,11 @@ func TestBuildVirtualBoxWindows11Amd64OnWindows(t *testing.T) {
 	t.Parallel()
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:      "windows11",
-		Arch:    "amd64",
-		VncPort: 5913,
-		HostOs:  HostOsWindows,
+		OS:                   "windows11",
+		Arch:                 "amd64",
+		VncPort:              5913,
+		HostOs:               HostOsWindows,
+		VirtualizationEngine: VirtualizationEngineVirtualBox,
 	}
 	err := RunVirtualBoxWindowsBuildOnWindows(VirtualMachineConfig)
 	if err != nil {

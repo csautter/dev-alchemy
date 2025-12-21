@@ -233,7 +233,7 @@ func getFreeVncPort(config *VirtualMachineConfig) int {
 func checkIfBuildArtifactsExist(config VirtualMachineConfig) (bool, error) {
 	if len(config.ExpectedBuildArtifacts) == 0 {
 		for _, vm := range AvailableVirtualMachineConfigs() {
-			if string(vm.HostOs) == string(config.HostOs) && vm.OS == config.OS && vm.UbuntuType == config.UbuntuType && vm.Arch == config.Arch {
+			if string(vm.HostOs) == string(config.HostOs) && vm.OS == config.OS && vm.UbuntuType == config.UbuntuType && vm.Arch == config.Arch && string(vm.VirtualizationEngine) == string(config.VirtualizationEngine) {
 				config.ExpectedBuildArtifacts = vm.ExpectedBuildArtifacts
 				break
 			}

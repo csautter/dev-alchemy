@@ -65,7 +65,7 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	for _, dep := range getWebFileDependencies() {
 		needsDownload := false
 		for _, relatedConfig := range dep.RelatedVmConfigs {
-			if string(relatedConfig.HostOs) == string(vmconfig.HostOs) && relatedConfig.OS == vmconfig.OS && relatedConfig.Arch == vmconfig.Arch && relatedConfig.UbuntuType == vmconfig.UbuntuType {
+			if string(relatedConfig.HostOs) == string(vmconfig.HostOs) && relatedConfig.OS == vmconfig.OS && relatedConfig.Arch == vmconfig.Arch && relatedConfig.UbuntuType == vmconfig.UbuntuType && string(relatedConfig.VirtualizationEngine) == string(vmconfig.VirtualizationEngine) {
 				if !checkIfWebFileDependencyExists(dep) {
 					needsDownload = true
 				}
@@ -155,14 +155,16 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://getutm.app/downloads/utm-guest-tools-latest.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:     "windows11",
-					Arch:   "amd64",
-					HostOs: HostOsDarwin,
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 				{
-					OS:     "windows11",
-					Arch:   "arm64",
-					HostOs: HostOsDarwin,
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -172,14 +174,16 @@ func getWebFileDependencies() []WebFileDependency {
 			BeforeHook: func() (string, error) { return getWindows11DownloadUrl("amd64", nil) },
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:     "windows11",
-					Arch:   "amd64",
-					HostOs: HostOsDarwin,
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 				{
-					OS:     "windows11",
-					Arch:   "amd64",
-					HostOs: HostOsWindows,
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsWindows,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -189,9 +193,10 @@ func getWebFileDependencies() []WebFileDependency {
 			BeforeHook: func() (string, error) { return getWindows11DownloadUrl("arm64", nil) },
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:     "windows11",
-					Arch:   "arm64",
-					HostOs: HostOsDarwin,
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -201,9 +206,10 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    fmt.Sprintf("http://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_%s_all.deb", qemu_efi_version),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:     "windows11",
-					Arch:   "arm64",
-					HostOs: HostOsDarwin,
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -213,9 +219,10 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.266-1/virtio-win-0.1.266.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:     "windows11",
-					Arch:   "arm64",
-					HostOs: HostOsDarwin,
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -225,10 +232,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "server",
-					Arch:       "arm64",
-					HostOs:     HostOsDarwin,
+					OS:                   "ubuntu",
+					UbuntuType:           "server",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -238,10 +246,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "server",
-					Arch:       "amd64",
-					HostOs:     HostOsDarwin,
+					OS:                   "ubuntu",
+					UbuntuType:           "server",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -251,10 +260,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "desktop",
-					Arch:       "arm64",
-					HostOs:     HostOsDarwin,
+					OS:                   "ubuntu",
+					UbuntuType:           "desktop",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -264,10 +274,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "desktop",
-					Arch:       "amd64",
-					HostOs:     HostOsDarwin,
+					OS:                   "ubuntu",
+					UbuntuType:           "desktop",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -277,10 +288,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    fmt.Sprintf("http://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_%s_all.deb", qemu_efi_version),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "server",
-					Arch:       "arm64",
-					HostOs:     HostOsDarwin,
+					OS:                   "ubuntu",
+					UbuntuType:           "server",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
