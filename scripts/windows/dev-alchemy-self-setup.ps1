@@ -14,6 +14,14 @@ if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
     Write-Output "Chocolatey is already installed."
 }
 
+# Install virtualbox
+if (-not (Get-Command VirtualBox -ErrorAction SilentlyContinue)) {
+    Write-Output "VirtualBox not found. Installing VirtualBox..."
+    choco install virtualbox -y
+} else {
+    Write-Output "VirtualBox is already installed."
+}
+
 # Install Cygwin
 if (-not (Get-Command cygwin -ErrorAction SilentlyContinue)) {
     Write-Output "Cygwin not found. Installing Cygwin..."

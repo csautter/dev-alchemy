@@ -19,3 +19,18 @@ func TestBuildHypervWindows11Amd64OnWindows(t *testing.T) {
 		t.Fatalf("Failed to build Hyper-V Windows 11 Amd64 on Windows: %v", err)
 	}
 }
+
+func TestBuildVirtualBoxWindows11Amd64OnWindows(t *testing.T) {
+	t.Parallel()
+
+	VirtualMachineConfig := VirtualMachineConfig{
+		OS:      "windows11",
+		Arch:    "amd64",
+		VncPort: 5913,
+		HostOs:  HostOsWindows,
+	}
+	err := RunVirtualBoxWindowsBuildOnWindows(VirtualMachineConfig)
+	if err != nil {
+		t.Fatalf("Failed to build VirtualBox Windows 11 Amd64 on Windows: %v", err)
+	}
+}
