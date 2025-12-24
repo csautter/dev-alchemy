@@ -18,6 +18,9 @@ jobs:
       resource-group: ${{ steps.vars.outputs.resource-group }}
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Generate names
         id: vars
         run: |
