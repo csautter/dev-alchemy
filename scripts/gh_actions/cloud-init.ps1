@@ -14,7 +14,7 @@ if ((Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V).State -n
   exit
 }
 
-# Install Hyper-V
+# Install Github Actions Runner
 Set-Location C:\actions-runner
 .\config.cmd `
   --url $env:REPO_URL `
