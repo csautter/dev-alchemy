@@ -25,8 +25,10 @@ jobs:
           echo "resource-group=github-win-${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
 
       - name: Azure login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
+          # create a service principal and store the JSON output in the AZURE_CREDENTIALS secret
+          # az ad sp create-for-rbac --name "Github Actions Runner" --role contributor --scopes /subscriptions/{subscription-id} --sdk-auth
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Create resource group
@@ -44,6 +46,8 @@ jobs:
           echo "$env:TOKEN=$TOKEN" > gh-runner.txt.tmp
           echo "$env:REPO_URL=https://github.com/${{ github.repository }}"  >> gh-runner.txt.tmp
           cat gh-runner.txt.tmp scripts/gh_actions/cloud-init.ps1 > scripts/gh_actions/cloud-init-combined.ps1
+          echo "Content of combined cloud-init script:"
+          cat scripts/gh_actions/cloud-init-combined.ps1
 
           # create vm with cloud-init script to install gh runner and register it
 
@@ -142,7 +146,7 @@ jobs:
 
     steps:
       - name: Azure login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
