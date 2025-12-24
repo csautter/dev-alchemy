@@ -8,13 +8,11 @@ packer {
 }
 
 variable "tenant_id" {
-  type     = string
-  required = true
+  type = string
 }
 
 variable "subscription_id" {
-  type     = string
-  required = true
+  type = string
 }
 
 variable "vm_size" {
@@ -25,6 +23,16 @@ variable "vm_size" {
 variable "github_actions_version" {
   type    = string
   default = "2.330.0"
+}
+
+variable "image_resource_group" {
+  type    = string
+  default = "gh-actions-images"
+}
+
+variable "location" {
+  type    = string
+  default = "East US"
 }
 
 locals {
@@ -54,14 +62,14 @@ source "azure-arm" "windows-azure-gh-runner" {
     task = "Image deployment"
   }
   temp_resource_group_name          = "packerResourceGroup_temp"
-  location                          = "East US"
+  location                          = var.location
   use_azure_cli_auth                = true
   communicator                      = "winrm"
   image_offer                       = "WindowsServer"
   image_publisher                   = "MicrosoftWindowsServer"
   image_sku                         = "2022-datacenter-g2"
   managed_image_name                = "Win2022GHAzureRunnerImage"
-  managed_image_resource_group_name = "packerResourceGroup"
+  managed_image_resource_group_name = var.image_resource_group
   os_type                           = "Windows"
   tenant_id                         = var.tenant_id
   subscription_id                   = var.subscription_id
