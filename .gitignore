@@ -11,3 +11,6 @@ __pycache__/
 .build_tmp/
 *cidata.iso
 cache/*
+*.tmp
+cloud-init-combined.ps1
+*secrets.pkrvars.hcl

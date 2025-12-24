@@ -1,6 +1,7 @@
-name: Test Packer Build for VMs on macOS Runners
+name: Test Packer Build for VMs
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "build/packer/windows/*"
@@ -10,35 +11,79 @@ on:
       - ".github/workflows/test-packer-build-win11-on-macos.yml"
 
 jobs:
+  provision-windows-runner:
+    runs-on: ubuntu-latest
+    outputs:
+      runner-label: ${{ steps.vars.outputs.runner-label }}
+      resource-group: ${{ steps.vars.outputs.resource-group }}
+
+    steps:
+      - name: Generate names
+        id: vars
+        run: |
+          echo "runner-label=azure-win-${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+          echo "resource-group=github-win-${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create resource group
+        run: |
+          az group create \
+            --name ${{ steps.vars.outputs.resource-group }} \
+            --location eastus
+
+      - name: Create Windows VM
+        run: |
+          # get gh runner registration token
+          TOKEN=$(curl -sX POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/runners/registration-token | jq -r .token)
+          echo "$env:TOKEN=$TOKEN" > gh-runner.txt.tmp
+          echo "$env:REPO_URL=https://github.com/${{ github.repository }}"  >> gh-runner.txt.tmp
+          cat gh-runner.txt.tmp scripts/gh_actions/cloud-init.ps1 > scripts/gh_actions/cloud-init-combined.ps1
+
+          # create vm with cloud-init script to install gh runner and register it
+
+          $machine_type="Standard_D2s_v3" # needs to support nested virtualization
+          az vm create \
+            --resource-group ${{ steps.vars.outputs.resource-group }} \
+            --name win-runner \
+            --image ${{ secrets.AZURE_VM_IMAGE }} \
+            --size $machine_type \
+            --admin-username azureuser \
+            --admin-password "${{ secrets.AZURE_VM_PASSWORD }}" \
+            --custom-data scripts/gh_actions/cloud-init-combined.ps1
+
   test-packer-build:
     name: build ${{ matrix.go_test_name }} VM_OS ${{ matrix.vm_os }} runner_os ${{ matrix.runner_os }}
-    runs-on: ${{ matrix.runner_os }}
+    runs-on: ${{ matrix.runner_os == 'macos-15' && 'macos-15' || matrix.runner_os == 'windows-2025' && 'self-hosted,windows,azure,nested' }}
     strategy:
       matrix:
         include:
-          - runner_os: macos-15
+          # - runner_os: macos-15
+          #   vm_os: windows11
+          #   go_test_name: TestBuildQemuWindows11Arm64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: windows11
+          #   go_test_name: TestBuildQemuWindows11Amd64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
+          - runner_os: windows-2025
             vm_os: windows11
-            go_test_name: TestBuildQemuWindows11Arm64OnMacos
-          - runner_os: macos-15
-            vm_os: windows11
-            go_test_name: TestBuildQemuWindows11Amd64OnMacos
-          - runner_os: macos-15
-            vm_os: ubuntu
-            go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
-          - runner_os: macos-15
-            vm_os: ubuntu
-            go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
-          - runner_os: macos-15
-            vm_os: ubuntu
-            go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
-          - runner_os: macos-15
-            vm_os: ubuntu
-            go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
-          # Disabled Windows build with Hyper-V, because github actions runners do not support nested virtualization.
-          # TODO: Create a self-hosted Windows runner with nested virtualization enabled to run these tests.
-          #- runner_os: windows-2025
-          #  vm_os: windows11
-          #  go_test_name: TestBuildHypervWindows11Amd64OnWindows
+            go_test_name: TestBuildHypervWindows11Amd64OnWindows
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -89,3 +134,20 @@ jobs:
         run: |
           echo "Packer build failed. Failing workflow."
           exit 1
+
+  cleanup:
+    needs: [provision-windows-runner, test-packer-build]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Delete resource group
+        run: |
+          az group delete \
+            --name ${{ needs.provision-windows-runner.outputs.resource-group }} \
+            --yes --no-wait

@@ -34,6 +34,11 @@
         "cmd": "packer fmt ${file}"
       },
       {
+        // Run when a .pkr.hcl file is saved
+        "match": "\\.pkrvars\\.hcl$",
+        "cmd": "packer fmt ${file}"
+      },
+      {
         // Run when a .sh file is saved
         "match": "\\.sh$",
         "cmd": "shfmt -w ${file}"
