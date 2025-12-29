@@ -14,3 +14,4 @@ cache/*
 *.tmp
 cloud-init-combined.ps1
 *secrets.pkrvars.hcl
+*_azureit_*

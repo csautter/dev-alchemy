@@ -80,6 +80,9 @@ az role assignment create \
   --assignee "$function_app_principal_id" \
   --scope "/$scope"
 
+# test local
+func start
+
 # deploy the function app code
 func azure functionapp publish $function_app_name
 
