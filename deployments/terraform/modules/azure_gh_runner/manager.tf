@@ -72,10 +72,15 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
 
   app_settings = {
     FUNCTIONS_WORKER_RUNTIME = "python"
+    VAULT_URL                = azurerm_key_vault.gh_runner_kv.vault_uri
   }
 
   identity {
     type = "SystemAssigned"
+  }
+
+  tags = {
+    "hidden-link: /app-insights-resource-id" = azurerm_application_insights.gh_runner_func_app.id
   }
 }
 

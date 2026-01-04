@@ -2,6 +2,7 @@ import azure.functions as func
 import json
 import logging
 import requests
+import os
 
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
@@ -23,9 +24,8 @@ def request_runner(req: func.HttpRequest) -> func.HttpResponse:
 
     # 1. Get PAT from Key Vault
     credential = DefaultAzureCredential()
-    kv_client = SecretClient(
-        vault_url="https://gh-runner-kv.vault.azure.net", credential=credential
-    )
+    vault_url = os.environ["VAULT_URL"]
+    kv_client = SecretClient(vault_url=vault_url, credential=credential)
 
     pat = kv_client.get_secret("github-runner-pat").value
 
