@@ -5,4 +5,6 @@
 azure-functions
 azure-identity
 azure-keyvault-secrets
+azure-mgmt-compute
+azure-mgmt-resource
 requests

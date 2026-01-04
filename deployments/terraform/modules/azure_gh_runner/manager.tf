@@ -32,12 +32,6 @@ resource "azurerm_role_assignment" "keyvault_secrets_officer" {
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = data.azurerm_client_config.current.object_id
 }
-
-ephemeral "azurerm_key_vault_secret" "github_runner_pat" {
-  name         = "github-runner-pat"
-  key_vault_id = azurerm_key_vault.gh_runner_kv.id
-}
-
 resource "azurerm_storage_account" "gh_runner_storage" {
   name                            = "ghrunnerstorage${random_integer.suffix.result}"
   resource_group_name             = azurerm_resource_group.gh_runner_manager.name
@@ -49,6 +43,16 @@ resource "azurerm_storage_account" "gh_runner_storage" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+ephemeral "azurerm_key_vault_secret" "github_runner_pat" {
+  name         = "github-runner-pat"
+  key_vault_id = azurerm_key_vault.gh_runner_kv.id
+}
+
+ephemeral "azurerm_key_vault_secret" "github-runner-vm-admin-pw" {
+  name         = "github-runner-vm-admin-pw"
+  key_vault_id = azurerm_key_vault.gh_runner_kv.id
 }
 
 resource "azurerm_linux_function_app" "gh_runner_func_app" {
@@ -73,6 +77,13 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
   app_settings = {
     FUNCTIONS_WORKER_RUNTIME = "python"
     VAULT_URL                = azurerm_key_vault.gh_runner_kv.vault_uri
+    SUBSCRIPTION_ID          = data.azurerm_client_config.current.subscription_id
+    LOCATION                 = "eastus2"
+    RESOURCE_GROUP           = "gh-runner-tmp-rg"
+    VM_NAME                  = "gh-runner-vm"
+    VM_SIZE                  = "Standard_D2s_v3"
+    ADMIN_USERNAME           = "azureuser"
+    CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images-eastus2/providers/Microsoft.Compute/images/Win2022GHAzureRunnerImage"
   }
 
   identity {
@@ -99,6 +110,12 @@ resource "azurerm_service_plan" "gh_runner_func_plan" {
 resource "azurerm_role_assignment" "keyvault_secrets_user" {
   scope                = azurerm_key_vault.gh_runner_kv.id
   role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_linux_function_app.gh_runner_func_app.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "function_contributor" {
+  scope                = data.azurerm_subscription.current.id
+  role_definition_name = "Contributor"
   principal_id         = azurerm_linux_function_app.gh_runner_func_app.identity[0].principal_id
 }
 
