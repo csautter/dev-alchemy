@@ -51,10 +51,38 @@ Set-Location $RunnerDir
 """
 
 
-@app.route(route="request_runner", auth_level=func.AuthLevel.FUNCTION)
+@app.route(
+    route="delete_resource_group",
+    auth_level=func.AuthLevel.FUNCTION,
+    methods=["DELETE"],
+)
+def delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info("Delete resource group request received")
+    try:
+        credential = DefaultAzureCredential()
+        subscription_id = os.environ["SUBSCRIPTION_ID"]
+        # TODO: resource group name needs to follow a naming convention to avoid deleting unintended groups
+        # TODO: create a check to validate the resource group is intended for deletion
+        resource_group = os.environ["RESOURCE_GROUP"]
+        resource_client = ResourceManagementClient(credential, subscription_id)
+        # Delete the resource group and all resources within
+        delete_async_op = resource_client.resource_groups.begin_delete(resource_group)
+        delete_async_op.wait()
+        return func.HttpResponse(
+            json.dumps({"message": f"Resource group '{resource_group}' deleted."}),
+            mimetype="application/json",
+            status_code=200,
+        )
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error deleting resource group: {str(e)}",
+            status_code=500,
+        )
+
+
+@app.route(route="request_runner", auth_level=func.AuthLevel.FUNCTION, methods=["POST"])
 def request_runner(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Request received")
-
     try:
         body = req.get_json()
         repo = body["repo"]  # org/repo
