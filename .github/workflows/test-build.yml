@@ -36,7 +36,7 @@ jobs:
   test-packer-build:
     name: build ${{ matrix.go_test_name }} VM_OS ${{ matrix.vm_os }} runner_os ${{ matrix.runner_os }}
     needs: [provision-windows-runner]
-    runs-on: ${{ matrix.runner_os == 'macos-15' && 'macos-15' || matrix.runner_os == 'windows-2025' && 'self-hosted,windows,azure,nested' }}
+    runs-on: ${{ matrix.runs_on }}
     strategy:
       matrix:
         include:
@@ -61,6 +61,11 @@ jobs:
           - runner_os: windows-2025
             vm_os: windows11
             go_test_name: TestBuildHypervWindows11Amd64OnWindows
+            runs_on:
+            - self-hosted
+            - Windows
+            - azure
+            - nested
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
