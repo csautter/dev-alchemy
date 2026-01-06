@@ -9,6 +9,7 @@ from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.resource import ResourceManagementClient
+from azure.mgmt.network import NetworkManagementClient
 
 app = func.FunctionApp()
 
@@ -113,8 +114,7 @@ def request_runner(req: func.HttpRequest) -> func.HttpResponse:
 
     # Support custom image via environment variable (expects ARM resource ID)
     custom_image_id = os.environ.get("CUSTOM_IMAGE_ID")
-    custom_image_location = os.environ.get("CUSTOM_IMAGE_LOCATION")
-    if custom_image_id and custom_image_location:
+    if custom_image_id:
         image_reference = {"id": custom_image_id}
     else:
         # throw error if no custom image provided
@@ -131,8 +131,93 @@ def request_runner(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     try:
+        # Create network resources
+        network_client = NetworkManagementClient(
+            credential, os.environ["SUBSCRIPTION_ID"]
+        )
+
+        vnet_name = os.environ.get("VNET_NAME", "gh-runner-vnet")
+        subnet_name = os.environ.get("SUBNET_NAME", "default")
+        ip_name = os.environ.get("IP_NAME", "gh-runner-ip")
+        nic_name = os.environ.get("NIC_NAME", "gh-runner-nic")
+        location = os.environ["LOCATION"]
+        resource_group = os.environ["RESOURCE_GROUP"]
+
+        # Create VNet if not exists
+        vnet = network_client.virtual_networks.begin_create_or_update(
+            resource_group,
+            vnet_name,
+            {
+                "location": location,
+                "address_space": {"address_prefixes": ["10.0.0.0/16"]},
+            },
+        ).result()
+
+        # Create Subnet if not exists
+        subnet = network_client.subnets.begin_create_or_update(
+            resource_group,
+            vnet_name,
+            subnet_name,
+            {"address_prefix": "10.0.0.0/24"},
+        ).result()
+
+        # Create Public IP
+        public_ip = network_client.public_ip_addresses.begin_create_or_update(
+            resource_group,
+            ip_name,
+            {
+                "location": location,
+                "public_ip_allocation_method": "Static",
+                "sku": {"name": "Standard"},
+            },
+        ).result()
+
+        # Create NSG (if not exists)
+        nsg_name = os.environ.get("NSG_NAME", "gh-runner-nsg")
+        nsg = network_client.network_security_groups.begin_create_or_update(
+            resource_group,
+            nsg_name,
+            {
+                "location": location,
+            },
+        ).result()
+
+        # Add inbound rule for RDP (3389)
+        network_client.security_rules.begin_create_or_update(
+            resource_group,
+            nsg_name,
+            "Allow-RDP-Inbound",
+            {
+                "protocol": "Tcp",
+                "source_port_range": "*",
+                "destination_port_range": "3389",
+                "source_address_prefix": "*",
+                "destination_address_prefix": "*",
+                "access": "Allow",
+                "priority": 1000,
+                "direction": "Inbound",
+            },
+        ).result()
+
+        # Create NIC and associate NSG
+        nic = network_client.network_interfaces.begin_create_or_update(
+            resource_group,
+            nic_name,
+            {
+                "location": location,
+                "ip_configurations": [
+                    {
+                        "name": "ipconfig1",
+                        "subnet": {"id": subnet.id},
+                        "public_ip_address": {"id": public_ip.id},
+                    }
+                ],
+                "network_security_group": {"id": nsg.id},
+            },
+        ).result()
+
         vm_params = {
-            "location": os.environ["LOCATION"],
+            "location": location,
             "hardware_profile": {"vm_size": os.environ["VM_SIZE"]},
             "storage_profile": {"image_reference": image_reference},
             "os_profile": {
@@ -141,13 +226,11 @@ def request_runner(req: func.HttpRequest) -> func.HttpResponse:
                 "admin_password": admin_password,
                 "custom_data": custom_data,
             },
-            "network_profile": {
-                # keep simple for now – NIC creation omitted for brevity
-            },
+            "network_profile": {"network_interfaces": [{"id": nic.id}]},
         }
 
         compute.virtual_machines.begin_create_or_update(
-            os.environ["RESOURCE_GROUP"], os.environ["VM_NAME"], vm_params
+            resource_group, os.environ["VM_NAME"], vm_params
         )
     except Exception as e:
         return func.HttpResponse(

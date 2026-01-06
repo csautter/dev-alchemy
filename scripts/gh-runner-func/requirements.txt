@@ -7,4 +7,5 @@ azure-identity
 azure-keyvault-secrets
 azure-mgmt-compute
 azure-mgmt-resource
+azure-mgmt-network
 requests
