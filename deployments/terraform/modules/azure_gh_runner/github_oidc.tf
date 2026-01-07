@@ -25,6 +25,6 @@ resource "azuread_application_federated_identity_credential" "gh_actions_github_
   application_id = azuread_application.gh_actions_runner_broker.id
   display_name   = "github-actions-pr"
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:csautter/dev-alchemy:ref:refs/pull/*"
+  subject        = "repo:csautter/dev-alchemy:pull_request"
   audiences      = ["api://AzureADTokenExchange"]
 }
