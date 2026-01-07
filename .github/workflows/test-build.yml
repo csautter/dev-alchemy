@@ -40,12 +40,13 @@ jobs:
           # placeholder for actual VM creation commands
           echo "placeholder for creating Windows VM"
           echo "Creating Windows VM in resource group ${{ steps.vars.outputs.resource-group }} with runner label ${{ steps.vars.outputs.runner-label }}"
-              az rest \
-                --method post \
-                --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/request_runner" \
-                --body '{
-                  "repo": "${{ github.repository }}"
-                }'
+          az rest \
+            --method post \
+            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/request_runner" \
+            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+            --body '{
+              "repo": "${{ github.repository }}"
+            }'
 
   test-packer-build:
     name: build ${{ matrix.go_test_name }} VM_OS ${{ matrix.vm_os }} runner_os ${{ matrix.runner_os }}
