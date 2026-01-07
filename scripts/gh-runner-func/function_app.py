@@ -80,8 +80,35 @@ def delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
         )
 
 
-@app.route(route="request_runner", auth_level=func.AuthLevel.FUNCTION, methods=["POST"])
+@app.route(
+    route="request_runner", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"]
+)
 def request_runner(req: func.HttpRequest) -> func.HttpResponse:
+    # Case 1: OIDC identity
+    principal = req.headers.get("X-MS-CLIENT-PRINCIPAL")
+
+    if principal:
+        claims = json.loads(base64.b64decode(principal))
+        repo = claims.get("repository")
+        ref = claims.get("ref")
+        actor = claims.get("actor")
+        # validate repo, ref, actor
+        if (
+            repo != "csautter/dev-alchemy"
+            or not ref.startswith("refs/heads/")
+            or actor != "csautter"
+        ):
+            return func.HttpResponse("Unauthorized", status_code=401)
+
+        return handle_request_runner(req)
+
+    # Case 2: Function key
+    if req.route_params.get("code") or req.headers.get("x-functions-key"):
+        return handle_request_runner(req)
+    return func.HttpResponse("Unauthorized", status_code=401)
+
+
+def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Request received")
     try:
         body = req.get_json()

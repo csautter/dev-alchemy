@@ -93,6 +93,19 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
   tags = {
     "hidden-link: /app-insights-resource-id" = azurerm_application_insights.gh_runner_func_app.id
   }
+
+  auth_settings_v2 {
+    auth_enabled           = true
+    default_provider       = "azureactivedirectory"
+    unauthenticated_action = "RedirectToLoginPage"
+    active_directory_v2 {
+      client_id            = azuread_application.gh_actions_runner_broker.client_id
+      tenant_auth_endpoint = "https://sts.windows.net/${data.azurerm_client_config.current.tenant_id}/"
+    }
+    login {
+
+    }
+  }
 }
 
 resource "azurerm_service_plan" "gh_runner_func_plan" {
@@ -153,3 +166,4 @@ resource "azurerm_monitor_action_group" "smart_detection" {
     use_common_alert_schema = true
   }
 }
+
