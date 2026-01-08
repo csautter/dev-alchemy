@@ -99,6 +99,15 @@ build {
       "Expand-Archive \"C:\\actions-runner.zip\" -DestinationPath \"C:\\actions-runner\"",
       "Remove-Item \"C:\\actions-runner.zip\"",
 
+      # install chocolatey
+      "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))",
+
+      # install python3 with chocolatey
+      "choco install -y python --version=3.13.11",
+
+      # install golang with chocolatey
+      "choco install -y golang",
+
       # loader script to execute custom data on first boot
       "New-Item -Path 'C:\\AzureData' -ItemType Directory -Force",
       local.bootstrap_script,

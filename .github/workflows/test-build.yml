@@ -90,6 +90,7 @@ jobs:
 
       - name: Set up Python
         uses: actions/setup-python@v6
+        if: matrix.runner_os != 'windows-2025'
         with:
           python-version: "3.13"
 
