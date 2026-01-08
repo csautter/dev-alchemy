@@ -18,7 +18,7 @@ jobs:
   provision-windows-runner:
     runs-on: ubuntu-latest
     outputs:
-      runner-label: ${{ steps.vars.outputs.runner-label }}
+      runner-name: ${{ steps.vars.outputs.runner-name }}
       resource-group: ${{ steps.vars.outputs.resource-group }}
 
     steps:
@@ -32,20 +32,22 @@ jobs:
       - name: Generate names
         id: vars
         run: |
-          echo "runner-label=azure-win-${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
-          echo "resource-group=github-win-${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+          echo "runner-name=gh-runner-tmp-win-${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+          echo "resource-group=gh-runner-tmp-${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
 
       - name: Request Windows Runner VM
         run: |
           # placeholder for actual VM creation commands
           echo "placeholder for creating Windows VM"
-          echo "Creating Windows VM in resource group ${{ steps.vars.outputs.resource-group }} with runner label ${{ steps.vars.outputs.runner-label }}"
+          echo "Creating Windows VM in resource group ${{ steps.vars.outputs.resource-group }} with runner name ${{ steps.vars.outputs.runner-name }}"
           az rest \
             --method post \
             --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/request_runner" \
             --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
             --body '{
-              "repo": "${{ github.repository }}"
+              "repo": "${{ github.repository }}",
+              "resource-group": "${{ steps.vars.outputs.resource-group }}",
+              "runner-name": "${{ steps.vars.outputs.runner-name }}",
             }'
 
   test-packer-build:
@@ -81,6 +83,7 @@ jobs:
             - Windows
             - azure
             - nested
+            - "${{ needs.provision-windows-runner.outputs.runner-name }}"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -143,3 +146,11 @@ jobs:
           # placeholder for actual resource group deletion commands
           echo "placeholder for deleting resource group"
           echo "Deleting resource group ${{ needs.provision-windows-runner.outputs.resource-group }}"
+          az rest \
+            --method delete \
+            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
+            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+            --body '{
+              "resource-group": "${{ needs.provision-windows-runner.outputs.resource-group }}",
+              "runner-name": "${{ needs.provision-windows-runner.outputs.runner-name }}"
+            }'
