@@ -43,7 +43,7 @@ Set-Location $RunnerDir
   --url $RepoUrl `
   --token $RunnerToken `
   --name $RunnerName `
-  --labels windows,azure,nested `
+  --labels windows,azure,nested,$RunnerName `
   --unattended `
   --ephemeral `
   --runasservice
@@ -53,17 +53,28 @@ Set-Location $RunnerDir
 
 @app.route(
     route="delete_resource_group",
-    auth_level=func.AuthLevel.FUNCTION,
-    methods=["DELETE"],
+    auth_level=func.AuthLevel.ANONYMOUS,
+    methods=["POST"],
 )
 def delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
+    principal_b64 = req.headers.get("X-MS-CLIENT-PRINCIPAL")
+
+    if principal_b64:
+        return handle_delete_resource_group(req)
+
+    return func.HttpResponse("Unauthorized - delete request", status_code=401)
+
+
+def handle_delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Delete resource group request received")
     try:
         credential = DefaultAzureCredential()
         subscription_id = os.environ["SUBSCRIPTION_ID"]
         # TODO: resource group name needs to follow a naming convention to avoid deleting unintended groups
         # TODO: create a check to validate the resource group is intended for deletion
-        resource_group = os.environ["RESOURCE_GROUP"]
+        body = req.get_json()
+        resource_group = body.get("resource-group", os.environ["RESOURCE_GROUP"])
+        validate_source_group_name(resource_group)
         resource_client = ResourceManagementClient(credential, subscription_id)
         # Delete the resource group and all resources within
         delete_async_op = resource_client.resource_groups.begin_delete(resource_group)
@@ -97,6 +108,9 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
     try:
         body = req.get_json()
         repo = body["repo"]  # org/repo
+        runner_name = body.get("runner-name", "gh-runner-vm")
+        resource_group = body.get("resource-group", os.environ["RESOURCE_GROUP"])
+        validate_source_group_name(resource_group)
     except Exception:
         return func.HttpResponse(
             'Invalid JSON body. Expected: { "repo": "org/repo" }', status_code=400
@@ -148,7 +162,7 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
     )
 
     resource_client.resource_groups.create_or_update(
-        os.environ["RESOURCE_GROUP"], {"location": os.environ["LOCATION"]}
+        resource_group, {"location": os.environ["LOCATION"]}
     )
 
     # Support custom image via environment variable (expects ARM resource ID)
@@ -180,7 +194,6 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
         ip_name = os.environ.get("IP_NAME", "gh-runner-ip")
         nic_name = os.environ.get("NIC_NAME", "gh-runner-nic")
         location = os.environ["LOCATION"]
-        resource_group = os.environ["RESOURCE_GROUP"]
 
         # Create VNet if not exists
         vnet = network_client.virtual_networks.begin_create_or_update(
@@ -260,7 +273,7 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
             "hardware_profile": {"vm_size": os.environ["VM_SIZE"]},
             "storage_profile": {"image_reference": image_reference},
             "os_profile": {
-                "computer_name": os.environ["VM_NAME"],
+                "computer_name": runner_name,
                 "admin_username": os.environ["ADMIN_USERNAME"],
                 "admin_password": admin_password,
                 "custom_data": custom_data,
@@ -284,3 +297,10 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
         mimetype="application/json",
         status_code=202,
     )
+
+
+def validate_source_group_name(name: str) -> bool:
+    if not name.startswith("gh-runner-tmp"):
+        raise Exception("Invalid source group name")
+
+    return True
