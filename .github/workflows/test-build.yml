@@ -110,6 +110,7 @@ jobs:
 
       - name: Run build for OS=${{ matrix.vm_os }} TEST_NAME=${{ matrix.go_test_name }}
         id: packer_build
+        shell: bash
         continue-on-error: false
         env:
           PACKER_LOG: 1

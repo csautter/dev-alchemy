@@ -83,7 +83,7 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
     VM_NAME                  = "gh-runner-vm"
     VM_SIZE                  = "Standard_D2s_v3"
     ADMIN_USERNAME           = "azureuser"
-    CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images/providers/Microsoft.Compute/images/Win2022GHAzureRunnerImage"
+    CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images-eastus/providers/Microsoft.Compute/images/Win2022GHAzureRunnerImage"
   }
 
   identity {

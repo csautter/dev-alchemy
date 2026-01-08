@@ -108,6 +108,10 @@ build {
       # install golang with chocolatey
       "choco install -y golang",
 
+      # install git for windows with chocolatey
+      # includes make and bash
+      "choco install -y git",
+
       # loader script to execute custom data on first boot
       "New-Item -Path 'C:\\AzureData' -ItemType Directory -Force",
       local.bootstrap_script,
