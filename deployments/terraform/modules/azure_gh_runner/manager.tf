@@ -97,10 +97,11 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
   auth_settings_v2 {
     auth_enabled           = true
     default_provider       = "azureactivedirectory"
-    unauthenticated_action = "RedirectToLoginPage"
+    unauthenticated_action = "AllowAnonymous"
     active_directory_v2 {
       client_id            = azuread_application.gh_actions_runner_broker.client_id
       tenant_auth_endpoint = "https://sts.windows.net/${data.azurerm_client_config.current.tenant_id}/"
+      allowed_audiences    = ["api://${azuread_application.gh_actions_runner_broker.client_id}"]
     }
     login {
 

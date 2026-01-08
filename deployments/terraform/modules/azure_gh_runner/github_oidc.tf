@@ -1,5 +1,13 @@
 resource "azuread_application" "gh_actions_runner_broker" {
   display_name = "gh-actions-runner-broker"
+  lifecycle {
+    ignore_changes = [identifier_uris]
+  }
+}
+
+resource "azuread_application_identifier_uri" "gh_actions_runner_broker" {
+  application_id = azuread_application.gh_actions_runner_broker.id
+  identifier_uri = "api://${azuread_application.gh_actions_runner_broker.client_id}"
 }
 
 resource "azuread_service_principal" "gh_actions_runner_broker" {
