@@ -483,7 +483,7 @@ Commercial license details can be found in [LICENSE_COMMERCIAL.md](./LICENSE_COM
 For commercial inquiries, contact:
 📧 cc@sautter.cc
 
-## Legacy Licensing
+### Legacy Licensing
 
 All releases up to and including **v0.1.0** are licensed under the **MIT License**.
 

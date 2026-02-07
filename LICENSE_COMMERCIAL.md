@@ -86,8 +86,8 @@ Disputes arising under this License shall be resolved in the courts of Bavaria, 
 
 For commercial license inquiries, pricing, or SLA agreements, please contact:
 
-📧 [cc@sautter.cc]  
-🌐 [www.c-sautter.de]
+📧 [cc@sautter.cc](mailto:cc@sautter.cc)  
+🌐 [www.c-sautter.de](https://www.c-sautter.de)
 
 ---
 
