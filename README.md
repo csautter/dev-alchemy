@@ -471,7 +471,7 @@ Dev Alchemy uses a **dual licensing model**:
 
 The source code is licensed under the **GNU Affero General Public License v3 (AGPLv3)**.
 
-You can review the full text in [LICENSE_AGPL.md](./LICENSE_AGPL.md).  
+You can review the full text in [LICENSE.md](./LICENSE.md).  
 AGPLv3 allows you to use, modify and redistribute the software *as long as* you comply with the AGPLv3 terms.
 
 ### 💼 Commercial License
