@@ -459,11 +459,33 @@ Contributions welcome! Feel free to:
 - Improve cross-platform support
 - Fix bugs or enhance docs
 
+Check out the [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
 ---
 
 ## 📜 License
 
-MIT License — see [LICENSE](LICENSE) file.
+Dev Alchemy uses a **dual licensing model**:
+
+### 🚀 Community Edition (Open Source)
+
+The source code is licensed under the **GNU Affero General Public License v3 (AGPLv3)**.
+
+You can review the full text in [LICENSE_AGPL.md](./LICENSE_AGPL.md).  
+AGPLv3 allows you to use, modify and redistribute the software *as long as* you comply with the AGPLv3 terms.
+
+### 💼 Commercial License
+
+If you wish to use Dev Alchemy in commercial products, SaaS platforms, or closed-source environments without AGPL obligations, a **commercial license** is required.
+
+Commercial license details can be found in [LICENSE_COMMERCIAL.md](./LICENSE_COMMERCIAL.md).
+
+For commercial inquiries, contact:
+📧 cc@sautter.cc
+
+## Legacy Licensing
+
+All releases up to and including **v0.1.0** are licensed under the **MIT License**.
 
 ---
 
