@@ -459,7 +459,7 @@ Contributions welcome! Feel free to:
 - Improve cross-platform support
 - Fix bugs or enhance docs
 
-Check out the [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+Review the [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution terms and the Contributor License Agreement (CLA).
 
 ---
 
