@@ -125,6 +125,9 @@ build {
       # install make with chocolatey
       "choco install -y make",
 
+      # install packer with chocolatey
+      "choco install -y packer",
+
       # loader script to execute custom data on first boot
       "New-Item -Path 'C:\\AzureData' -ItemType Directory -Force",
       local.bootstrap_script,
