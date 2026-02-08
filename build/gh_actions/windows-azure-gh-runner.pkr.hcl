@@ -117,10 +117,13 @@ build {
       "choco install -y golang",
 
       # install git for windows with chocolatey
-      # includes make and bash
+      # includes bash
       "choco install -y git",
       # add bash.exe to the path for use in build scripts
       "[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';C:\\Program Files\\Git\\bin', 'Machine')",
+
+      # install make with chocolatey
+      "choco install -y make",
 
       # loader script to execute custom data on first boot
       "New-Item -Path 'C:\\AzureData' -ItemType Directory -Force",
