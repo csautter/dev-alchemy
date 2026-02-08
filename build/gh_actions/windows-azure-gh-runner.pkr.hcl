@@ -88,11 +88,19 @@ source "azure-arm" "windows-azure-gh-runner" {
 build {
   sources = ["source.azure-arm.windows-azure-gh-runner"]
 
+  provisioner "file" {
+    source      = "../../scripts/windows/install_oscdimg.ps1"
+    destination = "C:\\AzureData\\scripts\\windows\\install_oscdimg.ps1"
+  }
+
   provisioner "powershell" {
     inline = [
       # Wait for the Azure Guest Agent to be running
       "while ((Get-Service RdAgent).Status -ne 'Running') { Start-Sleep -s 5 }",
       "while ((Get-Service WindowsAzureGuestAgent).Status -ne 'Running') { Start-Sleep -s 5 }",
+
+      # Install oscdimg for image capture
+      "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\install_oscdimg.ps1",
 
       # Github Actions Runner
       "Invoke-WebRequest -Uri \"https://github.com/actions/runner/releases/download/v${var.github_actions_version}/actions-runner-win-x64-${var.github_actions_version}.zip\" -OutFile \"C:\\actions-runner.zip\"",
@@ -111,6 +119,8 @@ build {
       # install git for windows with chocolatey
       # includes make and bash
       "choco install -y git",
+      # add bash.exe to the path for use in build scripts
+      "[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';C:\\Program Files\\Git\\bin', 'Machine')",
 
       # loader script to execute custom data on first boot
       "New-Item -Path 'C:\\AzureData' -ItemType Directory -Force",
