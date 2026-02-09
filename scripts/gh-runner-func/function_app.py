@@ -14,7 +14,6 @@ from azure.mgmt.network import NetworkManagementClient
 app = func.FunctionApp()
 
 POWERSHELL_TEMPLATE = r"""
-<powershell>
 $ErrorActionPreference = "Stop"
 
 # write a file that logs if this file was executed
@@ -22,13 +21,13 @@ New-Item -Path "C:\" -Name "execution.log" -ItemType "file" -Force
 Add-Content -Path "C:\execution.log" -Value "cloud-init-combined.ps1 executed on $(Get-Date)"
 
 # Install Hyper-V
-Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart
-Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Management-PowerShell -All -NoRestart
-# Optionally, restart if required
 if ((Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V).State -ne 'Enabled') {
-  Write-Host 'Restart required to complete Hyper-V installation.'
-  Restart-Computer -Force
-  exit
+    Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart
+    Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Management-PowerShell -All -NoRestart
+    # Restart to complete Hyper-V installation
+    Write-Host 'Restart required to complete Hyper-V installation.'
+    Restart-Computer -Force
+    exit
 }
 
 $RunnerToken = "__RUNNER_TOKEN__"
@@ -43,11 +42,37 @@ Set-Location $RunnerDir
   --url $RepoUrl `
   --token $RunnerToken `
   --name $RunnerName `
+  --labels initializing,donotuse `
+  --unattended `
+  --ephemeral `
+  --runasservice
+
+# Find all GitHub Actions Runner services
+$services = Get-Service | Where-Object { $_.Name -like "actions.runner.*" }
+
+foreach ($svc in $services) {
+    $serviceAccount = "NT SERVICE\$($svc.Name)"
+    try {
+        # Add runner service account to Hyper-V Administrators
+        Add-LocalGroupMember -Group "Hyper-V Administrators" -Member $serviceAccount
+        Write-Host "Added $serviceAccount to Hyper-V Administrators."
+    } catch {
+        Write-Host ("Failed to add {0}: {1}" -f $serviceAccount, $_.Exception.Message)
+    }
+}
+
+# Start the runner service
+# update the service with the correct labels to pick up jobs
+.\config.cmd remove --token $RunnerToken
+.\config.cmd `
+  --url $RepoUrl `
+  --token $RunnerToken `
+  --name $RunnerName `
   --labels windows,azure,nested,$RunnerName `
   --unattended `
   --ephemeral `
   --runasservice
-</powershell>
+# Start-Service $serviceName
 """
 
 
@@ -58,10 +83,8 @@ Set-Location $RunnerDir
 )
 def delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
     principal_b64 = req.headers.get("X-MS-CLIENT-PRINCIPAL")
-
-    if principal_b64:
+    if principal_b64 or is_valid_function_key(req):
         return handle_delete_resource_group(req)
-
     return func.HttpResponse("Unauthorized - delete request", status_code=401)
 
 
@@ -96,11 +119,28 @@ def handle_delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
 )
 def request_runner(req: func.HttpRequest) -> func.HttpResponse:
     principal_b64 = req.headers.get("X-MS-CLIENT-PRINCIPAL")
-
-    if principal_b64:
+    if principal_b64 or is_valid_function_key(req):
         return handle_request_runner(req)
-
     return func.HttpResponse("Unauthorized - runner request", status_code=401)
+
+
+def is_valid_function_key(req: func.HttpRequest) -> bool:
+    """
+    Checks for Azure Function key in the 'x-functions-key' header or 'code' query param.
+    Compares against the FUNCTION_KEY environment variable (set this in your app settings for testing).
+    """
+    function_key = os.environ.get("FUNCTION_KEY")
+    if not function_key:
+        return False
+    # Check header
+    header_key = req.headers.get("x-functions-key")
+    if header_key and header_key == function_key:
+        return True
+    # Check query param
+    code_param = req.params.get("code")
+    if code_param and code_param == function_key:
+        return True
+    return False
 
 
 def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
