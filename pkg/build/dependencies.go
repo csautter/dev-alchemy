@@ -121,6 +121,10 @@ func getWindows11DownloadUrl(arch string, args []string) (string, error) {
 	if err != nil {
 		RunCliCommand(workdir, pipPath, []string{"install", "playwright"})
 	}
+	_, err = RunCliCommand(workdir, venvPython, []string{"-c", "import playwright_stealth"})
+	if err != nil {
+		RunCliCommand(workdir, pipPath, []string{"install", "playwright-stealth"})
+	}
 
 	log.Printf("Installing Playwright browsers for Windows 11 download script")
 	RunCliCommand(workdir, venvPython, []string{"-m", "playwright", "install", "chromium"})
