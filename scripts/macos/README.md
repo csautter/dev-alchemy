@@ -17,6 +17,7 @@ This script uses Playwright to fetch the latest Windows 11 ISO download link fro
 3. **Install Playwright**:
    ```bash
    pip install playwright
+   pip install playwright-stealth
    python -m playwright install
    ```
 ### Running the Script

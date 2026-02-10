@@ -4,10 +4,13 @@ Fetches the latest Windows 11 ISO download link from Microsoft's official downlo
 
 import asyncio
 from playwright.async_api import async_playwright
+
+from playwright_stealth import Stealth
 import random
 import time
 import argparse
 import os
+import json
 
 MICROSOFT_WIN11_ISO_URL = "https://www.microsoft.com/en-US/software-download/windows11"
 MICROSOFT_WIN11_ARM_ISO_URL = (
@@ -16,17 +19,17 @@ MICROSOFT_WIN11_ARM_ISO_URL = (
 
 USER_AGENTS = [
     # Chrome on Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+    # "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
     # Chrome on Mac
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
     # Chrome on Linux
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
     # Edge on Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.3719.115",
+    # "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.3719.115",
     # Edge on Mac
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.3719.115",
     # Firefox on Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0",
+    # "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0",
     # Safari on Mac
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
 ]
@@ -47,6 +50,10 @@ async def random_mouse_movements(page, min_seconds=5, max_seconds=15):
         x = random.randint(0, int(width) - 1)
         y = random.randint(0, int(height) - 1)
         await page.mouse.move(x, y, steps=random.randint(5, 20))
+        # Randomly scroll sometimes
+        if random.random() < 0.3:
+            scroll_amount = random.randint(-100, 100)
+            await page.mouse.wheel(0, scroll_amount)
         await asyncio.sleep(random.uniform(0.1, 0.5))
 
 
@@ -101,13 +108,40 @@ async def select_option_by_text(page, selector, text_match):
 
 
 async def fetch_win11_iso_link(arm: bool = False, headless: bool = False):
-    async with async_playwright() as p:
+    async with Stealth().use_async(async_playwright()) as p:
         browser = await p.chromium.launch(headless=headless)
+
+        # Randomly select viewport size
+        width = random.randint(800, 1920)
+        height = random.randint(600, 1080)
+        print(f"[INFO] Using viewport size: {width}x{height}")
+
         user_agent = random.choice(USER_AGENTS)
+
         context = await browser.new_context(
-            locale="en-US", timezone_id="EST", user_agent=user_agent
+            locale="en-US",
+            timezone_id="EST",
+            user_agent=user_agent,
+            viewport={"width": width, "height": height},
+        )
+        # Load cookies from a previous session
+        try:
+            with open("cookies.json", "r") as f:
+                saved_cookies = json.load(f)
+            await context.add_cookies(saved_cookies)
+        except FileNotFoundError:
+            pass
+
+        # Inject JavaScript to disable the webdriver flag
+        await context.add_init_script(
+            """
+            Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined
+            })
+            """
         )
         page = await context.new_page()
+
         url = MICROSOFT_WIN11_ARM_ISO_URL if arm else MICROSOFT_WIN11_ISO_URL
         await page.goto(url)
 
@@ -163,6 +197,11 @@ async def fetch_win11_iso_link(arm: bool = False, headless: bool = False):
         )
         with open(output_path, "w") as f:
             f.write(link)
+
+        # Save current session cookies for future use
+        current_cookies = context.cookies()
+        with open("cookies.json", "w") as f:
+            json.dump(current_cookies, f)
 
         await browser.close()
 
