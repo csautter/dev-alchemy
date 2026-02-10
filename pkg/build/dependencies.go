@@ -185,6 +185,12 @@ func getWebFileDependencies() []WebFileDependency {
 					HostOs:               HostOsWindows,
 					VirtualizationEngine: VirtualizationEngineUtm,
 				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsWindows,
+					VirtualizationEngine: VirtualizationEngineHyperv,
+				},
 			},
 		},
 		{

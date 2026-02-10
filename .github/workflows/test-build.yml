@@ -119,6 +119,7 @@ jobs:
         continue-on-error: false
         env:
           PACKER_LOG: 1
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 

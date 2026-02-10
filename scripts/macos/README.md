@@ -32,6 +32,10 @@ To get the latest Windows 11 ISO arm version download link, use:
 ```bash
 python playwright_win11_iso.py --arm
 ```
+Or run the script with the `--headless false` flag to see the browser in action:
+```bash
+python playwright_win11_iso.py --headless false
+```
 This will output the latest Windows 11 ISO download link in the terminal.
 Additionally , the script saves the download link to a file named `./vendor/windows/win11_iso_url.txt` or `./vendor/windows/win11_arm_iso_url.txt`.
 
