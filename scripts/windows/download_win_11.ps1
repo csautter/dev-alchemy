@@ -3,7 +3,7 @@ param(
 )
 
 # Define variables
-$FidoVersion = "1.66"
+$FidoVersion = "1.67"
 $FidoExe = "Fido.ps1"
 $VendorDir = "$PSScriptRoot\..\..\vendor"
 $FidoPath = "$VendorDir\$FidoExe"
@@ -31,7 +31,7 @@ if (!(Test-Path $FidoSig)) {
 }
 
 # Verify sha256 checksum of Fido.ps1.lzma sha256:a6d2b028b6b1b022c0e564ecadbab0e1971b42886df9c7de99c074124762ad23
-$ExpectedHash = "5674ebbe02e7e9af4ed36bc0ad37d2b5baa23109869bd6b14ebff781ecd27f45"
+$ExpectedHash = "4951C4B5F86D1B1778EF63ACD8A699F60FD2A96C1583CE625BCE055235EBB7DA"
 $FileHash = (Get-FileHash -Path $FidoLzma -Algorithm SHA256).Hash
 if ($FileHash -ne $ExpectedHash) {
     Write-Error "Hash mismatch for Fido.ps1.lzma. Expected: $ExpectedHash, Actual: $FileHash"
