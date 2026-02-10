@@ -50,8 +50,13 @@ ephemeral "azurerm_key_vault_secret" "github_runner_pat" {
   key_vault_id = azurerm_key_vault.gh_runner_kv.id
 }
 
-ephemeral "azurerm_key_vault_secret" "github-runner-vm-admin-pw" {
+ephemeral "azurerm_key_vault_secret" "github_runner_vm_admin_pw" {
   name         = "github-runner-vm-admin-pw"
+  key_vault_id = azurerm_key_vault.gh_runner_kv.id
+}
+
+data "azurerm_key_vault_secret" "azure_function_key" {
+  name         = "azure-function-key"
   key_vault_id = azurerm_key_vault.gh_runner_kv.id
 }
 
@@ -84,6 +89,7 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
     VM_SIZE                  = "Standard_D2s_v3"
     ADMIN_USERNAME           = "azureuser"
     CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images-eastus/providers/Microsoft.Compute/images/Win2022GHAzureRunnerImage"
+    FUNCTION_KEY             = data.azurerm_key_vault_secret.azure_function_key.value
   }
 
   identity {
