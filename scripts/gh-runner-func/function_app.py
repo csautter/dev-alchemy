@@ -38,32 +38,23 @@ $RunnerDir   = "C:\actions-runner"
 New-Item -ItemType Directory -Force -Path $RunnerDir
 Set-Location $RunnerDir
 
-.\config.cmd `
-  --url $RepoUrl `
-  --token $RunnerToken `
-  --name $RunnerName `
-  --labels initializing,donotuse `
-  --unattended `
-  --ephemeral `
-  --runasservice
+# Create a local user 'ghrunner' with a random password, add to Administrators and Hyper-V Administrators
 
-# Find all GitHub Actions Runner services
-$services = Get-Service | Where-Object { $_.Name -like "actions.runner.*" }
 
-foreach ($svc in $services) {
-    $serviceAccount = "NT SERVICE\$($svc.Name)"
-    try {
-        # Add runner service account to Hyper-V Administrators
-        Add-LocalGroupMember -Group "Hyper-V Administrators" -Member $serviceAccount
-        Write-Host "Added $serviceAccount to Hyper-V Administrators."
-    } catch {
-        Write-Host ("Failed to add {0}: {1}" -f $serviceAccount, $_.Exception.Message)
-    }
+Add-Type -AssemblyName System.Web
+$Password = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 20 | % {[char]$_})
+Write-Host "[DEBUG] Generated password: $Password"
+$SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+
+# Create the user if it doesn't exist
+if (-not (Get-LocalUser -Name "ghrunner" -ErrorAction SilentlyContinue)) {
+    New-LocalUser -Name "ghrunner" -Password $SecurePassword -FullName "GitHub Runner" -Description "Local user for GitHub Actions Runner" -PasswordNeverExpires
 }
 
-# Start the runner service
-# update the service with the correct labels to pick up jobs
-.\config.cmd remove --token $RunnerToken
+# Add user to Administrators and Hyper-V Administrators groups
+Add-LocalGroupMember -Group "Administrators" -Member "ghrunner" -ErrorAction SilentlyContinue
+Add-LocalGroupMember -Group "Hyper-V Administrators" -Member "ghrunner" -ErrorAction SilentlyContinue
+
 .\config.cmd `
   --url $RepoUrl `
   --token $RunnerToken `
@@ -71,8 +62,9 @@ foreach ($svc in $services) {
   --labels windows,azure,nested,$RunnerName `
   --unattended `
   --ephemeral `
-  --runasservice
-# Start-Service $serviceName
+  --runasservice `
+  --windowslogonaccount ghrunner `
+  --windowslogonpassword $Password
 """
 
 
