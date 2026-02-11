@@ -128,6 +128,9 @@ build {
       # install packer with chocolatey
       "choco install -y packer",
 
+      # install virtualbox with chocolatey
+      "choco install -y virtualbox",
+
       # loader script to execute custom data on first boot
       "New-Item -Path 'C:\\AzureData' -ItemType Directory -Force",
       local.bootstrap_script,

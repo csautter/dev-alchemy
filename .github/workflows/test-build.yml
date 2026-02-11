@@ -77,7 +77,7 @@ jobs:
           #   go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
           - runner_os: windows-2025
             vm_os: windows11
-            go_test_name: TestBuildHypervWindows11Amd64OnWindows
+            go_test_name: TestBuildVirtualBoxWindows11Amd64OnWindows
             runs_on:
             - self-hosted
             - Windows
