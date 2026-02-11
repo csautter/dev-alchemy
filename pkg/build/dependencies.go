@@ -354,6 +354,8 @@ func downloadWebFileDependency(dep WebFileDependency) error {
 	}
 	err := client.Get()
 	if err != nil {
+		// delete the file if it was partially downloaded
+		_ = os.Remove(dep.LocalPath)
 		log.Printf("Failed to download web file dependency from %s to %s: %v", dep.Source, dep.LocalPath, err)
 		return err
 	}
