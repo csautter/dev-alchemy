@@ -80,7 +80,7 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	}
 }
 
-func getWindows11DownloadUrl(arch string, args []string) (string, error) {
+func getWindows11Download(arch string, savePath string, download bool) (string, error) {
 	var url_file string
 	if arch == "amd64" {
 		url_file = "win11_amd64_iso_url.txt"
@@ -129,10 +129,13 @@ func getWindows11DownloadUrl(arch string, args []string) (string, error) {
 	log.Printf("Installing Playwright browsers for Windows 11 download script")
 	RunCliCommand(workdir, venvPython, []string{"-m", "playwright", "install", "chromium"})
 
-	args = []string{"playwright_win11_iso.py"}
+	args := []string{"playwright_win11_iso.py", "--save-path", savePath}
 	// if arch is arm64, add --arm flag
 	if arch == "arm64" {
 		args = append(args, "--arm")
+	}
+	if download {
+		args = append(args, "--download")
 	}
 	config := RunProcessConfig{
 		WorkingDir:     workdir,
@@ -141,6 +144,10 @@ func getWindows11DownloadUrl(arch string, args []string) (string, error) {
 		Timeout:        10 * time.Minute,
 	}
 	RunExternalProcess(config)
+
+	if download {
+		return "", nil
+	}
 
 	content, err := os.ReadFile(filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/"+url_file))
 	if err != nil {
@@ -173,9 +180,11 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath:  filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_amd64.iso"),
-			Checksum:   "",
-			BeforeHook: func() (string, error) { return getWindows11DownloadUrl("amd64", nil) },
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_amd64.iso"),
+			Checksum:  "",
+			BeforeHook: func() (string, error) {
+				return getWindows11Download("amd64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_amd64.iso"), true)
+			},
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "windows11",
@@ -195,12 +204,20 @@ func getWebFileDependencies() []WebFileDependency {
 					HostOs:               HostOsWindows,
 					VirtualizationEngine: VirtualizationEngineHyperv,
 				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsWindows,
+					VirtualizationEngine: VirtualizationEngineVirtualBox,
+				},
 			},
 		},
 		{
-			LocalPath:  filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_arm64.iso"),
-			Checksum:   "",
-			BeforeHook: func() (string, error) { return getWindows11DownloadUrl("arm64", nil) },
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_arm64.iso"),
+			Checksum:  "",
+			BeforeHook: func() (string, error) {
+				return getWindows11Download("arm64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_arm64.iso"), true)
+			},
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "windows11",
@@ -314,6 +331,11 @@ func downloadWebFileDependency(dep WebFileDependency) error {
 		newSource, err := dep.BeforeHook()
 		if err != nil {
 			return err
+		}
+		// some before hooks may also download the file themselves, so if the new source is empty, we can assume the file has been downloaded and skip the download step
+		if newSource == "" {
+			log.Printf("BeforeHook for %s returned empty source, assuming file has been downloaded", dep.LocalPath)
+			return nil
 		}
 		dep.Source = newSource
 	}

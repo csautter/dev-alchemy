@@ -107,7 +107,12 @@ async def select_option_by_text(page, selector, text_match):
     return None
 
 
-async def fetch_win11_iso_link(arm: bool = False, headless: bool = False):
+async def fetch_win11_iso_link(
+    arm: bool = False,
+    headless: bool = False,
+    download: bool = False,
+    save_path: str = "",
+):
     async with Stealth().use_async(async_playwright()) as p:
         browser = await p.chromium.launch(headless=headless)
 
@@ -198,6 +203,14 @@ async def fetch_win11_iso_link(arm: bool = False, headless: bool = False):
         with open(output_path, "w") as f:
             f.write(link)
 
+        if download:
+            print("Starting ISO download...")
+            async with page.expect_download() as download_info:
+                await page.goto(link)
+            download_obj = await download_info.value
+            await download_obj.save_as(save_path)
+            print(f"ISO saved to {save_path}")
+
         # Save current session cookies for future use
         current_cookies = context.cookies()
         with open("cookies.json", "w") as f:
@@ -219,5 +232,23 @@ if __name__ == "__main__":
         default=True,
         help="Run browser in headless mode (true/false, default: true)",
     )
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Automatically download the ISO after fetching the link",
+    )
+    parser.add_argument(
+        "--save-path",
+        type=str,
+        default="windows11.iso",
+        help="Path to save the downloaded ISO (default: windows11.iso)",
+    )
     args = parser.parse_args()
-    asyncio.run(fetch_win11_iso_link(arm=args.arm, headless=args.headless))
+    asyncio.run(
+        fetch_win11_iso_link(
+            arm=args.arm,
+            headless=args.headless,
+            download=args.download,
+            save_path=args.save_path,
+        )
+    )
