@@ -2,27 +2,98 @@ $ErrorActionPreference = "Stop"
 
 # write a file that logs if this file was executed
 New-Item -Path "C:\" -Name "execution.log" -ItemType "file" -Force
-Add-Content -Path "C:\execution.log" -Value "cloud-init-combined.ps1 executed on $(Get-Date)"
+Add-Content -Path "C:\execution.log" -Value "runner-setup.ps1 executed on $(Get-Date)"
 
-# Import required modules if available
-if (Get-Module -ListAvailable -Name Hyper-V) {
-    Import-Module Hyper-V -ErrorAction SilentlyContinue
+# Detect OS type
+$OSCaption = (Get-CimInstance Win32_OperatingSystem).Caption
+$IsServer = $OSCaption -like "*Server*"
+Write-Host "Detected OS: $OSCaption (Server: $IsServer)"
+
+# Function to ensure script re-runs after restart
+function Set-ScriptContinuation {
+    param([string]$ScriptPath)
+    
+    $taskName = "ContinueRunnerSetup"
+    $action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
+    $trigger = New-ScheduledTaskTrigger -AtStartup
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    
+    # Remove existing task if present
+    Unregister-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue -Confirm:$false
+    
+    # Register new task
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
+    Write-Host "Scheduled task '$taskName' created to continue after restart"
 }
 
-# Install Hyper-V
-if ((Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V).State -ne 'Enabled') {
-    Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart
-    Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Management-PowerShell -All -NoRestart
-    Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Management-Clients -All -NoRestart
+# Function to remove continuation task
+function Remove-ScriptContinuation {
+    $taskName = "ContinueRunnerSetup"
+    Unregister-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue -Confirm:$false
+    Write-Host "Scheduled task '$taskName' removed"
+}
+
+# Install Hyper-V based on OS type
+$needsRestart = $false
+
+if ($IsServer) {
+    # Windows Server - use Install-WindowsFeature
+    Write-Host "Installing Hyper-V on Windows Server..."
     
-    # Restart to complete Hyper-V installation
-    Write-Host 'Restart required to complete Hyper-V installation. Hyper-V configuration will continue after restart.'
+    $hypervFeature = Get-WindowsFeature -Name Hyper-V
+    if (-not $hypervFeature.Installed) {
+        Write-Host "Installing Hyper-V role..."
+        $result = Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
+        if ($result.RestartNeeded -eq 'Yes') {
+            $needsRestart = $true
+        }
+    }
+    
+    # Ensure PowerShell module is installed
+    $hypervPowerShell = Get-WindowsFeature -Name Hyper-V-PowerShell
+    if (-not $hypervPowerShell.Installed) {
+        Write-Host "Installing Hyper-V PowerShell module..."
+        $result = Install-WindowsFeature -Name Hyper-V-PowerShell
+        if ($result.RestartNeeded -eq 'Yes') {
+            $needsRestart = $true
+        }
+    }
+} else {
+    # Windows Client - use Enable-WindowsOptionalFeature
+    Write-Host "Installing Hyper-V on Windows Client..."
+    
+    $hypervFeature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V
+    if ($hypervFeature.State -ne 'Enabled') {
+        Write-Host "Enabling Hyper-V feature..."
+        Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All -All -NoRestart | Out-Null
+        $needsRestart = $true
+    }
+}
+
+# Handle restart if needed
+if ($needsRestart) {
+    Write-Host "Restart required to complete Hyper-V installation."
+    
+    # Set up continuation after restart
+    $scriptPath = $MyInvocation.MyCommand.Path
+    if (-not $scriptPath) {
+        $scriptPath = "C:\runner-setup.ps1"  # Fallback path
+    }
+    Set-ScriptContinuation -ScriptPath $scriptPath
+    
+    Write-Host "System will restart in 10 seconds. Script will continue automatically after restart."
+    Start-Sleep -Seconds 10
     Restart-Computer -Force
     exit
 }
 
-# Hyper-V is now enabled - import the module
-Import-Module Hyper-V
+# Remove continuation task since we're past the restart phase
+Remove-ScriptContinuation
+
+# Import Hyper-V module
+Write-Host "Importing Hyper-V module..."
+Import-Module Hyper-V -ErrorAction Stop
 
 # Create default virtual switch with NAT network (required for nested virtualization)
 if (-not (Get-VMSwitch -Name "Default Switch" -ErrorAction SilentlyContinue)) {
