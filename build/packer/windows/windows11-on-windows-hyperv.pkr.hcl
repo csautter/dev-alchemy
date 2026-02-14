@@ -28,7 +28,7 @@ source "hyperv-iso" "win11" {
   # If it does not exist, create a new virtual switch named "Default Switch".
   switch_name = "Default Switch"
   memory      = 4096
-  cpus        = 2
+  cpus        = min(packer.num_cores, 4)
   disk_size   = 61440
 
   communicator   = "winrm"
@@ -39,8 +39,14 @@ source "hyperv-iso" "win11" {
   generation         = 2
   enable_tpm         = true
 
-  boot_wait = "2s"
+  boot_wait = "500ms"
+
+  # Send multiple keypresses to ensure we catch the "press any key" prompt
+  # The prompt typically has a 5-second timeout window
   boot_command = [
+    "<spacebar><wait1s>",
+    "<spacebar><wait1s>",
+    "<spacebar><wait1s>",
     "<spacebar>"
   ]
 
