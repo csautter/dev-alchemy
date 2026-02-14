@@ -28,7 +28,7 @@ source "hyperv-iso" "win11" {
   # If it does not exist, create a new virtual switch named "Default Switch".
   switch_name = "Default Switch"
   memory      = 4096
-  cpus        = 4
+  cpus        = 2
   disk_size   = 61440
 
   communicator   = "winrm"
