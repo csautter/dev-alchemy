@@ -14,6 +14,7 @@ func TestBuildHypervWindows11Amd64OnWindows(t *testing.T) {
 		VncPort:              5912,
 		HostOs:               HostOsWindows,
 		VirtualizationEngine: VirtualizationEngineHyperv,
+		Cpus:                 4,
 	}
 	err := RunHypervWindowsBuildOnWindows(VirtualMachineConfig)
 	if err != nil {
@@ -30,6 +31,7 @@ func TestBuildVirtualBoxWindows11Amd64OnWindows(t *testing.T) {
 		VncPort:              5913,
 		HostOs:               HostOsWindows,
 		VirtualizationEngine: VirtualizationEngineVirtualBox,
+		Cpus:                 4,
 	}
 	err := RunVirtualBoxWindowsBuildOnWindows(VirtualMachineConfig)
 	if err != nil {

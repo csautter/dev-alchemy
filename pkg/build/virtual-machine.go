@@ -31,6 +31,7 @@ type VirtualMachineConfig struct {
 	ExpectedBuildArtifacts []string
 	HostOs                 HostOsType
 	VirtualizationEngine   VirtualizationEngine
+	Cpus                   int
 }
 
 func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
