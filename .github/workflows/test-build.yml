@@ -62,6 +62,7 @@ jobs:
     needs: [provision-windows-runner]
     runs-on: ${{ matrix.runs_on }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           # - runner_os: macos-15
