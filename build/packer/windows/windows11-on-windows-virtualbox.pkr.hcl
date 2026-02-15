@@ -17,6 +17,16 @@ variable "iso_url" {
   default = "../../../vendor/windows/Win11_25H2_English_x64.iso"
 }
 
+variable "nested_virt" {
+  type    = bool
+  default = true
+}
+
+variable "cpus" {
+  type    = number
+  default = 2
+}
+
 source "virtualbox-iso" "win11" {
   vm_name          = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   output_directory = "${path.root}/../../../vendor/windows/virtualbox-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
@@ -26,8 +36,9 @@ source "virtualbox-iso" "win11" {
 
   guest_os_type = "Windows11_64"
   memory        = 4096
-  cpus          = 4
+  cpus          = var.cpus
   disk_size     = 61440
+  nested_virt   = var.nested_virt
 
   communicator   = "winrm"
   winrm_username = "Administrator"
