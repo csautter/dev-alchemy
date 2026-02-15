@@ -15,7 +15,9 @@ from azure.mgmt.network import NetworkManagementClient
 app = func.FunctionApp()
 
 
-def load_powershell_script(runner_token: str, repo_url: str) -> str:
+def load_powershell_script(
+    runner_token: str, repo_url: str, virtualization_flavor: str
+) -> str:
     """Load and prepare the PowerShell runner setup script."""
     script_path = Path(__file__).parent / "runner-setup.ps1"
     with open(script_path, "r", encoding="utf-8") as f:
@@ -24,6 +26,7 @@ def load_powershell_script(runner_token: str, repo_url: str) -> str:
     # Replace placeholders
     script = script.replace("__RUNNER_TOKEN__", runner_token)
     script = script.replace("__REPO_URL__", repo_url)
+    script = script.replace("__VIRTUALIZATION_FLAVOR__", virtualization_flavor)
 
     return script
 
@@ -102,6 +105,7 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
         repo = body["repo"]  # org/repo
         runner_name = body.get("runner-name", "gh-runner-vm")
         resource_group = body.get("resource-group", os.environ["RESOURCE_GROUP"])
+        virtualization_flavor = body.get("virtualization-flavor", "hyperv")
         validate_source_group_name(resource_group)
     except Exception:
         return func.HttpResponse(
@@ -136,7 +140,9 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
     runner_token = response.json()["token"]
 
     # Load and prepare PowerShell script
-    script = load_powershell_script(runner_token, f"https://github.com/{repo}")
+    script = load_powershell_script(
+        runner_token, f"https://github.com/{repo}", virtualization_flavor
+    )
 
     custom_data = base64.b64encode(script.encode("utf-8")).decode("utf-8")
 
@@ -153,7 +159,7 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
     # Support custom image via environment variable (expects ARM resource ID)
     custom_image_id = os.environ.get("CUSTOM_IMAGE_ID")
     if custom_image_id:
-        image_reference = {"id": custom_image_id}
+        image_reference = {"id": custom_image_id + "-" + virtualization_flavor}
     else:
         # throw error if no custom image provided
         return func.HttpResponse(

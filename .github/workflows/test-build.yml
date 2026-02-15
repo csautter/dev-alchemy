@@ -46,6 +46,7 @@ jobs:
               "repo": "${{ github.repository }}",
               "resource-group": "${{ steps.vars.outputs.resource-group }}",
               "runner-name": "${{ steps.vars.outputs.runner-name }}",
+              "virtualization-flavor": "hyperv"
             }'
 
   provision-virtualbox-runner:
@@ -79,6 +80,7 @@ jobs:
               "repo": "${{ github.repository }}",
               "resource-group": "${{ steps.vars.outputs.resource-group }}",
               "runner-name": "${{ steps.vars.outputs.runner-name }}",
+              "virtualization-flavor": "virtualbox"
             }'
 
   test-hyperv-build:
