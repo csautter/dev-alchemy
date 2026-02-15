@@ -35,8 +35,17 @@ variable "location" {
   default = "East US"
 }
 
+variable "virtualization_flavor" {
+  type    = string
+  default = "hyperv"
+  validation {
+    condition     = contains(["hyperv", "virtualbox"], var.virtualization_flavor)
+    error_message = "Virtualization_flavor must be either 'hyperv' or 'virtualbox'."
+  }
+}
+
 locals {
-  bootstrap_script = <<EOF
+  bootstrap_script   = <<EOF
 $bootstrap = @'
 Set-Content -Path 'C:\AzureData\provision_log.txt' -Value 'Starting custom data execution...'
 try {
@@ -54,6 +63,8 @@ try {
 '@
 Set-Content -Path 'C:\AzureData\bootstrap.ps1' -Value $bootstrap
 EOF
+  virtualbox_install = var.virtualization_flavor == "virtualbox" ? "choco install -y virtualbox" : ""
+
 }
 
 
@@ -68,7 +79,7 @@ source "azure-arm" "windows-azure-gh-runner" {
   image_offer                       = "WindowsServer"
   image_publisher                   = "MicrosoftWindowsServer"
   image_sku                         = "2022-datacenter-g2"
-  managed_image_name                = "Win2022GHAzureRunnerImage"
+  managed_image_name                = "Win2022GHAzureRunner-${var.virtualization_flavor}"
   managed_image_resource_group_name = var.image_resource_group
   os_type                           = "Windows"
   tenant_id                         = var.tenant_id
@@ -129,8 +140,7 @@ build {
       "choco install -y packer",
 
       # install virtualbox with chocolatey
-      "choco install -y virtualbox",
-
+      local.virtualbox_install,
       # loader script to execute custom data on first boot
       "New-Item -Path 'C:\\AzureData' -ItemType Directory -Force",
       local.bootstrap_script,
