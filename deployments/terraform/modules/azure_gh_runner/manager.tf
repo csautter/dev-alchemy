@@ -83,12 +83,12 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
     FUNCTIONS_WORKER_RUNTIME = "python"
     VAULT_URL                = azurerm_key_vault.gh_runner_kv.vault_uri
     SUBSCRIPTION_ID          = data.azurerm_client_config.current.subscription_id
-    LOCATION                 = "eastus2"
+    LOCATION                 = var.runner_location
     RESOURCE_GROUP           = "gh-runner-tmp-rg"
     VM_NAME                  = "gh-runner-vm"
     VM_SIZE                  = "Standard_D2_v5"
     ADMIN_USERNAME           = "azureuser"
-    CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images-eastus/providers/Microsoft.Compute/images/Win2022GHAzureRunnerImage"
+    CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images-${var.runner_location}/providers/Microsoft.Compute/images/Win2022GHAzureRunnerImage"
     FUNCTION_KEY             = data.azurerm_key_vault_secret.azure_function_key.value
   }
 
