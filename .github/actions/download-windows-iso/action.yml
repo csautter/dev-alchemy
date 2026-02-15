@@ -14,6 +14,7 @@ runs:
   steps:
     - name: Download Windows ISO from Azure Blob Storage
       shell: powershell
+      continue-on-error: true
       run: |
         $isoPath = "${{ inputs.iso-path }}"
         
