@@ -22,21 +22,18 @@ runs:
         } else {
           Write-Host "Windows ISO not found locally, attempting to download from Azure Blob Storage..."
           
-          $storageAccountName = "devalchemy${{ inputs.subscription-id }}".Substring(0, 24) -replace '[^a-z0-9]', ''
-          $resourceGroup = "dev-alchemy-storage-rg"
+          $storageAccountName = "ghrunner${{ inputs.subscription-id }}".Substring(0, 24) -replace '[^a-z0-9]', ''
+          $resourceGroup = "gh-runner-storage-rg"
           $containerName = "windows-isos"
           $blobName = "win11_25h2_english_amd64.iso"
           
-          # Check if storage account exists
-          $sa = az storage account show --name $storageAccountName --resource-group $resourceGroup 2>$null | ConvertFrom-Json
-          
-          if ($sa) {
-            # Check if blob exists
+          # Try to check if blob exists and download it
+          try {
             $blobExists = az storage blob exists `
               --account-name $storageAccountName `
               --container-name $containerName `
               --name $blobName `
-              --auth-mode login | ConvertFrom-Json
+              --auth-mode login 2>$null | ConvertFrom-Json
             
             if ($blobExists.exists) {
               Write-Host "Found Windows ISO in blob storage, downloading..."
@@ -59,7 +56,7 @@ runs:
             } else {
               Write-Host "Windows ISO not found in blob storage, will need to be downloaded from Microsoft"
             }
-          } else {
-            Write-Host "Storage account does not exist, will need to download ISO from Microsoft"
+          } catch {
+            Write-Host "Could not access blob storage (may not exist or no permissions), will need to download ISO from Microsoft"
           }
         }

@@ -20,8 +20,8 @@ runs:
         if (Test-Path $isoPath) {
           Write-Host "Windows ISO found at $isoPath"
           
-          $storageAccountName = "devalchemy${{ inputs.subscription-id }}".Substring(0, 24) -replace '[^a-z0-9]', ''
-          $resourceGroup = "dev-alchemy-storage-rg"
+          $storageAccountName = "ghrunner${{ inputs.subscription-id }}".Substring(0, 24) -replace '[^a-z0-9]', ''
+          $resourceGroup = "gh-runner-storage-rg"
           $location = "eastus2"
           $containerName = "windows-isos"
           
