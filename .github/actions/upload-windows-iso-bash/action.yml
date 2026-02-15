@@ -1,0 +1,77 @@
+name: 'Upload Windows ISO to Azure Blob Storage (Bash)'
+description: 'Creates Azure Blob Storage and uploads Windows ISO if it exists - for macOS and Linux runners'
+
+inputs:
+  iso-path:
+    description: 'Path to the Windows ISO file'
+    required: true
+  subscription-id:
+    description: 'Azure subscription ID'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Create storage account and upload Windows ISO
+      shell: bash
+      run: |
+        iso_path="${{ inputs.iso-path }}"
+        
+        if [ -f "$iso_path" ]; then
+          echo "Windows ISO found at $iso_path"
+          
+          # Create storage account name (max 24 chars, lowercase alphanumeric only)
+          storage_account_name=$(echo "ghrunner${{ inputs.subscription-id }}" | tr -cd '[:alnum:]' | tr '[:upper:]' '[:lower:]' | cut -c1-24)
+          resource_group="gh-runner-storage-rg"
+          location="eastus2"
+          container_name="windows-isos"
+          
+          # Create resource group if it doesn't exist
+          if ! az group show --name "$resource_group" &>/dev/null; then
+            echo "Creating resource group $resource_group in $location"
+            az group create --name "$resource_group" --location "$location"
+          fi
+          
+          # Create storage account if it doesn't exist
+          if ! az storage account show --name "$storage_account_name" --resource-group "$resource_group" &>/dev/null; then
+            echo "Creating storage account $storage_account_name"
+            az storage account create \
+              --name "$storage_account_name" \
+              --resource-group "$resource_group" \
+              --location "$location" \
+              --sku Standard_LRS \
+              --kind StorageV2 \
+              --access-tier Hot \
+              --allow-blob-public-access false
+          fi
+          
+          # Create container if it doesn't exist
+          container_exists=$(az storage container exists \
+            --account-name "$storage_account_name" \
+            --name "$container_name" \
+            --auth-mode login \
+            --query "exists" \
+            --output tsv)
+          
+          if [ "$container_exists" != "true" ]; then
+            echo "Creating container $container_name"
+            az storage container create \
+              --account-name "$storage_account_name" \
+              --name "$container_name" \
+              --auth-mode login
+          fi
+          
+          # Upload ISO to blob storage
+          echo "Uploading Windows ISO to blob storage..."
+          az storage blob upload \
+            --account-name "$storage_account_name" \
+            --container-name "$container_name" \
+            --name "win11_25h2_english_amd64.iso" \
+            --file "$iso_path" \
+            --auth-mode login \
+            --overwrite true
+          
+          echo "Successfully uploaded Windows ISO to Azure Blob Storage"
+        else
+          echo "Windows ISO not found at $iso_path, skipping upload"
+        fi

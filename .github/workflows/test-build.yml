@@ -299,6 +299,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Azure Login (OIDC)
+        if: matrix.vm_os == 'windows11'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download Windows ISO from Azure Blob Storage
+        if: matrix.vm_os == 'windows11'
+        uses: ./.github/actions/download-windows-iso-bash
+        with:
+          iso-path: vendor/windows/win11_25h2_english_amd64.iso
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Set up Python
         uses: actions/setup-python@v6
         if: matrix.runs_on != 'windows-2025'
@@ -333,6 +348,21 @@ jobs:
           name: packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           retention-days: 1
+
+      - name: Azure Login (OIDC)
+        if: matrix.vm_os == 'windows11'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload Windows ISO to Azure Blob Storage
+        if: matrix.vm_os == 'windows11'
+        uses: ./.github/actions/upload-windows-iso-bash
+        with:
+          iso-path: vendor/windows/win11_25h2_english_amd64.iso
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if Packer build failed
         if: steps.packer_build.outcome == 'failure'
