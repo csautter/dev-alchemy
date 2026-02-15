@@ -17,9 +17,14 @@ on:
 jobs:
   provision-windows-runner:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        suffix: [hv, vbox]
     outputs:
-      runner-name: ${{ steps.vars.outputs.runner-name }}
-      resource-group: ${{ steps.vars.outputs.resource-group }}
+      runner-name-hv: ${{ steps.vars.outputs.runner-name-hv }}
+      resource-group-hv: ${{ steps.vars.outputs.resource-group-hv }}
+      runner-name-vbox: ${{ steps.vars.outputs.runner-name-vbox }}
+      resource-group-vbox: ${{ steps.vars.outputs.resource-group-vbox }}
 
     steps:
       - name: Azure Login (OIDC)
@@ -32,8 +37,10 @@ jobs:
       - name: Generate names
         id: vars
         run: |
-          echo "runner-name=ghr-${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
-          echo "resource-group=gh-runner-tmp-${GITHUB_RUN_ID}" >> $GITHUB_OUTPUT
+          echo "runner-name=ghr-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          echo "resource-group=gh-runner-tmp-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          echo "runner-name-${{ matrix.suffix }}=ghr-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          echo "resource-group-${{ matrix.suffix }}=gh-runner-tmp-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
 
       - name: Request Windows Runner VM
         run: |
@@ -83,7 +90,16 @@ jobs:
             - Windows
             - azure
             - nested
-            - "${{ needs.provision-windows-runner.outputs.runner-name }}"
+            - "${{ needs.provision-windows-runner.outputs.runner-name-hv }}"
+          - runner_os: windows-2025
+            vm_os: windows11
+            go_test_name: TestBuildVirtualBoxWindows11Amd64OnWindows
+            runs_on:
+            - self-hosted
+            - Windows
+            - azure
+            - nested
+            - "${{ needs.provision-windows-runner.outputs.runner-name-vbox }}"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -155,39 +171,30 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Delete resource group
+      - name: Delete resource groups
         run: |
-          # placeholder for actual resource group deletion commands
-          echo "placeholder for deleting resource group"
-          echo "Deleting resource group ${{ needs.provision-windows-runner.outputs.resource-group }}"
-          az rest \
-            --method post \
-            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
-            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
-            --body '{
-              "resource-group": "${{ needs.provision-windows-runner.outputs.resource-group }}",
-              "runner-name": "${{ needs.provision-windows-runner.outputs.runner-name }}"
-            }'
-      
-      - name: Deregister Github Runner in Github (always)
-        run: |
-          # Get runner ID
-          RUNNER_ID=$(gh api \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            /repos/${{ github.repository }}/actions/runners \
-            --jq '.runners[] | select(.name=="${{ needs.provision-windows-runner.outputs.runner-name }}") | .id')
-          
-          # Delete the runner if found
-          if [ -n "$RUNNER_ID" ]; then
-            gh api \
-              --method DELETE \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              /repos/${{ github.repository }}/actions/runners/$RUNNER_ID
-            echo "Runner ${{ needs.provision-windows-runner.outputs.runner-name }} (ID: $RUNNER_ID) deleted"
-          else
-            echo "Runner not found or already removed"
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
+          for suffix in hv vbox; do
+            rg_var="resource-group-${suffix}"
+            runner_var="runner-name-${suffix}"
+            
+            case $suffix in
+              hv) 
+                resource_group="${{ needs.provision-windows-runner.outputs.resource-group-hv }}"
+                runner_name="${{ needs.provision-windows-runner.outputs.runner-name-hv }}"
+                ;;
+              vbox)
+                resource_group="${{ needs.provision-windows-runner.outputs.resource-group-vbox }}"
+                runner_name="${{ needs.provision-windows-runner.outputs.runner-name-vbox }}"
+                ;;
+            esac
+            
+            echo "Deleting resource group ${resource_group}"
+            az rest \
+              --method post \
+              --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
+              --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+              --body "{
+                \"resource-group\": \"${resource_group}\",
+                \"runner-name\": \"${runner_name}\"
+              }"
+          done

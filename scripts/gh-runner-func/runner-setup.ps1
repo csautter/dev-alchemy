@@ -195,12 +195,12 @@ if (-not (Get-LocalUser -Name "ghrunner" -ErrorAction SilentlyContinue)) {
 Add-LocalGroupMember -Group "Administrators" -Member "ghrunner" -ErrorAction SilentlyContinue
 Add-LocalGroupMember -Group "Hyper-V Administrators" -Member "ghrunner" -ErrorAction SilentlyContinue
 
-# optional: set --ephemeral flag to make runner automatically remove itself after job completion
 .\config.cmd `
   --url $RepoUrl `
   --token $RunnerToken `
   --name $RunnerName `
   --labels windows,azure,nested,$RunnerName `
+  --ephemeral `
   --unattended `
   --runasservice `
   --windowslogonaccount ghrunner `

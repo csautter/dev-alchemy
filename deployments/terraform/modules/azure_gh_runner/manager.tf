@@ -86,7 +86,7 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
     LOCATION                 = "eastus"
     RESOURCE_GROUP           = "gh-runner-tmp-rg"
     VM_NAME                  = "gh-runner-vm"
-    VM_SIZE                  = "Standard_D2s_v3"
+    VM_SIZE                  = "Standard_D2_v5"
     ADMIN_USERNAME           = "azureuser"
     CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images-eastus/providers/Microsoft.Compute/images/Win2022GHAzureRunnerImage"
     FUNCTION_KEY             = data.azurerm_key_vault_secret.azure_function_key.value

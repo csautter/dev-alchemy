@@ -39,6 +39,7 @@ source "hyperv-iso" "win11" {
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "P@ssw0rd!"
+  winrm_timeout  = "60m"
 
   enable_secure_boot = true
   generation         = 2
