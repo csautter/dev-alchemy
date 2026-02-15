@@ -19,12 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        suffix: [hv, vbox]
+        suffix: [hv, vb]
     outputs:
       runner-name-hv: ${{ steps.vars.outputs.runner-name-hv }}
       resource-group-hv: ${{ steps.vars.outputs.resource-group-hv }}
-      runner-name-vbox: ${{ steps.vars.outputs.runner-name-vbox }}
-      resource-group-vbox: ${{ steps.vars.outputs.resource-group-vbox }}
+      runner-name-vb: ${{ steps.vars.outputs.runner-name-vb }}
+      resource-group-vb: ${{ steps.vars.outputs.resource-group-vb }}
 
     steps:
       - name: Azure Login (OIDC)
@@ -37,9 +37,9 @@ jobs:
       - name: Generate names
         id: vars
         run: |
-          echo "runner-name=ghr-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          echo "runner-name=${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
           echo "resource-group=gh-runner-tmp-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
-          echo "runner-name-${{ matrix.suffix }}=ghr-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          echo "runner-name-${{ matrix.suffix }}=${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
           echo "resource-group-${{ matrix.suffix }}=gh-runner-tmp-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
 
       - name: Request Windows Runner VM
@@ -99,7 +99,7 @@ jobs:
             - Windows
             - azure
             - nested
-            - "${{ needs.provision-windows-runner.outputs.runner-name-vbox }}"
+            - "${{ needs.provision-windows-runner.outputs.runner-name-vb }}"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -173,7 +173,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Delete resource groups
         run: |
-          for suffix in hv vbox; do
+          for suffix in hv vb; do
             rg_var="resource-group-${suffix}"
             runner_var="runner-name-${suffix}"
             
@@ -182,9 +182,9 @@ jobs:
                 resource_group="${{ needs.provision-windows-runner.outputs.resource-group-hv }}"
                 runner_name="${{ needs.provision-windows-runner.outputs.runner-name-hv }}"
                 ;;
-              vbox)
-                resource_group="${{ needs.provision-windows-runner.outputs.resource-group-vbox }}"
-                runner_name="${{ needs.provision-windows-runner.outputs.runner-name-vbox }}"
+              vb)
+                resource_group="${{ needs.provision-windows-runner.outputs.resource-group-vb }}"
+                runner_name="${{ needs.provision-windows-runner.outputs.runner-name-vb }}"
                 ;;
             esac
             
