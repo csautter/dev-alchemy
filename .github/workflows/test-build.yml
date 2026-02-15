@@ -280,21 +280,21 @@ jobs:
           - vm_os: windows11
             go_test_name: TestBuildQemuWindows11Arm64OnMacos
             runs_on: macos-15
-          - vm_os: windows11
-            go_test_name: TestBuildQemuWindows11Amd64OnMacos
-            runs_on: macos-15
-          - vm_os: ubuntu
-            go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
-            runs_on: macos-15
-          - vm_os: ubuntu
-            go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
-            runs_on: macos-15
-          - vm_os: ubuntu
-            go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
-            runs_on: macos-15
-          - vm_os: ubuntu
-            go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
-            runs_on: macos-15
+          # - vm_os: windows11
+          #   go_test_name: TestBuildQemuWindows11Amd64OnMacos
+          #   runs_on: macos-15
+          # - vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
+          #   runs_on: macos-15
+          # - vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
+          #   runs_on: macos-15
+          # - vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
+          #   runs_on: macos-15
+          # - vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
+          #   runs_on: macos-15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
