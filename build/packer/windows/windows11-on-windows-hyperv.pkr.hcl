@@ -17,6 +17,11 @@ variable "iso_url" {
   default = "../../../vendor/windows/Win11_25H2_English_x64.iso"
 }
 
+variable "cpus" {
+  type    = number
+  default = 2
+}
+
 source "hyperv-iso" "win11" {
   vm_name          = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   output_directory = "${path.root}/../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
@@ -28,7 +33,7 @@ source "hyperv-iso" "win11" {
   # If it does not exist, create a new virtual switch named "Default Switch".
   switch_name = "Default Switch"
   memory      = 4096
-  cpus        = min(packer.num_cores, 4)
+  cpus        = var.cpus
   disk_size   = 61440
 
   communicator   = "winrm"
