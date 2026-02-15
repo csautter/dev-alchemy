@@ -139,6 +139,9 @@ build {
       # install packer with chocolatey
       "choco install -y packer",
 
+      # install azure cli with chocolatey
+      "choco install -y azure-cli",
+
       # install virtualbox with chocolatey
       local.virtualbox_install,
       # loader script to execute custom data on first boot
