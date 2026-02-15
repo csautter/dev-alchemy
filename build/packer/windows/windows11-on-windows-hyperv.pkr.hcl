@@ -17,9 +17,14 @@ variable "iso_url" {
   default = "../../../vendor/windows/Win11_25H2_English_x64.iso"
 }
 
+variable "cpus" {
+  type    = number
+  default = 2
+}
+
 source "hyperv-iso" "win11" {
-  vm_name            = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory   = "${path.root}/../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  vm_name          = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  output_directory = "${path.root}/../../../vendor/windows/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
 
   iso_url      = var.iso_url
   iso_checksum = "none"
@@ -28,19 +33,26 @@ source "hyperv-iso" "win11" {
   # If it does not exist, create a new virtual switch named "Default Switch".
   switch_name = "Default Switch"
   memory      = 4096
-  cpus        = 4
+  cpus        = var.cpus
   disk_size   = 61440
 
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "P@ssw0rd!"
+  winrm_timeout  = "60m"
 
   enable_secure_boot = true
-  generation        = 2
-  enable_tpm        = true
+  generation         = 2
+  enable_tpm         = true
 
-  boot_wait = "2s"
+  boot_wait = "500ms"
+
+  # Send multiple keypresses to ensure we catch the "press any key" prompt
+  # The prompt typically has a 5-second timeout window
   boot_command = [
+    "<spacebar><wait1s>",
+    "<spacebar><wait1s>",
+    "<spacebar><wait1s>",
     "<spacebar>"
   ]
 
@@ -56,21 +68,10 @@ source "hyperv-iso" "win11" {
 build {
   sources = ["source.hyperv-iso.win11"]
 
-  # This provisioner creates C:\packer.txt to verify that the VM was successfully provisioned by Packer.
-  provisioner "powershell" {
-    inline = [
-      "Write-Output 'Running inside Windows VM...'",
-      "New-Item -Path C:\\packer.txt -ItemType File -Force",
-      "Write-Output 'Created C:\\packer.txt file.'",
-      # delete the file to keep the image clean
-      "Remove-Item -Path C:\\packer.txt -Force"
-    ]
-  }
-
   post-processor "vagrant" {
-    output = "${path.root}/../../../vendor/windows/win11-hyperv.box"
+    output              = "${path.root}/../../../cache/windows11/hyperv-windows11-amd64.box"
     keep_input_artifact = false
-    provider_override = "hyperv"
-    compression_level = 1
+    provider_override   = "hyperv"
+    compression_level   = 1
   }
 }

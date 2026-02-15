@@ -34,6 +34,11 @@
         "cmd": "packer fmt ${file}"
       },
       {
+        // Run when a .pkr.hcl file is saved
+        "match": "\\.pkrvars\\.hcl$",
+        "cmd": "packer fmt ${file}"
+      },
+      {
         // Run when a .sh file is saved
         "match": "\\.sh$",
         "cmd": "shfmt -w ${file}"
@@ -46,7 +51,16 @@
     ]
   },
   "yaml.schemas": {
-    "https://raw.githubusercontent.com/canonical/cloud-init/main/cloudinit/config/schemas/versions.schema.cloud-config.json": "file:///c%3A/Users/chris/Project/dev-alchemy/build/packer/linux/ubuntu/http/user-data"
+    "https://raw.githubusercontent.com/canonical/cloud-init/main/cloudinit/config/schemas/versions.schema.cloud-config.json": [
+      "user-data",
+    ]
   },
-  "makefile.configureOnOpen": false
+  "makefile.configureOnOpen": false,
+  "azureFunctions.deploySubpath": "scripts\\gh-runner-func",
+  "azureFunctions.scmDoBuildDuringDeployment": true,
+  "azureFunctions.pythonVenv": ".venv",
+  "azureFunctions.projectLanguage": "Python",
+  "azureFunctions.projectRuntime": "~4",
+  "debug.internalConsoleOptions": "neverOpen",
+  "azureFunctions.projectLanguageModel": 2
 }

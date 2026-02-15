@@ -47,7 +47,7 @@ Example:
 				sem <- struct{}{} // acquire semaphore
 				go func(vm alchemy_build.VirtualMachineConfig) {
 					defer wg.Done()
-					fmt.Printf("➡️  Building VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
+					fmt.Printf("➡️ Building VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
 					if vm.OS == "ubuntu" {
 						alchemy_build.RunQemuUbuntuBuildOnMacOS(vm)
 					}

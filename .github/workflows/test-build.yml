@@ -1,0 +1,201 @@
+name: Test Packer Build for VMs
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "build/packer/windows/*"
+      - "build/packer/windows/**/*"
+      - "scripts/macos/*"
+      - "scripts/macos/**/*"
+      - ".github/workflows/test-packer-build-win11-on-macos.yml"
+
+jobs:
+  provision-windows-runner:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        suffix: [hv, vb]
+    outputs:
+      runner-name-hv: ${{ steps.vars.outputs.runner-name-hv }}
+      resource-group-hv: ${{ steps.vars.outputs.resource-group-hv }}
+      runner-name-vb: ${{ steps.vars.outputs.runner-name-vb }}
+      resource-group-vb: ${{ steps.vars.outputs.resource-group-vb }}
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Generate names
+        id: vars
+        run: |
+          echo "runner-name=${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          echo "resource-group=gh-runner-tmp-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          echo "runner-name-${{ matrix.suffix }}=${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+          echo "resource-group-${{ matrix.suffix }}=gh-runner-tmp-${GITHUB_RUN_ID}-${{ matrix.suffix }}" >> $GITHUB_OUTPUT
+
+      - name: Request Windows Runner VM
+        run: |
+          # placeholder for actual VM creation commands
+          echo "placeholder for creating Windows VM"
+          echo "Creating Windows VM in resource group ${{ steps.vars.outputs.resource-group }} with runner name ${{ steps.vars.outputs.runner-name }}"
+          az rest \
+            --method post \
+            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/request_runner" \
+            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+            --body '{
+              "repo": "${{ github.repository }}",
+              "resource-group": "${{ steps.vars.outputs.resource-group }}",
+              "runner-name": "${{ steps.vars.outputs.runner-name }}",
+            }'
+
+  test-packer-build:
+    name: build ${{ matrix.go_test_name }} VM_OS ${{ matrix.vm_os }} runner_os ${{ matrix.runner_os }}
+    needs: [provision-windows-runner]
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # - runner_os: macos-15
+          #   vm_os: windows11
+          #   go_test_name: TestBuildQemuWindows11Arm64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: windows11
+          #   go_test_name: TestBuildQemuWindows11Amd64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
+          # - runner_os: macos-15
+          #   vm_os: ubuntu
+          #   go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
+          - runner_os: windows-2025
+            vm_os: windows11
+            go_test_name: TestBuildHypervWindows11Amd64OnWindows
+            runs_on:
+            - self-hosted
+            - Windows
+            - azure
+            - nested
+            - "${{ needs.provision-windows-runner.outputs.runner-name-hv }}"
+          - runner_os: windows-2025
+            vm_os: windows11
+            go_test_name: TestBuildVirtualBoxWindows11Amd64OnWindows
+            runs_on:
+            - self-hosted
+            - Windows
+            - azure
+            - nested
+            - "${{ needs.provision-windows-runner.outputs.runner-name-vb }}"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        if: matrix.runner_os != 'windows-2025'
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies macos
+        if: matrix.runner_os == 'macos-15'
+        run: |
+          bash scripts/macos/dev-alchemy-install-dependencies.sh
+
+      - name: Install dependencies windows
+        if: matrix.runner_os == 'windows-2025'
+        shell: powershell
+        run: |
+          # check if oscdimg is already installed
+          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $oscdimgPath) {
+            echo "oscdimg.exe not found. Installing..."
+            powershell -File scripts/windows/install_oscdimg.ps1
+          }
+          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          echo "$oscdimgPath" # Optional: debug output
+          echo "$($oscdimgPath | Split-Path)" | Out-File -Append $env:GITHUB_PATH
+
+      - name: Run build for OS=${{ matrix.vm_os }} TEST_NAME=${{ matrix.go_test_name }}
+        id: packer_build
+        shell: bash
+        continue-on-error: false
+        env:
+          PACKER_LOG: 1
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
+
+      - name: Move .vnc.mp4 files to artifact directory
+        if: matrix.runner_os == 'macos-15'
+        run: |
+          mkdir -p artifact
+          find ./cache -name '*.vnc.mp4' -exec cp {} artifact/ \;
+
+      - name: Upload packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
+        if: matrix.runner_os == 'macos-15'
+        uses: actions/upload-artifact@v4
+        with:
+          name: packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4
+          path: artifact/*.vnc.mp4
+          retention-days: 1
+
+      - name: Fail if Packer build failed
+        if: steps.packer_build.outcome == 'failure'
+        run: |
+          echo "Packer build failed. Failing workflow."
+          exit 1
+
+  cleanup:
+    needs: [provision-windows-runner, test-packer-build]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Delete resource groups
+        run: |
+          for suffix in hv vb; do
+            rg_var="resource-group-${suffix}"
+            runner_var="runner-name-${suffix}"
+            
+            case $suffix in
+              hv) 
+                resource_group="${{ needs.provision-windows-runner.outputs.resource-group-hv }}"
+                runner_name="${{ needs.provision-windows-runner.outputs.runner-name-hv }}"
+                ;;
+              vb)
+                resource_group="${{ needs.provision-windows-runner.outputs.resource-group-vb }}"
+                runner_name="${{ needs.provision-windows-runner.outputs.runner-name-vb }}"
+                ;;
+            esac
+            
+            echo "Deleting resource group ${resource_group}"
+            az rest \
+              --method post \
+              --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
+              --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+              --body "{
+                \"resource-group\": \"${resource_group}\",
+                \"runner-name\": \"${runner_name}\"
+              }" || echo "Failed to delete resource group ${resource_group}, continuing..."
+          done

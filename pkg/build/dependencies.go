@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/hashicorp/go-getter"
@@ -56,13 +57,15 @@ type WebFileDependency struct {
 	BeforeHook func() (string, error)
 }
 
-const qemu_efi_version = "2025.05-1"
+// TODO: Automate version updates by checking Debian package repository
+// https://packages.debian.org/trixie/qemu-efi-aarch64
+const qemu_efi_version = "2025.02-8"
 
 func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	for _, dep := range getWebFileDependencies() {
 		needsDownload := false
 		for _, relatedConfig := range dep.RelatedVmConfigs {
-			if relatedConfig.OS == vmconfig.OS && relatedConfig.Arch == vmconfig.Arch && relatedConfig.UbuntuType == vmconfig.UbuntuType {
+			if string(relatedConfig.HostOs) == string(vmconfig.HostOs) && relatedConfig.OS == vmconfig.OS && relatedConfig.Arch == vmconfig.Arch && relatedConfig.UbuntuType == vmconfig.UbuntuType && string(relatedConfig.VirtualizationEngine) == string(vmconfig.VirtualizationEngine) {
 				if !checkIfWebFileDependencyExists(dep) {
 					needsDownload = true
 				}
@@ -77,7 +80,7 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	}
 }
 
-func getWindows11DownloadUrl(arch string, args []string) (string, error) {
+func getWindows11Download(arch string, savePath string, download bool) (string, error) {
 	var url_file string
 	if arch == "amd64" {
 		url_file = "win11_amd64_iso_url.txt"
@@ -86,22 +89,64 @@ func getWindows11DownloadUrl(arch string, args []string) (string, error) {
 		url_file = "win11_arm64_iso_url.txt"
 	}
 
-	args = append(args, "--arch", arch, "--project-root", GetDirectoriesInstance().ProjectDir)
-
-	RunProcessConfig := RunProcessConfig{
-		ExecutablePath: "bash",
-		WorkingDir:     filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos"),
-		Args:           append([]string{filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos/playwright_win11_iso.sh")}, args...),
-		Timeout:        20 * time.Minute,
+	// if running on windows
+	var python_executable string
+	if runtime.GOOS == "windows" {
+		python_executable = "python"
+	} else {
+		python_executable = "python3"
 	}
 
-	ctx := RunExternalProcess(RunProcessConfig)
-	ctxDone := ctx.Done()
-	select {
-	case <-ctxDone:
-		// Process completed
-	case <-time.After(RunProcessConfig.Timeout):
-		return "", fmt.Errorf("timeout reached while getting Windows 11 download URL")
+	workdir := filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos")
+	_, err := os.Stat(filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos/.venv"))
+	if err != nil && os.IsNotExist(err) {
+		log.Printf("Creating Python virtual environment for Windows 11 download script")
+		RunCliCommand(workdir, python_executable, []string{"-m", "venv", ".venv"})
+	} else if err == nil {
+		log.Printf("Python virtual environment for Windows 11 download script already exists")
+	} else {
+		return "", err
+	}
+
+	log.Printf("Installing required Python packages for Windows 11 download script")
+	pipPath := filepath.Join(workdir, ".venv", "Scripts", "pip.exe")
+	if runtime.GOOS != "windows" {
+		pipPath = filepath.Join(workdir, ".venv", "bin", "pip")
+	}
+	venvPython := filepath.Join(workdir, ".venv", "Scripts", "python.exe")
+	if runtime.GOOS != "windows" {
+		venvPython = filepath.Join(workdir, ".venv", "bin", "python3")
+	}
+	_, err = RunCliCommand(workdir, venvPython, []string{"-c", "import playwright"})
+	if err != nil {
+		RunCliCommand(workdir, pipPath, []string{"install", "playwright"})
+	}
+	_, err = RunCliCommand(workdir, venvPython, []string{"-c", "import playwright_stealth"})
+	if err != nil {
+		RunCliCommand(workdir, pipPath, []string{"install", "playwright-stealth"})
+	}
+
+	log.Printf("Installing Playwright browsers for Windows 11 download script")
+	RunCliCommand(workdir, venvPython, []string{"-m", "playwright", "install", "chromium"})
+
+	args := []string{"playwright_win11_iso.py", "--save-path", savePath}
+	// if arch is arm64, add --arm flag
+	if arch == "arm64" {
+		args = append(args, "--arm")
+	}
+	if download {
+		args = append(args, "--download")
+	}
+	config := RunProcessConfig{
+		WorkingDir:     workdir,
+		ExecutablePath: venvPython,
+		Args:           args,
+		Timeout:        10 * time.Minute,
+	}
+	RunExternalProcess(config)
+
+	if download {
+		return "", nil
 	}
 
 	content, err := os.ReadFile(filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/"+url_file))
@@ -121,34 +166,64 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://getutm.app/downloads/utm-guest-tools-latest.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:   "windows11",
-					Arch: "amd64",
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 				{
-					OS:   "windows11",
-					Arch: "arm64",
-				},
-			},
-		},
-		{
-			LocalPath:  filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_amd64.iso"),
-			Checksum:   "",
-			BeforeHook: func() (string, error) { return getWindows11DownloadUrl("amd64", nil) },
-			RelatedVmConfigs: []VirtualMachineConfig{
-				{
-					OS:   "windows11",
-					Arch: "amd64",
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
 		{
-			LocalPath:  filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_arm64.iso"),
-			Checksum:   "",
-			BeforeHook: func() (string, error) { return getWindows11DownloadUrl("arm64", nil) },
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_amd64.iso"),
+			Checksum:  "",
+			BeforeHook: func() (string, error) {
+				return getWindows11Download("amd64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_amd64.iso"), false)
+			},
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:   "windows11",
-					Arch: "arm64",
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsWindows,
+					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsWindows,
+					VirtualizationEngine: VirtualizationEngineHyperv,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsWindows,
+					VirtualizationEngine: VirtualizationEngineVirtualBox,
+				},
+			},
+		},
+		{
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_arm64.iso"),
+			Checksum:  "",
+			BeforeHook: func() (string, error) {
+				return getWindows11Download("arm64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_arm64.iso"), false)
+			},
+			RelatedVmConfigs: []VirtualMachineConfig{
+				{
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -158,8 +233,10 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    fmt.Sprintf("http://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_%s_all.deb", qemu_efi_version),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:   "windows11",
-					Arch: "arm64",
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -169,8 +246,10 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.266-1/virtio-win-0.1.266.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:   "windows11",
-					Arch: "arm64",
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -180,9 +259,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "server",
-					Arch:       "arm64",
+					OS:                   "ubuntu",
+					UbuntuType:           "server",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -192,9 +273,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "server",
-					Arch:       "amd64",
+					OS:                   "ubuntu",
+					UbuntuType:           "server",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -204,9 +287,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "desktop",
-					Arch:       "arm64",
+					OS:                   "ubuntu",
+					UbuntuType:           "desktop",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -216,9 +301,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "desktop",
-					Arch:       "amd64",
+					OS:                   "ubuntu",
+					UbuntuType:           "desktop",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -228,9 +315,11 @@ func getWebFileDependencies() []WebFileDependency {
 			Source:    fmt.Sprintf("http://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_%s_all.deb", qemu_efi_version),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
-					OS:         "ubuntu",
-					UbuntuType: "server",
-					Arch:       "arm64",
+					OS:                   "ubuntu",
+					UbuntuType:           "server",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
 				},
 			},
 		},
@@ -242,6 +331,11 @@ func downloadWebFileDependency(dep WebFileDependency) error {
 		newSource, err := dep.BeforeHook()
 		if err != nil {
 			return err
+		}
+		// some before hooks may also download the file themselves, so if the new source is empty, we can assume the file has been downloaded and skip the download step
+		if newSource == "" {
+			log.Printf("BeforeHook for %s returned empty source, assuming file has been downloaded", dep.LocalPath)
+			return nil
 		}
 		dep.Source = newSource
 	}
@@ -260,6 +354,8 @@ func downloadWebFileDependency(dep WebFileDependency) error {
 	}
 	err := client.Get()
 	if err != nil {
+		// delete the file if it was partially downloaded
+		_ = os.Remove(dep.LocalPath)
 		log.Printf("Failed to download web file dependency from %s to %s: %v", dep.Source, dep.LocalPath, err)
 		return err
 	}
