@@ -105,56 +105,10 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Download Windows ISO from Azure Blob Storage
-        shell: powershell
-        run: |
-          $isoPath = "C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso"
-          
-          if (Test-Path $isoPath) {
-            Write-Host "Windows ISO already exists at $isoPath, skipping download"
-          } else {
-            Write-Host "Windows ISO not found locally, attempting to download from Azure Blob Storage..."
-            
-            $storageAccountName = "devalchemy${{ secrets.AZURE_SUBSCRIPTION_ID }}".Substring(0, 24) -replace '[^a-z0-9]', ''
-            $resourceGroup = "dev-alchemy-storage-rg"
-            $containerName = "windows-isos"
-            $blobName = "win11_25h2_english_amd64.iso"
-            
-            # Check if storage account exists
-            $sa = az storage account show --name $storageAccountName --resource-group $resourceGroup 2>$null | ConvertFrom-Json
-            
-            if ($sa) {
-              # Check if blob exists
-              $blobExists = az storage blob exists `
-                --account-name $storageAccountName `
-                --container-name $containerName `
-                --name $blobName `
-                --auth-mode login | ConvertFrom-Json
-              
-              if ($blobExists.exists) {
-                Write-Host "Found Windows ISO in blob storage, downloading..."
-                
-                # Create directory if it doesn't exist
-                $isoDir = Split-Path -Path $isoPath -Parent
-                if (-not (Test-Path $isoDir)) {
-                  New-Item -ItemType Directory -Path $isoDir -Force
-                }
-                
-                # Download the blob
-                az storage blob download `
-                  --account-name $storageAccountName `
-                  --container-name $containerName `
-                  --name $blobName `
-                  --file $isoPath `
-                  --auth-mode login
-                
-                Write-Host "Successfully downloaded Windows ISO from Azure Blob Storage"
-              } else {
-                Write-Host "Windows ISO not found in blob storage, will need to be downloaded from Microsoft"
-              }
-            } else {
-              Write-Host "Storage account does not exist, will need to download ISO from Microsoft"
-            }
-          }
+        uses: ./.github/actions/download-windows-iso
+        with:
+          iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install dependencies windows
         shell: powershell
@@ -191,68 +145,11 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Create storage account and upload Windows ISO
-        shell: powershell
-        run: |
-          $isoPath = "C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso"
-          
-          if (Test-Path $isoPath) {
-            Write-Host "Windows ISO found at $isoPath"
-            
-            $storageAccountName = "devalchemy${{ secrets.AZURE_SUBSCRIPTION_ID }}".Substring(0, 24) -replace '[^a-z0-9]', ''
-            $resourceGroup = "dev-alchemy-storage-rg"
-            $location = "eastus2"
-            $containerName = "windows-isos"
-            
-            # Create resource group if it doesn't exist
-            $rg = az group show --name $resourceGroup 2>$null | ConvertFrom-Json
-            if (-not $rg) {
-              Write-Host "Creating resource group $resourceGroup in $location"
-              az group create --name $resourceGroup --location $location
-            }
-            
-            # Create storage account if it doesn't exist
-            $sa = az storage account show --name $storageAccountName --resource-group $resourceGroup 2>$null | ConvertFrom-Json
-            if (-not $sa) {
-              Write-Host "Creating storage account $storageAccountName"
-              az storage account create `
-                --name $storageAccountName `
-                --resource-group $resourceGroup `
-                --location $location `
-                --sku Standard_LRS `
-                --kind StorageV2 `
-                --access-tier Hot `
-                --allow-blob-public-access false
-            }
-            
-            # Create container if it doesn't exist
-            $containerExists = az storage container exists `
-              --account-name $storageAccountName `
-              --name $containerName `
-              --auth-mode login | ConvertFrom-Json
-            
-            if (-not $containerExists.exists) {
-              Write-Host "Creating container $containerName"
-              az storage container create `
-                --account-name $storageAccountName `
-                --name $containerName `
-                --auth-mode login
-            }
-            
-            # Upload ISO to blob storage
-            Write-Host "Uploading Windows ISO to blob storage..."
-            az storage blob upload `
-              --account-name $storageAccountName `
-              --container-name $containerName `
-              --name "win11_25h2_english_amd64.iso" `
-              --file $isoPath `
-              --auth-mode login `
-              --overwrite true
-            
-            Write-Host "Successfully uploaded Windows ISO to Azure Blob Storage"
-          } else {
-            Write-Host "Windows ISO not found at $isoPath, skipping upload"
-          }
+      - name: Upload Windows ISO to Azure Blob Storage
+        uses: ./.github/actions/upload-windows-iso
+        with:
+          iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   test-virtualbox-build:
     name: build TestBuildVirtualBoxWindows11Amd64OnWindows
@@ -267,6 +164,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download Windows ISO from Azure Blob Storage
+        uses: ./.github/actions/download-windows-iso
+        with:
+          iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install dependencies windows
         shell: powershell
@@ -295,6 +205,19 @@ jobs:
         run: |
           echo "Packer build failed. Failing workflow."
           exit 1
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload Windows ISO to Azure Blob Storage
+        uses: ./.github/actions/upload-windows-iso
+        with:
+          iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   cleanup-hyperv:
     needs: [provision-hyperv-runner, test-hyperv-build]

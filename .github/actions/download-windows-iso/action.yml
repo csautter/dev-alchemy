@@ -1,0 +1,65 @@
+name: 'Download Windows ISO from Azure Blob Storage'
+description: 'Downloads Windows ISO from Azure Blob Storage if it exists, otherwise allows fallback to Microsoft download'
+
+inputs:
+  iso-path:
+    description: 'Path where the ISO should be downloaded'
+    required: true
+  subscription-id:
+    description: 'Azure subscription ID'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download Windows ISO from Azure Blob Storage
+      shell: powershell
+      run: |
+        $isoPath = "${{ inputs.iso-path }}"
+        
+        if (Test-Path $isoPath) {
+          Write-Host "Windows ISO already exists at $isoPath, skipping download"
+        } else {
+          Write-Host "Windows ISO not found locally, attempting to download from Azure Blob Storage..."
+          
+          $storageAccountName = "devalchemy${{ inputs.subscription-id }}".Substring(0, 24) -replace '[^a-z0-9]', ''
+          $resourceGroup = "dev-alchemy-storage-rg"
+          $containerName = "windows-isos"
+          $blobName = "win11_25h2_english_amd64.iso"
+          
+          # Check if storage account exists
+          $sa = az storage account show --name $storageAccountName --resource-group $resourceGroup 2>$null | ConvertFrom-Json
+          
+          if ($sa) {
+            # Check if blob exists
+            $blobExists = az storage blob exists `
+              --account-name $storageAccountName `
+              --container-name $containerName `
+              --name $blobName `
+              --auth-mode login | ConvertFrom-Json
+            
+            if ($blobExists.exists) {
+              Write-Host "Found Windows ISO in blob storage, downloading..."
+              
+              # Create directory if it doesn't exist
+              $isoDir = Split-Path -Path $isoPath -Parent
+              if (-not (Test-Path $isoDir)) {
+                New-Item -ItemType Directory -Path $isoDir -Force
+              }
+              
+              # Download the blob
+              az storage blob download `
+                --account-name $storageAccountName `
+                --container-name $containerName `
+                --name $blobName `
+                --file $isoPath `
+                --auth-mode login
+              
+              Write-Host "Successfully downloaded Windows ISO from Azure Blob Storage"
+            } else {
+              Write-Host "Windows ISO not found in blob storage, will need to be downloaded from Microsoft"
+            }
+          } else {
+            Write-Host "Storage account does not exist, will need to download ISO from Microsoft"
+          }
+        }

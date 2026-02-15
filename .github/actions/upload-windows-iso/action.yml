@@ -1,0 +1,76 @@
+name: 'Upload Windows ISO to Azure Blob Storage'
+description: 'Creates Azure Blob Storage and uploads Windows ISO if it exists'
+
+inputs:
+  iso-path:
+    description: 'Path to the Windows ISO file'
+    required: true
+  subscription-id:
+    description: 'Azure subscription ID'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Create storage account and upload Windows ISO
+      shell: powershell
+      run: |
+        $isoPath = "${{ inputs.iso-path }}"
+        
+        if (Test-Path $isoPath) {
+          Write-Host "Windows ISO found at $isoPath"
+          
+          $storageAccountName = "devalchemy${{ inputs.subscription-id }}".Substring(0, 24) -replace '[^a-z0-9]', ''
+          $resourceGroup = "dev-alchemy-storage-rg"
+          $location = "eastus2"
+          $containerName = "windows-isos"
+          
+          # Create resource group if it doesn't exist
+          $rg = az group show --name $resourceGroup 2>$null | ConvertFrom-Json
+          if (-not $rg) {
+            Write-Host "Creating resource group $resourceGroup in $location"
+            az group create --name $resourceGroup --location $location
+          }
+          
+          # Create storage account if it doesn't exist
+          $sa = az storage account show --name $storageAccountName --resource-group $resourceGroup 2>$null | ConvertFrom-Json
+          if (-not $sa) {
+            Write-Host "Creating storage account $storageAccountName"
+            az storage account create `
+              --name $storageAccountName `
+              --resource-group $resourceGroup `
+              --location $location `
+              --sku Standard_LRS `
+              --kind StorageV2 `
+              --access-tier Hot `
+              --allow-blob-public-access false
+          }
+          
+          # Create container if it doesn't exist
+          $containerExists = az storage container exists `
+            --account-name $storageAccountName `
+            --name $containerName `
+            --auth-mode login | ConvertFrom-Json
+          
+          if (-not $containerExists.exists) {
+            Write-Host "Creating container $containerName"
+            az storage container create `
+              --account-name $storageAccountName `
+              --name $containerName `
+              --auth-mode login
+          }
+          
+          # Upload ISO to blob storage
+          Write-Host "Uploading Windows ISO to blob storage..."
+          az storage blob upload `
+            --account-name $storageAccountName `
+            --container-name $containerName `
+            --name "win11_25h2_english_amd64.iso" `
+            --file $isoPath `
+            --auth-mode login `
+            --overwrite true
+          
+          Write-Host "Successfully uploaded Windows ISO to Azure Blob Storage"
+        } else {
+          Write-Host "Windows ISO not found at $isoPath, skipping upload"
+        }
