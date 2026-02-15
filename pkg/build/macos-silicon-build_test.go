@@ -16,11 +16,12 @@ func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 	t.Parallel()
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "arm64",
-		UbuntuType: "server",
-		VncPort:    5901,
-		HostOs:     HostOsDarwin,
+		OS:                   "ubuntu",
+		Arch:                 "arm64",
+		UbuntuType:           "server",
+		VncPort:              5901,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -32,11 +33,12 @@ func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 	t.Parallel()
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "amd64",
-		UbuntuType: "server",
-		VncPort:    5902,
-		HostOs:     HostOsDarwin,
+		OS:                   "ubuntu",
+		Arch:                 "amd64",
+		UbuntuType:           "server",
+		VncPort:              5902,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -48,11 +50,12 @@ func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 	t.Parallel()
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "arm64",
-		UbuntuType: "desktop",
-		VncPort:    5903,
-		HostOs:     HostOsDarwin,
+		OS:                   "ubuntu",
+		Arch:                 "arm64",
+		UbuntuType:           "desktop",
+		VncPort:              5903,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -64,11 +67,12 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 	t.Parallel()
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "amd64",
-		UbuntuType: "desktop",
-		VncPort:    5904,
-		HostOs:     HostOsDarwin,
+		OS:                   "ubuntu",
+		Arch:                 "amd64",
+		UbuntuType:           "desktop",
+		VncPort:              5904,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -80,10 +84,11 @@ func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 	t.Parallel()
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:      "windows11",
-		Arch:    "arm64",
-		VncPort: 5911,
-		HostOs:  HostOsDarwin,
+		OS:                   "windows11",
+		Arch:                 "arm64",
+		VncPort:              5911,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -95,10 +100,11 @@ func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
 	t.Parallel()
 
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:      "windows11",
-		Arch:    "amd64",
-		VncPort: 5912,
-		HostOs:  HostOsDarwin,
+		OS:                   "windows11",
+		Arch:                 "amd64",
+		VncPort:              5912,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
