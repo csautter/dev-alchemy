@@ -25,9 +25,13 @@ runs:
           
           # Create storage account name (max 24 chars, lowercase alphanumeric only)
           storage_account_name=$(echo "ghrunner${{ inputs.subscription-id }}" | tr -cd '[:alnum:]' | tr '[:upper:]' '[:lower:]' | cut -c1-24)
+          echo "Using storage account name: $storage_account_name"
           resource_group="gh-runner-storage-rg"
+          echo "Using resource group: $resource_group"
           container_name="windows-isos"
+          echo "Using container name: $container_name"
           blob_name="win11_25h2_english_amd64.iso"
+          echo "Using blob name: $blob_name"
           
           # Check if storage account exists
           if az storage account show --name "$storage_account_name" --resource-group "$resource_group" &>/dev/null; then

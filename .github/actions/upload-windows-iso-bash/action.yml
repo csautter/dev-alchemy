@@ -22,44 +22,13 @@ runs:
           
           # Create storage account name (max 24 chars, lowercase alphanumeric only)
           storage_account_name=$(echo "ghrunner${{ inputs.subscription-id }}" | tr -cd '[:alnum:]' | tr '[:upper:]' '[:lower:]' | cut -c1-24)
+          echo "Using storage account name: $storage_account_name"
           resource_group="gh-runner-storage-rg"
+          echo "Using resource group: $resource_group"
           location="eastus2"
+          echo "Using location: $location"
           container_name="windows-isos"
-          
-          # Create resource group if it doesn't exist
-          if ! az group show --name "$resource_group" &>/dev/null; then
-            echo "Creating resource group $resource_group in $location"
-            az group create --name "$resource_group" --location "$location"
-          fi
-          
-          # Create storage account if it doesn't exist
-          if ! az storage account show --name "$storage_account_name" --resource-group "$resource_group" &>/dev/null; then
-            echo "Creating storage account $storage_account_name"
-            az storage account create \
-              --name "$storage_account_name" \
-              --resource-group "$resource_group" \
-              --location "$location" \
-              --sku Standard_LRS \
-              --kind StorageV2 \
-              --access-tier Hot \
-              --allow-blob-public-access false
-          fi
-          
-          # Create container if it doesn't exist
-          container_exists=$(az storage container exists \
-            --account-name "$storage_account_name" \
-            --name "$container_name" \
-            --auth-mode login \
-            --query "exists" \
-            --output tsv)
-          
-          if [ "$container_exists" != "true" ]; then
-            echo "Creating container $container_name"
-            az storage container create \
-              --account-name "$storage_account_name" \
-              --name "$container_name" \
-              --auth-mode login
-          fi
+          echo "Using container name: $container_name"
           
           # Upload ISO to blob storage
           echo "Uploading Windows ISO to blob storage..."
