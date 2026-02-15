@@ -196,5 +196,5 @@ jobs:
               --body "{
                 \"resource-group\": \"${resource_group}\",
                 \"runner-name\": \"${runner_name}\"
-              }"
+              }" || echo "Failed to delete resource group ${resource_group}, continuing..."
           done

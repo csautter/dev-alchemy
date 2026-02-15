@@ -83,7 +83,7 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
     FUNCTIONS_WORKER_RUNTIME = "python"
     VAULT_URL                = azurerm_key_vault.gh_runner_kv.vault_uri
     SUBSCRIPTION_ID          = data.azurerm_client_config.current.subscription_id
-    LOCATION                 = "eastus"
+    LOCATION                 = "eastus2"
     RESOURCE_GROUP           = "gh-runner-tmp-rg"
     VM_NAME                  = "gh-runner-vm"
     VM_SIZE                  = "Standard_D2_v5"
