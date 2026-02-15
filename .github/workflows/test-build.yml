@@ -125,18 +125,13 @@ jobs:
       - name: Run HyperV build
         id: packer_build
         shell: bash
-        continue-on-error: false
+        continue-on-error: true
         env:
           PACKER_LOG: 1
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           make test-build-specific TEST_NAME=TestBuildHypervWindows11Amd64OnWindows
 
-      - name: Fail if Packer build failed
-        if: steps.packer_build.outcome == 'failure'
-        run: |
-          echo "Packer build failed. Failing workflow."
-          exit 1
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -150,6 +145,12 @@ jobs:
         with:
           iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fail if Packer build failed
+        if: steps.packer_build.outcome == 'failure'
+        run: |
+          echo "Packer build failed. Failing workflow."
+          exit 1
 
   test-virtualbox-build:
     name: build TestBuildVirtualBoxWindows11Amd64OnWindows
@@ -193,18 +194,12 @@ jobs:
       - name: Run VirtualBox build
         id: packer_build
         shell: bash
-        continue-on-error: false
+        continue-on-error: true
         env:
           PACKER_LOG: 1
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           make test-build-specific TEST_NAME=TestBuildVirtualBoxWindows11Amd64OnWindows
-
-      - name: Fail if Packer build failed
-        if: steps.packer_build.outcome == 'failure'
-        run: |
-          echo "Packer build failed. Failing workflow."
-          exit 1
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -218,6 +213,12 @@ jobs:
         with:
           iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fail if Packer build failed
+        if: steps.packer_build.outcome == 'failure'
+        run: |
+          echo "Packer build failed. Failing workflow."
+          exit 1
 
   cleanup-hyperv:
     needs: [provision-hyperv-runner, test-hyperv-build]
@@ -328,7 +329,7 @@ jobs:
       - name: Run build for VM OS=${{ matrix.vm_os }} TEST_NAME=${{ matrix.go_test_name }} on runner OS=${{ matrix.runs_on }}
         id: packer_build
         shell: bash
-        continue-on-error: false
+        continue-on-error: true
         env:
           PACKER_LOG: 1
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
