@@ -30,7 +30,7 @@ runs:
           echo "Using resource group: $resource_group"
           container_name="windows-isos"
           echo "Using container name: $container_name"
-          blob_name="win11_25h2_english_amd64.iso"
+          blob_name=$(basename "$iso_path")
           echo "Using blob name: $blob_name"
           
           # Check if storage account exists

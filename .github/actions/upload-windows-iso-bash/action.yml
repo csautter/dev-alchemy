@@ -29,13 +29,15 @@ runs:
           echo "Using location: $location"
           container_name="windows-isos"
           echo "Using container name: $container_name"
+          blob_name=$(basename "$iso_path")
+          echo "Using blob name: $blob_name"
           
           # Upload ISO to blob storage
           echo "Uploading Windows ISO to blob storage..."
           az storage blob upload \
             --account-name "$storage_account_name" \
             --container-name "$container_name" \
-            --name "win11_25h2_english_amd64.iso" \
+            --name "$blob_name" \
             --file "$iso_path" \
             --auth-mode login \
             --overwrite true
