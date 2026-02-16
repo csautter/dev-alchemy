@@ -27,20 +27,34 @@ runs:
           $containerName = "windows-isos"
           $blobName = Split-Path -Leaf "${{ inputs.iso-path }}"
           
-          Write-Host "Uploading Windows ISO to blob storage account: $storageAccountName..."
-          az storage blob upload `
+          # Check if blob already exists
+          Write-Host "Checking if blob already exists in storage account: $storageAccountName..."
+          $blobExists = az storage blob exists `
             --account-name $storageAccountName `
             --container-name $containerName `
             --name $blobName `
-            --file $isoPath `
             --auth-mode login `
-            --overwrite true
+            --query exists `
+            --output tsv
           
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Successfully uploaded Windows ISO to Azure Blob Storage"
+          if ($blobExists -eq "true") {
+            Write-Host "Blob $blobName already exists in Azure Blob Storage. Skipping upload to prevent overwrite."
           } else {
-            Write-Error "Failed to upload Windows ISO to Azure Blob Storage"
-            exit 1
+            Write-Host "Uploading Windows ISO to blob storage account: $storageAccountName..."
+            az storage blob upload `
+              --account-name $storageAccountName `
+              --container-name $containerName `
+              --name $blobName `
+              --file $isoPath `
+              --auth-mode login `
+              --overwrite false
+            
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Successfully uploaded Windows ISO to Azure Blob Storage"
+            } else {
+              Write-Error "Failed to upload Windows ISO to Azure Blob Storage"
+              exit 1
+            }
           }
         } else {
           Write-Host "Windows ISO not found at $isoPath, skipping upload"
@@ -60,16 +74,30 @@ runs:
           container_name="windows-isos"
           blob_name=$(basename "$iso_path")
           
-          echo "Uploading Windows ISO to blob storage account: $storage_account_name..."
-          az storage blob upload \
+          # Check if blob already exists
+          echo "Checking if blob already exists in storage account: $storage_account_name..."
+          blob_exists=$(az storage blob exists \
             --account-name "$storage_account_name" \
             --container-name "$container_name" \
             --name "$blob_name" \
-            --file "$iso_path" \
             --auth-mode login \
-            --overwrite true
+            --query exists \
+            --output tsv)
           
-          echo "Successfully uploaded Windows ISO to Azure Blob Storage"
+          if [ "$blob_exists" = "true" ]; then
+            echo "Blob $blob_name already exists in Azure Blob Storage. Skipping upload to prevent overwrite."
+          else
+            echo "Uploading Windows ISO to blob storage account: $storage_account_name..."
+            az storage blob upload \
+              --account-name "$storage_account_name" \
+              --container-name "$container_name" \
+              --name "$blob_name" \
+              --file "$iso_path" \
+              --auth-mode login \
+              --overwrite false
+            
+            echo "Successfully uploaded Windows ISO to Azure Blob Storage"
+          fi
         else
           echo "Windows ISO not found at $iso_path, skipping upload"
         fi
