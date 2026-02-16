@@ -1,5 +1,5 @@
 name: 'Upload Windows ISO to Azure Blob Storage'
-description: 'Creates Azure Blob Storage and uploads Windows ISO if it exists'
+description: 'Uploads Windows ISO to Azure Blob Storage if it exists - Works on Windows, macOS, and Linux'
 
 inputs:
   iso-path:
@@ -12,7 +12,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Upload Windows ISO to blob storage
+    - name: Upload Windows ISO to blob storage (Windows)
+      if: runner.os == 'Windows'
       shell: powershell
       run: |
         $isoPath = "${{ inputs.iso-path }}"
@@ -24,12 +25,13 @@ runs:
           # Must match Terraform logic: concat -> remove hyphens -> truncate to 24 chars
           $storageAccountName = ("ghrunner${{ inputs.subscription-id }}" -replace '-', '').Substring(0, 24)
           $containerName = "windows-isos"
+          $blobName = Split-Path -Leaf "${{ inputs.iso-path }}"
           
           Write-Host "Uploading Windows ISO to blob storage account: $storageAccountName..."
           az storage blob upload `
             --account-name $storageAccountName `
             --container-name $containerName `
-            --name "win11_25h2_english_amd64.iso" `
+            --name $blobName `
             --file $isoPath `
             --auth-mode login `
             --overwrite true
@@ -43,3 +45,31 @@ runs:
         } else {
           Write-Host "Windows ISO not found at $isoPath, skipping upload"
         }
+
+    - name: Upload Windows ISO to blob storage (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        iso_path="${{ inputs.iso-path }}"
+        
+        if [ -f "$iso_path" ]; then
+          echo "Windows ISO found at $iso_path"
+          
+          # Create storage account name (max 24 chars, lowercase alphanumeric only)
+          storage_account_name=$(echo "ghrunner${{ inputs.subscription-id }}" | tr -cd '[:alnum:]' | tr '[:upper:]' '[:lower:]' | cut -c1-24)
+          container_name="windows-isos"
+          blob_name=$(basename "$iso_path")
+          
+          echo "Uploading Windows ISO to blob storage account: $storage_account_name..."
+          az storage blob upload \
+            --account-name "$storage_account_name" \
+            --container-name "$container_name" \
+            --name "$blob_name" \
+            --file "$iso_path" \
+            --auth-mode login \
+            --overwrite true
+          
+          echo "Successfully uploaded Windows ISO to Azure Blob Storage"
+        else
+          echo "Windows ISO not found at $iso_path, skipping upload"
+        fi

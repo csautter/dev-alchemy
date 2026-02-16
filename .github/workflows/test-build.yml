@@ -310,7 +310,7 @@ jobs:
 
       - name: Download Windows ISO from Azure Blob Storage
         if: matrix.vm_os == 'windows11'
-        uses: ./.github/actions/download-windows-iso-bash
+        uses: ./.github/actions/download-windows-iso
         with:
           iso-path: ./vendor/windows/win11_25h2_english_${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -360,7 +360,7 @@ jobs:
 
       - name: Upload Windows ISO to Azure Blob Storage
         if: matrix.vm_os == 'windows11'
-        uses: ./.github/actions/upload-windows-iso-bash
+        uses: ./.github/actions/upload-windows-iso
         with:
           iso-path: ./vendor/windows/win11_25h2_english_${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
