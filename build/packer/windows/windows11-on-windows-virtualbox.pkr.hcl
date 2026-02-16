@@ -43,7 +43,7 @@ source "virtualbox-iso" "win11" {
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "P@ssw0rd!"
-  winrm_timeout  = "60m"
+  winrm_timeout  = "90m"
 
   boot_wait = "2s"
   boot_command = [
