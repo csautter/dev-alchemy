@@ -32,9 +32,23 @@ resource "azurerm_storage_container" "windows_isos" {
   }
 }
 
+# Grant the GitHub Actions service principal permission to read the resource group
+resource "azurerm_role_assignment" "gh_actions_cache_rg_reader" {
+  scope                = azurerm_resource_group.cache_storage.id
+  role_definition_name = "Reader"
+  principal_id         = azuread_service_principal.gh_actions_runner_broker.object_id
+}
+
 # Grant the GitHub Actions service principal permission to read and upload blobs to the cache storage account
 resource "azurerm_role_assignment" "gh_actions_cache_blob_contributor" {
   scope                = azurerm_storage_account.cache.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azuread_service_principal.gh_actions_runner_broker.object_id
+}
+
+# Grant the current user (deploying Terraform) permission to upload blobs to the cache storage account
+resource "azurerm_role_assignment" "current_user_cache_blob_contributor" {
+  scope                = azurerm_storage_account.cache.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
 }

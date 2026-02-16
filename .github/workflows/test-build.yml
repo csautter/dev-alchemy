@@ -107,7 +107,7 @@ jobs:
       - name: Download Windows ISO from Azure Blob Storage
         uses: ./.github/actions/download-windows-iso
         with:
-          iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
+          iso-path: .\vendor\windows\win11_25h2_english_amd64.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install dependencies windows
@@ -143,7 +143,7 @@ jobs:
       - name: Upload Windows ISO to Azure Blob Storage
         uses: ./.github/actions/upload-windows-iso
         with:
-          iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
+          iso-path: .\vendor\windows\win11_25h2_english_amd64.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if Packer build failed
@@ -312,7 +312,7 @@ jobs:
         if: matrix.vm_os == 'windows11'
         uses: ./.github/actions/download-windows-iso-bash
         with:
-          iso-path: vendor/windows/win11_25h2_english_${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}.iso
+          iso-path: ./vendor/windows/win11_25h2_english_${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set up Python
@@ -362,7 +362,7 @@ jobs:
         if: matrix.vm_os == 'windows11'
         uses: ./.github/actions/upload-windows-iso-bash
         with:
-          iso-path: vendor/windows/win11_25h2_english_${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}.iso
+          iso-path: ./vendor/windows/win11_25h2_english_${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if Packer build failed

@@ -12,7 +12,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Create storage account and upload Windows ISO
+    - name: Upload Windows ISO to blob storage
       shell: powershell
       run: |
         $isoPath = "${{ inputs.iso-path }}"
@@ -20,13 +20,12 @@ runs:
         if (Test-Path $isoPath) {
           Write-Host "Windows ISO found at $isoPath"
           
-          $storageAccountName = "ghrunner${{ inputs.subscription-id }}".Substring(0, 24) -replace '[^a-z0-9]', ''
-          $resourceGroup = "gh-runner-storage-rg"
-          $location = "eastus2"
+          # Storage resources are created by Terraform (see deployments/terraform/modules/azure_gh_runner/cache.tf)
+          # Must match Terraform logic: concat -> remove hyphens -> truncate to 24 chars
+          $storageAccountName = ("ghrunner${{ inputs.subscription-id }}" -replace '-', '').Substring(0, 24)
           $containerName = "windows-isos"
           
-          # Upload ISO to blob storage
-          Write-Host "Uploading Windows ISO to blob storage..."
+          Write-Host "Uploading Windows ISO to blob storage account: $storageAccountName..."
           az storage blob upload `
             --account-name $storageAccountName `
             --container-name $containerName `
@@ -35,7 +34,12 @@ runs:
             --auth-mode login `
             --overwrite true
           
-          Write-Host "Successfully uploaded Windows ISO to Azure Blob Storage"
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Successfully uploaded Windows ISO to Azure Blob Storage"
+          } else {
+            Write-Error "Failed to upload Windows ISO to Azure Blob Storage"
+            exit 1
+          }
         } else {
           Write-Host "Windows ISO not found at $isoPath, skipping upload"
         }
