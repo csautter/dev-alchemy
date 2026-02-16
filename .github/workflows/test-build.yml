@@ -130,6 +130,7 @@ jobs:
           PACKER_LOG: 1
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          go mod vendor
           make test-build-specific TEST_NAME=TestBuildHypervWindows11Amd64OnWindows
 
 
@@ -199,6 +200,7 @@ jobs:
           PACKER_LOG: 1
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          go mod vendor
           make test-build-specific TEST_NAME=TestBuildVirtualBoxWindows11Amd64OnWindows
 
       - name: Azure Login (OIDC)
@@ -334,6 +336,7 @@ jobs:
           PACKER_LOG: 1
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
       - name: Move .vnc.mp4 files to artifact directory
