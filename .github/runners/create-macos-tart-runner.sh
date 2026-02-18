@@ -87,15 +87,24 @@ fetch_removal_token() {
 cleanup_vm() {
 	local vm="${1:-$CURRENT_VM_NAME}"
 	[[ -z "$vm" ]] && return
+	# Clear immediately so the EXIT trap re-fire after INT/TERM is a no-op.
+	CURRENT_VM_NAME=""
 
-	# Deregister the runner before stopping the VM (handles Ctrl+C interruption)
+	# Deregister the runner before stopping the VM (handles Ctrl+C interruption).
+	# Ephemeral runners deregister themselves when run.sh receives SIGINT, so we
+	# wait briefly and only attempt an explicit removal if the runner is still listed.
 	if [[ -n "$CURRENT_RUNNER_NAME" && -n "$CURRENT_VM_IP" ]]; then
 		echo "Deregistering runner '${CURRENT_RUNNER_NAME}'..."
 		local removal_token
+		# Give run.sh a moment to finish its own graceful shutdown / self-deregistration.
+		sleep 3
 		if removal_token=$(fetch_removal_token 2>/dev/null); then
-			vm_ssh bash -c "cd '${RUNNER_DIR}' && ./config.sh remove --token '${removal_token}'" 2>/dev/null \
-				&& echo "Runner '${CURRENT_RUNNER_NAME}' deregistered." \
-				|| echo "Warning: Runner deregistration via SSH failed; it may need manual cleanup."
+			if vm_ssh bash -c "cd '${RUNNER_DIR}' && ./config.sh remove --token '${removal_token}'" 2>/dev/null; then
+				echo "Runner '${CURRENT_RUNNER_NAME}' deregistered."
+			else
+				# SSH failure is expected when the runner already self-deregistered on interrupt.
+				echo "Note: SSH deregistration skipped (runner likely already self-deregistered)."
+			fi
 		else
 			echo "Warning: Could not obtain removal token; runner may need manual cleanup."
 		fi
@@ -208,6 +217,12 @@ echo "Configuring runner..."
 	--labels "${RUNNER_LABELS}" \
 	--ephemeral \
 	--unattended
+
+# Inject PATH into the runner .env so every job inherits Homebrew binaries.
+# The runner process is a non-login shell and never sources ~/.zprofile or
+# /etc/paths.d – writing to .env is the supported way to set env vars for
+# self-hosted runners.
+echo 'PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin' >> .env
 
 echo "Runner configured. Waiting for a job (./run.sh)..."
 ./run.sh
