@@ -159,9 +159,10 @@ fi
 
 # ── Additional tools (uncomment as needed) ────────────────────────────────────
 # brew install terraform
-# brew install packer
+brew install packer
 # brew install ansible
 # brew install jq
+brew install go
 
 echo ""
 echo "Provisioning complete. Installed versions:"
