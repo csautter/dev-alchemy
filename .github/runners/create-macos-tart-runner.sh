@@ -62,12 +62,53 @@ fi
 echo "Base image '${VM_BASE_IMAGE}' present."
 
 # ─── Cleanup helper ────────────────────────────────────────────────────────────
-# Tracks the name of the VM that is currently running so the trap can clean up.
+# Tracks state of the currently running VM/runner so the trap can clean up.
 CURRENT_VM_NAME=""
+CURRENT_RUNNER_NAME=""
+CURRENT_VM_IP=""
+
+# SSH helper (uses global CURRENT_VM_IP)
+vm_ssh() {
+	sshpass -p "${VM_SSH_PASS}" ssh \
+		-o "StrictHostKeyChecking=no" \
+		-o "UserKnownHostsFile=/dev/null" \
+		-o "ConnectTimeout=5" \
+		"${VM_SSH_USER}@${CURRENT_VM_IP}" "$@"
+}
+
+# Fetch a runner removal token from GitHub
+fetch_removal_token() {
+	if [[ "$GITHUB_SCOPE" == "org" ]]; then
+		gh api --method POST \
+			-H "Accept: application/vnd.github+json" \
+			"/orgs/${GITHUB_ORG}/actions/runners/remove-token" \
+			--jq '.token'
+	else
+		gh api --method POST \
+			-H "Accept: application/vnd.github+json" \
+			"/repos/${GITHUB_REPO}/actions/runners/remove-token" \
+			--jq '.token'
+	fi
+}
 
 cleanup_vm() {
 	local vm="${1:-$CURRENT_VM_NAME}"
 	[[ -z "$vm" ]] && return
+
+	# Deregister the runner before stopping the VM (handles Ctrl+C interruption)
+	if [[ -n "$CURRENT_RUNNER_NAME" && -n "$CURRENT_VM_IP" ]]; then
+		echo "Deregistering runner '${CURRENT_RUNNER_NAME}'..."
+		local removal_token
+		if removal_token=$(fetch_removal_token 2>/dev/null); then
+			vm_ssh bash -c "cd '${RUNNER_DIR}' && ./config.sh remove --token '${removal_token}'" 2>/dev/null \
+				&& echo "Runner '${CURRENT_RUNNER_NAME}' deregistered." \
+				|| echo "Warning: Runner deregistration via SSH failed; it may need manual cleanup."
+		else
+			echo "Warning: Could not obtain removal token; runner may need manual cleanup."
+		fi
+		CURRENT_RUNNER_NAME=""
+	fi
+
 	echo "Stopping VM '${vm}'..."
 	tart stop "${vm}" 2>/dev/null || true
 	if [[ "$VM_CLONE_PER_RUN" == "true" && "$vm" != "$VM_BASE_IMAGE" ]]; then
@@ -139,21 +180,12 @@ while true; do
 	tart run --no-graphics --net-bridged="Wi-Fi" "${VM_NAME}" &
 
 	# ── Wait for an IP ───────────────────────────────────────────────
-	VM_IP=""
-	while [[ -z "$VM_IP" ]]; do
-		VM_IP=$(tart ip --resolver=arp "${VM_NAME}" 2>/dev/null || echo "")
+	CURRENT_VM_IP=""
+	while [[ -z "$CURRENT_VM_IP" ]]; do
+		CURRENT_VM_IP=$(tart ip --resolver=arp "${VM_NAME}" 2>/dev/null || echo "")
 		sleep 1
 	done
-	echo "VM IP: $VM_IP"
-
-	# ── SSH helper ───────────────────────────────────────────────────
-	vm_ssh() {
-		sshpass -p "${VM_SSH_PASS}" ssh \
-			-o "StrictHostKeyChecking=no" \
-			-o "UserKnownHostsFile=/dev/null" \
-			-o "ConnectTimeout=5" \
-			"${VM_SSH_USER}@${VM_IP}" "$@"
-	}
+	echo "VM IP: $CURRENT_VM_IP"
 
 	# ── Wait for SSH ─────────────────────────────────────────────────
 	until vm_ssh "true" 2>/dev/null; do
@@ -166,6 +198,7 @@ while true; do
 	# Running ./run.sh in the foreground means this SSH session blocks until the
 	# ephemeral runner picks up a job, completes it, and deregisters itself.
 	# Control then returns to this host script which cleans up the VM and loops.
+	CURRENT_RUNNER_NAME="$RUNNER_NAME"
 	echo "Installing and starting GitHub Actions runner '${RUNNER_NAME}' (version ${RUNNER_VERSION})..."
 
 	vm_ssh bash <<EOF
@@ -198,6 +231,7 @@ EOF
 	# ── Shut down VM ─────────────────────────────────────────────────
 	cleanup_vm "$CURRENT_VM_NAME"
 	CURRENT_VM_NAME=""
+	CURRENT_VM_IP=""
 
 	# ── Check cycle limit ────────────────────────────────────────────
 	if [[ "$MAX_RUNS" -gt 0 && "$RUN_COUNT" -ge "$MAX_RUNS" ]]; then

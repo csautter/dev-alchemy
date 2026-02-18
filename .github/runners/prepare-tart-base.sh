@@ -121,6 +121,12 @@ if ! grep -qF "$BREW_PROFILE_LINE" ~/.zprofile 2>/dev/null; then
 fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
+# Make Homebrew binaries available system-wide (non-login shells, GH Actions runner)
+if [[ ! -f /etc/paths.d/homebrew ]]; then
+	echo "Registering Homebrew in /etc/paths.d/homebrew..."
+	printf '/opt/homebrew/bin\n/opt/homebrew/sbin\n' | sudo tee /etc/paths.d/homebrew > /dev/null
+fi
+
 # ── Azure CLI ─────────────────────────────────────────────────────────────────
 if ! command -v az &>/dev/null; then
 	echo "Installing Azure CLI..."
