@@ -87,6 +87,7 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
     RESOURCE_GROUP           = "gh-runner-tmp-rg"
     VM_NAME                  = "gh-runner-vm"
     VM_SIZE                  = "Standard_D4_v5"
+    VM_USE_SPOT              = "true"
     ADMIN_USERNAME           = "azureuser"
     CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images-${var.runner_location}/providers/Microsoft.Compute/images/Win2022GHAzureRunner" # gets extended with virtualization flavor in function app code like this: CUSTOM_IMAGE_ID + "-" + virtualization_flavor
     FUNCTION_KEY             = data.azurerm_key_vault_secret.azure_function_key.value

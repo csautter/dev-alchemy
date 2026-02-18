@@ -272,6 +272,13 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
             "network_profile": {"network_interfaces": [{"id": nic.id}]},
         }
 
+        # Configure spot VM if enabled
+        use_spot = os.environ.get("VM_USE_SPOT", "false").lower() == "true"
+        if use_spot:
+            vm_params["priority"] = "Spot"
+            vm_params["eviction_policy"] = "Deallocate"
+            vm_params["billing_profile"] = {"max_price": -1}  # -1 means pay up to on-demand price
+
         compute.virtual_machines.begin_create_or_update(
             resource_group, os.environ["VM_NAME"], vm_params
         )
