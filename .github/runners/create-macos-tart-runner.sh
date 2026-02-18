@@ -27,7 +27,7 @@ RUNNER_NAME_BASE="${RUNNER_NAME_BASE:-$(hostname -s)-tart}"
 VM_SSH_USER="${VM_SSH_USER:-admin}"
 VM_SSH_PASS="${VM_SSH_PASS:-admin}"
 RUNNER_DIR="${RUNNER_DIR:-/Users/admin/actions-runner}"
-VM_BASE_IMAGE="${VM_BASE_IMAGE:-tahoe-base}"
+VM_BASE_IMAGE="${VM_BASE_IMAGE:-tahoe-runner}"
 VM_CLONE_PER_RUN="${VM_CLONE_PER_RUN:-true}"
 MAX_RUNS="${MAX_RUNS:-0}"
 # ───────────────────────────────────────────────────────────────────────────────
@@ -53,12 +53,13 @@ RUNNER_ARCHIVE="actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
 RUNNER_DOWNLOAD_URL="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${RUNNER_ARCHIVE}"
 
 # ─── Ensure base image exists ──────────────────────────────────────────────────
-if ! tart list | grep -q "^local.*${VM_BASE_IMAGE}"; then
-	echo "Cloning base image '${VM_BASE_IMAGE}' from ghcr.io/cirruslabs/macos-tahoe-base:latest ..."
-	tart clone ghcr.io/cirruslabs/macos-tahoe-base:latest "${VM_BASE_IMAGE}"
-else
-	echo "Base image '${VM_BASE_IMAGE}' already present."
+if ! tart list | awk 'NR>1 && $1=="local" {print $2}' | grep -qx "${VM_BASE_IMAGE}"; then
+	echo "ERROR: Base image '${VM_BASE_IMAGE}' not found."
+	echo "  Run './prepare-tart-base.sh' first to build the golden image."
+	echo "  Or set VM_BASE_IMAGE=tahoe-base to use the upstream image directly."
+	exit 1
 fi
+echo "Base image '${VM_BASE_IMAGE}' present."
 
 # ─── Cleanup helper ────────────────────────────────────────────────────────────
 # Tracks the name of the VM that is currently running so the trap can clean up.
