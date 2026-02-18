@@ -334,6 +334,31 @@ jobs:
           iso-path: ./vendor/windows/win11_25h2_english_${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Save Windows ISO to local runner cache
+        if: matrix.vm_os == 'windows11'
+        continue-on-error: true
+        shell: bash
+        run: |
+          ARCH="${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}"
+          ISO_NAME="win11_25h2_english_${ARCH}.iso"
+          CACHE_DIR="/Volumes/iso-cache"
+          CACHE_PATH="${CACHE_DIR}/${ISO_NAME}"
+          WORKSPACE_ISO="./vendor/windows/${ISO_NAME}"
+
+          if [ ! -d "$CACHE_DIR" ]; then
+            echo "Cache volume not mounted — skipping cache save."
+          elif [ -f "$CACHE_PATH" ]; then
+            echo "ISO already in cache at $CACHE_PATH — nothing to do."
+          elif [ -L "$WORKSPACE_ISO" ]; then
+            echo "ISO is a symlink to cache — already cached, nothing to do."
+          elif [ -f "$WORKSPACE_ISO" ]; then
+            echo "Saving freshly downloaded ISO to cache at $CACHE_PATH ..."
+            cp "$WORKSPACE_ISO" "$CACHE_PATH"
+            echo "ISO cached. Future runs on this runner will skip the Azure download."
+          else
+            echo "ISO not found at $WORKSPACE_ISO — cannot cache."
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v6
         if: matrix.runs_on != 'windows-2025'

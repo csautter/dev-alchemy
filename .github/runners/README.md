@@ -29,43 +29,56 @@ Workflows that test Packer builds require a Windows 11 ISO (`win11_25h2_english_
 metered internet connection the Azure Blob Storage download dominates job run-time.
 
 To avoid repeated downloads you can maintain a local ISO cache on the **host machine**. The runner
-script will mount the directory into every VM at boot via VirtioFS, and the workflow job will
-symlink the ISO from the mount-point instead of downloading it.
+script mounts the directory into every VM at boot via VirtioFS (read-write). The workflow then:
+
+1. **Cache hit** — symlinks the ISO from `/Volumes/iso-cache/` into the workspace; the
+   Azure download is skipped entirely.
+2. **Cache miss** — downloads the ISO from Azure Blob Storage as normal, then **copies it into
+   the cache** so every subsequent run on the same runner is a cache hit.
+
+No manual preparation of individual runners is needed. Point all of them at an empty directory
+and the first job will populate it automatically.
 
 ### How it works
 
 ```
-Host machine
-└── ~/iso-cache/
-    ├── win11_25h2_english_arm64.iso   ← lives here, never copied
-    └── win11_25h2_english_amd64.iso
+First run (cache empty)
+──────────────────────────────────────────────────────────────
+Azure Blob Storage
+    │  download-windows-iso action
+    ▼
+Workflow workspace: vendor/windows/win11_25h2_english_arm64.iso  (real file)
+    │  "Save Windows ISO to local runner cache" step  (cp)
+    ▼
+Host machine: ~/iso-cache/win11_25h2_english_arm64.iso           (persists)
 
-      │  VirtioFS (tart --dir flag)
-      ▼
-
-Tart VM
-└── /Volumes/iso-cache/
-    ├── win11_25h2_english_arm64.iso   ← read-only view
-    └── win11_25h2_english_amd64.iso
-
-      │  ln -sf
-      ▼
-
-Workflow workspace
-└── vendor/windows/win11_25h2_english_arm64.iso  ← symlink only
+Every subsequent run (cache warm)
+──────────────────────────────────────────────────────────────
+Host machine: ~/iso-cache/win11_25h2_english_arm64.iso
+    │  VirtioFS (tart --dir, read-write)
+    ▼
+Tart VM: /Volumes/iso-cache/win11_25h2_english_arm64.iso
+    │  "Link cached Windows ISO" step  (ln -sf)
+    ▼
+Workflow workspace: vendor/windows/win11_25h2_english_arm64.iso  (symlink → no download)
 ```
 
-The download-windows-iso action checks whether the file already exists before contacting Azure Blob
-Storage, so the symlink is sufficient to skip the download entirely.
+### Set up the cache directory (one time per host)
 
-### Set up the cache (one time)
+Just create an empty directory — the first workflow run fills it:
 
 ```bash
-# Create the cache directory
 mkdir -p ~/iso-cache
+```
 
-# Download the ISO(s) you need.
-# Option A – from Azure Blob Storage (requires az CLI login):
+That's it. Alternatively, if you want to pre-seed the cache to avoid the first slow download
+(e.g. you have the ISO on a USB drive or another machine):
+
+```bash
+# Option A – copy from USB drive / NAS / another machine:
+cp /path/to/win11_25h2_english_arm64.iso ~/iso-cache/
+
+# Option B – download once from Azure Blob Storage:
 SUBSCRIPTION_ID="<your-subscription-id>"
 STORAGE_ACCOUNT="ghrunner$(echo $SUBSCRIPTION_ID | tr -d '-' | cut -c1-24)"
 
@@ -75,9 +88,6 @@ az storage blob download \
   --name win11_25h2_english_arm64.iso \
   --file ~/iso-cache/win11_25h2_english_arm64.iso \
   --auth-mode login
-
-# Option B – copy from another machine, USB drive, or NAS:
-cp /path/to/win11_25h2_english_arm64.iso ~/iso-cache/
 ```
 
 ### Start the runner with caching enabled
@@ -90,18 +100,16 @@ GITHUB_REPO=myorg/myrepo \
 ./create-macos-tart-runner.sh
 ```
 
-The directory is mounted read-only inside every VM as `/Volumes/iso-cache/`. The workflow's
-"Link cached Windows ISO" step automatically creates the symlink; if the file is absent the job
-falls back to the normal Azure Blob Storage download without any manual intervention.
+The directory is mounted read-write inside every VM as `/Volumes/iso-cache/`.
 
 ### Keeping the ISO up to date
 
-Windows ISOs are large and rarely change. A simple maintenance workflow:
+Windows ISOs are large and rarely change. When a new version appears:
 
-1. When a new ISO version is added to Azure Blob Storage, re-download it to `~/iso-cache/` on
-   each host machine.
-2. The old ISO file can be deleted once no workflows reference the old filename.
-3. If the host machine itself is recreated, re-run the one-time setup steps above.
+1. Delete (or rename) the old file in `~/iso-cache/` on each host machine.
+2. The next workflow run will automatically download the new ISO from Azure Blob Storage and
+   repopulate the cache.
+3. Alternatively, copy the new ISO directly into `~/iso-cache/` to avoid any slow first run.
 
 ### Environment variables
 
