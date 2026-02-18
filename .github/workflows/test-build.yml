@@ -310,6 +310,23 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Link cached Windows ISO (if available on runner)
+        if: matrix.vm_os == 'windows11'
+        continue-on-error: true
+        shell: bash
+        run: |
+          ARCH="${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}"
+          ISO_NAME="win11_25h2_english_${ARCH}.iso"
+          CACHE_PATH="/Volumes/iso-cache/${ISO_NAME}"
+          DEST="./vendor/windows/${ISO_NAME}"
+          if [ -f "$CACHE_PATH" ]; then
+            mkdir -p ./vendor/windows
+            ln -sf "$CACHE_PATH" "$DEST"
+            echo "Linked cached ISO from $CACHE_PATH → $DEST (skipping Azure download)"
+          else
+            echo "No pre-cached ISO found at $CACHE_PATH — will attempt Azure Blob Storage download"
+          fi
+
       - name: Download Windows ISO from Azure Blob Storage
         if: matrix.vm_os == 'windows11'
         uses: ./.github/actions/download-windows-iso

@@ -30,6 +30,10 @@ RUNNER_DIR="${RUNNER_DIR:-/Users/admin/actions-runner}"
 VM_BASE_IMAGE="${VM_BASE_IMAGE:-tahoe-runner}"
 VM_CLONE_PER_RUN="${VM_CLONE_PER_RUN:-true}"
 MAX_RUNS="${MAX_RUNS:-0}"
+# Optional: path on the HOST where Windows ISOs are cached.
+# When set the directory is shared into each VM as /Volumes/iso-cache/ via VirtioFS,
+# so the workflow can symlink the ISO instead of downloading it from Azure.
+ISO_CACHE_DIR="${ISO_CACHE_DIR:-}"
 # ───────────────────────────────────────────────────────────────────────────────
 
 # ─── Pre-flight checks ─────────────────────────────────────────────────────────
@@ -179,7 +183,12 @@ while true; do
 	# NOTE: on some systems with strict firewall rules tart VMs may need --net-bridged
 	#       to reach the internet.
 	echo "Starting VM '${VM_NAME}'..."
-	tart run --no-graphics --net-bridged="Wi-Fi" "${VM_NAME}" &
+	TART_DIR_FLAG=()
+	if [[ -n "$ISO_CACHE_DIR" ]]; then
+		echo "Sharing ISO cache '${ISO_CACHE_DIR}' → /Volumes/iso-cache/ inside VM"
+		TART_DIR_FLAG=("--dir=iso-cache:${ISO_CACHE_DIR}")
+	fi
+	tart run --no-graphics --net-bridged="Wi-Fi" "${TART_DIR_FLAG[@]}" "${VM_NAME}" &
 
 	# ── Wait for an IP ───────────────────────────────────────────────
 	CURRENT_VM_IP=""
