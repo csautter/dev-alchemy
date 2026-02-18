@@ -45,13 +45,6 @@ for cmd in tart gh sshpass; do
 	fi
 done
 
-# ─── Resolve the latest runner version once (reused across all cycles) ─────────
-echo "Resolving latest GitHub Actions runner version..."
-RUNNER_VERSION=$(gh api /repos/actions/runner/releases/latest --jq '.tag_name' | sed 's/^v//')
-echo "Runner version: ${RUNNER_VERSION}"
-RUNNER_ARCHIVE="actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
-RUNNER_DOWNLOAD_URL="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${RUNNER_ARCHIVE}"
-
 # ─── Ensure base image exists ──────────────────────────────────────────────────
 if ! tart list | awk 'NR>1 && $1=="local" {print $2}' | grep -qx "${VM_BASE_IMAGE}"; then
 	echo "ERROR: Base image '${VM_BASE_IMAGE}' not found."
@@ -194,23 +187,18 @@ while true; do
 	done
 	echo "SSH connection successful."
 
-	# ── Install, configure and run the runner (foreground) ──────────
+	# ── Configure and run the runner (foreground) ───────────────────
+	# The runner binary is pre-installed in the golden image by prepare-tart-base.sh.
 	# Running ./run.sh in the foreground means this SSH session blocks until the
 	# ephemeral runner picks up a job, completes it, and deregisters itself.
 	# Control then returns to this host script which cleans up the VM and loops.
 	CURRENT_RUNNER_NAME="$RUNNER_NAME"
-	echo "Installing and starting GitHub Actions runner '${RUNNER_NAME}' (version ${RUNNER_VERSION})..."
+	echo "Configuring and starting GitHub Actions runner '${RUNNER_NAME}'..."
 
 	vm_ssh bash <<EOF
 set -e
 
-mkdir -p "${RUNNER_DIR}"
 cd "${RUNNER_DIR}"
-
-echo "Downloading runner ${RUNNER_ARCHIVE}..."
-curl -fsSL -o "${RUNNER_ARCHIVE}" "${RUNNER_DOWNLOAD_URL}"
-tar xzf "${RUNNER_ARCHIVE}"
-rm -f "${RUNNER_ARCHIVE}"
 
 echo "Configuring runner..."
 ./config.sh \

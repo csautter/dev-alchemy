@@ -14,6 +14,8 @@ set -e
 #   VM_SSH_USER        - SSH user inside the VM             (default: admin)
 #   VM_SSH_PASS        - SSH password inside the VM         (default: admin)
 #   NET_INTERFACE      - bridged network interface          (default: Wi-Fi)
+#   RUNNER_DIR         - install directory inside the VM    (default: /Users/admin/actions-runner)
+#   RUNNER_VERSION     - pinned runner version (default: resolve latest via gh api)
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 TART_SOURCE_IMAGE="${TART_SOURCE_IMAGE:-tahoe-base}"
@@ -22,20 +24,32 @@ TART_GOLDEN_IMAGE="${TART_GOLDEN_IMAGE:-tahoe-runner}"
 VM_SSH_USER="${VM_SSH_USER:-admin}"
 VM_SSH_PASS="${VM_SSH_PASS:-admin}"
 NET_INTERFACE="${NET_INTERFACE:-Wi-Fi}"
+RUNNER_DIR="${RUNNER_DIR:-/Users/admin/actions-runner}"
 BUILD_VM="build-${TART_GOLDEN_IMAGE}"
+# RUNNER_VERSION resolved below after pre-flight
 # ───────────────────────────────────────────────────────────────────────────────
 
 # ─── Pre-flight checks ─────────────────────────────────────────────────────────
-for cmd in tart sshpass; do
+for cmd in tart sshpass gh; do
 	if ! command -v "$cmd" &>/dev/null; then
 		echo "ERROR: '$cmd' not found."
 		case "$cmd" in
 			tart)    echo "  Install: brew install tart" ;;
 			sshpass) echo "  Install: brew install sshpass" ;;
+			gh)      echo "  Install: brew install gh" ;;
 		esac
 		exit 1
 	fi
 done
+
+# ─── Resolve runner version ────────────────────────────────────────────────────
+if [[ -z "${RUNNER_VERSION:-}" ]]; then
+	echo "Resolving latest GitHub Actions runner version..."
+	RUNNER_VERSION=$(gh api /repos/actions/runner/releases/latest --jq '.tag_name' | sed 's/^v//')
+fi
+echo "Runner version: ${RUNNER_VERSION}"
+RUNNER_ARCHIVE="actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
+RUNNER_DOWNLOAD_URL="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${RUNNER_ARCHIVE}"
 
 # ─── Ensure upstream base image is present ────────────────────────────────────
 if ! tart list | awk 'NR>1 && $1=="local" {print $2}' | grep -qx "${TART_SOURCE_IMAGE}"; then
@@ -158,6 +172,25 @@ PROVISION
 
 echo "Provisioning finished successfully."
 
+# ─── Download and install GitHub Actions runner ───────────────────────────────
+echo "Installing GitHub Actions runner ${RUNNER_VERSION} into golden image..."
+
+vm_ssh bash <<EOF
+set -e
+
+mkdir -p "${RUNNER_DIR}"
+cd "${RUNNER_DIR}"
+
+echo "Downloading runner ${RUNNER_ARCHIVE}..."
+curl -fsSL -o "${RUNNER_ARCHIVE}" "${RUNNER_DOWNLOAD_URL}"
+tar xzf "${RUNNER_ARCHIVE}"
+rm -f "${RUNNER_ARCHIVE}"
+
+echo "Runner ${RUNNER_VERSION} installed to ${RUNNER_DIR}."
+EOF
+
+echo "Runner installation complete."
+
 # ─── Graceful shutdown ────────────────────────────────────────────────────────
 echo "Shutting down build VM..."
 vm_ssh "sudo shutdown -h now" 2>/dev/null || true
@@ -180,5 +213,6 @@ tart delete "${BUILD_VM}"
 echo ""
 echo "════════════════════════════════════════════════════════════"
 echo " Golden image '${TART_GOLDEN_IMAGE}' is ready."
+echo " Runner ${RUNNER_VERSION} pre-installed at ${RUNNER_DIR}."
 echo " Use it with: VM_BASE_IMAGE=${TART_GOLDEN_IMAGE} ./create-macos-tart-runner.sh"
 echo "════════════════════════════════════════════════════════════"
