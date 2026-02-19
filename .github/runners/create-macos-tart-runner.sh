@@ -185,7 +185,7 @@ while true; do
 	echo "Starting VM '${VM_NAME}'..."
 	TART_DIR_FLAG=()
 	if [[ -n "$ISO_CACHE_DIR" ]]; then
-		echo "Sharing ISO cache '${ISO_CACHE_DIR}' → /Volumes/iso-cache/ inside VM"
+		echo "Sharing ISO cache '${ISO_CACHE_DIR}' → /Volumes/My Shared Files/iso-cache/ inside VM"
 		TART_DIR_FLAG=("--dir=iso-cache:${ISO_CACHE_DIR}")
 	fi
 	tart run --no-graphics --net-bridged="Wi-Fi" "${TART_DIR_FLAG[@]}" "${VM_NAME}" &
@@ -231,7 +231,8 @@ echo "Configuring runner..."
 # The runner process is a non-login shell and never sources ~/.zprofile or
 # /etc/paths.d – writing to .env is the supported way to set env vars for
 # self-hosted runners.
-echo 'PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin' >> .env
+echo 'PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/go/bin:/Users/admin/go/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin' >> .env
+echo 'GOPATH=/Users/admin/go' >> .env
 
 echo "Runner configured. Waiting for a job (./run.sh)..."
 ./run.sh

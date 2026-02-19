@@ -342,7 +342,7 @@ jobs:
         run: |
           ARCH="${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}"
           ISO_NAME="win11_25h2_english_${ARCH}.iso"
-          CACHE_PATH="/Volumes/iso-cache/${ISO_NAME}"
+          CACHE_PATH="/Volumes/My Shared Files/iso-cache/${ISO_NAME}"
           DEST="./cache/windows11/iso/${ISO_NAME}"
           if [ -f "$CACHE_PATH" ]; then
             mkdir -p ./cache/windows11/iso
@@ -366,7 +366,7 @@ jobs:
         run: |
           ARCH="${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}"
           ISO_NAME="win11_25h2_english_${ARCH}.iso"
-          CACHE_DIR="/Volumes/iso-cache"
+          CACHE_DIR="/Volumes/My Shared Files/iso-cache"
           CACHE_PATH="${CACHE_DIR}/${ISO_NAME}"
           WORKSPACE_ISO="./cache/windows11/iso/${ISO_NAME}"
 

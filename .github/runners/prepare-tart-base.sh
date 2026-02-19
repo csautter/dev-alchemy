@@ -140,38 +140,59 @@ if [[ ! -f /etc/paths.d/homebrew ]]; then
 	echo "Registering Homebrew in /etc/paths.d/homebrew..."
 	printf '/opt/homebrew/bin\n/opt/homebrew/sbin\n' | sudo tee /etc/paths.d/homebrew > /dev/null
 fi
+PROVISION
 
+vm_ssh bash <<'PROVISION'
+eval "$(/opt/homebrew/bin/brew shellenv)"
+set -e
 # ── Azure CLI ─────────────────────────────────────────────────────────────────
 if ! command -v az &>/dev/null; then
 	echo "Installing Azure CLI..."
-	brew install azure-cli
+	brew install azure-cli || echo "WARNING: azure-cli install failed, continuing..."
 else
 	echo "Azure CLI already installed."
 fi
+PROVISION
+
+vm_ssh bash <<'PROVISION'
+eval "$(/opt/homebrew/bin/brew shellenv)"
+set -e
 
 # ── GitHub CLI ────────────────────────────────────────────────────────────────
 if ! command -v gh &>/dev/null; then
 	echo "Installing GitHub CLI..."
-	brew install gh
+	brew install gh || echo "WARNING: gh install failed, continuing..."
 else
 	echo "GitHub CLI already installed."
 fi
+PROVISION
+
+vm_ssh bash <<'PROVISION'
+eval "$(/opt/homebrew/bin/brew shellenv)"
+set -e
 
 # ── Additional tools (uncomment as needed) ────────────────────────────────────
 # brew install terraform
-brew install packer
-# brew install ansible
-# brew install jq
-brew install go
-
-echo ""
-echo "Provisioning complete. Installed versions:"
-"$BREW" --version | head -1
-az version --query '"azure-cli"' -o tsv 2>/dev/null | xargs echo "  azure-cli:"
-gh --version 2>/dev/null | head -1 | xargs echo "  gh:"
+if ! command -v packer &>/dev/null; then
+	echo "Installing Packer..."
+	brew tap hashicorp/tap || echo "WARNING: packer install failed, continuing..."
+	brew install hashicorp/tap/packer || echo "WARNING: packer install failed, continuing..."
+else
+	echo "Packer already installed."
+fi
 PROVISION
 
-echo "Provisioning finished successfully."
+vm_ssh bash <<'PROVISION'
+eval "$(/opt/homebrew/bin/brew shellenv)"
+set -e
+
+if ! command -v go &>/dev/null; then
+	echo "Installing Go..."
+	brew install go || echo "WARNING: go install failed, continuing..."
+else
+	echo "Go already installed."
+fi
+PROVISION
 
 # ─── Download and install GitHub Actions runner ───────────────────────────────
 echo "Installing GitHub Actions runner ${RUNNER_VERSION} into golden image..."
@@ -191,6 +212,8 @@ echo "Runner ${RUNNER_VERSION} installed to ${RUNNER_DIR}."
 EOF
 
 echo "Runner installation complete."
+echo "Provisioning finished successfully."
+
 
 # ─── Graceful shutdown ────────────────────────────────────────────────────────
 echo "Shutting down build VM..."
