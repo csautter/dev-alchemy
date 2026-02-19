@@ -6,6 +6,22 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      enable_az_hyperv:
+        description: 'Enable AzureHyperV jobs (provision + test + cleanup)'
+        required: false
+        default: true
+        type: boolean
+      enable_az_virtualbox:
+        description: 'Enable Azure VirtualBox jobs (provision + test + cleanup)'
+        required: false
+        default: true
+        type: boolean
+      enable_utm_qemu_macos:
+        description: 'Enable UTM QEMU macOS builds'
+        required: false
+        default: true
+        type: boolean
   pull_request:
     paths:
       - "build/packer/windows/*"
@@ -16,6 +32,7 @@ on:
 
 jobs:
   provision-hyperv-runner:
+    if: ${{ github.event_name == 'pull_request' || inputs.enable_az_hyperv }}
     runs-on: ubuntu-latest
     outputs:
       runner-name: ${{ steps.vars.outputs.runner-name }}
@@ -50,6 +67,7 @@ jobs:
             }'
 
   provision-virtualbox-runner:
+    if: ${{ github.event_name == 'pull_request' || inputs.enable_az_virtualbox }}
     runs-on: ubuntu-latest
     outputs:
       runner-name: ${{ steps.vars.outputs.runner-name }}
@@ -84,6 +102,7 @@ jobs:
             }'
 
   test-hyperv-build:
+    if: ${{ github.event_name == 'pull_request' || inputs.enable_az_hyperv }}
     name: build TestBuildHypervWindows11Amd64OnWindows
     needs: [provision-hyperv-runner]
     runs-on:
@@ -154,6 +173,7 @@ jobs:
           exit 1
 
   test-virtualbox-build:
+    if: ${{ github.event_name == 'pull_request' || inputs.enable_az_virtualbox }}
     name: build TestBuildVirtualBoxWindows11Amd64OnWindows
     needs: [provision-virtualbox-runner]
     runs-on:
@@ -224,7 +244,7 @@ jobs:
 
   cleanup-hyperv:
     needs: [provision-hyperv-runner, test-hyperv-build]
-    if: always()
+    if: always() && (github.event_name == 'pull_request' || inputs.enable_az_hyperv)
     runs-on: ubuntu-latest
 
     steps:
@@ -249,7 +269,7 @@ jobs:
 
   cleanup-virtualbox:
     needs: [provision-virtualbox-runner, test-virtualbox-build]
-    if: always()
+    if: always() && (github.event_name == 'pull_request' || inputs.enable_az_virtualbox)
     runs-on: ubuntu-latest
 
     steps:
@@ -274,6 +294,7 @@ jobs:
 
 
   test-packer-build:
+    if: github.event_name == 'pull_request' || inputs.enable_utm_qemu_macos
     name: build ${{ matrix.go_test_name }} VM_OS ${{ matrix.vm_os }} runner_os ${{ matrix.runs_on }}
     runs-on: ${{ matrix.runs_on }}
     strategy:
@@ -366,7 +387,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install dependencies macos
-        if: matrix.runs_on == 'macos-15'
+        if: contains(matrix.runs_on, 'macos')
         run: |
           bash scripts/macos/dev-alchemy-install-dependencies.sh
 
@@ -382,13 +403,13 @@ jobs:
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
       - name: Move .vnc.mp4 files to artifact directory
-        if: matrix.runner_os == 'macos-15'
+        if: contains(matrix.runs_on, 'macos')
         run: |
           mkdir -p artifact
           find ./cache -name '*.vnc.mp4' -exec cp {} artifact/ \;
 
       - name: Upload packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
-        if: matrix.runs_on == 'macos-15'
+        if: contains(matrix.runs_on, 'macos')
         uses: actions/upload-artifact@v4
         with:
           name: packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4
