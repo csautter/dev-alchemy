@@ -213,3 +213,36 @@ Add-LocalGroupMember -Group "Hyper-V Administrators" -Member $RunnerUser -ErrorA
   --runasservice `
   --windowslogonaccount $RunnerUser `
   --windowslogonpassword $Password
+
+# Allow the SCM a moment to register the service after config
+Start-Sleep -Seconds 5
+
+# Configure automatic service recovery on failure.
+# For ephemeral runners we intentionally leave failureflag at its default (0) so that
+# a clean exit after completing a job does NOT trigger a restart — only crashes /
+# non-zero exits will. Restart delays: 30 s → 60 s → 120 s; reset counter after 1 h.
+Write-Host "Configuring GitHub Actions Runner service auto-recovery..."
+
+# Derive the service name from the repo URL (https://github.com/<owner>/<repo>)
+$urlParts   = $RepoUrl.TrimEnd('/').Split('/')
+$repoOwner  = $urlParts[-2]
+$repoName   = $urlParts[-1]
+$ServiceName = "actions.runner.$repoOwner.$repoName.$RunnerName"
+
+$svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+
+# Fallback: search by wildcard in case the name differs slightly
+if (-not $svc) {
+    Write-Warning "Service '$ServiceName' not found; searching by pattern..."
+    $svc = Get-Service | Where-Object { $_.Name -like "actions.runner*$RunnerName*" } | Select-Object -First 1
+}
+
+if ($svc) {
+    Write-Host "Applying recovery policy to service: $($svc.Name)"
+    # reset=3600  → reset failure count after 3600 s (1 h) of stable operation
+    # actions     → restart after 30 s on 1st failure, 60 s on 2nd, 120 s on all subsequent
+    sc.exe failure "$($svc.Name)" reset=3600 actions=restart/30000/restart/60000/restart/120000
+    Write-Host "Service auto-recovery configured successfully."
+} else {
+    Write-Warning "Could not locate the runner service to configure recovery. Skipping."
+}
