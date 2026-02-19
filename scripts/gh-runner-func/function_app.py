@@ -277,11 +277,30 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
         if use_spot:
             vm_params["priority"] = "Spot"
             vm_params["eviction_policy"] = "Deallocate"
-            vm_params["billing_profile"] = {"max_price": -1}  # -1 means pay up to on-demand price
+            vm_params["billing_profile"] = {
+                "max_price": -1
+            }  # -1 means pay up to on-demand price
 
-        compute.virtual_machines.begin_create_or_update(
-            resource_group, os.environ["VM_NAME"], vm_params
-        )
+            try:
+                logging.info("Attempting to create spot VM")
+                compute.virtual_machines.begin_create_or_update(
+                    resource_group, os.environ["VM_NAME"], vm_params
+                )
+            except Exception as spot_error:
+                logging.warning(
+                    f"Spot VM creation failed: {str(spot_error)}. Retrying with regular VM."
+                )
+                # Remove spot configuration and retry
+                vm_params.pop("priority", None)
+                vm_params.pop("eviction_policy", None)
+                vm_params.pop("billing_profile", None)
+                compute.virtual_machines.begin_create_or_update(
+                    resource_group, os.environ["VM_NAME"], vm_params
+                )
+        else:
+            compute.virtual_machines.begin_create_or_update(
+                resource_group, os.environ["VM_NAME"], vm_params
+            )
     except Exception as e:
         return func.HttpResponse(
             f"Error creating VM: {str(e)}",
