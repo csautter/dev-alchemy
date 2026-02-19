@@ -262,7 +262,14 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
         vm_params = {
             "location": location,
             "hardware_profile": {"vm_size": os.environ["VM_SIZE"]},
-            "storage_profile": {"image_reference": image_reference},
+            "storage_profile": {
+                "image_reference": image_reference,
+                "os_disk": {
+                    "create_option": "FromImage",
+                    "disk_size_gb": int(os.environ.get("OS_DISK_SIZE_GB", "80")),
+                    "managed_disk": {"storage_account_type": "Premium_LRS"},
+                },
+            },
             "os_profile": {
                 "computer_name": runner_name,
                 "admin_username": os.environ["ADMIN_USERNAME"],
