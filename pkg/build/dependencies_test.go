@@ -1,6 +1,7 @@
 package build
 
 import (
+	"path/filepath"
 	"testing"
 )
 
@@ -38,5 +39,19 @@ func TestIntegrationDependencyReconciliation(t *testing.T) {
 
 	for _, vmconfig := range tests {
 		DependencyReconciliation(vmconfig)
+	}
+}
+
+func TestGetWindows11DownloadAmd64(t *testing.T) {
+	_, err := getWindows11Download("amd64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_amd64.iso"), false)
+	if err != nil {
+		t.Fatalf("Failed to get Windows 11 download: %v", err)
+	}
+}
+
+func TestGetWindows11DownloadArm64(t *testing.T) {
+	_, err := getWindows11Download("arm64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/win11_25h2_english_arm64.iso"), false)
+	if err != nil {
+		t.Fatalf("Failed to get Windows 11 download: %v", err)
 	}
 }
