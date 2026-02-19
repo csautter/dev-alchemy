@@ -28,6 +28,12 @@ variable "cpus" {
   default = 2
 }
 
+variable "memory" {
+  type        = number
+  default     = 4096
+  description = "Memory in MB to allocate to the VM"
+}
+
 variable "temp_disk_path" {
   type        = string
   default     = ""
@@ -41,7 +47,7 @@ source "virtualbox-iso" "win11" {
   iso_checksum     = "none"
 
   guest_os_type = "Windows11_64"
-  memory        = 4096
+  memory        = var.memory
   cpus          = var.cpus
   disk_size     = 61440
   nested_virt   = var.nested_virt
@@ -49,7 +55,7 @@ source "virtualbox-iso" "win11" {
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "P@ssw0rd!"
-  winrm_timeout  = "90m"
+  winrm_timeout  = "60m"
 
   boot_wait = "2s"
   boot_command = [

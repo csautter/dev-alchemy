@@ -22,6 +22,12 @@ variable "cpus" {
   default = 2
 }
 
+variable "memory" {
+  type        = number
+  default     = 4096
+  description = "Memory in MB to allocate to the VM"
+}
+
 variable "temp_disk_path" {
   type        = string
   default     = ""
@@ -43,7 +49,7 @@ source "hyperv-iso" "win11" {
   # You can check in Hyper-V Manager under "Virtual Switch Manager".
   # If it does not exist, create a new virtual switch named "Default Switch".
   switch_name = "Default Switch"
-  memory      = 4096
+  memory      = var.memory
   cpus        = var.cpus
   disk_size   = 61440
 

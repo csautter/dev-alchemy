@@ -32,6 +32,10 @@ type VirtualMachineConfig struct {
 	HostOs                 HostOsType
 	VirtualizationEngine   VirtualizationEngine
 	Cpus                   int
+	// MemoryMB is the desired VM memory in megabytes.
+	// When 0 (the default), memory is calculated automatically:
+	// max(4096, totalSystemMemoryMB - 4096).
+	MemoryMB int
 }
 
 func AvailableVirtualMachineConfigs() []VirtualMachineConfig {

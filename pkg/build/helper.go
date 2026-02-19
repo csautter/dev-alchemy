@@ -7,6 +7,11 @@ import (
 	"strconv"
 )
 
+const (
+	minVmMemoryMB = 4096 // 4 GB minimum
+	osHeadroomMB  = 4096 // 4 GB reserved for the host OS
+)
+
 func getVmCpuCountInt(config VirtualMachineConfig) int {
 	desired_cpus := config.Cpus
 	system_cpus := runtime.NumCPU()
@@ -18,6 +23,31 @@ func getVmCpuCountInt(config VirtualMachineConfig) int {
 
 func getVmCpuCountString(config VirtualMachineConfig) string {
 	return strconv.Itoa(getVmCpuCountInt(config))
+}
+
+// getVmMemoryMB determines the memory to allocate to the VM in megabytes.
+//
+// Logic:
+//  1. If config.MemoryMB is non-zero it is used as-is (explicit override).
+//  2. Otherwise the total physical host memory is queried and the VM receives
+//     all memory minus osHeadroomMB (4 GB) reserved for the host OS.
+//  3. The result is always at least minVmMemoryMB (4 GB).
+func getVmMemoryMB(config VirtualMachineConfig) int {
+	if config.MemoryMB > 0 {
+		return config.MemoryMB
+	}
+
+	totalMB, err := getSystemTotalMemoryMB()
+	if err != nil || totalMB == 0 {
+		return minVmMemoryMB
+	}
+
+	vmMemory := int(totalMB) - osHeadroomMB
+	if vmMemory < minVmMemoryMB {
+		vmMemory = minVmMemoryMB
+	}
+
+	return vmMemory
 }
 
 func getTempDiskPathForHypervBuild() string {

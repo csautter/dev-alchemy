@@ -3,10 +3,18 @@
 
 package build
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestBuildHypervWindows11Amd64OnWindows(t *testing.T) {
 	t.Parallel()
+
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
 
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:                   "windows11",
@@ -15,6 +23,7 @@ func TestBuildHypervWindows11Amd64OnWindows(t *testing.T) {
 		HostOs:               HostOsWindows,
 		VirtualizationEngine: VirtualizationEngineHyperv,
 		Cpus:                 4,
+		MemoryMB:             memoryMB,
 	}
 	err := RunHypervWindowsBuildOnWindows(VirtualMachineConfig)
 	if err != nil {
@@ -25,6 +34,11 @@ func TestBuildHypervWindows11Amd64OnWindows(t *testing.T) {
 func TestBuildVirtualBoxWindows11Amd64OnWindows(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:                   "windows11",
 		Arch:                 "amd64",
@@ -32,6 +46,7 @@ func TestBuildVirtualBoxWindows11Amd64OnWindows(t *testing.T) {
 		HostOs:               HostOsWindows,
 		VirtualizationEngine: VirtualizationEngineVirtualBox,
 		Cpus:                 4,
+		MemoryMB:             memoryMB,
 	}
 	err := RunVirtualBoxWindowsBuildOnWindows(VirtualMachineConfig)
 	if err != nil {
