@@ -181,6 +181,7 @@ $RunnerToken = "__RUNNER_TOKEN__"
 $RepoUrl     = "__REPO_URL__"
 $RunnerName  = $env:COMPUTERNAME
 $RunnerDir   = "C:\actions-runner"
+$RunnerUser   = "ghrunner"
 
 New-Item -ItemType Directory -Force -Path $RunnerDir
 Set-Location $RunnerDir
@@ -190,17 +191,17 @@ Set-Location $RunnerDir
 
 Add-Type -AssemblyName System.Web
 $Password = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 20 | % {[char]$_})
-Write-Host "[DEBUG] Generated password: $Password"
+Write-Host "[DEBUG] Generated password: $Password for user: $RunnerUser"
 $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
 
 # Create the user if it doesn't exist
-if (-not (Get-LocalUser -Name "ghrunner" -ErrorAction SilentlyContinue)) {
-    New-LocalUser -Name "ghrunner" -Password $SecurePassword -FullName "GitHub Runner" -Description "Local user for GitHub Actions Runner" -PasswordNeverExpires
+if (-not (Get-LocalUser -Name $RunnerUser -ErrorAction SilentlyContinue)) {
+    New-LocalUser -Name $RunnerUser -Password $SecurePassword -FullName "GitHub Runner" -Description "Local user for GitHub Actions Runner" -PasswordNeverExpires
 }
 
 # Add user to Administrators and Hyper-V Administrators groups
-Add-LocalGroupMember -Group "Administrators" -Member "ghrunner" -ErrorAction SilentlyContinue
-Add-LocalGroupMember -Group "Hyper-V Administrators" -Member "ghrunner" -ErrorAction SilentlyContinue
+Add-LocalGroupMember -Group "Administrators" -Member $RunnerUser -ErrorAction SilentlyContinue
+Add-LocalGroupMember -Group "Hyper-V Administrators" -Member $RunnerUser -ErrorAction SilentlyContinue
 
 .\config.cmd `
   --url $RepoUrl `
@@ -210,5 +211,5 @@ Add-LocalGroupMember -Group "Hyper-V Administrators" -Member "ghrunner" -ErrorAc
   --ephemeral `
   --unattended `
   --runasservice `
-  --windowslogonaccount ghrunner `
+  --windowslogonaccount $RunnerUser `
   --windowslogonpassword $Password

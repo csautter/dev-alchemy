@@ -52,7 +52,7 @@ try {
     if (Test-Path 'C:\AzureData\CustomData.bin') {
         $scriptPath = 'C:\AzureData\CustomData.ps1'
         Copy-Item 'C:\AzureData\CustomData.bin' $scriptPath -Force
-        powershell.exe -ExecutionPolicy Bypass -File $scriptPath >> 'C:\AzureData\provision_log.txt' 2>&1
+        powershell.exe -ExecutionPolicy Bypass -File $scriptPath 2>&1 | Out-File -FilePath 'C:\AzureData\provision_log.txt' -Append -Encoding utf8
         Add-Content -Path 'C:\AzureData\provision_log.txt' -Value 'Execution successful.'
     } else {
         Add-Content -Path 'C:\AzureData\provision_log.txt' -Value 'Error: CustomData.bin not found.'
