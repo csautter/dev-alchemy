@@ -58,6 +58,9 @@ runs:
                 --auth-mode login
               
               Write-Host "Successfully downloaded Windows ISO from Azure Blob Storage"
+              # output full path to the downloaded ISO for use in subsequent steps
+              Write-Host "iso-path=$isoPath" | Out-File -FilePath $GITHUB_OUTPUT -Encoding utf8 -Append
+              Write-Host "Downloaded ISO to path: $isoPath"
             } else {
               Write-Host "Windows ISO not found in blob storage, will need to be downloaded from Microsoft"
             }
@@ -111,6 +114,9 @@ runs:
                 --auth-mode login
               
               echo "Successfully downloaded Windows ISO from Azure Blob Storage"
+              # output full path to the downloaded ISO for use in subsequent steps
+              echo "iso-path=$iso_path" >> $GITHUB_OUTPUT
+              echo "Downloaded ISO to path: $iso_path"
             else
               echo "Windows ISO not found in blob storage, will need to be downloaded from Microsoft"
             fi
