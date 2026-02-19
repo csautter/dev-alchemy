@@ -9,7 +9,7 @@ import (
 
 const (
 	minVmMemoryMB = 4096 // 4 GB minimum
-	osHeadroomMB  = 4096 // 4 GB reserved for the host OS
+	osHeadroomMB  = 8192 // 8 GB reserved for the host OS
 )
 
 func getVmCpuCountInt(config VirtualMachineConfig) int {
