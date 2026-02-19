@@ -1,13 +1,17 @@
 package build
 
 import (
+	"bufio"
+	"compress/gzip"
 	"crypto/sha256"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/go-getter"
@@ -57,9 +61,58 @@ type WebFileDependency struct {
 	BeforeHook func() (string, error)
 }
 
-// TODO: Automate version updates by checking Debian package repository
-// https://packages.debian.org/trixie/qemu-efi-aarch64
-const qemu_efi_version = "2025.02-8"
+// resolveDebianPackageURL fetches the current download URL for an architecture-independent
+// Debian package by querying the official Packages index for the given suite.
+// This avoids hardcoding version strings that change frequently and are purged quickly.
+func resolveDebianPackageURL(suite, packageName string) (string, error) {
+	packagesURL := fmt.Sprintf("https://deb.debian.org/debian/dists/%s/main/binary-all/Packages.gz", suite)
+	log.Printf("Resolving latest Debian package URL for %s from %s", packageName, packagesURL)
+
+	resp, err := http.Get(packagesURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch Debian package index: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected HTTP status %d fetching %s", resp.StatusCode, packagesURL)
+	}
+
+	gz, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to decompress Debian package index: %w", err)
+	}
+	defer gz.Close()
+
+	scanner := bufio.NewScanner(gz)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+
+	var filename string
+	inTarget := false
+
+outer:
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case line == "Package: "+packageName:
+			inTarget = true
+		case inTarget && strings.HasPrefix(line, "Filename: "):
+			filename = strings.TrimPrefix(line, "Filename: ")
+		case inTarget && filename != "" && line == "":
+			break outer
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("error reading Debian package index: %w", err)
+	}
+	if filename == "" {
+		return "", fmt.Errorf("package %q not found in Debian suite %q (binary-all)", packageName, suite)
+	}
+
+	url := "https://deb.debian.org/debian/" + filename
+	log.Printf("Resolved %s to %s", packageName, url)
+	return url, nil
+}
 
 func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	for _, dep := range getWebFileDependencies() {
@@ -237,9 +290,11 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, fmt.Sprintf("./vendor/qemu-efi-aarch64_%s_all.deb", qemu_efi_version)),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/qemu-efi-aarch64_all.deb"),
 			Checksum:  "",
-			Source:    fmt.Sprintf("http://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_%s_all.deb", qemu_efi_version),
+			BeforeHook: func() (string, error) {
+				return resolveDebianPackageURL("trixie", "qemu-efi-aarch64")
+			},
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "windows11",
@@ -319,9 +374,11 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, fmt.Sprintf("./vendor/qemu-efi-aarch64_%s_all.deb", qemu_efi_version)),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/qemu-efi-aarch64_all.deb"),
 			Checksum:  "",
-			Source:    fmt.Sprintf("http://deb.debian.org/debian/pool/main/e/edk2/qemu-efi-aarch64_%s_all.deb", qemu_efi_version),
+			BeforeHook: func() (string, error) {
+				return resolveDebianPackageURL("trixie", "qemu-efi-aarch64")
+			},
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "ubuntu",
