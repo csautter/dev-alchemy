@@ -42,8 +42,8 @@ variable "is_ci" {
 locals {
   cache_directory = "${path.root}/../../../cache"
   win11_default_iso = {
-    amd64 = "../../../vendor/windows/win11_25h2_english_amd64.iso"
-    arm64 = "../../../vendor/windows/Win11_25H2_English_arm64.iso"
+    amd64 = "../../../cache/windows11/iso/win11_25h2_english_amd64.iso"
+    arm64 = "../../../cache/windows11/iso/Win11_25H2_English_arm64.iso"
   }
   win11_iso         = var.iso_url != "" ? var.iso_url : local.win11_default_iso[var.arch]
   win11_qcow2       = "${local.cache_directory}/windows11/qemu-windows11-${var.arch}.qcow2"

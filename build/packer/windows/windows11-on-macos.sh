@@ -70,10 +70,10 @@ echo "Headless mode: $headless"
 cd "${project_root}" || exit 1
 
 # download the Windows 11 ISO if not already present
-if [ ! -d ./vendor/windows ]; then
-	mkdir -p ./vendor/windows
+if [ ! -d ./cache/windows11/iso ]; then
+	mkdir -p ./cache/windows11/iso
 fi
-if [ ! -f "./vendor/windows/win11_25H2_english_$arch.iso" ]; then
+if [ ! -f "./cache/windows11/iso/win11_25H2_english_$arch.iso" ]; then
 	echo "Downloading Windows 11 $arch ISO"
 	cd "${project_root}/scripts/macos/" || exit 1
 	if [ ! -d .venv ]; then
@@ -92,14 +92,15 @@ if [ ! -f "./vendor/windows/win11_25H2_english_$arch.iso" ]; then
 	elif [ "$arch" = "arm64" ]; then
 		python playwright_win11_iso.py --arm
 	fi
+	mkdir -p "${project_root}/cache/windows11/iso"
 	cd "${project_root}/vendor/windows/" || exit 1
 
 	if [ "$headless" = "true" ]; then
 		echo "Running in headless mode, skipping ISO download progress bar"
-		curl -o "win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
+		curl -o "${project_root}/cache/windows11/iso/win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
 	else
 		echo "Running in interactive mode, showing ISO download progress bar"
-		curl --progress-bar -o "win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
+		curl --progress-bar -o "${project_root}/cache/windows11/iso/win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
 	fi
 
 	cd "${project_root}" || exit 1
@@ -128,10 +129,10 @@ packer init "build/packer/windows/windows11-on-macos.pkr.hcl"
 
 # determine the Windows 11 ISO path to use
 if [ "$arch" = "amd64" ]; then
-	win11_iso_path="${project_root}/vendor/windows/win11_25h2_english_$arch.iso"
+	win11_iso_path="${project_root}/cache/windows11/iso/win11_25h2_english_$arch.iso"
 elif [ "$arch" = "arm64" ]; then
 	# use the unattended ISO we created earlier
-	win11_iso_path="${project_root}/vendor/windows/Win11_ARM64_Unattended.iso"
+	win11_iso_path="${project_root}/cache/windows11/iso/Win11_ARM64_Unattended.iso"
 fi
 
 # remove packer output directory if it exists

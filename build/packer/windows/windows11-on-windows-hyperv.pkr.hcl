@@ -14,7 +14,7 @@ packer {
 
 variable "iso_url" {
   type    = string
-  default = "../../../vendor/windows/Win11_25H2_English_x64.iso"
+  default = "../../../cache/windows11/iso/Win11_25H2_English_x64.iso"
 }
 
 variable "cpus" {

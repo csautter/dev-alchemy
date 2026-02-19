@@ -4,7 +4,7 @@ import "fmt"
 
 const (
 	packerExecutable     = "packer"
-	windows11ISOPath     = "./vendor/windows/win11_25h2_english_amd64.iso"
+	windows11ISOPath     = "./cache/windows11/iso/win11_25h2_english_amd64.iso"
 	hypervPackerFile     = "build/packer/windows/windows11-on-windows-hyperv.pkr.hcl"
 	virtualBoxPackerFile = "build/packer/windows/windows11-on-windows-virtualbox.pkr.hcl"
 )
