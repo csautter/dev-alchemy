@@ -11,7 +11,7 @@
 				<OSImage>
 					<InstallTo>
 						<DiskID>0</DiskID>
-						<PartitionID>2</PartitionID>
+						<PartitionID>3</PartitionID>
 					</InstallTo>
 				</OSImage>
 			</ImageInstall>
@@ -38,11 +38,11 @@
 				</RunSynchronousCommand>
 				<RunSynchronousCommand wcm:action="add">
 					<Order>4</Order>
-					<Path>cmd.exe /c "&gt;&gt;"X:\diskpart.txt" (echo:SELECT DISK=0&amp;echo:CLEAN&amp;echo:CREATE PARTITION PRIMARY SIZE=100&amp;echo:FORMAT QUICK FS=NTFS LABEL=^"System Reserved^"&amp;echo:ASSIGN LETTER=S&amp;echo:ACTIVE&amp;echo:CREATE PARTITION PRIMARY)"</Path>
+					<Path>cmd.exe /c &gt;&gt;X:\diskpart.txt (echo:SELECT DISK=0&amp;echo:CLEAN&amp;echo:CONVERT GPT&amp;echo:CREATE PARTITION EFI SIZE=300&amp;echo:FORMAT QUICK FS=FAT32 LABEL=^"System^"&amp;echo:ASSIGN LETTER=S&amp;echo:CREATE PARTITION MSR SIZE=16&amp;echo:CREATE PARTITION PRIMARY)</Path>
 				</RunSynchronousCommand>
 				<RunSynchronousCommand wcm:action="add">
 					<Order>5</Order>
-					<Path>cmd.exe /c "&gt;&gt;"X:\diskpart.txt" (echo:FORMAT QUICK FS=NTFS LABEL=^"Windows^"&amp;echo:ASSIGN LETTER=W)"</Path>
+					<Path>cmd.exe /c &gt;&gt;X:\diskpart.txt (echo:FORMAT QUICK FS=NTFS LABEL=^"Windows^"&amp;echo:ASSIGN LETTER=W)</Path>
 				</RunSynchronousCommand>
 				<RunSynchronousCommand wcm:action="add">
 					<Order>6</Order>

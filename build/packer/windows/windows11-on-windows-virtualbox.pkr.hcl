@@ -52,12 +52,36 @@ source "virtualbox-iso" "win11" {
   disk_size     = 61440
   nested_virt   = var.nested_virt
 
+  # SATA is detected reliably by WinPE without driver injection.
+  # VirtualBox NVMe (pcie) requires stornvme.sys to be pre-loaded in WinPE,
+  # which the stock Windows 11 ISO does not do reliably during setup.
+  hard_drive_interface = "sata"
+  iso_interface        = "sata"
+  firmware             = "efi"
+
+  # Skip attaching/mounting Guest Additions ISO - not needed for a build
+  guest_additions_mode = "disable"
+
+  # Performance tuning via VBoxManage:
+  # - paravirtprovider hyperv: exposes Hyper-V enlightenments to the Windows guest,
+  #   improving timer/scheduler performance even on a non-Hyper-V host
+  # - ioapic: required for multi-CPU and improves IRQ handling
+  # - disable audio/USB/VRDE: eliminates polling overhead during the build
+  vboxmanage = [
+    ["modifyvm", "{{.Name}}", "--paravirtprovider", "hyperv"],
+    ["modifyvm", "{{.Name}}", "--ioapic", "on"],
+    ["modifyvm", "{{.Name}}", "--audio-enabled", "off"],
+    ["modifyvm", "{{.Name}}", "--vrde", "off"],
+  ]
+
   communicator   = "winrm"
   winrm_username = "Administrator"
   winrm_password = "P@ssw0rd!"
   winrm_timeout  = "60m"
 
-  boot_wait = "2s"
+  # EFI/OVMF takes longer to initialise than BIOS before the
+  # "Press any key to boot from CD or DVD" prompt appears.
+  boot_wait = "8s"
   boot_command = [
     "<spacebar>"
   ]
