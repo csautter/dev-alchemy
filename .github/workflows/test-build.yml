@@ -201,7 +201,7 @@ jobs:
       - name: Download Windows ISO from Azure Blob Storage
         uses: ./.github/actions/download-windows-iso
         with:
-          iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
+          iso-path: .\vendor\windows\win11_25h2_english_amd64.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install dependencies windows
@@ -237,7 +237,7 @@ jobs:
       - name: Upload Windows ISO to Azure Blob Storage
         uses: ./.github/actions/upload-windows-iso
         with:
-          iso-path: C:\actions-runner\_work\dev-alchemy\dev-alchemy\vendor\windows\win11_25h2_english_amd64.iso
+          iso-path: .\vendor\windows\win11_25h2_english_amd64.iso
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if Packer build failed
