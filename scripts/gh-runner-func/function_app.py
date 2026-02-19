@@ -266,7 +266,8 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
                 "image_reference": image_reference,
                 "os_disk": {
                     "create_option": "FromImage",
-                    "disk_size_gb": int(os.environ.get("OS_DISK_SIZE_GB", "80")),
+                    # disk size needs to be at minium 128GB - defined by the image size
+                    # "disk_size_gb": int(os.environ.get("OS_DISK_SIZE_GB", "80")),
                     "managed_disk": {"storage_account_type": "Premium_LRS"},
                 },
             },
