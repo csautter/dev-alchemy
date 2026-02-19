@@ -81,6 +81,15 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 }
 
 func getWindows11Download(arch string, savePath string, download bool) (string, error) {
+
+	_, err := os.Stat(savePath)
+	if err != nil && os.IsNotExist(err) {
+		log.Printf("Windows 11 ISO not found at %s, will attempt to get download url", savePath)
+	} else {
+		log.Printf("File already exists at %s, skipping evaluation of download url", savePath)
+		return "", nil
+	}
+
 	var url_file string
 	if arch == "amd64" {
 		url_file = "win11_amd64_iso_url.txt"
@@ -98,7 +107,7 @@ func getWindows11Download(arch string, savePath string, download bool) (string, 
 	}
 
 	workdir := filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos")
-	_, err := os.Stat(filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos/.venv"))
+	_, err = os.Stat(filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos/.venv"))
 	if err != nil && os.IsNotExist(err) {
 		log.Printf("Creating Python virtual environment for Windows 11 download script")
 		RunCliCommand(workdir, python_executable, []string{"-m", "venv", ".venv"})
