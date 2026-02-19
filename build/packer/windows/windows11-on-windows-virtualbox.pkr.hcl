@@ -18,8 +18,9 @@ variable "iso_url" {
 }
 
 variable "nested_virt" {
-  type    = bool
-  default = true
+  type        = bool
+  default     = false
+  description = "Do NOT enable on Azure/Hyper-V cloud machines - Hyper-V owns VT-x, causing VirtualBox to software-emulate nested virt at extreme CPU cost"
 }
 
 variable "cpus" {
