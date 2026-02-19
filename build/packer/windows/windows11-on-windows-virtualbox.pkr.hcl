@@ -27,12 +27,17 @@ variable "cpus" {
   default = 2
 }
 
+variable "temp_disk_path" {
+  type        = string
+  default     = ""
+  description = "Path to use for temporary files and VM storage (e.g., D:\\ for Azure local temp disk)"
+}
+
 source "virtualbox-iso" "win11" {
   vm_name          = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory = "${path.root}/../../../vendor/windows/virtualbox-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-
-  iso_url      = var.iso_url
-  iso_checksum = "none"
+  output_directory = var.temp_disk_path != "" ? var.temp_disk_path : "${path.root}/../../../cache/windows11/virtualbox-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  iso_url          = var.iso_url
+  iso_checksum     = "none"
 
   guest_os_type = "Windows11_64"
   memory        = 4096

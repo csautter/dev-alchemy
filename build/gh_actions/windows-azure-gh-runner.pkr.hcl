@@ -17,7 +17,7 @@ variable "subscription_id" {
 
 variable "vm_size" {
   type    = string
-  default = "Standard_D2_v5"
+  default = "Standard_D2s_v5"
 }
 
 variable "github_actions_version" {
@@ -89,11 +89,13 @@ source "azure-arm" "windows-azure-gh-runner" {
   winrm_timeout                     = "5m"
   winrm_use_ssl                     = true
   winrm_username                    = "packer"
-  /*
+
+  managed_image_storage_account_type = "Premium_LRS" # Premium SSD
+
   spot {
     eviction_policy = "Delete"
     max_price       = -1
-  }*/
+  }
 }
 
 build {
