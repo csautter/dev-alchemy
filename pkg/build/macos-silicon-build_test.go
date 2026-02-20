@@ -4,6 +4,7 @@
 package build
 
 import (
+	"os"
 	"runtime"
 	"testing"
 )
@@ -82,6 +83,10 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 
 func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 	t.Parallel()
+
+	if os.Getuid() != 0 {
+		t.Fatal("This test requires sudo/root permissions. Please run with sudo.")
+	}
 
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:                   "windows11",

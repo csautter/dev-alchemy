@@ -108,24 +108,26 @@ else
 	echo "Windows 11 $arch ISO already exists, skipping download"
 fi
 
-bash scripts/macos/download-utm-guest-tools.sh
+bash "${project_root}/scripts/macos/download-utm-guest-tools.sh"
 
 if [ "$arch" = "arm64" ]; then
 	# download the qemu-uefi files if not already present
-	bash scripts/macos/download-arm64-uefi.sh
+	bash "${project_root}/scripts/macos/download-arm64-uefi.sh"
 
 	# builds the autounattend ISO with the current autounattend.xml file
-	bash scripts/macos/create-win11-autounattend-iso.sh
+	echo "Creating Windows 11 ARM64 unattended ISO..."
+	echo "Running the create-win11-autounattend-iso.sh script to generate the unattended ISO..."
+	bash "${project_root}/scripts/macos/create-win11-autounattend-iso.sh"
 
 	# download the virtio-win ISO if not already present
-	bash scripts/macos/download-virtio-win-iso.sh
+	bash "${project_root}/scripts/macos/download-virtio-win-iso.sh"
 
 fi
 
 # creates the qcow2 disk image and overwrites it if it already exists
-bash scripts/macos/create-qemu-qcow2-disk.sh --arch $arch
+bash "${project_root}/scripts/macos/create-qemu-qcow2-disk.sh" --arch "$arch"
 
-packer init "build/packer/windows/windows11-on-macos.pkr.hcl"
+packer init "${project_root}/build/packer/windows/windows11-on-macos.pkr.hcl"
 
 # determine the Windows 11 ISO path to use
 if [ "$arch" = "amd64" ]; then
@@ -136,7 +138,7 @@ elif [ "$arch" = "arm64" ]; then
 fi
 
 # remove packer output directory if it exists
-output_dir="$project_root/cache/windows11/qemu-out-windows11-${arch}"
+output_dir="${project_root}/cache/windows11/qemu-out-windows11-${arch}"
 if [ -d "$output_dir" ]; then
 	echo "Removing existing Packer output directory..."
 	rm -rf "$output_dir"
