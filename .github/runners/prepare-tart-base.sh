@@ -128,20 +128,26 @@ ${body}
 ENDSSH
 }
 
-# brew_install LABEL CMD PKG [TAP]
+# brew_install LABEL CMD PKG [TAP] [FLAGS]
 #   LABEL - human-readable name shown in output
-#   CMD   - binary to check with command -v
+#   CMD   - binary name (checked via command -v) or absolute path (checked via -e)
 #   PKG   - brew package to install (use "org/tap/pkg" form when a tap is needed)
 #   TAP   - (optional) brew tap to register before installing
+#   FLAGS - (optional) extra brew install flags, e.g. --cask
 brew_install() {
-	local label="$1" cmd="$2" pkg="$3" tap="${4:-}"
-	local tap_line=""
+	local label="$1" cmd="$2" pkg="$3" tap="${4:-}" flags="${5:-}"
+	local tap_line="" check
 	[[ -n "$tap" ]] && tap_line="brew tap ${tap} || echo 'WARNING: tap ${tap} failed, continuing...'"
+	if [[ "$cmd" == /* ]]; then
+		check="[[ -e ${cmd} ]]"
+	else
+		check="command -v ${cmd} &>/dev/null"
+	fi
 	provision_step "${label}" "
-if ! command -v ${cmd} &>/dev/null; then
+if ! ${check}; then
 	echo 'Installing ${label}...'
 	${tap_line}
-	brew install ${pkg} || echo 'WARNING: ${label} install failed, continuing...'
+	brew install ${flags} ${pkg} || echo 'WARNING: ${label} install failed, continuing...'
 else
 	echo '${label} already installed.'
 fi
@@ -176,11 +182,16 @@ fi
 PROVISION
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
-# brew install terraform  # uncomment if needed
-brew_install "Azure CLI"  az      azure-cli
-brew_install "GitHub CLI" gh      gh
-brew_install "Packer"     packer  hashicorp/tap/packer  hashicorp/tap
-brew_install "Go"         go      go
+brew_install "Azure CLI"   az                        azure-cli
+brew_install "GitHub CLI"  gh                        gh
+brew_install "Packer"      packer                    hashicorp/tap/packer  hashicorp/tap
+brew_install "Go"          go                        go
+brew_install "UTM"         /Applications/UTM.app     utm                   ""  --cask
+brew_install "QEMU"        qemu-img                  qemu
+brew_install "xz"          xz                        xz
+brew_install "FFmpeg"      ffmpeg                    ffmpeg
+brew_install "vncsnapshot" vncsnapshot               vncsnapshot
+brew_install "xorriso"     xorriso                   xorriso
 
 # ─── Download and install GitHub Actions runner ───────────────────────────────
 echo "Installing GitHub Actions runner ${RUNNER_VERSION} into golden image..."
