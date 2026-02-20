@@ -410,7 +410,7 @@ jobs:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           go mod vendor
-          make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
+          sudo -E make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
       - name: Move .vnc.mp4 files to artifact directory
         if: contains(matrix.runs_on, 'macos')
