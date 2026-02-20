@@ -115,13 +115,46 @@ echo "SSH connection successful."
 # ─── Provision tools ──────────────────────────────────────────────────────────
 echo "Starting provisioning..."
 
+# ─── Provision helpers ────────────────────────────────────────────────────────
+# Opens a fresh SSH session per step
+provision_step() {
+	local label="$1"
+	local body="$2"
+	echo "── ${label} ─────────────────────────────────────────────────────"
+	vm_ssh bash <<ENDSSH
+eval "\$(/opt/homebrew/bin/brew shellenv)" 2>/dev/null || true
+set -e
+${body}
+ENDSSH
+}
+
+# brew_install LABEL CMD PKG [TAP]
+#   LABEL - human-readable name shown in output
+#   CMD   - binary to check with command -v
+#   PKG   - brew package to install (use "org/tap/pkg" form when a tap is needed)
+#   TAP   - (optional) brew tap to register before installing
+brew_install() {
+	local label="$1" cmd="$2" pkg="$3" tap="${4:-}"
+	local tap_line=""
+	[[ -n "$tap" ]] && tap_line="brew tap ${tap} || echo 'WARNING: tap ${tap} failed, continuing...'"
+	provision_step "${label}" "
+if ! command -v ${cmd} &>/dev/null; then
+	echo 'Installing ${label}...'
+	${tap_line}
+	brew install ${pkg} || echo 'WARNING: ${label} install failed, continuing...'
+else
+	echo '${label} already installed.'
+fi
+"
+}
+
+# ── Homebrew (must run first; brew may not exist yet) ─────────────────────────
 vm_ssh bash <<'PROVISION'
 set -e
 
 BREW="/opt/homebrew/bin/brew"
 BREW_PROFILE_LINE='eval "$(/opt/homebrew/bin/brew shellenv)"'
 
-# ── Homebrew ──────────────────────────────────────────────────────────────────
 if [[ ! -x "$BREW" ]]; then
 	echo "Installing Homebrew..."
 	NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -142,57 +175,12 @@ if [[ ! -f /etc/paths.d/homebrew ]]; then
 fi
 PROVISION
 
-vm_ssh bash <<'PROVISION'
-eval "$(/opt/homebrew/bin/brew shellenv)"
-set -e
-# ── Azure CLI ─────────────────────────────────────────────────────────────────
-if ! command -v az &>/dev/null; then
-	echo "Installing Azure CLI..."
-	brew install azure-cli || echo "WARNING: azure-cli install failed, continuing..."
-else
-	echo "Azure CLI already installed."
-fi
-PROVISION
-
-vm_ssh bash <<'PROVISION'
-eval "$(/opt/homebrew/bin/brew shellenv)"
-set -e
-
-# ── GitHub CLI ────────────────────────────────────────────────────────────────
-if ! command -v gh &>/dev/null; then
-	echo "Installing GitHub CLI..."
-	brew install gh || echo "WARNING: gh install failed, continuing..."
-else
-	echo "GitHub CLI already installed."
-fi
-PROVISION
-
-vm_ssh bash <<'PROVISION'
-eval "$(/opt/homebrew/bin/brew shellenv)"
-set -e
-
-# ── Additional tools (uncomment as needed) ────────────────────────────────────
-# brew install terraform
-if ! command -v packer &>/dev/null; then
-	echo "Installing Packer..."
-	brew tap hashicorp/tap || echo "WARNING: packer install failed, continuing..."
-	brew install hashicorp/tap/packer || echo "WARNING: packer install failed, continuing..."
-else
-	echo "Packer already installed."
-fi
-PROVISION
-
-vm_ssh bash <<'PROVISION'
-eval "$(/opt/homebrew/bin/brew shellenv)"
-set -e
-
-if ! command -v go &>/dev/null; then
-	echo "Installing Go..."
-	brew install go || echo "WARNING: go install failed, continuing..."
-else
-	echo "Go already installed."
-fi
-PROVISION
+# ── Tools ─────────────────────────────────────────────────────────────────────
+# brew install terraform  # uncomment if needed
+brew_install "Azure CLI"  az      azure-cli
+brew_install "GitHub CLI" gh      gh
+brew_install "Packer"     packer  hashicorp/tap/packer  hashicorp/tap
+brew_install "Go"         go      go
 
 # ─── Download and install GitHub Actions runner ───────────────────────────────
 echo "Installing GitHub Actions runner ${RUNNER_VERSION} into golden image..."
