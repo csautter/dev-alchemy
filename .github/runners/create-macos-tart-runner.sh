@@ -73,21 +73,6 @@ vm_ssh() {
 		"${VM_SSH_USER}@${CURRENT_VM_IP}" "$@"
 }
 
-# Fetch a runner removal token from GitHub
-fetch_removal_token() {
-	if [[ "$GITHUB_SCOPE" == "org" ]]; then
-		gh api --method POST \
-			-H "Accept: application/vnd.github+json" \
-			"/orgs/${GITHUB_ORG}/actions/runners/remove-token" \
-			--jq '.token'
-	else
-		gh api --method POST \
-			-H "Accept: application/vnd.github+json" \
-			"/repos/${GITHUB_REPO}/actions/runners/remove-token" \
-			--jq '.token'
-	fi
-}
-
 cleanup_vm() {
 	local vm="${1:-$CURRENT_VM_NAME}"
 	[[ -z "$vm" ]] && return
@@ -97,20 +82,36 @@ cleanup_vm() {
 	# Deregister the runner before stopping the VM (handles Ctrl+C interruption).
 	# Ephemeral runners deregister themselves when run.sh receives SIGINT, so we
 	# wait briefly and only attempt an explicit removal if the runner is still listed.
-	if [[ -n "$CURRENT_RUNNER_NAME" && -n "$CURRENT_VM_IP" ]]; then
+	if [[ -n "$CURRENT_RUNNER_NAME" ]]; then
 		echo "Deregistering runner '${CURRENT_RUNNER_NAME}'..."
-		local removal_token
 		# Give run.sh a moment to finish its own graceful shutdown / self-deregistration.
 		sleep 3
-		if removal_token=$(fetch_removal_token 2>/dev/null); then
-			if vm_ssh bash -c "cd '${RUNNER_DIR}' && ./config.sh remove --token '${removal_token}'" 2>/dev/null; then
-				echo "Runner '${CURRENT_RUNNER_NAME}' deregistered."
+
+		# Use the GitHub API directly via the local gh CLI. This is the only reliable
+		# last-resort path: SSH into the VM never works during an unclean shutdown.
+		local runner_id
+		if [[ "$GITHUB_SCOPE" == "org" ]]; then
+			runner_id=$(gh api "/orgs/${GITHUB_ORG}/actions/runners" \
+				--jq ".runners[] | select(.name == \"${CURRENT_RUNNER_NAME}\") | .id" 2>/dev/null || true)
+		else
+			runner_id=$(gh api "/repos/${GITHUB_REPO}/actions/runners" \
+				--jq ".runners[] | select(.name == \"${CURRENT_RUNNER_NAME}\") | .id" 2>/dev/null || true)
+		fi
+
+		if [[ -n "$runner_id" ]]; then
+			local api_path
+			if [[ "$GITHUB_SCOPE" == "org" ]]; then
+				api_path="/orgs/${GITHUB_ORG}/actions/runners/${runner_id}"
 			else
-				# SSH failure is expected when the runner already self-deregistered on interrupt.
-				echo "Note: SSH deregistration skipped (runner likely already self-deregistered)."
+				api_path="/repos/${GITHUB_REPO}/actions/runners/${runner_id}"
+			fi
+			if gh api --method DELETE "$api_path" 2>/dev/null; then
+				echo "Runner '${CURRENT_RUNNER_NAME}' deregistered via GitHub API."
+			else
+				echo "Warning: Could not deregister runner '${CURRENT_RUNNER_NAME}' via GitHub API; manual cleanup may be required."
 			fi
 		else
-			echo "Warning: Could not obtain removal token; runner may need manual cleanup."
+			echo "Runner '${CURRENT_RUNNER_NAME}' not found via GitHub API; likely already self-deregistered."
 		fi
 		CURRENT_RUNNER_NAME=""
 	fi
