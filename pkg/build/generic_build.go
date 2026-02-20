@@ -69,7 +69,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	vnc_snapshot_done := make(chan struct{})
 	vnc_interrupt_retry_chan := make(chan bool)
 
-	startVncScreenCaptureOnMacosDarwin(ctx, config, timeout, vnc_interrupt_retry_chan, vnc_recording_config, vnc_snapshot_done, cmd, done)
+	startVncScreenCaptureOnMacosDarwin(ctx, config, timeout, vnc_interrupt_retry_chan, &vnc_recording_config, vnc_snapshot_done, cmd, done)
 
 	select {
 	case err := <-done:
@@ -136,13 +136,13 @@ func runFfmpegOnMacosDarwin(vnc_snapshot_done chan struct{}, config VirtualMachi
 	RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: timeout}, vnc_recording_config)
 }
 
-func startVncScreenCaptureOnMacosDarwin(ctx context.Context, config VirtualMachineConfig, timeout time.Duration, vnc_interrupt_retry_chan chan bool, vnc_recording_config VncRecordingConfig, vnc_snapshot_done chan struct{}, cmd *exec.Cmd, done chan error) {
+func startVncScreenCaptureOnMacosDarwin(ctx context.Context, config VirtualMachineConfig, timeout time.Duration, vnc_interrupt_retry_chan chan bool, vnc_recording_config *VncRecordingConfig, vnc_snapshot_done chan struct{}, cmd *exec.Cmd, done chan error) {
 	if runtime.GOOS != "darwin" {
 		return
 	}
 	var vnc_snapshot_ctx context.Context
 	go func() {
-		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, Retries: 30, InterruptRetryChan: vnc_interrupt_retry_chan, RetryInterval: 10 * time.Second}, &vnc_recording_config)
+		vnc_snapshot_ctx = RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, Retries: 30, InterruptRetryChan: vnc_interrupt_retry_chan, RetryInterval: 10 * time.Second}, vnc_recording_config)
 		if vnc_snapshot_ctx != nil {
 			<-vnc_snapshot_ctx.Done()
 		}
