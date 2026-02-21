@@ -32,14 +32,20 @@ ls "$vendor_dir/win11_arm64_iso_files/autounattend.xml"
 rm -f "$windows_target_iso_path"
 
 # Check available disk space before creating the ISO
-required_space_kb=$(du -sk "$vendor_dir/win11_arm64_iso_files" | awk '{print $1}')
-# Add 20% buffer to account for ISO filesystem overhead
-required_space_kb=$((required_space_kb * 12 / 10))
+# The output ISO is roughly the same size as the source files;
+# use a 50% buffer to cover ISO overhead and the efisys partition.
+source_size_kb=$(du -sk "$vendor_dir/win11_arm64_iso_files" | awk '{print $1}')
+required_space_kb=$((source_size_kb * 15 / 10))
+iso_fs=$(df -k "$iso_dir" | awk 'NR==2 {print $1}')
 available_space_kb=$(df -k "$iso_dir" | awk 'NR==2 {print $4}')
+echo "Disk space check:"
+echo "  Source files            : $((source_size_kb / 1024)) MB"
+echo "  Required (incl. 50% overhead) : $((required_space_kb / 1024)) MB"
+echo "  Available on $iso_fs : $((available_space_kb / 1024)) MB"
+echo "  Full disk usage:"
+df -h
 if [ "$available_space_kb" -lt "$required_space_kb" ]; then
 	echo "ERROR: Not enough disk space to create the ISO image."
-	echo "  Required (incl. 20% overhead) : $((required_space_kb / 1024)) MB"
-	echo "  Available on $(df -k "$iso_dir" | awk 'NR==2 {print $1}')  : $((available_space_kb / 1024)) MB"
 	exit 1
 fi
 
