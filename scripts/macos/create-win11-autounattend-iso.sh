@@ -31,10 +31,22 @@ ls "$vendor_dir/win11_arm64_iso_files/autounattend.xml"
 
 rm -f "$windows_target_iso_path"
 
+# Check available disk space before creating the ISO
+required_space_kb=$(du -sk "$vendor_dir/win11_arm64_iso_files" | awk '{print $1}')
+# Add 20% buffer to account for ISO filesystem overhead
+required_space_kb=$((required_space_kb * 12 / 10))
+available_space_kb=$(df -k "$iso_dir" | awk 'NR==2 {print $4}')
+if [ "$available_space_kb" -lt "$required_space_kb" ]; then
+	echo "ERROR: Not enough disk space to create the ISO image."
+	echo "  Required (incl. 20% overhead) : $((required_space_kb / 1024)) MB"
+	echo "  Available on $(df -k "$iso_dir" | awk 'NR==2 {print $1}')  : $((available_space_kb / 1024)) MB"
+	exit 1
+fi
+
 # Create the target ISO with the autounattend.xml file
 xorriso -as mkisofs \
 	-iso-level 3 \
-	-volid "CCCOMA_A64FRE_EN-US_DV9" \
+	-volid "CCCOMA_A64FRE_EN_US_DV9" \
 	-eltorito-alt-boot \
 	-e --interval:appended_partition_2:all:: \
 	-no-emul-boot \
