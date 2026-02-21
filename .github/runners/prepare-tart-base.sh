@@ -42,6 +42,23 @@ for cmd in tart sshpass gh; do
 	fi
 done
 
+# ─── GitHub CLI authentication check ──────────────────────────────────────────
+if ! gh auth status &>/dev/null; then
+	echo "WARNING: GitHub CLI is not authenticated."
+	echo "Attempting to authenticate via 'gh auth login'..."
+	if ! gh auth login; then
+		echo "ERROR: GitHub CLI authentication failed."
+		echo "  Run 'gh auth login' manually and re-run this script."
+		exit 1
+	fi
+	# Re-verify after login
+	if ! gh auth status &>/dev/null; then
+		echo "ERROR: GitHub CLI still not authenticated after login attempt."
+		exit 1
+	fi
+fi
+echo "GitHub CLI authentication: OK"
+
 # ─── Resolve runner version ────────────────────────────────────────────────────
 if [[ -z "${RUNNER_VERSION:-}" ]]; then
 	echo "Resolving latest GitHub Actions runner version..."
