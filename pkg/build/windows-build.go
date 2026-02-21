@@ -1,6 +1,10 @@
 package build
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+	"time"
+)
 
 const (
 	packerExecutable     = "packer"
@@ -10,11 +14,41 @@ const (
 )
 
 // RunHypervWindowsBuildOnWindows builds a Windows 11 VM using Hyper-V on Windows.
+// It retries early failures to handle the transient "No ip address" race condition in the
+// Packer HyperV plugin: StepRun calls GetHostAdapterIpAddressForSwitch with no retry, and
+// attaching a new VM to the Default Switch can briefly disrupt the host adapter's IPv4 address.
+// This failure always occurs within the first ~30 seconds; real build failures take 30+ minutes.
+// Retries are skipped for long-running failures to avoid wasting CI time on genuine errors.
 func RunHypervWindowsBuildOnWindows(config VirtualMachineConfig) error {
+	const maxRetries = 3
+	const retryDelay = 30 * time.Second
+	// Failures under this threshold are likely the transient IP detection race.
+	// Real errors (WinRM timeout, provisioner failure, etc.) occur after many minutes.
+	const earlyFailureThreshold = 2 * time.Minute
+
 	if err := createHypervTempDir(GetDirectoriesInstance()); err != nil {
 		return fmt.Errorf("failed to create hyperv temp directory: %w", err)
 	}
-	return runWindowsBuild(config, hypervPackerFile)
+
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		start := time.Now()
+		lastErr = runWindowsBuild(config, hypervPackerFile)
+		if lastErr == nil {
+			return nil
+		}
+		elapsed := time.Since(start)
+		if elapsed >= earlyFailureThreshold {
+			// Long-running failure — not the IP race condition, don't retry.
+			return fmt.Errorf("HyperV build failed after %.0fs (not retrying): %w", elapsed.Seconds(), lastErr)
+		}
+		if attempt < maxRetries {
+			log.Printf("HyperV build attempt %d/%d failed after %.0fs (likely transient IP detection race): %v. Retrying in %s...",
+				attempt, maxRetries, elapsed.Seconds(), lastErr, retryDelay)
+			time.Sleep(retryDelay)
+		}
+	}
+	return fmt.Errorf("HyperV build failed after %d attempts: %w", maxRetries, lastErr)
 }
 
 // RunVirtualBoxWindowsBuildOnWindows builds a Windows 11 VM using VirtualBox on Windows.
