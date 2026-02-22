@@ -330,7 +330,8 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
                 },
             },
             "os_profile": {
-                "computer_name": runner_name,
+                # Windows computer names must be ≤15 chars
+                "computer_name": runner_name[:15],
                 "admin_username": os.environ["ADMIN_USERNAME"],
                 "admin_password": admin_password,
                 "custom_data": custom_data,

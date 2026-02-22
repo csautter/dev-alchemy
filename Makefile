@@ -46,8 +46,8 @@ test-gh-runner-func-request:
 
 test-gh-runner-func-delete:
 	# Usage:
-	# make test-gh-runner-func-delete FUNCTION_APP_NAME=<function-app-name> RESOURCE_GROUP=<name> RUNNER_NAME=<name>
-	# Optional: API_CLIENT_ID=<api-client-id> TENANT_ID=<tenant-id>
+	# make test-gh-runner-func-delete FUNCTION_APP_NAME=<function-app-name> RESOURCE_GROUP=<name>
+	# Optional: API_CLIENT_ID=<api-client-id> TENANT_ID=<tenant-id> RUNNER_NAME=<name>
 	FUNCTION_APP_NAME="$(FUNCTION_APP_NAME)" \
 	API_CLIENT_ID="$(API_CLIENT_ID)" \
 	TENANT_ID="$(TENANT_ID)" \

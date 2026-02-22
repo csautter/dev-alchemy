@@ -160,7 +160,7 @@ if [[ "$REQUEST_RUNNER" == "true" ]]; then
     RESOURCE_GROUP="gh-runner-tmp-local-$(date +%s)"
   fi
   if [[ -z "$RUNNER_NAME" ]]; then
-    RUNNER_NAME="local-$(date +%s)"
+    RUNNER_NAME="local-$(date +%s | tail -c 9)"
   fi
 
   request_body=$(
@@ -192,14 +192,10 @@ if [[ "$DELETE_RESOURCE_GROUP" == "true" ]]; then
     echo "--resource-group is required for --delete-resource-group" >&2
     exit 1
   fi
-  if [[ -z "$RUNNER_NAME" ]]; then
-    echo "--runner-name is required for --delete-resource-group" >&2
-    exit 1
-  fi
 
   delete_body=$(
     printf '{"resource-group":"%s","runner-name":"%s"}' \
-      "$RESOURCE_GROUP" "$RUNNER_NAME"
+      "$RESOURCE_GROUP" ""
   )
 
   echo "Calling delete_resource_group..."
