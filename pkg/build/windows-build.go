@@ -72,7 +72,10 @@ func runWindowsBuild(config VirtualMachineConfig, packerFile string) error {
 
 // initializePacker runs the packer init command for the given file.
 func initializePacker(packerFile string) error {
-	RunCliCommand(GetDirectoriesInstance().ProjectDir, packerExecutable, []string{"init", packerFile})
+	_, err := RunCliCommand(GetDirectoriesInstance().ProjectDir, packerExecutable, []string{"init", packerFile})
+	if err != nil {
+		return fmt.Errorf("packer init failed for %s: %w", packerFile, err)
+	}
 	return nil
 }
 
