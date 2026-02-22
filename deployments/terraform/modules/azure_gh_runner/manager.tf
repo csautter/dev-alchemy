@@ -1,8 +1,15 @@
 resource "random_integer" "suffix" {
-  #min = 10000
-  #max = 99999
-  min = 18632
-  max = 18632
+  min = 10000
+  max = 99999
+
+  # ignore_changes prevents Terraform from replacing this resource when min/max
+  # change, which would regenerate the suffix and force recreation of all named
+  # resources (storage account, key vault, function app). The value already in
+  # state stays stable.
+  # New environments will receive a genuinely random suffix from the full range.
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 resource "azurerm_resource_group" "gh_runner_manager" {
