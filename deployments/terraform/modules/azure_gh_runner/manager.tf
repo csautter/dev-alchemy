@@ -91,6 +91,9 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
     ADMIN_USERNAME           = "azureuser"
     CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images-${var.runner_location}/providers/Microsoft.Compute/images/Win2022GHAzureRunner" # gets extended with virtualization flavor in function app code like this: CUSTOM_IMAGE_ID + "-" + virtualization_flavor
     FUNCTION_KEY             = data.azurerm_key_vault_secret.azure_function_key.value
+    ALLOWED_TENANT_ID        = data.azurerm_client_config.current.tenant_id
+    ALLOWED_AUDIENCE         = "api://${azuread_application.gh_actions_runner_broker.client_id}"
+    ALLOWED_CLIENT_IDS       = azuread_application.gh_actions_runner_broker.client_id
   }
 
   identity {
@@ -104,7 +107,7 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
   auth_settings_v2 {
     auth_enabled           = true
     default_provider       = "azureactivedirectory"
-    unauthenticated_action = "AllowAnonymous"
+    unauthenticated_action = "Return401"
     active_directory_v2 {
       client_id            = azuread_application.gh_actions_runner_broker.client_id
       tenant_auth_endpoint = "https://sts.windows.net/${data.azurerm_client_config.current.tenant_id}/"
@@ -174,4 +177,3 @@ resource "azurerm_monitor_action_group" "smart_detection" {
     use_common_alert_schema = true
   }
 }
-

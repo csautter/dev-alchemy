@@ -15,6 +15,50 @@ from azure.mgmt.network import NetworkManagementClient
 app = func.FunctionApp()
 
 
+def _get_claims_from_principal_header(req: func.HttpRequest) -> dict[str, str]:
+    principal_b64 = req.headers.get("X-MS-CLIENT-PRINCIPAL")
+    if not principal_b64:
+        raise ValueError("missing principal header")
+    decoded = base64.b64decode(principal_b64)
+    principal = json.loads(decoded)
+    claims: dict[str, str] = {}
+    for claim in principal.get("claims", []):
+        claim_type = claim.get("typ")
+        claim_value = claim.get("val")
+        if claim_type and claim_value:
+            claims[claim_type] = claim_value
+    return claims
+
+
+def _csv_env(name: str) -> set[str]:
+    raw = os.environ.get(name, "")
+    return {value.strip() for value in raw.split(",") if value.strip()}
+
+
+def require_authenticated_caller(req: func.HttpRequest) -> tuple[bool, str]:
+    try:
+        claims = _get_claims_from_principal_header(req)
+    except Exception as err:
+        return False, f"invalid principal: {err}"
+
+    allowed_tenant = os.environ["ALLOWED_TENANT_ID"]
+    allowed_audience = os.environ["ALLOWED_AUDIENCE"]
+    allowed_client_ids = _csv_env("ALLOWED_CLIENT_IDS")
+
+    tenant_id = claims.get("tid", "")
+    audience = claims.get("aud", "")
+    client_id = claims.get("azp") or claims.get("appid") or ""
+
+    if tenant_id != allowed_tenant:
+        return False, "tenant not allowed"
+    if audience != allowed_audience:
+        return False, "audience not allowed"
+    if client_id not in allowed_client_ids:
+        return False, "client id not allowed"
+
+    return True, ""
+
+
 def load_powershell_script(
     runner_token: str, repo_url: str, virtualization_flavor: str
 ) -> str:
@@ -37,10 +81,12 @@ def load_powershell_script(
     methods=["POST"],
 )
 def delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
-    principal_b64 = req.headers.get("X-MS-CLIENT-PRINCIPAL")
-    if principal_b64 or is_valid_function_key(req):
-        return handle_delete_resource_group(req)
-    return func.HttpResponse("Unauthorized - delete request", status_code=401)
+    authorized, reason = require_authenticated_caller(req)
+    if not authorized:
+        return func.HttpResponse(
+            f"Unauthorized - delete request ({reason})", status_code=401
+        )
+    return handle_delete_resource_group(req)
 
 
 def handle_delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
@@ -73,28 +119,17 @@ def handle_delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
     route="request_runner", auth_level=func.AuthLevel.ANONYMOUS, methods=["POST"]
 )
 def request_runner(req: func.HttpRequest) -> func.HttpResponse:
-    principal_b64 = req.headers.get("X-MS-CLIENT-PRINCIPAL")
-    if principal_b64 or is_valid_function_key(req):
-        return handle_request_runner(req)
-    return func.HttpResponse("Unauthorized - runner request", status_code=401)
+    authorized, reason = require_authenticated_caller(req)
+    if not authorized:
+        return func.HttpResponse(
+            f"Unauthorized - runner request ({reason})", status_code=401
+        )
+    return handle_request_runner(req)
 
 
 def is_valid_function_key(req: func.HttpRequest) -> bool:
-    """
-    Checks for Azure Function key in the 'x-functions-key' header or 'code' query param.
-    Compares against the FUNCTION_KEY environment variable (set this in your app settings for testing).
-    """
-    function_key = os.environ.get("FUNCTION_KEY")
-    if not function_key:
-        return False
-    # Check header
-    header_key = req.headers.get("x-functions-key")
-    if header_key and header_key == function_key:
-        return True
-    # Check query param
-    code_param = req.params.get("code")
-    if code_param and code_param == function_key:
-        return True
+    # Function key authentication is intentionally disabled for mutating endpoints.
+    # Keep this helper only for compatibility with potential future non-mutating routes.
     return False
 
 
