@@ -55,11 +55,6 @@ ephemeral "azurerm_key_vault_secret" "github_runner_vm_admin_pw" {
   key_vault_id = azurerm_key_vault.gh_runner_kv.id
 }
 
-data "azurerm_key_vault_secret" "azure_function_key" {
-  name         = "azure-function-key"
-  key_vault_id = azurerm_key_vault.gh_runner_kv.id
-}
-
 resource "azurerm_linux_function_app" "gh_runner_func_app" {
   name                                           = "gh-runner-func-app-${random_integer.suffix.result}"
   resource_group_name                            = azurerm_resource_group.gh_runner_manager.name
@@ -90,7 +85,6 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
     VM_USE_SPOT              = "true"
     ADMIN_USERNAME           = "azureuser"
     CUSTOM_IMAGE_ID          = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/gh-actions-images-${var.runner_location}/providers/Microsoft.Compute/images/Win2022GHAzureRunner" # gets extended with virtualization flavor in function app code like this: CUSTOM_IMAGE_ID + "-" + virtualization_flavor
-    FUNCTION_KEY             = data.azurerm_key_vault_secret.azure_function_key.value
     ALLOWED_TENANT_ID        = data.azurerm_client_config.current.tenant_id
     ALLOWED_AUDIENCE         = "api://${azuread_application.gh_actions_runner_broker.client_id}"
     ALLOWED_CLIENT_IDS       = azuread_application.gh_actions_runner_broker.client_id

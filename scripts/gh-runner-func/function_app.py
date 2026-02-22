@@ -59,8 +59,12 @@ def require_authenticated_caller(req: func.HttpRequest) -> tuple[bool, str]:
     except Exception as err:
         return False, f"invalid principal: {err}"
 
-    allowed_tenant = os.environ["ALLOWED_TENANT_ID"]
-    allowed_audience = os.environ["ALLOWED_AUDIENCE"]
+    allowed_tenant = os.environ.get("ALLOWED_TENANT_ID", "")
+    allowed_audience = os.environ.get("ALLOWED_AUDIENCE", "")
+    if not allowed_tenant or not allowed_audience:
+        logging.error("ALLOWED_TENANT_ID or ALLOWED_AUDIENCE is not configured")
+        return False, "server misconfiguration"
+
     allowed_client_ids = _csv_env("ALLOWED_CLIENT_IDS")
     allowed_user_object_ids = _csv_env("ALLOWED_USER_OBJECT_IDS")
 
@@ -106,9 +110,8 @@ def load_powershell_script(
 def delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
     authorized, reason = require_authenticated_caller(req)
     if not authorized:
-        return func.HttpResponse(
-            f"Unauthorized - delete request ({reason})", status_code=401
-        )
+        logging.warning("Unauthorized delete_resource_group request: %s", reason)
+        return func.HttpResponse("Unauthorized", status_code=401)
     return handle_delete_resource_group(req)
 
 
@@ -144,16 +147,9 @@ def handle_delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
 def request_runner(req: func.HttpRequest) -> func.HttpResponse:
     authorized, reason = require_authenticated_caller(req)
     if not authorized:
-        return func.HttpResponse(
-            f"Unauthorized - runner request ({reason})", status_code=401
-        )
+        logging.warning("Unauthorized request_runner request: %s", reason)
+        return func.HttpResponse("Unauthorized", status_code=401)
     return handle_request_runner(req)
-
-
-def is_valid_function_key(req: func.HttpRequest) -> bool:
-    # Function key authentication is intentionally disabled for mutating endpoints.
-    # Keep this helper only for compatibility with potential future non-mutating routes.
-    return False
 
 
 def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
