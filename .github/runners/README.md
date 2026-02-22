@@ -31,7 +31,7 @@ metered internet connection the Azure Blob Storage download dominates job run-ti
 To avoid repeated downloads you can maintain a local ISO cache on the **host machine**. The runner
 script mounts the directory into every VM at boot via VirtioFS (read-write). The workflow then:
 
-1. **Cache hit** — symlinks the ISO from `/Volumes/iso-cache/` into the workspace; the
+1. **Cache hit** — symlinks the ISO from `/Volumes/My Shared Files/iso-cache/` into the workspace; the
    Azure download is skipped entirely.
 2. **Cache miss** — downloads the ISO from Azure Blob Storage as normal, then **copies it into
    the cache** so every subsequent run on the same runner is a cache hit.
@@ -47,7 +47,7 @@ First run (cache empty)
 Azure Blob Storage
     │  download-windows-iso action
     ▼
-Workflow workspace: vendor/windows/win11_25h2_english_arm64.iso  (real file)
+Workflow workspace: cache/windows11/iso/win11_25h2_english_arm64.iso  (real file)
     │  "Save Windows ISO to local runner cache" step  (cp)
     ▼
 Host machine: ~/iso-cache/win11_25h2_english_arm64.iso           (persists)
@@ -57,10 +57,10 @@ Every subsequent run (cache warm)
 Host machine: ~/iso-cache/win11_25h2_english_arm64.iso
     │  VirtioFS (tart --dir, read-write)
     ▼
-Tart VM: /Volumes/iso-cache/win11_25h2_english_arm64.iso
+Tart VM: /Volumes/My Shared Files/iso-cache/win11_25h2_english_arm64.iso
     │  "Link cached Windows ISO" step  (ln -sf)
     ▼
-Workflow workspace: vendor/windows/win11_25h2_english_arm64.iso  (symlink → no download)
+Workflow workspace: cache/windows11/iso/win11_25h2_english_arm64.iso  (symlink → no download)
 ```
 
 ### Set up the cache directory (one time per host)
