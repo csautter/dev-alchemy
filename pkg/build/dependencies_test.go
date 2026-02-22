@@ -8,6 +8,46 @@ import (
 	"testing"
 )
 
+// TestBootstrapPythonEnv_VenvCreationFails verifies that bootstrapPythonEnv returns
+// a wrapped error (not nil) when the python executable does not exist and the venv
+// directory is absent, so callers can fail fast with an actionable message.
+func TestBootstrapPythonEnv_VenvCreationFails(t *testing.T) {
+	workdir := t.TempDir()
+	// Point at a path that is guaranteed not to exist.
+	badPython := filepath.Join(t.TempDir(), "nonexistent-python")
+
+	err := bootstrapPythonEnv(workdir, badPython)
+
+	if err == nil {
+		t.Fatal("expected error when Python executable does not exist, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create Python venv") {
+		t.Errorf("expected error to mention venv creation failure, got: %v", err)
+	}
+}
+
+// TestBootstrapPythonEnv_PipInstallFails verifies that bootstrapPythonEnv returns
+// a wrapped error when the venv directory already exists but contains no real
+// Python/pip binaries, so the playwright pip install step fails immediately.
+func TestBootstrapPythonEnv_PipInstallFails(t *testing.T) {
+	workdir := t.TempDir()
+	// Create the .venv directory so venv creation is skipped, but leave it empty
+	// so that venvPython and pipPath do not exist.
+	if err := os.MkdirAll(filepath.Join(workdir, ".venv"), 0755); err != nil {
+		t.Fatalf("could not create mock venv dir: %v", err)
+	}
+
+	// pythonExe is irrelevant here because the venv dir already exists.
+	err := bootstrapPythonEnv(workdir, "ignored")
+
+	if err == nil {
+		t.Fatal("expected error when venv Python/pip binaries are missing, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to install playwright") {
+		t.Errorf("expected error to mention playwright install failure, got: %v", err)
+	}
+}
+
 func TestIntegrationDependencyReconciliation(t *testing.T) {
 	tests := []VirtualMachineConfig{
 		{

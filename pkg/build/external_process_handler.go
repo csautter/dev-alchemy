@@ -3,6 +3,7 @@ package build
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -25,7 +26,7 @@ type RunProcessConfig struct {
 	InterruptRetryChan chan bool
 }
 
-func RunExternalProcess(config RunProcessConfig) context.Context {
+func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if config.Context != nil {
@@ -48,10 +49,10 @@ func RunExternalProcess(config RunProcessConfig) context.Context {
 			// continue
 		case sig := <-sigs:
 			log.Printf("Process %s start interrupted by signal: %v", config.ExecutablePath, sig)
-			return ctx
+			return ctx, fmt.Errorf("process %q start interrupted by signal: %v", config.ExecutablePath, sig)
 		case <-ctx.Done():
 			log.Printf("Process %s start cancelled due to timeout or interruption: %v", config.ExecutablePath, ctx.Err())
-			return ctx
+			return ctx, fmt.Errorf("process %q start cancelled: %w", config.ExecutablePath, ctx.Err())
 		}
 	}
 
@@ -100,18 +101,20 @@ func RunExternalProcess(config RunProcessConfig) context.Context {
 				log.Fatalf("Process %s failed: %v", config.ExecutablePath, err)
 			}
 			log.Printf("Process %s finished with error: %v", config.ExecutablePath, err)
-			return ctx
+			return ctx, fmt.Errorf("process %q exited with error: %w", config.ExecutablePath, err)
 		}
 		log.Printf("Process %s finished successfully.", config.ExecutablePath)
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
 		_ = cmd.Process.Kill()
 		log.Printf("Process %s terminated due to timeout or interruption: %v", config.ExecutablePath, ctx.Err())
+		return ctx, fmt.Errorf("process %q terminated: %w", config.ExecutablePath, ctx.Err())
 	case sig := <-sigs:
 		_ = cmd.Process.Kill()
 		log.Printf("Process %s terminated due to signal: %v", config.ExecutablePath, sig)
+		return ctx, fmt.Errorf("process %q terminated by signal: %v", config.ExecutablePath, sig)
 	}
-	return ctx
+	return ctx, nil
 }
 
 func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
@@ -123,11 +126,11 @@ func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
 			log.Printf("Retrying process %s (attempt %d/%d) after error: %v", config.ExecutablePath, attempt, config.Retries, lastErr)
 			time.Sleep(config.RetryInterval)
 		}
-		ctx := RunExternalProcess(config)
-		if ctx.Err() == nil {
+		ctx, err := RunExternalProcess(config)
+		if err == nil {
 			return ctx
 		}
-		lastErr = ctx.Err()
+		lastErr = err
 
 		// Check if we received an interrupt signal to stop retries
 		if config.InterruptRetryChan != nil {

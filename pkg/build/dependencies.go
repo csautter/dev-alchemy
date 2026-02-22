@@ -133,6 +133,53 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	}
 }
 
+// bootstrapPythonEnv ensures the Python virtual environment at workdir/.venv exists
+// and has playwright and playwright-stealth installed, then installs the Chromium browser.
+// pythonExe is the system Python executable used only when the venv does not yet exist.
+func bootstrapPythonEnv(workdir, pythonExe string) error {
+	venvDir := filepath.Join(workdir, ".venv")
+	if _, err := os.Stat(venvDir); os.IsNotExist(err) {
+		log.Printf("Creating Python virtual environment for Windows 11 download script")
+		if _, err = RunCliCommand(workdir, pythonExe, []string{"-m", "venv", ".venv"}); err != nil {
+			return fmt.Errorf("failed to create Python venv: %w", err)
+		}
+	} else if err != nil {
+		return err
+	} else {
+		log.Printf("Python virtual environment for Windows 11 download script already exists")
+	}
+
+	pipPath := filepath.Join(workdir, ".venv", "Scripts", "pip.exe")
+	if runtime.GOOS != "windows" {
+		pipPath = filepath.Join(workdir, ".venv", "bin", "pip")
+	}
+	venvPython := filepath.Join(workdir, ".venv", "Scripts", "python.exe")
+	if runtime.GOOS != "windows" {
+		venvPython = filepath.Join(workdir, ".venv", "bin", "python3")
+	}
+
+	log.Printf("Installing required Python packages for Windows 11 download script")
+	if _, err := RunCliCommand(workdir, venvPython, []string{"-c", "import playwright"}); err != nil {
+		log.Printf("playwright not found, installing...")
+		if _, err = RunCliCommand(workdir, pipPath, []string{"install", "playwright"}); err != nil {
+			return fmt.Errorf("failed to install playwright: %w", err)
+		}
+	}
+	if _, err := RunCliCommand(workdir, venvPython, []string{"-c", "import playwright_stealth"}); err != nil {
+		log.Printf("playwright-stealth not found, installing...")
+		if _, err = RunCliCommand(workdir, pipPath, []string{"install", "playwright-stealth"}); err != nil {
+			return fmt.Errorf("failed to install playwright-stealth: %w", err)
+		}
+	}
+
+	log.Printf("Installing Playwright browsers for Windows 11 download script")
+	if _, err := RunCliCommand(workdir, venvPython, []string{"-m", "playwright", "install", "chromium"}); err != nil {
+		return fmt.Errorf("failed to install Playwright Chromium browser: %w", err)
+	}
+
+	return nil
+}
+
 func getWindows11Download(arch string, savePath string, download bool) (string, error) {
 
 	_, err := os.Stat(savePath)
@@ -160,36 +207,14 @@ func getWindows11Download(arch string, savePath string, download bool) (string, 
 	}
 
 	workdir := filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos")
-	_, err = os.Stat(filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos/.venv"))
-	if err != nil && os.IsNotExist(err) {
-		log.Printf("Creating Python virtual environment for Windows 11 download script")
-		RunCliCommand(workdir, python_executable, []string{"-m", "venv", ".venv"})
-	} else if err == nil {
-		log.Printf("Python virtual environment for Windows 11 download script already exists")
-	} else {
-		return "", err
+	if err := bootstrapPythonEnv(workdir, python_executable); err != nil {
+		return "", fmt.Errorf("dependency bootstrap failed: %w", err)
 	}
 
-	log.Printf("Installing required Python packages for Windows 11 download script")
-	pipPath := filepath.Join(workdir, ".venv", "Scripts", "pip.exe")
-	if runtime.GOOS != "windows" {
-		pipPath = filepath.Join(workdir, ".venv", "bin", "pip")
-	}
 	venvPython := filepath.Join(workdir, ".venv", "Scripts", "python.exe")
 	if runtime.GOOS != "windows" {
 		venvPython = filepath.Join(workdir, ".venv", "bin", "python3")
 	}
-	_, err = RunCliCommand(workdir, venvPython, []string{"-c", "import playwright"})
-	if err != nil {
-		RunCliCommand(workdir, pipPath, []string{"install", "playwright"})
-	}
-	_, err = RunCliCommand(workdir, venvPython, []string{"-c", "import playwright_stealth"})
-	if err != nil {
-		RunCliCommand(workdir, pipPath, []string{"install", "playwright-stealth"})
-	}
-
-	log.Printf("Installing Playwright browsers for Windows 11 download script")
-	RunCliCommand(workdir, venvPython, []string{"-m", "playwright", "install", "chromium"})
 
 	args := []string{"playwright_win11_iso.py", "--save-path", savePath}
 	// if arch is arm64, add --arm flag
@@ -205,7 +230,9 @@ func getWindows11Download(arch string, savePath string, download bool) (string, 
 		Args:           args,
 		Timeout:        10 * time.Minute,
 	}
-	RunExternalProcess(config)
+	if _, err := RunExternalProcess(config); err != nil {
+		return "", fmt.Errorf("playwright script failed: %w", err)
+	}
 
 	if download {
 		return "", nil

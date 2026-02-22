@@ -165,7 +165,11 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 		config.RetryInterval = process_config.RetryInterval
 	}
 
-	ctx = RunExternalProcess(config)
+	var convErr error
+	ctx, convErr = RunExternalProcess(config)
+	if convErr != nil {
+		log.Printf("Video conversion for %s failed: %v", recording_config.OutputFile, convErr)
+	}
 
 	// remove the snapshot images after video generation
 	removePattern := recording_config.OutputFile
