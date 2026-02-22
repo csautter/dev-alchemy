@@ -2,6 +2,7 @@ import base64
 import azure.functions as func
 import json
 import logging
+import re
 import requests
 import os
 from pathlib import Path
@@ -13,6 +14,12 @@ from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.network import NetworkManagementClient
 
 app = func.FunctionApp()
+
+# Allowed virtualization flavors — must match the image naming convention
+_ALLOWED_FLAVORS: frozenset[str] = frozenset({"hyperv", "virtualbox"})
+
+# GitHub repo: only allow "owner/repo" with safe characters, no path traversal
+_REPO_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*/[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 
 
 # EasyAuth v2 serialises Azure AD claim types as full URI strings.
@@ -135,9 +142,9 @@ def handle_delete_resource_group(req: func.HttpRequest) -> func.HttpResponse:
             status_code=200,
         )
     except Exception as e:
+        logging.error("Error deleting resource group: %s", e)
         return func.HttpResponse(
-            f"Error deleting resource group: {str(e)}",
-            status_code=500,
+            "Internal error deleting resource group", status_code=500
         )
 
 
@@ -166,6 +173,16 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
             'Invalid JSON body. Expected: { "repo": "org/repo" }', status_code=400
         )
 
+    if not _REPO_RE.match(repo):
+        return func.HttpResponse(
+            "Invalid repo format. Expected: owner/repo", status_code=400
+        )
+    if virtualization_flavor not in _ALLOWED_FLAVORS:
+        return func.HttpResponse(
+            f"Invalid virtualization-flavor. Allowed: {', '.join(sorted(_ALLOWED_FLAVORS))}",
+            status_code=400,
+        )
+
     # 1. Get PAT from Key Vault
     credential = DefaultAzureCredential()
     vault_url = os.environ["VAULT_URL"]
@@ -187,8 +204,9 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
     )
 
     if response.status_code != 201:
+        logging.error("GitHub API error: %s %s", response.status_code, response.text)
         return func.HttpResponse(
-            f"GitHub API error: {response.status_code} {response.text}", status_code=500
+            "Failed to obtain runner registration token", status_code=500
         )
 
     runner_token = response.json()["token"]
@@ -223,9 +241,9 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
     try:
         admin_password = kv_client.get_secret("github-runner-vm-admin-pw").value
     except Exception as e:
+        logging.error("Failed to retrieve VM admin password from Key Vault: %s", e)
         return func.HttpResponse(
-            f"Error retrieving VM admin password from Key Vault: {str(e)}",
-            status_code=500,
+            "Internal error retrieving credentials", status_code=500
         )
 
     try:
@@ -365,10 +383,8 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
                 resource_group, os.environ["VM_NAME"], vm_params
             )
     except Exception as e:
-        return func.HttpResponse(
-            f"Error creating VM: {str(e)}",
-            status_code=500,
-        )
+        logging.error("Error creating VM: %s", e)
+        return func.HttpResponse("Internal error creating runner VM", status_code=500)
 
     return func.HttpResponse(
         json.dumps(
