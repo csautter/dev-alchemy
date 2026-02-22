@@ -15,6 +15,20 @@ from azure.mgmt.network import NetworkManagementClient
 app = func.FunctionApp()
 
 
+# EasyAuth v2 serialises Azure AD claim types as full URI strings.
+# Map them to their short JWT equivalents so the rest of the code
+# can use simple names regardless of token version.
+_CLAIM_URI_TO_SHORT: dict[str, str] = {
+    "http://schemas.microsoft.com/identity/claims/tenantid": "tid",
+    "http://schemas.microsoft.com/identity/claims/objectidentifier": "oid",
+    "http://schemas.microsoft.com/identity/claims/identityprovider": "idp",
+    "http://schemas.microsoft.com/claims/authnmethodsreferences": "amr",
+    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier": "sub",
+    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress": "email",
+    "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name": "name",
+}
+
+
 def _get_claims_from_principal_header(req: func.HttpRequest) -> dict[str, str]:
     principal_b64 = req.headers.get("X-MS-CLIENT-PRINCIPAL")
     if not principal_b64:
@@ -26,7 +40,11 @@ def _get_claims_from_principal_header(req: func.HttpRequest) -> dict[str, str]:
         claim_type = claim.get("typ")
         claim_value = claim.get("val")
         if claim_type and claim_value:
-            claims[claim_type] = claim_value
+            # Normalise full URI claim types to their short JWT equivalents
+            short_claim_type: str = _CLAIM_URI_TO_SHORT.get(
+                claim_type, claim_type or ""
+            )
+            claims[short_claim_type] = claim_value
     return claims
 
 
