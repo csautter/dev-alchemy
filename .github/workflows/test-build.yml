@@ -28,7 +28,7 @@ on:
       - "build/packer/windows/**/*"
       - "scripts/macos/*"
       - "scripts/macos/**/*"
-      - ".github/workflows/test-packer-build-win11-on-macos.yml"
+      - ".github/workflows/test-build.yml"
 
 jobs:
   provision-hyperv-runner:
