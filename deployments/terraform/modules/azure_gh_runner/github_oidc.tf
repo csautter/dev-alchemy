@@ -1,8 +1,31 @@
+resource "random_uuid" "gh_actions_runner_broker_scope_id" {}
+
 resource "azuread_application" "gh_actions_runner_broker" {
   display_name = "gh-actions-runner-broker"
   lifecycle {
     ignore_changes = [identifier_uris]
   }
+
+  api {
+    oauth2_permission_scope {
+      admin_consent_description  = "Allow the application to call the GitHub Actions runner broker API"
+      admin_consent_display_name = "Access gh-actions-runner-broker"
+      enabled                    = true
+      id                         = random_uuid.gh_actions_runner_broker_scope_id.result
+      type                       = "User"
+      user_consent_description   = "Allow the application to call the GitHub Actions runner broker API on your behalf"
+      user_consent_display_name  = "Access gh-actions-runner-broker"
+      value                      = "user_impersonation"
+    }
+  }
+}
+
+# Pre-authorise the Azure CLI public client so `az rest --resource api://<id>` works
+# without any user/admin consent prompt.
+resource "azuread_application_pre_authorized" "azure_cli" {
+  application_id       = azuread_application.gh_actions_runner_broker.id
+  authorized_client_id = "04b07795-8ddb-461a-bbee-02f9e1bf7b46" # Well-known Azure CLI app ID
+  permission_ids       = [random_uuid.gh_actions_runner_broker_scope_id.result]
 }
 
 resource "azuread_application_identifier_uri" "gh_actions_runner_broker" {

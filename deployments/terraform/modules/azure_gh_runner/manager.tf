@@ -94,6 +94,7 @@ resource "azurerm_linux_function_app" "gh_runner_func_app" {
     ALLOWED_TENANT_ID        = data.azurerm_client_config.current.tenant_id
     ALLOWED_AUDIENCE         = "api://${azuread_application.gh_actions_runner_broker.client_id}"
     ALLOWED_CLIENT_IDS       = azuread_application.gh_actions_runner_broker.client_id
+    ALLOWED_USER_OBJECT_IDS  = length(var.allowed_user_object_ids) > 0 ? join(",", var.allowed_user_object_ids) : data.azurerm_client_config.current.object_id
   }
 
   identity {

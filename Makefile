@@ -28,22 +28,34 @@ test-gh-runner-func-request:
 	# Example:
 	# make test-gh-runner-func-request FUNCTION_APP_NAME=my-func-app
 	# Optional:
+	# API_CLIENT_ID=<api-client-id> TENANT_ID=<tenant-id>
 	# REPO=<owner/repo> RESOURCE_GROUP=<name> RUNNER_NAME=<name> VIRTUALIZATION_FLAVOR=hyperv|virtualbox
+	# AZURE_BROKER_CONFIG_DIR=~/.azure-broker AZURE_ADMIN_CONFIG_DIR=~/.azure
+	# TERRAGRUNT_OUTPUT_DIR=deployments/terraform/env/azure_dev/azure_gh_runner
 	FUNCTION_APP_NAME="$(FUNCTION_APP_NAME)" \
-	API_CLIENT_ID="$$(az ad app list --display-name gh-actions-runner-broker --query '[0].appId' -o tsv)" \
+	API_CLIENT_ID="$(API_CLIENT_ID)" \
+	TENANT_ID="$(TENANT_ID)" \
 	REPO="$(REPO)" \
 	RESOURCE_GROUP="$(RESOURCE_GROUP)" \
 	RUNNER_NAME="$(RUNNER_NAME)" \
 	VIRTUALIZATION_FLAVOR="$(VIRTUALIZATION_FLAVOR)" \
+	AZURE_BROKER_CONFIG_DIR="$(AZURE_BROKER_CONFIG_DIR)" \
+	AZURE_ADMIN_CONFIG_DIR="$(AZURE_ADMIN_CONFIG_DIR)" \
+	TERRAGRUNT_OUTPUT_DIR="$(TERRAGRUNT_OUTPUT_DIR)" \
 	bash ./scripts/gh-runner-func/test-endpoints.sh --request-runner
 
 test-gh-runner-func-delete:
 	# Usage:
-	# make test-gh-runner-func-delete FUNCTION_APP_NAME=<function-app-name> API_CLIENT_ID=<api-client-id> RESOURCE_GROUP=<name> RUNNER_NAME=<name>
+	# make test-gh-runner-func-delete FUNCTION_APP_NAME=<function-app-name> RESOURCE_GROUP=<name> RUNNER_NAME=<name>
+	# Optional: API_CLIENT_ID=<api-client-id> TENANT_ID=<tenant-id>
 	FUNCTION_APP_NAME="$(FUNCTION_APP_NAME)" \
-	API_CLIENT_ID="$$(az ad app list --display-name gh-actions-runner-broker --query '[0].appId' -o tsv)" \
+	API_CLIENT_ID="$(API_CLIENT_ID)" \
+	TENANT_ID="$(TENANT_ID)" \
 	RESOURCE_GROUP="$(RESOURCE_GROUP)" \
 	RUNNER_NAME="$(RUNNER_NAME)" \
+	AZURE_BROKER_CONFIG_DIR="$(AZURE_BROKER_CONFIG_DIR)" \
+	AZURE_ADMIN_CONFIG_DIR="$(AZURE_ADMIN_CONFIG_DIR)" \
+	TERRAGRUNT_OUTPUT_DIR="$(TERRAGRUNT_OUTPUT_DIR)" \
 	bash ./scripts/gh-runner-func/test-endpoints.sh --delete-resource-group
 
 deploy-plan-terraform-azure-gh-runner:

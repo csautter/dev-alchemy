@@ -8,3 +8,9 @@ variable "runner_location" {
   type        = string
   default     = "eastus2"
 }
+
+variable "allowed_user_object_ids" {
+  description = "Optional list of Entra user object IDs allowed to call broker endpoints directly."
+  type        = list(string)
+  default     = []
+}

@@ -5,28 +5,24 @@ usage() {
   cat <<'EOF'
 Test Azure runner broker endpoints with Entra auth.
 
-Required:
+Optional:
   --function-app <name>    Azure Function App name (without .azurewebsites.net)
   --api-client-id <id>     App registration client ID used as API audience
-
-Optional:
   --repo <owner/repo>      GitHub repo (default: csautter/dev-alchemy)
   --resource-group <name>  Resource group name
   --runner-name <name>     Runner name
   --flavor <hyperv|virtualbox>  Virtualization flavor (default: hyperv)
+  --admin-azure-profile-dir <path> Azure CLI config dir for admin lookups (default: ~/.azure)
+  --terragrunt-output-dir <path>  Terragrunt dir for output discovery
   --request-runner         Call request_runner endpoint
   --delete-resource-group  Call delete_resource_group endpoint
   -h, --help               Show this help
 
 Examples:
   bash scripts/gh-runner-func/test-endpoints.sh \
-    --function-app my-func-app \
-    --api-client-id 00000000-0000-0000-0000-000000000000 \
     --request-runner
 
   bash scripts/gh-runner-func/test-endpoints.sh \
-    --function-app my-func-app \
-    --api-client-id 00000000-0000-0000-0000-000000000000 \
     --resource-group gh-runner-tmp-local-12345 \
     --runner-name local-12345 \
     --delete-resource-group
@@ -48,6 +44,10 @@ RUNNER_NAME="${RUNNER_NAME:-}"
 VIRTUALIZATION_FLAVOR="${VIRTUALIZATION_FLAVOR:-hyperv}"
 REQUEST_RUNNER=false
 DELETE_RESOURCE_GROUP=false
+AZURE_ADMIN_CONFIG_DIR="${AZURE_ADMIN_CONFIG_DIR:-$HOME/.azure}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+TERRAGRUNT_OUTPUT_DIR="${TERRAGRUNT_OUTPUT_DIR:-$REPO_ROOT/deployments/terraform/env/azure_dev/azure_gh_runner}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -75,6 +75,14 @@ while [[ $# -gt 0 ]]; do
       VIRTUALIZATION_FLAVOR="$2"
       shift 2
       ;;
+    --admin-azure-profile-dir)
+      AZURE_ADMIN_CONFIG_DIR="$2"
+      shift 2
+      ;;
+    --terragrunt-output-dir)
+      TERRAGRUNT_OUTPUT_DIR="$2"
+      shift 2
+      ;;
     --request-runner)
       REQUEST_RUNNER=true
       shift
@@ -94,18 +102,6 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-
-if [[ -z "$FUNCTION_APP_NAME" ]]; then
-  echo "--function-app is required" >&2
-  usage
-  exit 1
-fi
-
-if [[ -z "$API_CLIENT_ID" ]]; then
-  echo "--api-client-id is required" >&2
-  usage
-  exit 1
-fi
 
 if [[ "$REQUEST_RUNNER" == "false" && "$DELETE_RESOURCE_GROUP" == "false" ]]; then
   echo "You must provide exactly one operation flag: --request-runner or --delete-resource-group" >&2
@@ -127,11 +123,35 @@ esac
 
 require_cmd az
 
-if ! az account show >/dev/null 2>&1; then
-  echo "Azure CLI is not logged in. Run: az login" >&2
-  exit 1
+resolve_from_terragrunt_output() {
+  local key="$1"
+  if ! command -v terragrunt >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ ! -d "$TERRAGRUNT_OUTPUT_DIR" ]]; then
+    return 0
+  fi
+  (cd "$TERRAGRUNT_OUTPUT_DIR" && terragrunt output -raw "$key" 2>/dev/null || true)
+}
+
+if [[ -z "$API_CLIENT_ID" ]]; then
+  API_CLIENT_ID="$(resolve_from_terragrunt_output azure_ad_app_client_id)"
+fi
+if [[ -z "$FUNCTION_APP_NAME" ]]; then
+  FUNCTION_APP_NAME="$(resolve_from_terragrunt_output function_app_name)"
 fi
 
+if [[ -z "$API_CLIENT_ID" && -d "$AZURE_ADMIN_CONFIG_DIR" ]]; then
+  API_CLIENT_ID="$(AZURE_CONFIG_DIR="$AZURE_ADMIN_CONFIG_DIR" az ad app list --display-name gh-actions-runner-broker --query '[0].appId' -o tsv 2>/dev/null || true)"
+fi
+if [[ -z "$FUNCTION_APP_NAME" ]]; then
+  echo "FUNCTION_APP_NAME is required. Pass --function-app or set FUNCTION_APP_NAME." >&2
+  exit 1
+fi
+if [[ -z "$API_CLIENT_ID" ]]; then
+  echo "API_CLIENT_ID is required. Pass --api-client-id or set API_CLIENT_ID." >&2
+  exit 1
+fi
 BASE_URL="https://${FUNCTION_APP_NAME}.azurewebsites.net/api"
 RESOURCE="api://${API_CLIENT_ID}"
 
@@ -156,6 +176,7 @@ if [[ "$REQUEST_RUNNER" == "true" ]]; then
   echo "  flavor: ${VIRTUALIZATION_FLAVOR}"
 
   az rest \
+    --only-show-errors \
     --method post \
     --uri "${BASE_URL}/request_runner" \
     --resource "$RESOURCE" \
@@ -183,6 +204,7 @@ if [[ "$DELETE_RESOURCE_GROUP" == "true" ]]; then
 
   echo "Calling delete_resource_group..."
   az rest \
+    --only-show-errors \
     --method post \
     --uri "${BASE_URL}/delete_resource_group" \
     --resource "$RESOURCE" \

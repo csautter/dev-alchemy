@@ -44,17 +44,22 @@ def require_authenticated_caller(req: func.HttpRequest) -> tuple[bool, str]:
     allowed_tenant = os.environ["ALLOWED_TENANT_ID"]
     allowed_audience = os.environ["ALLOWED_AUDIENCE"]
     allowed_client_ids = _csv_env("ALLOWED_CLIENT_IDS")
+    allowed_user_object_ids = _csv_env("ALLOWED_USER_OBJECT_IDS")
 
     tenant_id = claims.get("tid", "")
     audience = claims.get("aud", "")
     client_id = claims.get("azp") or claims.get("appid") or ""
+    user_object_id = claims.get("oid", "")
 
     if tenant_id != allowed_tenant:
         return False, "tenant not allowed"
     if audience != allowed_audience:
         return False, "audience not allowed"
-    if client_id not in allowed_client_ids:
-        return False, "client id not allowed"
+
+    client_allowed = client_id in allowed_client_ids
+    user_allowed = user_object_id in allowed_user_object_ids
+    if not client_allowed and not user_allowed:
+        return False, "caller not allowlisted"
 
     return True, ""
 
