@@ -98,6 +98,10 @@ Pass the `ISO_CACHE_DIR` environment variable when launching the runner script:
 ISO_CACHE_DIR=~/iso-cache \
 GITHUB_REPO=myorg/myrepo \
 ./create-macos-tart-runner.sh
+
+ISO_CACHE_DIR=~/iso-cache \
+RUNNER_POOL_SIZE=3 VM_CPU_COUNT=4 VM_MEMORY_MB=8192 \
+./create-macos-tart-runner.sh
 ```
 
 The directory is mounted read-write inside every VM as `/Volumes/iso-cache/`.

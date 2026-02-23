@@ -16,7 +16,10 @@ set -e
 #   RUNNER_DIR        - install directory inside the VM    (default: /Users/admin/actions-runner)
 #   VM_BASE_IMAGE     - tart base image name               (default: tahoe-base)
 #   VM_CLONE_PER_RUN  - clone base image for every run so the VM starts clean (default: true)
-#   MAX_RUNS          - maximum number of runner cycles before this script exits (default: 0 = infinite)
+#   MAX_RUNS          - maximum number of runner cycles per worker before this script exits (default: 0 = infinite)
+#   RUNNER_POOL_SIZE  - number of parallel runner workers / VMs to run simultaneously (default: 1)
+#   VM_CPU_COUNT      - number of vCPU cores to assign to each VM (default: image default)
+#   VM_MEMORY_MB      - memory in MiB to assign to each VM (default: image default)
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 GITHUB_SCOPE="${GITHUB_SCOPE:-repo}"
@@ -30,6 +33,11 @@ RUNNER_DIR="${RUNNER_DIR:-/Users/admin/actions-runner}"
 VM_BASE_IMAGE="${VM_BASE_IMAGE:-tahoe-runner}"
 VM_CLONE_PER_RUN="${VM_CLONE_PER_RUN:-true}"
 MAX_RUNS="${MAX_RUNS:-0}"
+# Number of parallel runner workers; each worker manages its own VM and runner cycle.
+RUNNER_POOL_SIZE="${RUNNER_POOL_SIZE:-1}"
+# VM resource overrides — leave empty to use the image defaults.
+VM_CPU_COUNT="${VM_CPU_COUNT:-}"   # vCPU cores,   e.g. 4
+VM_MEMORY_MB="${VM_MEMORY_MB:-}"   # memory (MiB), e.g. 8192
 # Optional: path on the HOST where Windows ISOs are cached.
 # When set the directory is shared into each VM as /Volumes/iso-cache/ via VirtioFS,
 # so the workflow can symlink the ISO instead of downloading it from Azure.
@@ -58,32 +66,29 @@ if ! tart list | awk 'NR>1 && $1=="local" {print $2}' | grep -qx "${VM_BASE_IMAG
 fi
 echo "Base image '${VM_BASE_IMAGE}' present."
 
-# ─── Cleanup helper ────────────────────────────────────────────────────────────
-# Tracks state of the currently running VM/runner so the trap can clean up.
-CURRENT_VM_NAME=""
-CURRENT_RUNNER_NAME=""
-CURRENT_VM_IP=""
-
-# SSH helper (uses global CURRENT_VM_IP)
+# ─── SSH helper ────────────────────────────────────────────────────────────────
+# Usage: vm_ssh <ip> [ssh-args...]
 vm_ssh() {
+	local ip="$1"; shift
 	sshpass -p "${VM_SSH_PASS}" ssh \
 		-o "StrictHostKeyChecking=no" \
 		-o "UserKnownHostsFile=/dev/null" \
 		-o "ConnectTimeout=5" \
-		"${VM_SSH_USER}@${CURRENT_VM_IP}" "$@"
+		"${VM_SSH_USER}@${ip}" "$@"
 }
 
+# ─── VM cleanup ────────────────────────────────────────────────────────────────
+# Usage: cleanup_vm <vm-name> [runner-name]
 cleanup_vm() {
-	local vm="${1:-$CURRENT_VM_NAME}"
+	local vm="$1"
+	local runner_name="${2:-}"
 	[[ -z "$vm" ]] && return
-	# Clear immediately so the EXIT trap re-fire after INT/TERM is a no-op.
-	CURRENT_VM_NAME=""
 
 	# Deregister the runner before stopping the VM (handles Ctrl+C interruption).
 	# Ephemeral runners deregister themselves when run.sh receives SIGINT, so we
 	# wait briefly and only attempt an explicit removal if the runner is still listed.
-	if [[ -n "$CURRENT_RUNNER_NAME" ]]; then
-		echo "Deregistering runner '${CURRENT_RUNNER_NAME}'..."
+	if [[ -n "$runner_name" ]]; then
+		echo "[${vm}] Deregistering runner '${runner_name}'..."
 		# Give run.sh a moment to finish its own graceful shutdown / self-deregistration.
 		sleep 3
 
@@ -92,10 +97,10 @@ cleanup_vm() {
 		local runner_id
 		if [[ "$GITHUB_SCOPE" == "org" ]]; then
 			runner_id=$(gh api "/orgs/${GITHUB_ORG}/actions/runners" \
-				--jq ".runners[] | select(.name == \"${CURRENT_RUNNER_NAME}\") | .id" 2>/dev/null || true)
+				--jq ".runners[] | select(.name == \"${runner_name}\") | .id" 2>/dev/null || true)
 		else
 			runner_id=$(gh api "/repos/${GITHUB_REPO}/actions/runners" \
-				--jq ".runners[] | select(.name == \"${CURRENT_RUNNER_NAME}\") | .id" 2>/dev/null || true)
+				--jq ".runners[] | select(.name == \"${runner_name}\") | .id" 2>/dev/null || true)
 		fi
 
 		if [[ -n "$runner_id" ]]; then
@@ -106,124 +111,144 @@ cleanup_vm() {
 				api_path="/repos/${GITHUB_REPO}/actions/runners/${runner_id}"
 			fi
 			if gh api --method DELETE "$api_path" 2>/dev/null; then
-				echo "Runner '${CURRENT_RUNNER_NAME}' deregistered via GitHub API."
+				echo "[${vm}] Runner '${runner_name}' deregistered via GitHub API."
 			else
-				echo "Warning: Could not deregister runner '${CURRENT_RUNNER_NAME}' via GitHub API; manual cleanup may be required."
+				echo "[${vm}] Warning: Could not deregister runner '${runner_name}'; manual cleanup may be required."
 			fi
 		else
-			echo "Runner '${CURRENT_RUNNER_NAME}' not found via GitHub API; likely already self-deregistered."
+			echo "[${vm}] Runner '${runner_name}' not found; likely already self-deregistered."
 		fi
-		CURRENT_RUNNER_NAME=""
 	fi
 
-	echo "Stopping VM '${vm}'..."
+	echo "[${vm}] Stopping VM..."
 	tart stop "${vm}" 2>/dev/null || true
 	if [[ "$VM_CLONE_PER_RUN" == "true" && "$vm" != "$VM_BASE_IMAGE" ]]; then
-		echo "Deleting ephemeral VM clone '${vm}'..."
+		echo "[${vm}] Deleting ephemeral VM clone..."
 		tart delete "${vm}" 2>/dev/null || true
 	fi
 }
 
-# Ensure the VM is stopped/deleted if this script is interrupted or exits.
-trap 'cleanup_vm "$CURRENT_VM_NAME"' EXIT INT TERM
+# ─── Single worker (runs one runner cycle at a time, loops until MAX_RUNS) ─────
+run_worker() {
+	local worker_id="$1"
+	local current_vm_name=""
+	local current_runner_name=""
+	local current_vm_ip=""
+	local run_count=0
 
-# ─── Main runner loop ──────────────────────────────────────────────────────────
-RUN_COUNT=0
+	_worker_cleanup() {
+		[[ -z "$current_vm_name" ]] && return
+		cleanup_vm "$current_vm_name" "$current_runner_name"
+		current_vm_name=""
+		current_runner_name=""
+	}
+	trap '_worker_cleanup' EXIT INT TERM
 
-while true; do
-	RUN_COUNT=$(( RUN_COUNT + 1 ))
-	TIMESTAMP=$(date +%s)
-	RUNNER_NAME="${RUNNER_NAME_BASE}-${TIMESTAMP}"
+	while true; do
+		run_count=$(( run_count + 1 ))
+		local timestamp
+		timestamp=$(date +%s)
+		local runner_name="${RUNNER_NAME_BASE}-w${worker_id}-${timestamp}"
 
-	echo ""
-	echo "════════════════════════════════════════════════════════════"
-	echo " Runner cycle #${RUN_COUNT}  |  name: ${RUNNER_NAME}"
-	echo "════════════════════════════════════════════════════════════"
+		echo ""
+		echo "════════════════════════════════════════════════════════════"
+		echo " Worker #${worker_id} | Cycle #${run_count} | Runner: ${runner_name}"
+		echo "════════════════════════════════════════════════════════════"
 
-	# ── Determine VM name for this cycle ────────────────────────────
-	if [[ "$VM_CLONE_PER_RUN" == "true" ]]; then
-		VM_NAME="runner-${TIMESTAMP}"
-		echo "Cloning '${VM_BASE_IMAGE}' → '${VM_NAME}' for a clean ephemeral VM..."
-		tart clone "${VM_BASE_IMAGE}" "${VM_NAME}"
-	else
-		VM_NAME="${VM_BASE_IMAGE}"
-	fi
-	CURRENT_VM_NAME="$VM_NAME"
-
-	# ── Fetch a fresh registration token (valid 1 hour) ─────────────
-	echo "Fetching runner registration token..."
-	if [[ "$GITHUB_SCOPE" == "org" ]]; then
-		if [[ -z "$GITHUB_ORG" ]]; then
-			echo "GITHUB_ORG must be set when GITHUB_SCOPE=org"
-			exit 1
+		# ── Determine VM name for this cycle ────────────────────────
+		local vm_name
+		if [[ "$VM_CLONE_PER_RUN" == "true" ]]; then
+			vm_name="runner-w${worker_id}-${timestamp}"
+			echo "[worker-${worker_id}] Cloning '${VM_BASE_IMAGE}' → '${vm_name}'..."
+			tart clone "${VM_BASE_IMAGE}" "${vm_name}"
+		else
+			vm_name="${VM_BASE_IMAGE}"
 		fi
-		RUNNER_TOKEN=$(gh api \
-			--method POST \
-			-H "Accept: application/vnd.github+json" \
-			"/orgs/${GITHUB_ORG}/actions/runners/registration-token" \
-			--jq '.token')
-		RUNNER_REGISTRATION_URL="https://github.com/${GITHUB_ORG}"
-	else
-		if [[ -z "$GITHUB_REPO" ]]; then
-			echo "GITHUB_REPO must be set (format: owner/repo)"
-			exit 1
+		current_vm_name="$vm_name"
+
+		# ── Apply CPU / memory overrides ─────────────────────────────
+		if [[ -n "$VM_CPU_COUNT" || -n "$VM_MEMORY_MB" ]]; then
+			local set_args=()
+			[[ -n "$VM_CPU_COUNT" ]] && set_args+=(--cpu "$VM_CPU_COUNT")
+			[[ -n "$VM_MEMORY_MB" ]] && set_args+=(--memory "$VM_MEMORY_MB")
+			echo "[worker-${worker_id}] Applying VM resource overrides: ${set_args[*]}"
+			tart set "${vm_name}" "${set_args[@]}"
 		fi
-		RUNNER_TOKEN=$(gh api \
-			--method POST \
-			-H "Accept: application/vnd.github+json" \
-			"/repos/${GITHUB_REPO}/actions/runners/registration-token" \
-			--jq '.token')
-		RUNNER_REGISTRATION_URL="https://github.com/${GITHUB_REPO}"
-	fi
-	echo "Registration token obtained."
 
-	# ── Start VM ────────────────────────────────────────────────────
-	# optionally disable graphics with --no-graphics
-	# WARNING: exposing ssh port with bridged networking and an insecure password is
-	#          only suitable for local/testing use.
-	# NOTE: on some systems with strict firewall rules tart VMs may need --net-bridged
-	#       to reach the internet.
-	echo "Starting VM '${VM_NAME}'..."
-	TART_DIR_FLAG=()
-	if [[ -n "$ISO_CACHE_DIR" ]]; then
-		echo "Sharing ISO cache '${ISO_CACHE_DIR}' → /Volumes/My Shared Files/iso-cache/ inside VM"
-		TART_DIR_FLAG=("--dir=iso-cache:${ISO_CACHE_DIR}")
-	fi
-	tart run --no-graphics --net-bridged="Wi-Fi" "${TART_DIR_FLAG[@]}" "${VM_NAME}" &
+		# ── Fetch a fresh registration token (valid 1 hour) ─────────
+		echo "[worker-${worker_id}] Fetching runner registration token..."
+		local runner_token runner_registration_url
+		if [[ "$GITHUB_SCOPE" == "org" ]]; then
+			if [[ -z "$GITHUB_ORG" ]]; then
+				echo "GITHUB_ORG must be set when GITHUB_SCOPE=org"
+				exit 1
+			fi
+			runner_token=$(gh api \
+				--method POST \
+				-H "Accept: application/vnd.github+json" \
+				"/orgs/${GITHUB_ORG}/actions/runners/registration-token" \
+				--jq '.token')
+			runner_registration_url="https://github.com/${GITHUB_ORG}"
+		else
+			if [[ -z "$GITHUB_REPO" ]]; then
+				echo "GITHUB_REPO must be set (format: owner/repo)"
+				exit 1
+			fi
+			runner_token=$(gh api \
+				--method POST \
+				-H "Accept: application/vnd.github+json" \
+				"/repos/${GITHUB_REPO}/actions/runners/registration-token" \
+				--jq '.token')
+			runner_registration_url="https://github.com/${GITHUB_REPO}"
+		fi
+		echo "[worker-${worker_id}] Registration token obtained."
 
-	# ── Wait for an IP ───────────────────────────────────────────────
-	CURRENT_VM_IP=""
-	while [[ -z "$CURRENT_VM_IP" ]]; do
-		CURRENT_VM_IP=$(tart ip --resolver=arp "${VM_NAME}" 2>/dev/null || echo "")
-		sleep 1
-	done
-	echo "VM IP: $CURRENT_VM_IP"
+		# ── Start VM ────────────────────────────────────────────────
+		# WARNING: exposing ssh port with bridged networking and an insecure password is
+		#          only suitable for local/testing use.
+		# NOTE: on some systems with strict firewall rules tart VMs may need --net-bridged
+		#       to reach the internet.
+		echo "[worker-${worker_id}] Starting VM '${vm_name}'..."
+		local tart_dir_flag=()
+		if [[ -n "$ISO_CACHE_DIR" ]]; then
+			echo "[worker-${worker_id}] Sharing ISO cache '${ISO_CACHE_DIR}' → /Volumes/My Shared Files/iso-cache/ inside VM"
+			tart_dir_flag=("--dir=iso-cache:${ISO_CACHE_DIR}")
+		fi
+		tart run --no-graphics --net-bridged="Wi-Fi" "${tart_dir_flag[@]}" "${vm_name}" &
 
-	# ── Wait for SSH ─────────────────────────────────────────────────
-	until vm_ssh "true" 2>/dev/null; do
-		echo "Waiting for SSH to become available..."
-		sleep 2
-	done
-	echo "SSH connection successful."
+		# ── Wait for an IP ───────────────────────────────────────────
+		current_vm_ip=""
+		while [[ -z "$current_vm_ip" ]]; do
+			current_vm_ip=$(tart ip --resolver=arp "${vm_name}" 2>/dev/null || echo "")
+			sleep 1
+		done
+		echo "[worker-${worker_id}] VM IP: $current_vm_ip"
 
-	# ── Configure and run the runner (foreground) ───────────────────
-	# The runner binary is pre-installed in the golden image by prepare-tart-base.sh.
-	# Running ./run.sh in the foreground means this SSH session blocks until the
-	# ephemeral runner picks up a job, completes it, and deregisters itself.
-	# Control then returns to this host script which cleans up the VM and loops.
-	CURRENT_RUNNER_NAME="$RUNNER_NAME"
-	echo "Configuring and starting GitHub Actions runner '${RUNNER_NAME}'..."
+		# ── Wait for SSH ─────────────────────────────────────────────
+		until vm_ssh "$current_vm_ip" "true" 2>/dev/null; do
+			echo "[worker-${worker_id}] Waiting for SSH to become available..."
+			sleep 2
+		done
+		echo "[worker-${worker_id}] SSH connection successful."
 
-	vm_ssh bash <<EOF
+		# ── Configure and run the runner (foreground) ───────────────
+		# The runner binary is pre-installed in the golden image by prepare-tart-base.sh.
+		# Running ./run.sh in the foreground means this SSH session blocks until the
+		# ephemeral runner picks up a job, completes it, and deregisters itself.
+		# Control then returns to this worker which cleans up the VM and loops.
+		current_runner_name="$runner_name"
+		echo "[worker-${worker_id}] Configuring and starting GitHub Actions runner '${runner_name}'..."
+
+		vm_ssh "$current_vm_ip" bash <<EOF
 set -e
 
 cd "${RUNNER_DIR}"
 
 echo "Configuring runner..."
 ./config.sh \
-	--url "${RUNNER_REGISTRATION_URL}" \
-	--token "${RUNNER_TOKEN}" \
-	--name "${RUNNER_NAME}" \
+	--url "${runner_registration_url}" \
+	--token "${runner_token}" \
+	--name "${runner_name}" \
 	--labels "${RUNNER_LABELS}" \
 	--ephemeral \
 	--unattended
@@ -240,21 +265,55 @@ echo "Runner configured. Waiting for a job (./run.sh)..."
 echo "Runner finished."
 EOF
 
-	echo "Runner '${RUNNER_NAME}' completed its job and deregistered."
+		echo "[worker-${worker_id}] Runner '${runner_name}' completed its job and deregistered."
 
-	# ── Shut down VM ─────────────────────────────────────────────────
-	cleanup_vm "$CURRENT_VM_NAME"
-	CURRENT_VM_NAME=""
-	CURRENT_VM_IP=""
+		# ── Shut down VM ─────────────────────────────────────────────
+		cleanup_vm "$current_vm_name" "$current_runner_name"
+		current_vm_name=""
+		current_runner_name=""
+		current_vm_ip=""
 
-	# ── Check cycle limit ────────────────────────────────────────────
-	if [[ "$MAX_RUNS" -gt 0 && "$RUN_COUNT" -ge "$MAX_RUNS" ]]; then
-		echo "Reached MAX_RUNS=${MAX_RUNS}. Exiting."
-		break
-	fi
+		# ── Check cycle limit ────────────────────────────────────────
+		if [[ "$MAX_RUNS" -gt 0 && "$run_count" -ge "$MAX_RUNS" ]]; then
+			echo "[worker-${worker_id}] Reached MAX_RUNS=${MAX_RUNS}. Worker exiting."
+			break
+		fi
 
-	echo "Restarting runner cycle in 3 seconds..."
-	sleep 3
+		echo "[worker-${worker_id}] Restarting runner cycle in 3 seconds..."
+		sleep 3
+	done
+
+	echo "[worker-${worker_id}] Worker exited after ${run_count} run(s)."
+}
+
+# ─── Launch parallel workers ───────────────────────────────────────────────────
+if [[ "$VM_CLONE_PER_RUN" != "true" && "$RUNNER_POOL_SIZE" -gt 1 ]]; then
+	echo "ERROR: VM_CLONE_PER_RUN=false with RUNNER_POOL_SIZE>1 — all workers would share"
+	echo "       the same base VM, causing conflicts. Set VM_CLONE_PER_RUN=true."
+	exit 1
+fi
+
+WORKER_PIDS=()
+
+cleanup_all_workers() {
+	echo "Shutting down all workers..."
+	for pid in "${WORKER_PIDS[@]}"; do
+		kill "$pid" 2>/dev/null || true
+	done
+	wait "${WORKER_PIDS[@]}" 2>/dev/null || true
+}
+
+trap 'cleanup_all_workers' EXIT INT TERM
+
+echo "Starting ${RUNNER_POOL_SIZE} parallel runner worker(s)..."
+for i in $(seq 1 "$RUNNER_POOL_SIZE"); do
+	run_worker "$i" &
+	WORKER_PIDS+=("$!")
+	echo "Worker #${i} started (PID: ${WORKER_PIDS[-1]})"
+	# Stagger VM boots slightly to avoid simultaneous resource contention.
+	[[ "$i" -lt "$RUNNER_POOL_SIZE" ]] && sleep 3
 done
 
-echo "Runner pool manager exited after ${RUN_COUNT} run(s)."
+# Wait for all workers to finish.
+wait "${WORKER_PIDS[@]}" || true
+echo "All ${RUNNER_POOL_SIZE} worker(s) have exited."
