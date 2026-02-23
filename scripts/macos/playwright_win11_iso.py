@@ -212,7 +212,7 @@ async def fetch_win11_iso_link(
             print(f"ISO saved to {save_path}")
 
         # Save current session cookies for future use
-        current_cookies = context.cookies()
+        current_cookies = await context.cookies()
         with open("cookies.json", "w") as f:
             json.dump(current_cookies, f)
 
