@@ -143,7 +143,18 @@ run_worker() {
 		current_vm_name=""
 		current_runner_name=""
 	}
-	trap '_worker_cleanup' EXIT INT TERM
+	# EXIT runs the actual cleanup.
+	# INT/TERM call exit so the EXIT trap fires and the worker subshell terminates;
+	# without an explicit exit here, set +e causes the loop to continue after Ctrl+C.
+	trap '_worker_cleanup' EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+
+	# Disable set -e within the worker so that a single cycle failure (e.g. an SSH
+	# authentication error, a failed clone, or a dropped VM) does not kill the
+	# entire worker process.  Each critical step checks its own exit code and uses
+	# `continue` to restart the cycle cleanly after VM cleanup.
+	set +e
 
 	while true; do
 		run_count=$(( run_count + 1 ))
@@ -161,7 +172,11 @@ run_worker() {
 		if [[ "$VM_CLONE_PER_RUN" == "true" ]]; then
 			vm_name="runner-w${worker_id}-${timestamp}"
 			echo "[worker-${worker_id}] Cloning '${VM_BASE_IMAGE}' → '${vm_name}'..."
-			tart clone "${VM_BASE_IMAGE}" "${vm_name}"
+			if ! tart clone "${VM_BASE_IMAGE}" "${vm_name}"; then
+				echo "[worker-${worker_id}] ERROR: tart clone failed. Retrying in 15s..."
+				sleep 15
+				continue
+			fi
 		else
 			vm_name="${VM_BASE_IMAGE}"
 		fi
@@ -202,6 +217,13 @@ run_worker() {
 				--jq '.token')
 			runner_registration_url="https://github.com/${GITHUB_REPO}"
 		fi
+		if [[ -z "$runner_token" ]]; then
+			echo "[worker-${worker_id}] ERROR: Failed to obtain registration token. Cleaning up and retrying in 30s..."
+			cleanup_vm "$current_vm_name"
+			current_vm_name=""
+			sleep 30
+			continue
+		fi
 		echo "[worker-${worker_id}] Registration token obtained."
 
 		# ── Start VM ────────────────────────────────────────────────
@@ -217,19 +239,46 @@ run_worker() {
 		fi
 		tart run --no-graphics --net-bridged="Wi-Fi" "${tart_dir_flag[@]}" "${vm_name}" &
 
-		# ── Wait for an IP ───────────────────────────────────────────
+		# ── Wait for an IP (90 s timeout) ───────────────────────────
 		current_vm_ip=""
+		local ip_attempts=0
 		while [[ -z "$current_vm_ip" ]]; do
-			current_vm_ip=$(tart ip --resolver=arp "${vm_name}" 2>/dev/null || echo "")
-			sleep 1
+			current_vm_ip=$(tart ip --resolver=arp "${vm_name}" 2>/dev/null || true)
+			if [[ -z "$current_vm_ip" ]]; then
+				ip_attempts=$(( ip_attempts + 1 ))
+				if [[ $ip_attempts -ge 90 ]]; then
+					echo "[worker-${worker_id}] ERROR: Timed out waiting for VM IP after ${ip_attempts}s. Cleaning up and retrying..."
+					break
+				fi
+				sleep 1
+			fi
 		done
+		if [[ -z "$current_vm_ip" ]]; then
+			cleanup_vm "$current_vm_name" "$current_runner_name"
+			current_vm_name=""
+			current_runner_name=""
+			continue
+		fi
 		echo "[worker-${worker_id}] VM IP: $current_vm_ip"
 
-		# ── Wait for SSH ─────────────────────────────────────────────
+		# ── Wait for SSH (60 s timeout) ──────────────────────────────
+		local ssh_attempts=0
 		until vm_ssh "$current_vm_ip" "true" 2>/dev/null; do
 			echo "[worker-${worker_id}] Waiting for SSH to become available..."
+			ssh_attempts=$(( ssh_attempts + 1 ))
+			if [[ $ssh_attempts -ge 30 ]]; then
+				echo "[worker-${worker_id}] ERROR: Timed out waiting for SSH after $(( ssh_attempts * 2 ))s. Cleaning up and retrying..."
+				current_vm_ip=""
+				break
+			fi
 			sleep 2
 		done
+		if [[ -z "$current_vm_ip" ]]; then
+			cleanup_vm "$current_vm_name" "$current_runner_name"
+			current_vm_name=""
+			current_runner_name=""
+			continue
+		fi
 		echo "[worker-${worker_id}] SSH connection successful."
 
 		# ── Configure and run the runner (foreground) ───────────────
@@ -240,7 +289,8 @@ run_worker() {
 		current_runner_name="$runner_name"
 		echo "[worker-${worker_id}] Configuring and starting GitHub Actions runner '${runner_name}'..."
 
-		vm_ssh "$current_vm_ip" bash <<EOF
+		local runner_exit=0
+		vm_ssh "$current_vm_ip" bash <<EOF || runner_exit=$?
 set -e
 
 cd "${RUNNER_DIR}"
@@ -265,6 +315,16 @@ echo "Runner configured. Waiting for a job (./run.sh)..."
 ./run.sh
 echo "Runner finished."
 EOF
+
+		if [[ $runner_exit -ne 0 ]]; then
+			echo "[worker-${worker_id}] ERROR: Runner SSH session failed (exit ${runner_exit}). Cleaning up and retrying in 10s..."
+			cleanup_vm "$current_vm_name" "$current_runner_name"
+			current_vm_name=""
+			current_runner_name=""
+			current_vm_ip=""
+			sleep 10
+			continue
+		fi
 
 		echo "[worker-${worker_id}] Runner '${runner_name}' completed its job and deregistered."
 
