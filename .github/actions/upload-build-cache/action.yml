@@ -108,25 +108,15 @@ runs:
             continue
           }
 
-          $blobExists = az storage blob exists `
-            --account-name $storageAcct `
-            --container-name $container `
-            --name $blobName `
-            --auth-mode login `
-            --query exists `
-            --output tsv
+          $existsArgs = @('storage', 'blob', 'exists', '--account-name', $storageAcct, '--container-name', $container, '--name', $blobName, '--auth-mode', 'login', '--query', 'exists', '--output', 'tsv')
+          $blobExists = az @existsArgs
 
           if ($blobExists -eq "true") {
             Write-Host "  ✓ Blob $blobName already exists in '$container' — skipping upload."
           } else {
             Write-Host "  ↑ Uploading $blobName to container '$container'..."
-            az storage blob upload `
-              --account-name $storageAcct `
-              --container-name $container `
-              --name $blobName `
-              --file $localPath `
-              --auth-mode login `
-              --overwrite false
+            $uploadArgs = @('storage', 'blob', 'upload', '--account-name', $storageAcct, '--container-name', $container, '--name', $blobName, '--file', $localPath, '--auth-mode', 'login', '--overwrite', 'false')
+            az @uploadArgs
             Write-Host "  ✓ Uploaded $blobName."
           }
         }

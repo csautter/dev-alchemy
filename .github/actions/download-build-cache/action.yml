@@ -115,26 +115,18 @@ runs:
           # 2. Azure Blob Storage → download
           # (Windows Azure runners have no shared-volume cache)
           Write-Host "  ↓ Attempting Azure Blob Storage download..."
-          $sa = az storage account show `
-            --name $storageAcct `
-            --resource-group $resourceGroup 2>$null | ConvertFrom-Json
+          $saArgs = @('storage', 'account', 'show', '--name', $storageAcct, '--resource-group', $resourceGroup)
+          $sa = az @saArgs 2>$null | ConvertFrom-Json
 
           if ($sa) {
-            $blobExists = az storage blob exists `
-              --account-name $storageAcct `
-              --container-name $container `
-              --name $blobName `
-              --auth-mode login | ConvertFrom-Json
+            $existsArgs = @('storage', 'blob', 'exists', '--account-name', $storageAcct, '--container-name', $container, '--name', $blobName, '--auth-mode', 'login')
+            $blobExists = az @existsArgs | ConvertFrom-Json
 
             if ($blobExists.exists) {
               $dir = Split-Path -Path $localPath -Parent
               if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-              az storage blob download `
-                --account-name $storageAcct `
-                --container-name $container `
-                --name $blobName `
-                --file $localPath `
-                --auth-mode login
+              $dlArgs = @('storage', 'blob', 'download', '--account-name', $storageAcct, '--container-name', $container, '--name', $blobName, '--file', $localPath, '--auth-mode', 'login')
+              az @dlArgs
               Write-Host "  ✓ Downloaded $blobName → $localPath"
             } else {
               Write-Host "  ✗ Blob $blobName not found in container '$container'."
