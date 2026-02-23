@@ -41,17 +41,7 @@ runs:
         LOCAL_CACHE_DIR="${{ inputs.local-cache-dir }}"
 
         # Iterate over each entry in the JSON array using Python (always available on runners)
-        echo "$FILES" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for f in data:
-    local_path = f.get('local-path', '')
-    blob_name  = f.get('blob-name', '')
-    container  = f.get('container', 'build-cache')
-    print(local_path)
-    print(blob_name)
-    print(container)
-" | while IFS= read -r local_path && IFS= read -r blob_name && IFS= read -r container; do
+        echo "$FILES" | python3 -c "import json,sys;data=json.load(sys.stdin);[print(f.get('local-path',''),f.get('blob-name',''),f.get('container','build-cache'),sep='\n') for f in data]" | while IFS= read -r local_path && IFS= read -r blob_name && IFS= read -r container; do
           [ -z "$local_path" ] && continue
           [ -z "$blob_name" ] && blob_name=$(basename "$local_path")
 
