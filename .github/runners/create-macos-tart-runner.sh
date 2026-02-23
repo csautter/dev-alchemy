@@ -9,7 +9,7 @@ set -e
 #   GITHUB_SCOPE      - "repo" (default) or "org"
 #   GITHUB_REPO       - owner/repo  (required when GITHUB_SCOPE=repo, e.g. "myorg/myrepo")
 #   GITHUB_ORG        - org name    (required when GITHUB_SCOPE=org,  e.g. "myorg")
-#   RUNNER_LABELS     - comma-separated runner labels/tags (default: "macos,tart,arm64,macos-16-tart")
+#   RUNNER_LABELS     - comma-separated runner labels/tags (default: "macos,tart,arm64,macos-26-tart")
 #   RUNNER_NAME_BASE  - base name; a timestamp suffix is appended each run (default: <hostname>-tart)
 #   VM_SSH_USER       - SSH user inside the tart VM        (default: admin)
 #   VM_SSH_PASS       - SSH password inside the tart VM    (default: admin)
@@ -22,7 +22,7 @@ set -e
 GITHUB_SCOPE="${GITHUB_SCOPE:-repo}"
 GITHUB_REPO="${GITHUB_REPO:-csautter/dev-alchemy}"
 GITHUB_ORG="${GITHUB_ORG:-}"
-RUNNER_LABELS="${RUNNER_LABELS:-macos,tart,arm64,macos-16-tart}"
+RUNNER_LABELS="${RUNNER_LABELS:-macos,tart,arm64,macos-26-tart}"
 RUNNER_NAME_BASE="${RUNNER_NAME_BASE:-$(hostname -s)-tart}"
 VM_SSH_USER="${VM_SSH_USER:-admin}"
 VM_SSH_PASS="${VM_SSH_PASS:-admin}"

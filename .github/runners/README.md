@@ -120,5 +120,5 @@ Windows ISOs are large and rarely change. When a new version appears:
 | `VM_CLONE_PER_RUN` | `true` | Clone a fresh VM for every runner cycle (recommended). |
 | `GITHUB_REPO` | `csautter/dev-alchemy` | `owner/repo` for runner registration. |
 | `GITHUB_SCOPE` | `repo` | `repo` or `org`. |
-| `RUNNER_LABELS` | `macos,tart,arm64,macos-16-tart` | Comma-separated runner labels. |
+| `RUNNER_LABELS` | `macos,tart,arm64,macos-26-tart` | Comma-separated runner labels. |
 | `MAX_RUNS` | `0` (infinite) | Stop the loop after this many runner cycles. |
