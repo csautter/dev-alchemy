@@ -32,6 +32,19 @@ resource "azurerm_storage_container" "windows_isos" {
   }
 }
 
+# General-purpose build cache container for ISOs, toolchain archives, and other
+# large build dependencies. Use this container for any new cached artifacts.
+# The windows-isos container above is kept for backward compatibility.
+resource "azurerm_storage_container" "build_cache" {
+  name                  = "build-cache"
+  storage_account_id    = azurerm_storage_account.cache.id
+  container_access_type = "private"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 # Grant the GitHub Actions service principal permission to read the resource group
 resource "azurerm_role_assignment" "gh_actions_cache_rg_reader" {
   scope                = azurerm_resource_group.cache_storage.id

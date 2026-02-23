@@ -38,10 +38,11 @@ RUNNER_POOL_SIZE="${RUNNER_POOL_SIZE:-1}"
 # VM resource overrides — leave empty to use the image defaults.
 VM_CPU_COUNT="${VM_CPU_COUNT:-}"   # vCPU cores,   e.g. 4
 VM_MEMORY_MB="${VM_MEMORY_MB:-}"   # memory (MiB), e.g. 8192
-# Optional: path on the HOST where Windows ISOs are cached.
-# When set the directory is shared into each VM as /Volumes/iso-cache/ via VirtioFS,
-# so the workflow can symlink the ISO instead of downloading it from Azure.
-ISO_CACHE_DIR="${ISO_CACHE_DIR:-}"
+# Optional: path on the HOST for the general-purpose build cache (ISOs, toolchain
+# archives, and other large build dependencies). When set, the directory is shared
+# into each VM as /Volumes/My Shared Files/build-cache/ via VirtioFS so workflows
+# can symlink cached files instead of downloading them from Azure Blob Storage.
+BUILD_CACHE_DIR="${BUILD_CACHE_DIR:-}"
 # ───────────────────────────────────────────────────────────────────────────────
 
 # ─── Pre-flight checks ─────────────────────────────────────────────────────────
@@ -210,9 +211,9 @@ run_worker() {
 		#       to reach the internet.
 		echo "[worker-${worker_id}] Starting VM '${vm_name}'..."
 		local tart_dir_flag=()
-		if [[ -n "$ISO_CACHE_DIR" ]]; then
-			echo "[worker-${worker_id}] Sharing ISO cache '${ISO_CACHE_DIR}' → /Volumes/My Shared Files/iso-cache/ inside VM"
-			tart_dir_flag=("--dir=iso-cache:${ISO_CACHE_DIR}")
+		if [[ -n "$BUILD_CACHE_DIR" ]]; then
+			echo "[worker-${worker_id}] Sharing build cache '${BUILD_CACHE_DIR}' → /Volumes/My Shared Files/build-cache/ inside VM"
+			tart_dir_flag=("--dir=build-cache:${BUILD_CACHE_DIR}")
 		fi
 		tart run --no-graphics --net-bridged="Wi-Fi" "${tart_dir_flag[@]}" "${vm_name}" &
 

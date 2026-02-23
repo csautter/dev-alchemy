@@ -1,0 +1,142 @@
+name: 'Upload Build Cache Files'
+description: >
+  For each file in the supplied list, saves it to the local runner shared-volume
+  cache (macOS Tart VirtioFS) when applicable, and uploads it to Azure Blob Storage
+  when no blob already exists. Works on Windows, macOS, and Linux.
+
+inputs:
+  files:
+    description: |
+      JSON array of cache file descriptors. Each object may contain:
+        - local-path  (required) path to the file in the workspace
+        - blob-name   (optional) blob key in Azure Storage; defaults to basename of local-path
+        - container   (optional) Azure Blob container name; defaults to "build-cache"
+      Pass '[]' to skip all cache operations (e.g. for builds with no cached files).
+    required: true
+  subscription-id:
+    description: 'Azure subscription ID used to derive the storage account name'
+    required: true
+  local-cache-dir:
+    description: >
+      Path to the local runner shared-volume cache directory (macOS Tart VirtioFS).
+      Leave empty to disable local cache write-back.
+    required: false
+    default: '/Volumes/My Shared Files/build-cache'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Upload build cache files (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        FILES='${{ inputs.files }}'
+        STORAGE_ACCOUNT=$(echo "ghrunner${{ inputs.subscription-id }}" | tr -cd '[:alnum:]' | tr '[:upper:]' '[:lower:]' | cut -c1-24)
+        LOCAL_CACHE_DIR="${{ inputs.local-cache-dir }}"
+
+        echo "$FILES" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for f in data:
+    local_path = f.get('local-path', '')
+    blob_name  = f.get('blob-name', '')
+    container  = f.get('container', 'build-cache')
+    print(local_path)
+    print(blob_name)
+    print(container)
+" | while IFS= read -r local_path && IFS= read -r blob_name && IFS= read -r container; do
+          [ -z "$local_path" ] && continue
+          [ -z "$blob_name" ] && blob_name=$(basename "$local_path")
+
+          echo "=== Build cache upload: $local_path [blob=$blob_name container=$container] ==="
+
+          # Resolve symlinks so we operate on the real bytes
+          real_path="$local_path"
+          if [ -L "$local_path" ]; then
+            real_path=$(readlink -f "$local_path")
+          fi
+
+          if [ ! -f "$real_path" ]; then
+            echo "  ✗ File not found at $local_path — skipping."
+            continue
+          fi
+
+          # 1. Save to local runner shared-volume cache (macOS Tart)
+          if [ -n "$LOCAL_CACHE_DIR" ] && [ -d "$LOCAL_CACHE_DIR" ]; then
+            cached="${LOCAL_CACHE_DIR}/${blob_name}"
+            if [ -L "$local_path" ]; then
+              echo "  ✓ File is a symlink to local cache — already cached."
+            elif [ -f "$cached" ]; then
+              echo "  ✓ Already in local runner cache at $cached."
+            else
+              echo "  ↑ Saving to local runner cache: $cached"
+              cp "$real_path" "$cached"
+              echo "  ✓ Saved to local runner cache."
+            fi
+          fi
+
+          # 2. Upload to Azure Blob Storage (skip if blob already exists)
+          blob_exists=$(az storage blob exists \
+            --account-name "$STORAGE_ACCOUNT" \
+            --container-name "$container" \
+            --name "$blob_name" \
+            --auth-mode login \
+            --query "exists" \
+            --output tsv)
+
+          if [ "$blob_exists" = "true" ]; then
+            echo "  ✓ Blob $blob_name already exists in '$container' — skipping upload."
+          else
+            echo "  ↑ Uploading $blob_name to container '$container'..."
+            az storage blob upload \
+              --account-name "$STORAGE_ACCOUNT" \
+              --container-name "$container" \
+              --name "$blob_name" \
+              --file "$real_path" \
+              --auth-mode login \
+              --overwrite false
+            echo "  ✓ Uploaded $blob_name."
+          fi
+        done
+
+    - name: Upload build cache files (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $files       = '${{ inputs.files }}' | ConvertFrom-Json
+        $storageAcct = ("ghrunner${{ inputs.subscription-id }}" -replace '-', '').Substring(0, 24)
+
+        foreach ($f in $files) {
+          $localPath = $f.'local-path'
+          $blobName  = if ($f.'blob-name') { $f.'blob-name' } else { Split-Path -Leaf $localPath }
+          $container = if ($f.'container') { $f.'container' } else { "build-cache" }
+
+          Write-Host "=== Build cache upload: $localPath [blob=$blobName container=$container] ==="
+
+          if (-not (Test-Path $localPath)) {
+            Write-Host "  ✗ File not found at $localPath — skipping."
+            continue
+          }
+
+          $blobExists = az storage blob exists `
+            --account-name $storageAcct `
+            --container-name $container `
+            --name $blobName `
+            --auth-mode login `
+            --query exists `
+            --output tsv
+
+          if ($blobExists -eq "true") {
+            Write-Host "  ✓ Blob $blobName already exists in '$container' — skipping upload."
+          } else {
+            Write-Host "  ↑ Uploading $blobName to container '$container'..."
+            az storage blob upload `
+              --account-name $storageAcct `
+              --container-name $container `
+              --name $blobName `
+              --file $localPath `
+              --auth-mode login `
+              --overwrite false
+            Write-Host "  ✓ Uploaded $blobName."
+          }
+        }

@@ -127,10 +127,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Download Windows ISO from Azure Blob Storage
-        uses: ./.github/actions/download-windows-iso
+      - name: Download build cache files
+        uses: ./.github/actions/download-build-cache
         with:
-          iso-path: .\cache\windows11\iso\win11_25h2_english_amd64.iso
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install dependencies windows
@@ -164,10 +164,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Upload Windows ISO to Azure Blob Storage
-        uses: ./.github/actions/upload-windows-iso
+      - name: Upload build cache files
+        uses: ./.github/actions/upload-build-cache
         with:
-          iso-path: .\cache\windows11\iso\win11_25h2_english_amd64.iso
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if Packer build failed
@@ -202,10 +202,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Download Windows ISO from Azure Blob Storage
-        uses: ./.github/actions/download-windows-iso
+      - name: Download build cache files
+        uses: ./.github/actions/download-build-cache
         with:
-          iso-path: .\cache\windows11\iso\win11_25h2_english_amd64.iso
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install dependencies windows
@@ -238,10 +238,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Upload Windows ISO to Azure Blob Storage
-        uses: ./.github/actions/upload-windows-iso
+      - name: Upload build cache files
+        uses: ./.github/actions/upload-build-cache
         with:
-          iso-path: .\cache\windows11\iso\win11_25h2_english_amd64.iso
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if Packer build failed
@@ -314,81 +314,45 @@ jobs:
           - vm_os: windows11
             go_test_name: TestBuildQemuWindows11Arm64OnMacos
             runs_on: macos-26-tart
+            cache_files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_arm64.iso","container":"windows-isos"}]'
           - vm_os: windows11
             go_test_name: TestBuildQemuWindows11Amd64OnMacos
             runs_on: macos-26-tart
+            cache_files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
             runs_on: macos-26-tart
+            cache_files: '[]'
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
             runs_on: macos-26-tart
+            cache_files: '[]'
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
             runs_on: macos-26-tart
+            cache_files: '[]'
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
             runs_on: macos-26-tart
+            cache_files: '[]'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Azure Login (OIDC)
-        if: matrix.vm_os == 'windows11'
+        if: matrix.cache_files != '[]'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Link cached Windows ISO (if available on runner)
-        if: matrix.vm_os == 'windows11'
-        continue-on-error: true
-        shell: bash
-        run: |
-          ARCH="${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}"
-          ISO_NAME="win11_25h2_english_${ARCH}.iso"
-          CACHE_PATH="/Volumes/My Shared Files/iso-cache/${ISO_NAME}"
-          DEST="./cache/windows11/iso/${ISO_NAME}"
-          if [ -f "$CACHE_PATH" ]; then
-            mkdir -p ./cache/windows11/iso
-            ln -sf "$CACHE_PATH" "$DEST"
-            echo "Linked cached ISO from $CACHE_PATH → $DEST (skipping Azure download)"
-          else
-            echo "No pre-cached ISO found at $CACHE_PATH — will attempt Azure Blob Storage download"
-          fi
-
-      - name: Download Windows ISO from Azure Blob Storage
-        if: matrix.vm_os == 'windows11'
-        uses: ./.github/actions/download-windows-iso
+      - name: Download build cache files
+        if: matrix.cache_files != '[]'
+        uses: ./.github/actions/download-build-cache
         with:
-          iso-path: ./cache/windows11/iso/win11_25h2_english_${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}.iso
+          files: ${{ matrix.cache_files }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Save Windows ISO to local runner cache
-        if: matrix.vm_os == 'windows11'
-        continue-on-error: true
-        shell: bash
-        run: |
-          ARCH="${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}"
-          ISO_NAME="win11_25h2_english_${ARCH}.iso"
-          CACHE_DIR="/Volumes/My Shared Files/iso-cache"
-          CACHE_PATH="${CACHE_DIR}/${ISO_NAME}"
-          WORKSPACE_ISO="./cache/windows11/iso/${ISO_NAME}"
-
-          if [ ! -d "$CACHE_DIR" ]; then
-            echo "Cache volume not mounted — skipping cache save."
-          elif [ -f "$CACHE_PATH" ]; then
-            echo "ISO already in cache at $CACHE_PATH — nothing to do."
-          elif [ -L "$WORKSPACE_ISO" ]; then
-            echo "ISO is a symlink to cache — already cached, nothing to do."
-          elif [ -f "$WORKSPACE_ISO" ]; then
-            echo "Saving freshly downloaded ISO to cache at $CACHE_PATH ..."
-            cp "$WORKSPACE_ISO" "$CACHE_PATH"
-            echo "ISO cached. Future runs on this runner will skip the Azure download."
-          else
-            echo "ISO not found at $WORKSPACE_ISO — cannot cache."
-          fi
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -427,18 +391,18 @@ jobs:
           retention-days: 1
 
       - name: Azure Login (OIDC)
-        if: matrix.vm_os == 'windows11'
+        if: matrix.cache_files != '[]'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Upload Windows ISO to Azure Blob Storage
-        if: matrix.vm_os == 'windows11'
-        uses: ./.github/actions/upload-windows-iso
+      - name: Upload build cache files
+        if: matrix.cache_files != '[]'
+        uses: ./.github/actions/upload-build-cache
         with:
-          iso-path: ./cache/windows11/iso/win11_25h2_english_${{ contains(matrix.go_test_name, 'Arm64') && 'arm64' || 'amd64' }}.iso
+          files: ${{ matrix.cache_files }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if Packer build failed
