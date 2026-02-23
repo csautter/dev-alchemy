@@ -90,7 +90,7 @@ locals {
       ["-accel", var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"],
       ["-machine", "virt,highmem=on"],
       ["-cpu", var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"],
-      ["-bios", "${path.root}/../../../../vendor/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
+      ["-bios", "${path.root}/../../../../cache/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
       ["-device", "ramfb"],
       ["-smp", "cpus=4,cores=4,sockets=1,threads=1"],
       ["-global", "PIIX4_PM.disable_s3=1"],

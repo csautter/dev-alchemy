@@ -93,7 +93,7 @@ if [ ! -f "./cache/windows11/iso/win11_25H2_english_$arch.iso" ]; then
 		python playwright_win11_iso.py --arm
 	fi
 	mkdir -p "${project_root}/cache/windows11/iso"
-	cd "${project_root}/vendor/windows/" || exit 1
+	cd "${project_root}/cache/windows/" || exit 1
 
 	if [ "$headless" = "true" ]; then
 		echo "Running in headless mode, skipping ISO download progress bar"

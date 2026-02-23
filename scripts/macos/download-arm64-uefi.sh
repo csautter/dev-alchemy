@@ -7,10 +7,10 @@ SCRIPT_DIR=$(
 	pwd
 )
 
-DEB_PATH="${SCRIPT_DIR}/../../vendor/qemu-efi-aarch64_all.deb"
+DEB_PATH="${SCRIPT_DIR}/../../cache/qemu-efi-aarch64_all.deb"
 
-# Ensure vendor directory exists before downloading
-mkdir -p "${SCRIPT_DIR}"/../../vendor
+# Ensure cache directory exists before downloading
+mkdir -p "${SCRIPT_DIR}"/../../cache
 
 if [ ! -f "${DEB_PATH}" ]; then
 	echo "Resolving latest qemu-efi-aarch64 download URL from Debian trixie package index"
@@ -27,16 +27,16 @@ else
 	echo "qemu-efi-aarch64_all.deb already exists, skipping download"
 fi
 
-mkdir -p "${SCRIPT_DIR}"/../../vendor/qemu-uefi
-if [ ! -f "${SCRIPT_DIR}"/../../vendor/qemu-uefi/data.tar.xz ]; then
+mkdir -p "${SCRIPT_DIR}"/../../cache/qemu-uefi
+if [ ! -f "${SCRIPT_DIR}"/../../cache/qemu-uefi/data.tar.xz ]; then
 	echo "Extract qemu-uefi data.tar.xz"
-	tar -xvf "${DEB_PATH}" -C "${SCRIPT_DIR}"/../../vendor/qemu-uefi
+	tar -xvf "${DEB_PATH}" -C "${SCRIPT_DIR}"/../../cache/qemu-uefi
 else
 	echo "qemu-uefi/data.tar.xz already exists, skipping extraction"
 fi
 
-if [ ! -d "${SCRIPT_DIR}"/../../vendor/qemu-uefi/usr/share/qemu-efi-aarch64 ]; then
-	tar -xvf "${SCRIPT_DIR}"/../../vendor/qemu-uefi/data.tar.xz -C "${SCRIPT_DIR}"/../../vendor/qemu-uefi
+if [ ! -d "${SCRIPT_DIR}"/../../cache/qemu-uefi/usr/share/qemu-efi-aarch64 ]; then
+	tar -xvf "${SCRIPT_DIR}"/../../cache/qemu-uefi/data.tar.xz -C "${SCRIPT_DIR}"/../../cache/qemu-uefi
 else
 	echo "qemu-uefi/usr/share/qemu-efi-aarch64 already exists, skipping extraction"
 fi

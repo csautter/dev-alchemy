@@ -314,33 +314,44 @@ jobs:
           - vm_os: windows11
             go_test_name: TestBuildQemuWindows11Arm64OnMacos
             runs_on: macos-26-tart
-            cache_files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_arm64.iso","container":"windows-isos"}]'
+            cache_files: >-
+              [{"local-path":"./cache/windows11/iso/win11_25h2_english_arm64.iso","container":"windows-isos"},
+               {"local-path":"./cache/utm/utm-guest-tools-latest.iso"},
+               {"local-path":"./cache/windows/virtio-win.iso"},
+               {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
           - vm_os: windows11
             go_test_name: TestBuildQemuWindows11Amd64OnMacos
             runs_on: macos-26-tart
-            cache_files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
+            cache_files: >-
+              [{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"},
+               {"local-path":"./cache/utm/utm-guest-tools-latest.iso"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
             runs_on: macos-26-tart
-            cache_files: '[]'
+            cache_files: >-
+              [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+               {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
             runs_on: macos-26-tart
-            cache_files: '[]'
+            cache_files: >-
+              [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
             runs_on: macos-26-tart
-            cache_files: '[]'
+            cache_files: >-
+              [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+               {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
             runs_on: macos-26-tart
-            cache_files: '[]'
+            cache_files: >-
+              [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Azure Login (OIDC)
-        if: matrix.cache_files != '[]'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -348,7 +359,6 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Download build cache files
-        if: matrix.cache_files != '[]'
         uses: ./.github/actions/download-build-cache
         with:
           files: ${{ matrix.cache_files }}
@@ -391,7 +401,6 @@ jobs:
           retention-days: 1
 
       - name: Azure Login (OIDC)
-        if: matrix.cache_files != '[]'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -399,7 +408,6 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Upload build cache files
-        if: matrix.cache_files != '[]'
         uses: ./.github/actions/upload-build-cache
         with:
           files: ${{ matrix.cache_files }}

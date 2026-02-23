@@ -7,7 +7,7 @@ SCRIPT_DIR=$(
 	pwd
 )
 
-vendor_dir="$SCRIPT_DIR/../../vendor/windows"
+vendor_dir="$SCRIPT_DIR/../../cache/windows"
 iso_dir="$SCRIPT_DIR/../../cache/windows11/iso"
 autounattend_xml_path="$SCRIPT_DIR/../../build/packer/windows/qemu-arm64/autounattend.xml"
 windows_source_iso_path="$iso_dir/win11_25h2_english_arm64.iso"

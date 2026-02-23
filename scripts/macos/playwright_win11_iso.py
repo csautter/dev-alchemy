@@ -195,7 +195,7 @@ async def fetch_win11_iso_link(
 
         # Write link to file for use in packer build
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        output_dir = os.path.join(script_dir, "../../vendor/windows/")
+        output_dir = os.path.join(script_dir, "../../cache/windows/")
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(
             output_dir, "win11_arm64_iso_url.txt" if arm else "win11_amd64_iso_url.txt"

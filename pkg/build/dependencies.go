@@ -238,7 +238,7 @@ func getWindows11Download(arch string, savePath string, download bool) (string, 
 		return "", nil
 	}
 
-	content, err := os.ReadFile(filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/"+url_file))
+	content, err := os.ReadFile(filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/windows/"+url_file))
 	if err != nil {
 		return "", err
 	}
@@ -250,7 +250,7 @@ func getWindows11Download(arch string, savePath string, download bool) (string, 
 func getWebFileDependencies() []WebFileDependency {
 	return []WebFileDependency{
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/utm/utm-guest-tools-latest.iso"),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/utm/utm-guest-tools-latest.iso"),
 			Checksum:  "",
 			Source:    "https://getutm.app/downloads/utm-guest-tools-latest.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
@@ -317,7 +317,7 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/qemu-efi-aarch64_all.deb"),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/qemu-efi-aarch64_all.deb"),
 			Checksum:  "",
 			BeforeHook: func() (string, error) {
 				return resolveDebianPackageURL("trixie", "qemu-efi-aarch64")
@@ -332,7 +332,7 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/windows/virtio-win.iso"),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/windows/virtio-win.iso"),
 			Checksum:  "",
 			Source:    "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.266-1/virtio-win-0.1.266.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
@@ -345,7 +345,7 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/linux/ubuntu-24.04.3-live-server-arm64.iso"),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/linux/ubuntu-24.04.3-live-server-arm64.iso"),
 			Checksum:  "sha256:2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555",
 			Source:    "https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
@@ -359,7 +359,7 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/linux/ubuntu-24.04.3-live-server-amd64.iso"),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"),
 			Checksum:  "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b",
 			Source:    "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
@@ -373,7 +373,7 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/linux/ubuntu-24.04.3-live-server-arm64.iso"),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/linux/ubuntu-24.04.3-live-server-arm64.iso"),
 			Checksum:  "sha256:2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555",
 			Source:    "https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
@@ -387,7 +387,7 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/linux/ubuntu-24.04.3-live-server-amd64.iso"),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"),
 			Checksum:  "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b",
 			Source:    "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso",
 			RelatedVmConfigs: []VirtualMachineConfig{
@@ -401,7 +401,7 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./vendor/qemu-efi-aarch64_all.deb"),
+			LocalPath: filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/qemu-efi-aarch64_all.deb"),
 			Checksum:  "",
 			BeforeHook: func() (string, error) {
 				return resolveDebianPackageURL("trixie", "qemu-efi-aarch64")

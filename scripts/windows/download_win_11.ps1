@@ -5,21 +5,21 @@ param(
 # Define variables
 $FidoVersion = "1.67"
 $FidoExe = "Fido.ps1"
-$VendorDir = "$PSScriptRoot\..\..\vendor"
-$FidoPath = "$VendorDir\$FidoExe"
+$CacheDir = "$PSScriptRoot\..\..\cache"
+$FidoPath = "$CacheDir\$FidoExe"
 # LZMA and signature file paths
-$FidoLzma = "$VendorDir\Fido.ps1.lzma"
-$FidoSig = "$VendorDir\Fido.ps1.lzma.sig"
+$FidoLzma = "$CacheDir\Fido.ps1.lzma"
+$FidoSig = "$CacheDir\Fido.ps1.lzma.sig"
 $SevenZip = "7z.exe" # Assumes 7z.exe is in PATH
 
 $oldLocation = Get-Location
 
-# Create vendor directory if it doesn't exist
-if (!(Test-Path $VendorDir)) {
-    New-Item -ItemType Directory -Path $VendorDir | Out-Null
+# Create cache directory if it doesn't exist
+if (!(Test-Path $CacheDir)) {
+    New-Item -ItemType Directory -Path $CacheDir | Out-Null
 }
 
-Set-Location $VendorDir
+Set-Location $CacheDir
 # Download Fido.ps1.lzma and .sig if not present
 if (!(Test-Path $FidoLzma)) {
     Write-Host "Downloading Fido.ps1.lzma..."
@@ -46,14 +46,14 @@ if (!(Test-Path $FidoPath) -and (Test-Path $FidoLzma)) {
     & $SevenZip e $FidoLzma | Out-Null
 }
 
-# create vendor/windows directory if it doesn't exist
-if (!(Test-Path "$VendorDir\windows")) {
-    New-Item -ItemType Directory -Path "$VendorDir\windows" | Out-Null
+# create cache/windows directory if it doesn't exist
+if (!(Test-Path "$CacheDir\windows")) {
+    New-Item -ItemType Directory -Path "$CacheDir\windows" | Out-Null
 }
 
 # Run Fido to download Windows 11 ISO with options
 Write-Host "Launching Fido to download Windows 11 ISO..."
-Set-Location $PSScriptRoot\..\..\vendor\windows\
+Set-Location $PSScriptRoot\..\..\cache\windows\
 $FidoArgs = @("-Win", "11", "-Rel", "Latest", "-Ed", "Pro", "-Arch", "x64", "-Lang", "English")
 if ($GetUrl) {
     $FidoArgs += @("-GetUrl")

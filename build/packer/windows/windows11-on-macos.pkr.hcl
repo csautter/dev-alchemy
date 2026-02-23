@@ -47,9 +47,9 @@ locals {
   }
   win11_iso         = var.iso_url != "" ? var.iso_url : local.win11_default_iso[var.arch]
   win11_qcow2       = "${local.cache_directory}/windows11/qemu-windows11-${var.arch}.qcow2"
-  win11_guest_tools = "${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso"
-  win11_virtio_iso  = "${path.root}/../../../vendor/windows/virtio-win.iso"
-  win11_uefi_bios   = "${path.root}/../../../vendor/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+  win11_guest_tools = "${path.root}/../../../cache/utm/utm-guest-tools-latest.iso"
+  win11_virtio_iso  = "${path.root}/../../../cache/windows/virtio-win.iso"
+  win11_uefi_bios   = "${path.root}/../../../cache/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
   qemu_args = {
     "amd64" = [
       ["-device", "qemu-xhci,id=usb"],
@@ -70,7 +70,7 @@ locals {
       ["-cpu", var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"],
       # setting a specific cpu model leads to issues, therefore using max above
       # ["-cpu", var.is_ci ? "cortex-a72" : "host"],
-      ["-bios", "${path.root}/../../../vendor/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
+      ["-bios", "${path.root}/../../../cache/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
       ["-device", "ramfb"],
       ["-device", "qemu-xhci"],
       ["-device", "usb-kbd"],
@@ -78,9 +78,9 @@ locals {
       ["-device", "usb-storage,drive=install,removable=true,bootindex=0"],
       ["-drive", "if=none,id=install,format=raw,media=cdrom,file=${local.win11_iso},readonly=true"],
       ["-device", "usb-storage,drive=virtio-drivers,removable=true,bootindex=2"],
-      ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${path.root}/../../../vendor/windows/virtio-win.iso,readonly=true"],
+      ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${path.root}/../../../cache/windows/virtio-win.iso,readonly=true"],
       ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=3"],
-      ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${path.root}/../../../vendor/utm/utm-guest-tools-latest.iso,readonly=true"],
+      ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${path.root}/../../../cache/utm/utm-guest-tools-latest.iso,readonly=true"],
       ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=1"],
       ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${local.cache_directory}/windows11/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
       ["-boot", "order=c,menu=on"],
