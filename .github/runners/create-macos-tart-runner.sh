@@ -308,8 +308,9 @@ trap 'cleanup_all_workers' EXIT INT TERM
 echo "Starting ${RUNNER_POOL_SIZE} parallel runner worker(s)..."
 for i in $(seq 1 "$RUNNER_POOL_SIZE"); do
 	run_worker "$i" &
-	WORKER_PIDS+=("$!")
-	echo "Worker #${i} started (PID: ${WORKER_PIDS[-1]})"
+	worker_pid=$!
+	WORKER_PIDS+=("$worker_pid")
+	echo "Worker #${i} started (PID: ${worker_pid})"
 	# Stagger VM boots slightly to avoid simultaneous resource contention.
 	[[ "$i" -lt "$RUNNER_POOL_SIZE" ]] && sleep 3
 done
