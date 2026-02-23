@@ -100,11 +100,21 @@ GITHUB_REPO=myorg/myrepo \
 ./create-macos-tart-runner.sh
 
 ISO_CACHE_DIR=~/iso-cache \
-RUNNER_POOL_SIZE=3 VM_CPU_COUNT=4 VM_MEMORY_MB=8192 \
+RUNNER_POOL_SIZE=2 VM_CPU_COUNT=4 VM_MEMORY_MB=8192 \
 ./create-macos-tart-runner.sh
 ```
 
 The directory is mounted read-write inside every VM as `/Volumes/iso-cache/`.
+
+### Set the runner CPU count or memory size and run up to 2 runners in parallel
+
+It's a limitation by Apple to limit the concurrency of VMs to 2 per host machine.
+
+```bash
+ISO_CACHE_DIR=~/iso-cache \
+RUNNER_POOL_SIZE=2 VM_CPU_COUNT=4 VM_MEMORY_MB=8192 \
+./create-macos-tart-runner.sh
+```
 
 ### Keeping the ISO up to date
 
