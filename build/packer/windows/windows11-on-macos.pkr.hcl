@@ -34,6 +34,17 @@ variable "vnc_port" {
   default = 5901
 }
 
+variable "cpus" {
+  type    = number
+  default = 4
+}
+
+variable "memory" {
+  type        = number
+  default     = 4096
+  description = "Memory in MB to allocate to the VM"
+}
+
 variable "is_ci" {
   type    = bool
   default = env("CI") == "true"
@@ -97,8 +108,8 @@ source "qemu" "win11" {
   iso_checksum     = "none"
   output_directory = "${local.cache_directory}/windows11/qemu-out-windows11-${var.arch}"
   display          = "cocoa"
-  memory           = "4096"
-  cores            = var.is_ci ? 3 : 4
+  memory           = var.memory
+  cores            = var.cpus
   vnc_bind_address = "127.0.0.1"
   vnc_port_min     = var.vnc_port
   vnc_port_max     = var.vnc_port

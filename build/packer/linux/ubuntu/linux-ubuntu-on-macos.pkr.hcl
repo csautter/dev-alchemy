@@ -53,6 +53,17 @@ variable "ubuntu_type" {
   }
 }
 
+variable "cpus" {
+  type    = number
+  default = 4
+}
+
+variable "memory" {
+  type        = number
+  default     = 4096
+  description = "Memory in MB to allocate to the VM"
+}
+
 locals {
   iso_url             = var.iso_url
   ubuntu_iso_checksum = var.arch == "amd64" ? "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b" : "none"
@@ -77,7 +88,7 @@ locals {
     "amd64" = [
       ["-machine", "q35,vmport=off,i8042=off,hpet=off"],
       ["-accel", "tcg,thread=multi,tb-size=1024"],
-      ["-smp", "cpus=4,cores=4,sockets=1,threads=1"],
+      ["-smp", "cpus=${var.cpus},cores=${var.cpus},sockets=1,threads=1"],
       ["-global", "PIIX4_PM.disable_s3=1"],
       ["-global", "ICH-LPC.disable_s3=1"],
       ["-device", "qemu-xhci"],
@@ -92,7 +103,7 @@ locals {
       ["-cpu", var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"],
       ["-bios", "${path.root}/../../../../cache/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
       ["-device", "ramfb"],
-      ["-smp", "cpus=4,cores=4,sockets=1,threads=1"],
+      ["-smp", "cpus=${var.cpus},cores=${var.cpus},sockets=1,threads=1"],
       ["-global", "PIIX4_PM.disable_s3=1"],
       ["-global", "ICH-LPC.disable_s3=1"],
       ["-device", "qemu-xhci"],
@@ -123,7 +134,7 @@ source "qemu" "ubuntu" {
   output_directory = local.output_directory
   iso_url          = local.iso_url
   iso_checksum     = local.ubuntu_iso_checksum
-  memory           = 4096
+  memory           = var.memory
   cpu_model        = var.arch == "amd64" ? "Skylake-Client" : "max" # overwritten by qemu arg for arm64
   disk_size        = "64G"                                          # overwritten by qemu arg for arm64
   disk_interface   = "ide"                                          # overwritten by qemu arg for arm64

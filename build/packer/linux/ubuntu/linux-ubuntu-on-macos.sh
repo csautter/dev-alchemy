@@ -8,6 +8,8 @@ arch="arm64"
 headless="false"
 ubuntu_type="server"
 vnc_port="5901"
+cpus="4"
+memory="4096"
 verbose="false"
 
 script_dir=$(
@@ -35,6 +37,24 @@ while [[ $# -gt 0 ]]; do
 	--headless)
 		headless="true"
 		shift
+		;;
+	--cpus)
+		if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+			cpus="$2"
+			shift 2
+		else
+			echo "Invalid value for --cpus: $2. It must be a number." >&2
+			exit 1
+		fi
+		;;
+	--memory)
+		if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+			memory="$2"
+			shift 2
+		else
+			echo "Invalid value for --memory: $2. It must be a number." >&2
+			exit 1
+		fi
 		;;
 	--vnc-port)
 		if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
@@ -139,4 +159,4 @@ packer init "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
 if [ "$verbose" = "true" ]; then
 	export PACKER_LOG=1
 fi
-packer build -var "iso_url=$iso_path" -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
+packer build -var "iso_url=$iso_path" -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" -var "cpus=$cpus" -var "memory=$memory" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"

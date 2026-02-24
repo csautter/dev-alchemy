@@ -1,3 +1,6 @@
+build:
+	go build ./...
+
 test-build:
 	# sudo is required to generate a customized Windows 11 iso
 	cd ./pkg/build && go test -parallel 4 -timeout 300m -v .

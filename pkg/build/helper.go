@@ -8,17 +8,25 @@ import (
 )
 
 const (
-	minVmMemoryMB = 4096 // 4 GB minimum
-	osHeadroomMB  = 8192 // 8 GB reserved for the host OS
+	minVmMemoryMB       = 4096 // 4 GB minimum
+	osHeadroomDarwinMB  = 4096 // 4 GB reserved for the host OS
+	osHeadroomWindowsMB = 8192 // 8 GB reserved for the host OS
 )
 
+// getVmCpuCountInt determines the CPU count to allocate to the VM.
+//
+// Logic:
+//  1. If config.Cpus is non-zero it is used, capped at the host's logical CPU count.
+//  2. Otherwise all available host CPUs are used (auto mode).
 func getVmCpuCountInt(config VirtualMachineConfig) int {
-	desired_cpus := config.Cpus
 	system_cpus := runtime.NumCPU()
-	if desired_cpus > system_cpus {
+	if config.Cpus == 0 {
 		return system_cpus
 	}
-	return desired_cpus
+	if config.Cpus > system_cpus {
+		return system_cpus
+	}
+	return config.Cpus
 }
 
 func getVmCpuCountString(config VirtualMachineConfig) string {
@@ -40,6 +48,11 @@ func getVmMemoryMB(config VirtualMachineConfig) int {
 	totalMB, err := getSystemTotalMemoryMB()
 	if err != nil || totalMB == 0 {
 		return minVmMemoryMB
+	}
+
+	osHeadroomMB := osHeadroomDarwinMB
+	if config.HostOs == HostOsWindows {
+		osHeadroomMB = osHeadroomWindowsMB
 	}
 
 	vmMemory := int(totalMB) - osHeadroomMB

@@ -16,6 +16,11 @@ func TestPrintSystemOsArch(t *testing.T) {
 func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:                   "ubuntu",
 		Arch:                 "arm64",
@@ -23,6 +28,8 @@ func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 		VncPort:              5901,
 		HostOs:               HostOsDarwin,
 		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -33,6 +40,11 @@ func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:                   "ubuntu",
 		Arch:                 "amd64",
@@ -40,6 +52,8 @@ func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 		VncPort:              5902,
 		HostOs:               HostOsDarwin,
 		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -50,6 +64,11 @@ func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:                   "ubuntu",
 		Arch:                 "arm64",
@@ -57,6 +76,8 @@ func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 		VncPort:              5903,
 		HostOs:               HostOsDarwin,
 		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -67,6 +88,11 @@ func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:                   "ubuntu",
 		Arch:                 "amd64",
@@ -74,6 +100,8 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 		VncPort:              5904,
 		HostOs:               HostOsDarwin,
 		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -88,12 +116,19 @@ func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 		t.Fatal("This test requires sudo/root permissions. Please run with sudo.")
 	}
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:                   "windows11",
 		Arch:                 "arm64",
 		VncPort:              5911,
 		HostOs:               HostOsDarwin,
 		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -104,12 +139,19 @@ func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
 		OS:                   "windows11",
 		Arch:                 "amd64",
 		VncPort:              5912,
 		HostOs:               HostOsDarwin,
 		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
