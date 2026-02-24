@@ -34,61 +34,11 @@ runs:
       if: runner.os != 'Windows'
       shell: bash
       continue-on-error: true
-      run: |
-        FILES='${{ inputs.files }}'
-        STORAGE_ACCOUNT=$(echo "ghrunner${{ inputs.subscription-id }}" | tr -cd '[:alnum:]' | tr '[:upper:]' '[:lower:]' | cut -c1-24)
-        RESOURCE_GROUP="gh-runner-storage-rg"
-        LOCAL_CACHE_DIR="${{ inputs.local-cache-dir }}"
-
-        # Iterate over each entry in the JSON array using Python (always available on runners)
-        echo "$FILES" | python3 -c "import json,sys;data=json.load(sys.stdin);[print(f.get('local-path',''),f.get('blob-name',''),f.get('container','build-cache'),sep='\n') for f in data]" | while IFS= read -r local_path && IFS= read -r blob_name && IFS= read -r container; do
-          [ -z "$local_path" ] && continue
-          [ -z "$blob_name" ] && blob_name=$(basename "$local_path")
-
-          echo "=== Build cache: $local_path [blob=$blob_name container=$container] ==="
-
-          # 1. Already present in workspace → nothing to do
-          if [ -f "$local_path" ]; then
-            echo "  ✓ Already present at $local_path — skipping."
-            continue
-          fi
-
-          # 2. Local runner shared-volume cache (macOS Tart VirtioFS) → symlink
-          if [ -n "$LOCAL_CACHE_DIR" ] && [ -f "${LOCAL_CACHE_DIR}/${blob_name}" ]; then
-            echo "  ✓ Found in local runner cache — creating symlink."
-            mkdir -p "$(dirname "$local_path")"
-            ln -sf "${LOCAL_CACHE_DIR}/${blob_name}" "$local_path"
-            continue
-          fi
-
-          # 3. Azure Blob Storage → download
-          echo "  ↓ Not in local cache. Attempting Azure Blob Storage download..."
-          if az storage account show \
-              --name "$STORAGE_ACCOUNT" \
-              --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-            blob_exists=$(az storage blob exists \
-              --account-name "$STORAGE_ACCOUNT" \
-              --container-name "$container" \
-              --name "$blob_name" \
-              --auth-mode login \
-              --query "exists" \
-              --output tsv)
-            if [ "$blob_exists" = "true" ]; then
-              mkdir -p "$(dirname "$local_path")"
-              az storage blob download \
-                --account-name "$STORAGE_ACCOUNT" \
-                --container-name "$container" \
-                --name "$blob_name" \
-                --file "$local_path" \
-                --auth-mode login
-              echo "  ✓ Downloaded $blob_name → $local_path"
-            else
-              echo "  ✗ Blob $blob_name not found in container '$container'."
-            fi
-          else
-            echo "  ✗ Storage account $STORAGE_ACCOUNT not found."
-          fi
-        done
+      env:
+        CACHE_FILES: ${{ inputs.files }}
+        SUBSCRIPTION_ID: ${{ inputs.subscription-id }}
+        LOCAL_CACHE_DIR: ${{ inputs.local-cache-dir }}
+      run: bash "${{ github.action_path }}/scripts/download-build-cache.sh"
 
     - name: Download build cache files (Windows)
       if: runner.os == 'Windows'
@@ -98,43 +48,4 @@ runs:
         CACHE_FILES: ${{ inputs.files }}
         SUBSCRIPTION_ID: ${{ inputs.subscription-id }}
       run: |
-        $files         = $env:CACHE_FILES | ConvertFrom-Json
-        $storageAcct   = ("ghrunner$env:SUBSCRIPTION_ID" -replace '-', '').Substring(0, 24)
-        $resourceGroup = "gh-runner-storage-rg"
-
-        foreach ($f in $files) {
-          $localPath = $f.'local-path'
-          $blobName  = if ($f.'blob-name') { $f.'blob-name' } else { Split-Path -Leaf $localPath }
-          $container = if ($f.'container') { $f.'container' } else { "build-cache" }
-
-          Write-Host "=== Build cache: $localPath [blob=$blobName container=$container] ==="
-
-          # 1. Already present in workspace → nothing to do
-          if (Test-Path $localPath) {
-            Write-Host "  ✓ Already present at $localPath — skipping."
-            continue
-          }
-
-          # 2. Azure Blob Storage → download
-          # (Windows Azure runners have no shared-volume cache)
-          Write-Host "  ↓ Attempting Azure Blob Storage download..."
-          $saArgs = @('storage', 'account', 'show', '--name', $storageAcct, '--resource-group', $resourceGroup)
-          $sa = az @saArgs 2>$null | ConvertFrom-Json
-
-          if ($sa) {
-            $existsArgs = @('storage', 'blob', 'exists', '--account-name', $storageAcct, '--container-name', $container, '--name', $blobName, '--auth-mode', 'login')
-            $blobExists = az @existsArgs | ConvertFrom-Json
-
-            if ($blobExists.exists) {
-              $dir = Split-Path -Path $localPath -Parent
-              if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-              $dlArgs = @('storage', 'blob', 'download', '--account-name', $storageAcct, '--container-name', $container, '--name', $blobName, '--file', $localPath, '--auth-mode', 'login')
-              az @dlArgs
-              Write-Host "  ✓ Downloaded $blobName → $localPath"
-            } else {
-              Write-Host "  ✗ Blob $blobName not found in container '$container'."
-            }
-          } else {
-            Write-Host "  ✗ Storage account $storageAcct not found."
-          }
-        }
+        & "${{ github.action_path }}\scripts\download-build-cache.ps1"
