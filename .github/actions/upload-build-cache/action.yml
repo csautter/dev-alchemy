@@ -92,9 +92,12 @@ runs:
     - name: Upload build cache files (Windows)
       if: runner.os == 'Windows'
       shell: powershell
+      env:
+        CACHE_FILES: ${{ inputs.files }}
+        SUBSCRIPTION_ID: ${{ inputs.subscription-id }}
       run: |
-        $files       = '${{ inputs.files }}' | ConvertFrom-Json
-        $storageAcct = ("ghrunner${{ inputs.subscription-id }}" -replace '-', '').Substring(0, 24)
+        $files       = $env:CACHE_FILES | ConvertFrom-Json
+        $storageAcct = ("ghrunner$env:SUBSCRIPTION_ID" -replace '-', '').Substring(0, 24)
 
         foreach ($f in $files) {
           $localPath = $f.'local-path'
