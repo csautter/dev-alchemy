@@ -7,6 +7,7 @@ param()
 $files         = $env:CACHE_FILES | ConvertFrom-Json
 $storageAcct   = ("ghrunner$env:SUBSCRIPTION_ID" -replace '-', '').Substring(0, 24)
 $resourceGroup = "gh-runner-storage-rg"
+$localCacheDir = $env:LOCAL_CACHE_DIR
 
 foreach ($f in $files) {
     $localPath = $f.'local-path'
@@ -41,6 +42,18 @@ foreach ($f in $files) {
             $dlArgs = @('storage', 'blob', 'download', '--account-name', $storageAcct, '--container-name', $container, '--name', $blobName, '--file', $localPath, '--auth-mode', 'login')
             az @dlArgs
             Write-Host "  ✓ Downloaded $blobName → $localPath"
+
+            # Save to local runner shared-volume cache
+            if ($localCacheDir -and (Test-Path $localCacheDir -PathType Container)) {
+                $cached = Join-Path $localCacheDir $blobName
+                if (Test-Path $cached) {
+                    Write-Host "  ✓ Already in local runner cache at $cached."
+                } else {
+                    Write-Host "  ↑ Saving to local runner cache: $cached"
+                    Copy-Item -Path $localPath -Destination $cached
+                    Write-Host "  ✓ Saved to local runner cache."
+                }
+            }
         } else {
             Write-Host "  ✗ Blob $blobName not found in container '$container'."
         }

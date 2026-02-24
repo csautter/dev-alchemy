@@ -57,6 +57,18 @@ for f in data:
         --file "$local_path" \
         --auth-mode login
       echo "  ✓ Downloaded $blob_name → $local_path"
+
+      # Save to local runner shared-volume cache (macOS Tart)
+      if [ -n "$LOCAL_CACHE_DIR" ] && [ -d "$LOCAL_CACHE_DIR" ]; then
+        cached="${LOCAL_CACHE_DIR}/${blob_name}"
+        if [ -f "$cached" ]; then
+          echo "  ✓ Already in local runner cache at $cached."
+        else
+          echo "  ↑ Saving to local runner cache: $cached"
+          cp "$local_path" "$cached"
+          echo "  ✓ Saved to local runner cache."
+        fi
+      fi
     else
       echo "  ✗ Blob $blob_name not found in container '$container'."
     fi
