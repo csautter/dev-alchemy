@@ -1,6 +1,7 @@
 # Expects the following environment variables (set by the composite action):
 #   CACHE_FILES       - JSON array of cache file descriptors
 #   SUBSCRIPTION_ID   - Azure subscription ID
+#   LOCAL_CACHE_DIR   - Optional local runner cache directory
 [CmdletBinding()]
 param()
 
@@ -20,13 +21,13 @@ foreach ($f in $files) {
 
     # 1. Already present in workspace -> nothing to do
     if (Test-Path $localPath) {
-        Write-Host "  ✓ Already present at $localPath — skipping."
+        Write-Host "  [ok] Already present at $localPath - skipping."
         continue
     }
 
     # 2. Azure Blob Storage -> download
-    # (Windows Azure runners have no shared-volume cache)
-    Write-Host "  ↓ Attempting Azure Blob Storage download..."
+    # (Windows Azure runners usually have no shared-volume cache)
+    Write-Host "  [download] Attempting Azure Blob Storage download..."
     $saArgs = @('storage', 'account', 'show', '--name', $storageAcct, '--resource-group', $resourceGroup)
     $saJson = az @saArgs 2>&1
     $sa = $null
@@ -41,23 +42,23 @@ foreach ($f in $files) {
             if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
             $dlArgs = @('storage', 'blob', 'download', '--account-name', $storageAcct, '--container-name', $container, '--name', $blobName, '--file', $localPath, '--auth-mode', 'login')
             az @dlArgs
-            Write-Host "  ✓ Downloaded $blobName → $localPath"
+            Write-Host "  [ok] Downloaded $blobName -> $localPath"
 
-            # Save to local runner shared-volume cache
+            # Save to local runner cache when available.
             if ($localCacheDir -and (Test-Path $localCacheDir -PathType Container)) {
                 $cached = Join-Path $localCacheDir $blobName
                 if (Test-Path $cached) {
-                    Write-Host "  ✓ Already in local runner cache at $cached."
+                    Write-Host "  [ok] Already in local runner cache at $cached."
                 } else {
-                    Write-Host "  ↑ Saving to local runner cache: $cached"
+                    Write-Host "  [cache] Saving to local runner cache: $cached"
                     Copy-Item -Path $localPath -Destination $cached
-                    Write-Host "  ✓ Saved to local runner cache."
+                    Write-Host "  [ok] Saved to local runner cache."
                 }
             }
         } else {
-            Write-Host "  ✗ Blob $blobName not found in container '$container'."
+            Write-Host "  [miss] Blob $blobName not found in container '$container'."
         }
     } else {
-        Write-Host "  ✗ Storage account $storageAcct not found."
+        Write-Host "  [miss] Storage account $storageAcct not found."
     }
 }

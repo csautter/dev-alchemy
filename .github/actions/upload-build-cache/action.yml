@@ -41,5 +41,6 @@ runs:
       env:
         CACHE_FILES: ${{ inputs.files }}
         SUBSCRIPTION_ID: ${{ inputs.subscription-id }}
+        LOCAL_CACHE_DIR: ${{ inputs.local-cache-dir }}
       run: |
         & "${{ github.action_path }}\scripts\upload-build-cache.ps1"
