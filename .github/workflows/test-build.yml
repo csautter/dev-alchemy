@@ -130,7 +130,7 @@ jobs:
       - name: Download build cache files
         uses: ./.github/actions/download-build-cache
         with:
-          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install dependencies windows
@@ -167,7 +167,7 @@ jobs:
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
-          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if Packer build failed
@@ -205,7 +205,7 @@ jobs:
       - name: Download build cache files
         uses: ./.github/actions/download-build-cache
         with:
-          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install dependencies windows
@@ -241,7 +241,7 @@ jobs:
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
-          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"}]'
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if Packer build failed
@@ -315,7 +315,7 @@ jobs:
             go_test_name: TestBuildQemuWindows11Arm64OnMacos
             runs_on: macos-26-tart
             cache_files: >-
-              [{"local-path":"./cache/windows11/iso/win11_25h2_english_arm64.iso","container":"windows-isos"},
+              [{"local-path":"./cache/windows11/iso/win11_25h2_english_arm64.iso","container":"build-cache"},
                {"local-path":"./cache/utm/utm-guest-tools-latest.iso"},
                {"local-path":"./cache/windows/virtio-win.iso"},
                {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
@@ -323,7 +323,7 @@ jobs:
             go_test_name: TestBuildQemuWindows11Amd64OnMacos
             runs_on: macos-26-tart
             cache_files: >-
-              [{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"windows-isos"},
+              [{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},
                {"local-path":"./cache/utm/utm-guest-tools-latest.iso"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuServerArm64OnMacos

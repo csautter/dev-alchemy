@@ -12,7 +12,7 @@ inputs:
         - blob-name   (optional) blob key in Azure Storage; defaults to basename of local-path
         - container   (optional) Azure Blob container name; defaults to "build-cache"
       Example:
-        '[{"local-path":"./cache/windows11/iso/win11.iso","container":"windows-isos"}]'
+        '[{"local-path":"./cache/windows11/iso/win11.iso","container":"build-cache"}]'
       Pass '[]' to skip all cache operations (e.g. for builds with no cached files).
     required: true
   subscription-id:
