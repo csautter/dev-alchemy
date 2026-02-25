@@ -92,7 +92,7 @@ tart clone "${TART_SOURCE_IMAGE}" "${BUILD_VM}"
 # ~6 GB for the output ISO, plus the existing tooling (~14 GB used on base).
 # 17 GB free after +20 GB was insufficient; +40 GB gives ~37 GB free headroom.
 current_disk_gb=$(tart get "${BUILD_VM}" --format json | python3 -c "import sys,json,math; print(math.ceil(float(json.load(sys.stdin)['Size'])))")
-new_disk_gb=$((current_disk_gb + 40))
+new_disk_gb=$((current_disk_gb + 50))
 echo "Resizing disk: ${current_disk_gb} GB → ${new_disk_gb} GB ..."
 tart set "${BUILD_VM}" --disk-size "${new_disk_gb}"
 
