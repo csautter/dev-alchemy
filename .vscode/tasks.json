@@ -9,7 +9,7 @@
 			"isBackground": true,
 			"dependsOn": "pip install (functions)",
 			"options": {
-				"cwd": "${workspaceFolder}/scripts\\gh-runner-func"
+				"cwd": "${workspaceFolder}/scripts/gh-runner-func"
 			}
 		},
 		{
@@ -19,14 +19,14 @@
 				"command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
 			},
 			"windows": {
-				"command": "${config:azureFunctions.pythonVenv}\\Scripts\\python -m pip install -r requirements.txt"
+				"command": "${config:azureFunctions.pythonVenv}/Scripts/python -m pip install -r requirements.txt"
 			},
 			"linux": {
 				"command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
 			},
 			"problemMatcher": [],
 			"options": {
-				"cwd": "${workspaceFolder}/scripts\\gh-runner-func"
+				"cwd": "${workspaceFolder}/scripts/gh-runner-func"
 			}
 		}
 	]
