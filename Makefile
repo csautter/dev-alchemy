@@ -16,6 +16,9 @@ test-deploy:
 test-clean-testcache:
 	go clean -testcache
 
+test-build-integration:
+	cd ./pkg/build && RUN_INTEGRATION_TESTS=1 go test -timeout 300m -v . -run "TestIntegrationDependencyReconciliation|TestGetWindows11DownloadAmd64|TestGetWindows11DownloadArm64|TestResolveDebianPackageURL|TestResolveAndDownloadQemuEfiAarch64"
+
 test-build-specific:
 	# Usage: make test-build-specific TEST_NAME=<name of the test>
 	cd ./pkg/build && go test -timeout 300m -v . -run $(TEST_NAME)

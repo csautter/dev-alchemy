@@ -49,6 +49,9 @@ func TestBootstrapPythonEnv_PipInstallFails(t *testing.T) {
 }
 
 func TestIntegrationDependencyReconciliation(t *testing.T) {
+	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
+		t.Skip("skipping integration test; set RUN_INTEGRATION_TESTS=1 to run")
+	}
 	tests := []VirtualMachineConfig{
 		{
 			OS:   "windows11",
@@ -86,6 +89,9 @@ func TestIntegrationDependencyReconciliation(t *testing.T) {
 }
 
 func TestGetWindows11DownloadAmd64(t *testing.T) {
+	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
+		t.Skip("skipping integration test; set RUN_INTEGRATION_TESTS=1 to run")
+	}
 	_, err := getWindows11Download("amd64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/windows11/iso/win11_25h2_english_amd64.iso"), false)
 	if err != nil {
 		t.Fatalf("Failed to get Windows 11 download: %v", err)
@@ -93,6 +99,9 @@ func TestGetWindows11DownloadAmd64(t *testing.T) {
 }
 
 func TestGetWindows11DownloadArm64(t *testing.T) {
+	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
+		t.Skip("skipping integration test; set RUN_INTEGRATION_TESTS=1 to run")
+	}
 	_, err := getWindows11Download("arm64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/windows11/iso/win11_25h2_english_arm64.iso"), false)
 	if err != nil {
 		t.Fatalf("Failed to get Windows 11 download: %v", err)
@@ -100,6 +109,9 @@ func TestGetWindows11DownloadArm64(t *testing.T) {
 }
 
 func TestResolveDebianPackageURL(t *testing.T) {
+	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
+		t.Skip("skipping integration test; set RUN_INTEGRATION_TESTS=1 to run")
+	}
 	url, err := resolveDebianPackageURL("trixie", "qemu-efi-aarch64")
 	if err != nil {
 		t.Fatalf("resolveDebianPackageURL returned error: %v", err)
@@ -125,6 +137,9 @@ func TestResolveDebianPackageURL(t *testing.T) {
 }
 
 func TestResolveAndDownloadQemuEfiAarch64(t *testing.T) {
+	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
+		t.Skip("skipping integration test; set RUN_INTEGRATION_TESTS=1 to run")
+	}
 	url, err := resolveDebianPackageURL("trixie", "qemu-efi-aarch64")
 	if err != nil {
 		t.Fatalf("resolveDebianPackageURL returned error: %v", err)
