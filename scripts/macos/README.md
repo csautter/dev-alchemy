@@ -38,7 +38,7 @@ Or run the script with the `--headless false` flag to see the browser in action:
 python playwright_win11_iso.py --headless false
 ```
 This will output the latest Windows 11 ISO download link in the terminal.
-Additionally , the script saves the download link to a file named `./cache/windows/win11_iso_url.txt` or `./cache/windows/win11_arm_iso_url.txt`.
+Additionally , the script saves the download link to a file named `./cache/windows/win11_amd64_iso_url.txt` or `./cache/windows/win11_arm64_iso_url.txt`.
 
 ### Download the ISO
 You can use `curl` or `wget` to download the ISO using the link saved in the file:
