@@ -452,7 +452,9 @@ func downloadWebFileDependency(dep WebFileDependency) error {
 		log.Printf("Failed to download web file dependency from %s to %s: %v", dep.Source, dep.LocalPath, err)
 		return err
 	}
-	listener.bar.Finish()
+	if listener.bar != nil {
+		listener.bar.Finish()
+	}
 	log.Printf("Successfully downloaded web file dependency from %s to %s", dep.Source, dep.LocalPath)
 	return nil
 }
