@@ -151,7 +151,7 @@ func TestResolveAndDownloadQemuEfiAarch64(t *testing.T) {
 		LocalPath: destPath,
 		Source:    url,
 	}
-	if err := downloadWebFileDependency(dep); err != nil {
+	if err := downloadWebFileDependency(nil, dep); err != nil {
 		t.Fatalf("downloadWebFileDependency failed: %v", err)
 	}
 
