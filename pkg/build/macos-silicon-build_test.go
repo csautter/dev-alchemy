@@ -30,6 +30,7 @@ func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 		VirtualizationEngine: VirtualizationEngineUtm,
 		Cpus:                 4,
 		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -54,6 +55,7 @@ func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 		VirtualizationEngine: VirtualizationEngineUtm,
 		Cpus:                 4,
 		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -78,6 +80,7 @@ func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 		VirtualizationEngine: VirtualizationEngineUtm,
 		Cpus:                 4,
 		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -102,6 +105,7 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 		VirtualizationEngine: VirtualizationEngineUtm,
 		Cpus:                 4,
 		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -129,6 +133,7 @@ func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 		VirtualizationEngine: VirtualizationEngineUtm,
 		Cpus:                 4,
 		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -152,6 +157,7 @@ func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
 		VirtualizationEngine: VirtualizationEngineUtm,
 		Cpus:                 4,
 		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
