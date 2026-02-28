@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/go-getter"
@@ -20,29 +19,16 @@ import (
 	"github.com/vbauerster/mpb/v8/decor"
 )
 
-// sharedMpb is a single mpb.Progress container shared across all concurrent downloads
-// so that all bars are rendered together without flickering.
-var (
-	sharedMpb     *mpb.Progress
-	sharedMpbOnce sync.Once
-)
-
-func getSharedMpb() *mpb.Progress {
-	sharedMpbOnce.Do(func() {
-		sharedMpb = mpb.New(mpb.WithWidth(80))
-	})
-	return sharedMpb
-}
-
-// ProgressBarListener implements getter.ProgressListener using a shared mpb container
+// ProgressBarListener implements getter.ProgressListener using an mpb container
 // so that concurrent downloads render their bars cleanly on separate lines.
 type ProgressBarListener struct {
-	bar *mpb.Bar
+	progress *mpb.Progress
+	bar      *mpb.Bar
 }
 
 func (p *ProgressBarListener) TrackProgress(src string, current, total int64, r io.ReadCloser) io.ReadCloser {
 	name := filepath.Base(src)
-	p.bar = getSharedMpb().AddBar(total,
+	p.bar = p.progress.AddBar(total,
 		mpb.PrependDecorators(
 			decor.Name(fmt.Sprintf("%-45s", "downloading "+name)),
 		),
@@ -148,6 +134,9 @@ outer:
 }
 
 func DependencyReconciliation(vmconfig VirtualMachineConfig) {
+	p := mpb.New(mpb.WithWidth(80))
+	defer p.Wait()
+
 	for _, dep := range getWebFileDependencies() {
 		needsDownload := false
 		for _, relatedConfig := range dep.RelatedVmConfigs {
@@ -158,7 +147,7 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 			}
 		}
 		if needsDownload {
-			err := downloadWebFileDependency(dep)
+			err := downloadWebFileDependency(p, dep)
 			if err != nil {
 				log.Fatalf("Failed to download web file dependency: %v", err)
 			}
@@ -452,7 +441,7 @@ func getWebFileDependencies() []WebFileDependency {
 	}
 }
 
-func downloadWebFileDependency(dep WebFileDependency) error {
+func downloadWebFileDependency(p *mpb.Progress, dep WebFileDependency) error {
 	if dep.BeforeHook != nil {
 		newSource, err := dep.BeforeHook()
 		if err != nil {
@@ -471,7 +460,7 @@ func downloadWebFileDependency(dep WebFileDependency) error {
 		src = src + "?checksum=" + dep.Checksum
 	}
 
-	listener := &ProgressBarListener{}
+	listener := &ProgressBarListener{progress: p}
 	client := &getter.Client{
 		Src:              src,
 		Dst:              dep.LocalPath,
