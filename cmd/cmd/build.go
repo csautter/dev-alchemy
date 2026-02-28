@@ -62,11 +62,13 @@ Example:
 		}
 
 		fmt.Printf("🔧 Building VM for OS: %s, Type: %s, Architecture: %s\n", osName, osType, arch)
-		available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigs()
+		available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+		var VirtualMachineConfig alchemy_build.VirtualMachineConfig
 		valid := false
 		for _, vm := range available_virtual_machines {
 			if vm.OS == osName && vm.UbuntuType == osType && vm.Arch == arch {
 				valid = true
+				VirtualMachineConfig = vm
 				break
 			}
 		}
@@ -77,12 +79,8 @@ Example:
 
 		port := 5900 + (rand.Intn(100) + 1)
 
-		VirtualMachineConfig := alchemy_build.VirtualMachineConfig{
-			OS:         osName,
-			Arch:       arch,
-			UbuntuType: osType,
-			VncPort:    port,
-		}
+		VirtualMachineConfig.VncPort = port
+
 		if osName == "ubuntu" {
 			alchemy_build.RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 		}
