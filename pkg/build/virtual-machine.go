@@ -37,6 +37,7 @@ type VirtualMachineConfig struct {
 	// When 0 (the default), memory is calculated automatically:
 	// max(4096, totalSystemMemoryMB - 4096).
 	MemoryMB int
+	Headless bool
 }
 
 func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
@@ -51,6 +52,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsDarwin,
 			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 8,
 		},
 		{
 			OS:         "ubuntu",
@@ -62,6 +64,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsDarwin,
 			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 4,
 		},
 		{
 			OS:         "ubuntu",
@@ -73,6 +76,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsDarwin,
 			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 8,
 		},
 		{
 			OS:         "ubuntu",
@@ -84,6 +88,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsDarwin,
 			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 4,
 		},
 		{
 			OS:      "windows11",
@@ -94,6 +99,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsDarwin,
 			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 8,
 		},
 		{
 			OS:      "windows11",
@@ -104,6 +110,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsDarwin,
 			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 4,
 		},
 		// Host OS Windows builds
 		{

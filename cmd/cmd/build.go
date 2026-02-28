@@ -13,6 +13,7 @@ import (
 var (
 	arch     string
 	parallel int
+	headless bool
 )
 
 // buildCmd represents the build command
@@ -80,6 +81,7 @@ Example:
 		port := 5900 + (rand.Intn(100) + 1)
 
 		VirtualMachineConfig.VncPort = port
+		VirtualMachineConfig.Headless = headless
 
 		if osName == "ubuntu" {
 			alchemy_build.RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
@@ -96,4 +98,5 @@ func init() {
 	buildCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	buildCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	buildCmd.Flags().IntVarP(&parallel, "parallel", "p", 1, "Number of parallel builds to run when building all VMs")
+	buildCmd.Flags().BoolVar(&headless, "headless", false, "Run QEMU in headless mode (no GUI, VNC only)")
 }

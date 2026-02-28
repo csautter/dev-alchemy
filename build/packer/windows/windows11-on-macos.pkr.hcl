@@ -104,10 +104,10 @@ source "qemu" "win11" {
   vm_name = "windows11-packer-${var.arch}"
 
   headless         = var.headless
-  iso_url          = var.iso_url != "" ? var.iso_url : local.win11_iso[var.arch]
+  iso_url          = local.win11_iso
   iso_checksum     = "none"
   output_directory = "${local.cache_directory}/windows11/qemu-out-windows11-${var.arch}"
-  display          = "cocoa"
+  display          = var.headless ? "none" : "cocoa"
   memory           = var.memory
   cores            = var.cpus
   vnc_bind_address = "127.0.0.1"
