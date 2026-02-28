@@ -55,20 +55,28 @@ func (p *ProgressBarListener) TrackProgress(src string, current, total int64, r 
 		),
 	)
 	return &progressReader{
-		reader: r,
-		bar:    p.bar,
+		reader:   r,
+		bar:      p.bar,
+		lastRead: time.Now(),
 	}
 }
 
 type progressReader struct {
-	reader io.ReadCloser
-	bar    *mpb.Bar
+	reader   io.ReadCloser
+	bar      *mpb.Bar
+	lastRead time.Time
 }
 
 func (pr *progressReader) Read(p []byte) (int, error) {
+	now := time.Now()
 	n, err := pr.reader.Read(p)
 	if n > 0 {
-		pr.bar.IncrBy(n)
+		elapsed := now.Sub(pr.lastRead)
+		if pr.lastRead.IsZero() || elapsed <= 0 {
+			elapsed = time.Millisecond
+		}
+		pr.bar.EwmaIncrBy(n, elapsed)
+		pr.lastRead = now
 	}
 	return n, err
 }
