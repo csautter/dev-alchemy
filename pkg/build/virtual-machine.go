@@ -2,6 +2,7 @@ package build
 
 import (
 	"path"
+	"runtime"
 	"strings"
 )
 
@@ -128,6 +129,29 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			VirtualizationEngine: VirtualizationEngineVirtualBox,
 		},
 	}
+}
+
+func GetCurrentHostOs() HostOsType {
+	switch runtime.GOOS {
+	case "linux":
+		return HostOsLinux
+	case "windows":
+		return HostOsWindows
+	case "darwin":
+		return HostOsDarwin
+	default:
+		return HostOsLinux
+	}
+}
+
+func AvailableVirtualMachineConfigsForCurrentHostOS() []VirtualMachineConfig {
+	var configs []VirtualMachineConfig
+	for _, config := range AvailableVirtualMachineConfigs() {
+		if config.HostOs == GetCurrentHostOs() {
+			configs = append(configs, config)
+		}
+	}
+	return configs
 }
 
 func GenerateVirtualMachineSlug(config *VirtualMachineConfig) string {

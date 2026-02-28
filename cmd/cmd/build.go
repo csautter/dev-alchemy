@@ -39,7 +39,7 @@ Example:
 
 		if osName == "all" {
 			fmt.Printf("🔧 Building all available VM configurations with %d parallel builds\n", parallel)
-			available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigs()
+			available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
 			var wg sync.WaitGroup
 			sem := make(chan struct{}, parallel)
 			for _, vm := range available_virtual_machines {

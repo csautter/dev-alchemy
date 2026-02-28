@@ -338,9 +338,10 @@ Check [README.md](./build/packer/windows/README.md) for a guide to build a Windo
 You can run the following commands to build and create the Windows 11 VM in UTM:
 
 ```bash
+# arm64 requires sudo to create a custom .iso file for automated installation.
 arch=arm64 # or amd64
-go run cmd/main.go build windows11 --arch $arch
-go run cmd/main.go create windows11 --arch $arch
+sudo go run cmd/main.go build windows11 --arch $arch
+sudo go run cmd/main.go create windows11 --arch $arch
 ```
 
 Open UTM and start the created Windows VM.

@@ -12,23 +12,48 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/go-getter"
-	"github.com/schollz/progressbar/v3"
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
 )
 
-// ProgressBarListener implements getter.ProgressListener to show a progress bar
+// sharedMpb is a single mpb.Progress container shared across all concurrent downloads
+// so that all bars are rendered together without flickering.
+var (
+	sharedMpb     *mpb.Progress
+	sharedMpbOnce sync.Once
+)
+
+func getSharedMpb() *mpb.Progress {
+	sharedMpbOnce.Do(func() {
+		sharedMpb = mpb.New(mpb.WithWidth(80))
+	})
+	return sharedMpb
+}
+
+// ProgressBarListener implements getter.ProgressListener using a shared mpb container
+// so that concurrent downloads render their bars cleanly on separate lines.
 type ProgressBarListener struct {
-	bar *progressbar.ProgressBar
+	bar *mpb.Bar
 }
 
 func (p *ProgressBarListener) TrackProgress(src string, current, total int64, r io.ReadCloser) io.ReadCloser {
-	if p.bar == nil {
-		p.bar = progressbar.DefaultBytes(total, fmt.Sprintf("downloading %s", src))
-	}
-
-	// Wrap the reader so the bar updates as data is read
+	name := filepath.Base(src)
+	p.bar = getSharedMpb().AddBar(total,
+		mpb.PrependDecorators(
+			decor.Name(fmt.Sprintf("%-45s", "downloading "+name)),
+		),
+		mpb.AppendDecorators(
+			decor.CountersKibiByte("% .2f / % .2f"),
+			decor.Name(" | "),
+			decor.EwmaSpeed(decor.SizeB1024(0), "% .2f", 30),
+			decor.Name(" | "),
+			decor.EwmaETA(decor.ET_STYLE_GO, 30),
+		),
+	)
 	return &progressReader{
 		reader: r,
 		bar:    p.bar,
@@ -37,13 +62,13 @@ func (p *ProgressBarListener) TrackProgress(src string, current, total int64, r 
 
 type progressReader struct {
 	reader io.ReadCloser
-	bar    *progressbar.ProgressBar
+	bar    *mpb.Bar
 }
 
 func (pr *progressReader) Read(p []byte) (int, error) {
 	n, err := pr.reader.Read(p)
 	if n > 0 {
-		_ = pr.bar.Add(n)
+		pr.bar.IncrBy(n)
 	}
 	return n, err
 }
@@ -449,11 +474,15 @@ func downloadWebFileDependency(dep WebFileDependency) error {
 	if err != nil {
 		// delete the file if it was partially downloaded
 		_ = os.Remove(dep.LocalPath)
+		if listener.bar != nil {
+			listener.bar.Abort(false)
+		}
 		log.Printf("Failed to download web file dependency from %s to %s: %v", dep.Source, dep.LocalPath, err)
 		return err
 	}
 	if listener.bar != nil {
-		listener.bar.Finish()
+		// Mark bar complete; mpb renders it as done and removes it from the live display.
+		listener.bar.SetTotal(listener.bar.Current(), true)
 	}
 	log.Printf("Successfully downloaded web file dependency from %s to %s", dep.Source, dep.LocalPath)
 	return nil
