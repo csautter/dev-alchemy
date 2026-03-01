@@ -1,0 +1,52 @@
+name: 'Download Build Cache Files'
+description: >
+  For each file in the supplied list, checks the local workspace first, then the
+  local runner shared-volume cache (macOS Tart VirtioFS), and finally Azure Blob
+  Storage. Works on Windows, macOS, and Linux.
+
+inputs:
+  files:
+    description: |
+      JSON array of cache file descriptors. Each object may contain:
+        - local-path  (required) path where the file should live in the workspace
+        - blob-name   (optional) blob key in Azure Storage; defaults to basename of local-path
+        - container   (optional) Azure Blob container name; defaults to "build-cache"
+      Example:
+        '[{"local-path":"./cache/windows11/iso/win11.iso","container":"build-cache"}]'
+      Pass '[]' to skip all cache operations (e.g. for builds with no cached files).
+    required: true
+  subscription-id:
+    description: 'Azure subscription ID used to derive the storage account name'
+    required: true
+  local-cache-dir:
+    description: >
+      Path to the local runner shared-volume cache directory.
+      On macOS Tart runners this is the VirtioFS mount exposed by the host
+      (e.g. /Volumes/My Shared Files/build-cache).
+      Leave empty to disable local cache look-up.
+    required: false
+    default: '/Volumes/My Shared Files/build-cache'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download build cache files (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      continue-on-error: true
+      env:
+        CACHE_FILES: ${{ inputs.files }}
+        SUBSCRIPTION_ID: ${{ inputs.subscription-id }}
+        LOCAL_CACHE_DIR: ${{ inputs.local-cache-dir }}
+      run: bash "${{ github.action_path }}/scripts/download-build-cache.sh"
+
+    - name: Download build cache files (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      continue-on-error: true
+      env:
+        CACHE_FILES: ${{ inputs.files }}
+        SUBSCRIPTION_ID: ${{ inputs.subscription-id }}
+        LOCAL_CACHE_DIR: ${{ inputs.local-cache-dir }}
+      run: |
+        & "${{ github.action_path }}\scripts\download-build-cache.ps1"

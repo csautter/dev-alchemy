@@ -1,6 +1,10 @@
+//go:build darwin
+// +build darwin
+
 package build
 
 import (
+	"os"
 	"runtime"
 	"testing"
 )
@@ -12,11 +16,21 @@ func TestPrintSystemOsArch(t *testing.T) {
 func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "arm64",
-		UbuntuType: "server",
-		VncPort:    5901,
+		OS:                   "ubuntu",
+		Arch:                 "arm64",
+		UbuntuType:           "server",
+		VncPort:              5901,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -27,11 +41,21 @@ func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "amd64",
-		UbuntuType: "server",
-		VncPort:    5902,
+		OS:                   "ubuntu",
+		Arch:                 "amd64",
+		UbuntuType:           "server",
+		VncPort:              5902,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -42,11 +66,21 @@ func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "arm64",
-		UbuntuType: "desktop",
-		VncPort:    5903,
+		OS:                   "ubuntu",
+		Arch:                 "arm64",
+		UbuntuType:           "desktop",
+		VncPort:              5903,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -57,11 +91,21 @@ func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:         "ubuntu",
-		Arch:       "amd64",
-		UbuntuType: "desktop",
-		VncPort:    5904,
+		OS:                   "ubuntu",
+		Arch:                 "amd64",
+		UbuntuType:           "desktop",
+		VncPort:              5904,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -72,10 +116,24 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	if os.Getuid() != 0 {
+		t.Fatal("This test requires sudo/root permissions. Please run with sudo.")
+	}
+
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:      "windows11",
-		Arch:    "arm64",
-		VncPort: 5911,
+		OS:                   "windows11",
+		Arch:                 "arm64",
+		VncPort:              5911,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {
@@ -86,10 +144,20 @@ func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
 	t.Parallel()
 
+	memoryMB := 4096
+	if os.Getenv("GITHUB_ACTIONS") != "" {
+		memoryMB = 0
+	}
+
 	VirtualMachineConfig := VirtualMachineConfig{
-		OS:      "windows11",
-		Arch:    "amd64",
-		VncPort: 5912,
+		OS:                   "windows11",
+		Arch:                 "amd64",
+		VncPort:              5912,
+		HostOs:               HostOsDarwin,
+		VirtualizationEngine: VirtualizationEngineUtm,
+		Cpus:                 4,
+		MemoryMB:             memoryMB,
+		Headless:             true,
 	}
 	err := RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
 	if err != nil {

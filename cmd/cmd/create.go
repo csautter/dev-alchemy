@@ -14,29 +14,50 @@ var (
 
 // createCmd represents the create command
 var createCmd = &cobra.Command{
-	Use:   "create",
+	Use:   "create <osname>",
 	Short: "Creates a new VM on your system with the defined OS",
 	Long: `Creates a new VM on your system with the defined OS.
+Use "all" to create all available VM configurations.
 
 Example:
   alchemy create ubuntu --type server --arch amd64
   alchemy create windows11 --arch arm64
+  alchemy create all
 `,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		osName := args[0]
-		fmt.Printf("🔧 Creating VM for OS: %s, Architecture: %s, Type: %s\n", osName, arch, osType)
 
-		VirtualMachineConfig := alchemy_build.VirtualMachineConfig{
-			OS:         osName,
-			Arch:       arch,
-			UbuntuType: osType,
+		if osName != "ubuntu" {
+			osType = ""
 		}
-		if osName == "ubuntu" {
-			alchemy_deploy.RunUtmDeployOnMacOS(VirtualMachineConfig)
+
+		if osName == "all" {
+			fmt.Println("🔧 Creating all available VM configurations")
+			for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
+				fmt.Printf("➡️ Creating VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
+				alchemy_deploy.RunUtmDeployOnMacOS(vm)
+			}
+			return
 		}
-		if osName == "windows11" {
-			alchemy_deploy.RunUtmDeployOnMacOS(VirtualMachineConfig)
+
+		available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+		var VirtualMachineConfig alchemy_build.VirtualMachineConfig
+		valid := false
+		for _, vm := range available_virtual_machines {
+			if vm.OS == osName && vm.UbuntuType == osType && vm.Arch == arch {
+				valid = true
+				VirtualMachineConfig = vm
+				break
+			}
 		}
+		if !valid {
+			fmt.Printf("❌ Invalid combination: OS=%s, Type=%s, Arch=%s\n", osName, osType, arch)
+			return
+		}
+
+		fmt.Printf("🔧 Creating VM for OS: %s, Architecture: %s, Type: %s\n", osName, arch, osType)
+		alchemy_deploy.RunUtmDeployOnMacOS(VirtualMachineConfig)
 	},
 }
 

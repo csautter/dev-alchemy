@@ -1,0 +1,420 @@
+name: Test Packer Build for VMs
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_az_hyperv:
+        description: 'Enable AzureHyperV jobs (provision + test + cleanup)'
+        required: false
+        default: true
+        type: boolean
+      enable_az_virtualbox:
+        description: 'Enable Azure VirtualBox jobs (provision + test + cleanup)'
+        required: false
+        default: true
+        type: boolean
+      enable_utm_qemu_macos:
+        description: 'Enable UTM QEMU macOS builds'
+        required: false
+        default: true
+        type: boolean
+  pull_request:
+    paths:
+      - "build/packer/windows/*"
+      - "build/packer/windows/**/*"
+      - "scripts/macos/*"
+      - "scripts/macos/**/*"
+      - ".github/workflows/test-build.yml"
+
+jobs:
+  provision-hyperv-runner:
+    if: ${{ github.event_name == 'pull_request' || inputs.enable_az_hyperv }}
+    runs-on: ubuntu-latest
+    outputs:
+      runner-name: ${{ steps.vars.outputs.runner-name }}
+      resource-group: ${{ steps.vars.outputs.resource-group }}
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Generate names
+        id: vars
+        run: |
+          echo "runner-name=${GITHUB_RUN_ID}-hv" >> $GITHUB_OUTPUT
+          echo "resource-group=gh-runner-tmp-${GITHUB_RUN_ID}-hv" >> $GITHUB_OUTPUT
+
+      - name: Request Windows Runner VM
+        run: |
+          echo "Creating Windows VM in resource group ${{ steps.vars.outputs.resource-group }} with runner name ${{ steps.vars.outputs.runner-name }}"
+          az rest \
+            --method post \
+            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/request_runner" \
+            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+            --body '{
+              "repo": "${{ github.repository }}",
+              "resource-group": "${{ steps.vars.outputs.resource-group }}",
+              "runner-name": "${{ steps.vars.outputs.runner-name }}",
+              "virtualization-flavor": "hyperv"
+            }'
+
+  provision-virtualbox-runner:
+    # if: ${{ github.event_name == 'pull_request' || inputs.enable_az_virtualbox }}
+    # TODO: Re-enable after fixing VirtualBox provisioning issue
+    if: false 
+    runs-on: ubuntu-latest
+    outputs:
+      runner-name: ${{ steps.vars.outputs.runner-name }}
+      resource-group: ${{ steps.vars.outputs.resource-group }}
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Generate names
+        id: vars
+        run: |
+          echo "runner-name=${GITHUB_RUN_ID}-vb" >> $GITHUB_OUTPUT
+          echo "resource-group=gh-runner-tmp-${GITHUB_RUN_ID}-vb" >> $GITHUB_OUTPUT
+
+      - name: Request Windows Runner VM
+        run: |
+          echo "Creating Windows VM in resource group ${{ steps.vars.outputs.resource-group }} with runner name ${{ steps.vars.outputs.runner-name }}"
+          az rest \
+            --method post \
+            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/request_runner" \
+            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+            --body '{
+              "repo": "${{ github.repository }}",
+              "resource-group": "${{ steps.vars.outputs.resource-group }}",
+              "runner-name": "${{ steps.vars.outputs.runner-name }}",
+              "virtualization-flavor": "virtualbox"
+            }'
+
+  test-hyperv-build:
+    if: ${{ github.event_name == 'pull_request' || inputs.enable_az_hyperv }}
+    name: build TestBuildHypervWindows11Amd64OnWindows
+    needs: [provision-hyperv-runner]
+    env:
+      PACKER_TEMP_PATH: "D:\\hyperv-temp" # Use Azure VM temp disk for packer temp files to speed up build
+    runs-on:
+      - self-hosted
+      - Windows
+      - azure
+      - nested
+      - "${{ needs.provision-hyperv-runner.outputs.runner-name }}"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download build cache files
+        uses: ./.github/actions/download-build-cache
+        with:
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install dependencies windows
+        shell: powershell
+        run: |
+          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $oscdimgPath) {
+            echo "oscdimg.exe not found. Installing..."
+            powershell -File scripts/windows/install_oscdimg.ps1
+          }
+          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          echo "$oscdimgPath"
+          echo "$($oscdimgPath | Split-Path)" | Out-File -Append $env:GITHUB_PATH
+
+      - name: Run HyperV build
+        id: packer_build
+        shell: bash
+        continue-on-error: true
+        env:
+          PACKER_LOG: 1
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          go mod vendor
+          make test-build-specific TEST_NAME=TestBuildHypervWindows11Amd64OnWindows
+
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload build cache files
+        uses: ./.github/actions/upload-build-cache
+        with:
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fail if Packer build failed
+        if: steps.packer_build.outcome == 'failure'
+        run: |
+          echo "Packer build failed. Failing workflow."
+          exit 1
+
+  test-virtualbox-build:
+    # if: ${{ github.event_name == 'pull_request' || inputs.enable_az_virtualbox }}
+    # TODO: Re-enable after fixing VirtualBox provisioning issue
+    if: false 
+    name: build TestBuildVirtualBoxWindows11Amd64OnWindows
+    needs: [provision-virtualbox-runner]
+    env:
+      PACKER_TEMP_PATH: "D:\\vbox-temp" # Use Azure VM temp disk for packer temp files to speed up build
+    runs-on:
+      - self-hosted
+      - Windows
+      - azure
+      - nested
+      - "${{ needs.provision-virtualbox-runner.outputs.runner-name }}"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download build cache files
+        uses: ./.github/actions/download-build-cache
+        with:
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install dependencies windows
+        shell: powershell
+        run: |
+          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $oscdimgPath) {
+            echo "oscdimg.exe not found. Installing..."
+            powershell -File scripts/windows/install_oscdimg.ps1
+          }
+          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          echo "$oscdimgPath"
+          echo "$($oscdimgPath | Split-Path)" | Out-File -Append $env:GITHUB_PATH
+
+      - name: Run VirtualBox build
+        id: packer_build
+        shell: bash
+        continue-on-error: true
+        env:
+          PACKER_LOG: 1
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          go mod vendor
+          make test-build-specific TEST_NAME=TestBuildVirtualBoxWindows11Amd64OnWindows
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload build cache files
+        uses: ./.github/actions/upload-build-cache
+        with:
+          files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fail if Packer build failed
+        if: steps.packer_build.outcome == 'failure'
+        run: |
+          echo "Packer build failed. Failing workflow."
+          exit 1
+
+  cleanup-hyperv:
+    needs: [provision-hyperv-runner, test-hyperv-build]
+    if: always() && (github.event_name == 'pull_request' || inputs.enable_az_hyperv)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete HyperV resource group
+        run: |
+          echo "Deleting resource group ${{ needs.provision-hyperv-runner.outputs.resource-group }}"
+          az rest \
+            --method post \
+            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
+            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+            --body "{
+              \"resource-group\": \"${{ needs.provision-hyperv-runner.outputs.resource-group }}\",
+              \"runner-name\": \"${{ needs.provision-hyperv-runner.outputs.runner-name }}\"
+            }" || echo "Failed to delete resource group, continuing..."
+
+  cleanup-virtualbox:
+    needs: [provision-virtualbox-runner, test-virtualbox-build]
+    # if: always() && (github.event_name == 'pull_request' || inputs.enable_az_virtualbox)
+    # TODO: Re-enable after fixing VirtualBox provisioning issue
+    if: false 
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete VirtualBox resource group
+        run: |
+          echo "Deleting resource group ${{ needs.provision-virtualbox-runner.outputs.resource-group }}"
+          az rest \
+            --method post \
+            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
+            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+            --body "{
+              \"resource-group\": \"${{ needs.provision-virtualbox-runner.outputs.resource-group }}\",
+              \"runner-name\": \"${{ needs.provision-virtualbox-runner.outputs.runner-name }}\"
+            }" || echo "Failed to delete resource group, continuing..."
+
+
+  test-packer-build:
+    if: github.event_name == 'pull_request' || inputs.enable_utm_qemu_macos
+    name: build ${{ matrix.go_test_name }} VM_OS ${{ matrix.vm_os }} runner_os ${{ matrix.runs_on }}
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - vm_os: windows11
+            go_test_name: TestBuildQemuWindows11Arm64OnMacos
+            runs_on: macos-26-tart
+            cache_files: >-
+              [{"local-path":"./cache/windows11/iso/win11_25h2_english_arm64.iso","container":"build-cache"},
+               {"local-path":"./cache/utm/utm-guest-tools-latest.iso"},
+               {"local-path":"./cache/windows/virtio-win.iso"},
+               {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
+          - vm_os: windows11
+            go_test_name: TestBuildQemuWindows11Amd64OnMacos
+            runs_on: macos-26-tart
+            cache_files: >-
+              [{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},
+               {"local-path":"./cache/utm/utm-guest-tools-latest.iso"}]
+          - vm_os: ubuntu
+            go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
+            runs_on: macos-26-tart
+            cache_files: >-
+              [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+               {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
+          - vm_os: ubuntu
+            go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
+            runs_on: macos-26-tart
+            cache_files: >-
+              [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+          - vm_os: ubuntu
+            go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
+            runs_on: macos-26-tart
+            cache_files: >-
+              [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+               {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
+          - vm_os: ubuntu
+            go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
+            runs_on: macos-26-tart
+            cache_files: >-
+              [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download build cache files
+        uses: ./.github/actions/download-build-cache
+        with:
+          files: ${{ matrix.cache_files }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        if: matrix.runs_on != 'windows-2025'
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies macos
+        if: contains(matrix.runs_on, 'macos')
+        run: |
+          bash scripts/macos/dev-alchemy-install-dependencies.sh
+
+      - name: Run build for VM OS=${{ matrix.vm_os }} TEST_NAME=${{ matrix.go_test_name }} on runner OS=${{ matrix.runs_on }}
+        id: packer_build
+        shell: bash
+        continue-on-error: true
+        env:
+          PACKER_LOG: 1
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          go mod vendor
+          sudo -E make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
+
+      - name: Move .vnc.mp4 files to artifact directory
+        if: contains(matrix.runs_on, 'macos')
+        run: |
+          mkdir -p artifact
+          find ./cache -name '*.vnc.mp4' -exec cp {} artifact/ \;
+
+      - name: Upload packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
+        if: contains(matrix.runs_on, 'macos')
+        uses: actions/upload-artifact@v4
+        with:
+          name: packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4
+          path: artifact/*.vnc.mp4
+          retention-days: 1
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload build cache files
+        uses: ./.github/actions/upload-build-cache
+        with:
+          files: ${{ matrix.cache_files }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fail if Packer build failed
+        if: steps.packer_build.outcome == 'failure'
+        run: |
+          echo "Packer build failed. Failing workflow."
+          exit 1

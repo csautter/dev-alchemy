@@ -131,7 +131,7 @@
 		<key>Architecture</key>
 		<string>aarch64</string>
 		<key>CPU</key>
-		<string>host</string>
+		<string>default</string>
 		<key>CPUCount</key>
 		<integer>4</integer>
 		<key>CPUFlagsAdd</key>

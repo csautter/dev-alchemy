@@ -13,6 +13,7 @@ import (
 var (
 	arch     string
 	parallel int
+	headless bool
 )
 
 // buildCmd represents the build command
@@ -39,7 +40,7 @@ Example:
 
 		if osName == "all" {
 			fmt.Printf("🔧 Building all available VM configurations with %d parallel builds\n", parallel)
-			available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigs()
+			available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
 			var wg sync.WaitGroup
 			sem := make(chan struct{}, parallel)
 			for _, vm := range available_virtual_machines {
@@ -47,7 +48,7 @@ Example:
 				sem <- struct{}{} // acquire semaphore
 				go func(vm alchemy_build.VirtualMachineConfig) {
 					defer wg.Done()
-					fmt.Printf("➡️  Building VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
+					fmt.Printf("➡️ Building VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
 					if vm.OS == "ubuntu" {
 						alchemy_build.RunQemuUbuntuBuildOnMacOS(vm)
 					}
@@ -62,11 +63,13 @@ Example:
 		}
 
 		fmt.Printf("🔧 Building VM for OS: %s, Type: %s, Architecture: %s\n", osName, osType, arch)
-		available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigs()
+		available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+		var VirtualMachineConfig alchemy_build.VirtualMachineConfig
 		valid := false
 		for _, vm := range available_virtual_machines {
 			if vm.OS == osName && vm.UbuntuType == osType && vm.Arch == arch {
 				valid = true
+				VirtualMachineConfig = vm
 				break
 			}
 		}
@@ -77,12 +80,9 @@ Example:
 
 		port := 5900 + (rand.Intn(100) + 1)
 
-		VirtualMachineConfig := alchemy_build.VirtualMachineConfig{
-			OS:         osName,
-			Arch:       arch,
-			UbuntuType: osType,
-			VncPort:    port,
-		}
+		VirtualMachineConfig.VncPort = port
+		VirtualMachineConfig.Headless = headless
+
 		if osName == "ubuntu" {
 			alchemy_build.RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
 		}
@@ -98,4 +98,5 @@ func init() {
 	buildCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	buildCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	buildCmd.Flags().IntVarP(&parallel, "parallel", "p", 1, "Number of parallel builds to run when building all VMs")
+	buildCmd.Flags().BoolVar(&headless, "headless", false, "Run QEMU in headless mode (no GUI, VNC only)")
 }

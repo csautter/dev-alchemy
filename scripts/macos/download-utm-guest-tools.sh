@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # This script downloads the latest UTM Guest Tools ISO for macOS hosts
-# and saves it to the vendor/utm directory.
+# and saves it to the cache/utm directory.
 set -ex
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUTPUT_DIR="$SCRIPT_DIR/../../vendor/utm"
+OUTPUT_DIR="$SCRIPT_DIR/../../cache/utm"
 OUTPUT_PATH="$OUTPUT_DIR/utm-guest-tools-latest.iso"
 
 if [ -f "$OUTPUT_PATH" ]; then

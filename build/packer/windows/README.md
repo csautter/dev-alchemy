@@ -17,8 +17,8 @@ Set the iso_url variable in [windows.pkr.hcl](windows.pkr.hcl) to point to your 
 # Example for Windows 11 ISO
 $isoPath = "C:\path\to\your\Win11_*.iso"
 
-# Find newest iso file in vendor/windows directory
-$isoPath = Get-ChildItem -Path ".\vendor\windows" -Filter "Win11_*.iso" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Select-Object -ExpandProperty FullName
+# Find newest iso file in cache/windows directory
+$isoPath = Get-ChildItem -Path ".\cache\windows" -Filter "Win11_*.iso" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Select-Object -ExpandProperty FullName
 Write-Host "Using ISO: $isoPath"
 ```
 

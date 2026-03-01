@@ -40,7 +40,7 @@ locals {
 
 source "hyperv-iso" "ubuntu" {
   vm_name            = "linux-ubuntu-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory   = "${path.root}/../../../../vendor/linux/hyperv-ubuntu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  output_directory   = "${path.root}/../../../../cache/linux/hyperv-ubuntu-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   iso_url            = local.ubuntu_iso_url
   iso_checksum       = local.ubuntu_iso_checksum
   generation         = 2

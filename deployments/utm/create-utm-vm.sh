@@ -54,14 +54,12 @@ cache_dir="$project_root/cache"
 
 utm_vm_dir="/Users/$(whoami)/Library/Containers/com.utmapp.UTM/Data/Documents"
 
-qemu_img="$cache_dir/windows/qemu-windows11-$arch.qcow2"
+qemu_img="$cache_dir/windows11/qemu-windows11-$arch.qcow2"
 if [[ "$os" == ubuntu* ]]; then
 	qemu_img="$cache_dir/ubuntu/qemu-$os-packer-$arch.qcow2"
 fi
 
-if [ -d "$utm_vm_dir" ] && [ ! -d "$utm_vm_dir/$os-$arch-dev-alchemy.utm/Data" ]; then
-	mkdir -p "$utm_vm_dir/$os-$arch-dev-alchemy.utm/Data"
-fi
+mkdir -p "$utm_vm_dir/$os-$arch-dev-alchemy.utm/Data"
 
 if [ "$os" = "Windows11" ] && [ ! -f "$qemu_img" ]; then
 	echo "The required qcow2 image for Windows 11 $arch is missing. Please run the create-qemu-qcow2-disk.sh script first."

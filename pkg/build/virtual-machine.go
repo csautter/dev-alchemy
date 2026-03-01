@@ -2,7 +2,25 @@ package build
 
 import (
 	"path"
+	"runtime"
 	"strings"
+)
+
+type HostOsType string
+
+const (
+	HostOsLinux   HostOsType = "debian"
+	HostOsWindows HostOsType = "windows"
+	HostOsDarwin  HostOsType = "darwin"
+)
+
+type VirtualizationEngine string
+
+const (
+	VirtualizationEngineQemu       VirtualizationEngine = "qemu"
+	VirtualizationEngineUtm        VirtualizationEngine = "utm"
+	VirtualizationEngineHyperv     VirtualizationEngine = "hyperv"
+	VirtualizationEngineVirtualBox VirtualizationEngine = "virtualbox"
 )
 
 type VirtualMachineConfig struct {
@@ -12,6 +30,14 @@ type VirtualMachineConfig struct {
 	VncPort                int
 	Slug                   string
 	ExpectedBuildArtifacts []string
+	HostOs                 HostOsType
+	VirtualizationEngine   VirtualizationEngine
+	Cpus                   int
+	// MemoryMB is the desired VM memory in megabytes.
+	// When 0 (the default), memory is calculated automatically:
+	// max(4096, totalSystemMemoryMB - 4096).
+	MemoryMB int
+	Headless bool
 }
 
 func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
@@ -24,6 +50,9 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-server-packer-arm64.qcow2"),
 			},
+			HostOs:               HostOsDarwin,
+			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 8,
 		},
 		{
 			OS:         "ubuntu",
@@ -33,6 +62,9 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-server-packer-amd64.qcow2"),
 			},
+			HostOs:               HostOsDarwin,
+			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 4,
 		},
 		{
 			OS:         "ubuntu",
@@ -42,6 +74,9 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-desktop-packer-arm64.qcow2"),
 			},
+			HostOs:               HostOsDarwin,
+			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 8,
 		},
 		{
 			OS:         "ubuntu",
@@ -51,6 +86,9 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-desktop-packer-amd64.qcow2"),
 			},
+			HostOs:               HostOsDarwin,
+			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 4,
 		},
 		{
 			OS:      "windows11",
@@ -59,6 +97,9 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "windows11/qemu-windows11-arm64.qcow2"),
 			},
+			HostOs:               HostOsDarwin,
+			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 8,
 		},
 		{
 			OS:      "windows11",
@@ -67,8 +108,57 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "windows11/qemu-windows11-amd64.qcow2"),
 			},
+			HostOs:               HostOsDarwin,
+			VirtualizationEngine: VirtualizationEngineUtm,
+			Cpus:                 4,
+		},
+		// Host OS Windows builds
+		{
+			OS:      "windows11",
+			Arch:    "amd64",
+			VncPort: 5912,
+
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "windows11/hyperv-windows11-amd64.box"),
+			},
+			HostOs:               HostOsWindows,
+			VirtualizationEngine: VirtualizationEngineHyperv,
+		},
+		{
+			OS:      "windows11",
+			Arch:    "amd64",
+			VncPort: 5913,
+
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "windows11/virtualbox-windows11-amd64.box"),
+			},
+			HostOs:               HostOsWindows,
+			VirtualizationEngine: VirtualizationEngineVirtualBox,
 		},
 	}
+}
+
+func GetCurrentHostOs() HostOsType {
+	switch runtime.GOOS {
+	case "linux":
+		return HostOsLinux
+	case "windows":
+		return HostOsWindows
+	case "darwin":
+		return HostOsDarwin
+	default:
+		return HostOsLinux
+	}
+}
+
+func AvailableVirtualMachineConfigsForCurrentHostOS() []VirtualMachineConfig {
+	var configs []VirtualMachineConfig
+	for _, config := range AvailableVirtualMachineConfigs() {
+		if config.HostOs == GetCurrentHostOs() {
+			configs = append(configs, config)
+		}
+	}
+	return configs
 }
 
 func GenerateVirtualMachineSlug(config *VirtualMachineConfig) string {
