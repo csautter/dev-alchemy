@@ -134,7 +134,7 @@ async def fetch_win11_iso_link(
             with open("cookies.json", "r") as f:
                 saved_cookies = json.load(f)
             await context.add_cookies(saved_cookies)
-        except FileNotFoundError:
+        except (FileNotFoundError, json.JSONDecodeError):
             pass
 
         # Inject JavaScript to disable the webdriver flag
