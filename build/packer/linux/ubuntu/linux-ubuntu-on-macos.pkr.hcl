@@ -95,7 +95,6 @@ locals {
       ["-device", "usb-kbd"],
       ["-device", "usb-tablet"],
       ["-device", "usb-mouse"],
-      ["-k", "de"],
     ]
     "arm64" = [
       ["-accel", var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"],
@@ -120,7 +119,6 @@ locals {
       ["-drive", "if=none,id=cidata,format=raw,file=${path.root}/cloud-init/qemu-${var.ubuntu_type}/cidata.iso,readonly=true"],
       ["-device", "virtio-blk-pci,drive=cidata"],
       ["-boot", "order=d,menu=on"],
-      ["-k", "de"],
     ]
   }
   left_list        = join("", [for i in range(0, 16) : "<left>"])
