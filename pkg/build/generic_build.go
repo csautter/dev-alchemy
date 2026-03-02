@@ -112,7 +112,13 @@ func stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan chan bool) {
 		return
 	}
 	log.Printf("stopping VNC snapshot...")
-	vnc_interrupt_retry_chan <- true
+	select {
+	case vnc_interrupt_retry_chan <- true:
+	default:
+		// VNC goroutine already exited (e.g. vncsnapshot finished successfully),
+		// so there is no receiver on the channel. Skip the send to avoid deadlock.
+		log.Printf("VNC snapshot already stopped, skipping interrupt signal.")
+	}
 	log.Printf("VNC snapshot stopped.")
 }
 
