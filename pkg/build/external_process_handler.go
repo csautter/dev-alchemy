@@ -117,15 +117,42 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 	return ctx, nil
 }
 
+func cancelledContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
+}
+
 func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
 	var lastErr error
 	startTime := time.Now()
 
+	// Register a signal channel at the retry-loop level so that Ctrl+C
+	// stops retrying immediately, even while sleeping between attempts.
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
+	defer signal.Stop(sigs)
+
 	for attempt := 0; attempt <= config.Retries && time.Since(startTime) < config.Timeout; attempt++ {
 		if attempt > 0 {
 			log.Printf("Retrying process %s (attempt %d/%d) after error: %v", config.ExecutablePath, attempt, config.Retries, lastErr)
-			time.Sleep(config.RetryInterval)
+			// Interruptible retry-interval sleep
+			select {
+			case sig := <-sigs:
+				log.Printf("Retry loop for process %s interrupted by signal: %v", config.ExecutablePath, sig)
+				return cancelledContext()
+			case <-time.After(config.RetryInterval):
+			}
 		}
+
+		// Check for a pending signal before starting the next attempt
+		select {
+		case sig := <-sigs:
+			log.Printf("Retry loop for process %s interrupted by signal before attempt %d: %v", config.ExecutablePath, attempt, sig)
+			return cancelledContext()
+		default:
+		}
+
 		ctx, err := RunExternalProcess(config)
 		if err == nil {
 			return ctx
@@ -142,9 +169,18 @@ func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
 				// No interrupt signal, continue
 			}
 		}
+
+		// If RunExternalProcess itself was interrupted by a signal, the outer
+		// sigs channel will also have received it — check and stop retrying.
+		select {
+		case sig := <-sigs:
+			log.Printf("Retry loop for process %s stopping after signal: %v", config.ExecutablePath, sig)
+			return cancelledContext()
+		default:
+		}
 	}
 	log.Printf("Process %s failed after %d attempts: %v", config.ExecutablePath, config.Retries+1, lastErr)
-	return context.Background()
+	return cancelledContext()
 }
 
 func RunBashScript(config RunProcessConfig) {
