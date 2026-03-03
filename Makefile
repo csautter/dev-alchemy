@@ -1,6 +1,9 @@
 build:
 	go build ./...
 
+test-build-runner:
+	go test ./cmd/cmd/... -run "TestParallelBuilds|TestSequentialBuilds" -v -timeout 60s
+
 test-build:
 	# sudo is required to generate a customized Windows 11 iso
 	cd ./pkg/build && go test -parallel 4 -timeout 300m -v .

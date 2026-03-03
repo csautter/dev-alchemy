@@ -15,10 +15,11 @@ import (
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 )
 
-// buildDuration is the simulated duration of one real packer/QEMU build.
-// Keep at 10 s to realistically exercise timing, parallelism and cancellation.
-// Run: go test ./cmd/cmd/... -run TestParallelBuilds -v -timeout 120s
-const buildDuration = 10 * time.Second
+// buildDuration is the simulated duration of one dummy build.
+// 2 s is enough to prove ordering, concurrency guards and failure propagation
+// without inflating the test suite runtime.
+// Run: go test ./cmd/cmd/... -run TestParallelBuilds -v -timeout 60s
+const buildDuration = 2 * time.Second
 
 // testVMs returns fixed VM configs that do not depend on the current host OS.
 func testVMs() []alchemy_build.VirtualMachineConfig {
@@ -53,7 +54,7 @@ func successRunner(ctx context.Context, vm alchemy_build.VirtualMachineConfig) e
 // TestParallelBuilds_AllSucceed runs 4 dummy 10-second builds with parallelism=2.
 // Expected wall time ~20 s (2 batches x 10 s).
 func TestParallelBuilds_AllSucceed(t *testing.T) {
-	t.Log("Running 4 x 10s dummy builds with parallelism=2; expected ~20s total")
+	t.Log("Running 4 x 2s dummy builds with parallelism=2; expected ~4s total")
 
 	ctx := context.Background()
 	vms := testVMs()
@@ -85,9 +86,9 @@ func TestParallelBuilds_AllSucceed(t *testing.T) {
 //
 // Setup: 4 VMs, parallelism 4 (all launched concurrently).
 //   - ubuntu/server/arm64  fails immediately.
-//   - windows11//amd64     fails after 2 s.
-//   - ubuntu/server/amd64  succeeds after 10 s.
-//   - ubuntu/desktop/amd64 succeeds after 10 s.
+//   - windows11//amd64     fails after 500 ms (while others are still running).
+//   - ubuntu/server/amd64  succeeds after buildDuration.
+//   - ubuntu/desktop/amd64 succeeds after buildDuration.
 //
 // Expected: 2 errors, all 4 VMs attempted, 2 successful completions.
 func TestParallelBuilds_SomeFailOthersStillRun(t *testing.T) {
@@ -110,8 +111,8 @@ func TestParallelBuilds_SomeFailOthersStillRun(t *testing.T) {
 			return errors.New("simulated immediate build failure")
 		case "windows11//amd64":
 			select {
-			case <-time.After(2 * time.Second):
-				return fmt.Errorf("simulated late build failure after 2s")
+			case <-time.After(500 * time.Millisecond):
+				return fmt.Errorf("simulated late build failure after 500ms")
 			case <-ctx.Done():
 				return ctx.Err()
 			}
@@ -156,14 +157,14 @@ func TestParallelBuilds_SomeFailOthersStillRun(t *testing.T) {
 // =============================================================================
 
 // TestParallelBuilds_SIGINTCancelsAll simulates Ctrl-C by cancelling the context
-// 3 s into a run where each build would otherwise take 30 s.
+// 1 s into a run where each build would otherwise take 10 s.
 //
 // The test exercises two behaviours:
 //  1. Running builds receive ctx.Done() and abort early.
 //  2. Builds queued behind the semaphore are never started after cancellation.
 //
-// Setup: 6 VMs, parallelism 2, cancel after 3 s.
-// Expected: wall time <8 s, all errors wrap context.Canceled, >=2 runners started.
+// Setup: 6 VMs, parallelism 2, cancel after 1 s.
+// Expected: wall time <4 s, all errors wrap context.Canceled, >=2 runners started.
 func TestParallelBuilds_SIGINTCancelsAll(t *testing.T) {
 	vms := append(testVMs(),
 		alchemy_build.VirtualMachineConfig{OS: "ubuntu", Arch: "arm64", UbuntuType: "desktop"},
@@ -179,7 +180,7 @@ func TestParallelBuilds_SIGINTCancelsAll(t *testing.T) {
 		started[s]++
 		startedMu.Unlock()
 		select {
-		case <-time.After(30 * time.Second):
+		case <-time.After(10 * time.Second):
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
@@ -187,9 +188,9 @@ func TestParallelBuilds_SIGINTCancelsAll(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	// Simulate SIGINT: cancel after 3 s (mirrors the signal goroutine in buildCmd).
+	// Simulate SIGINT: cancel after 1 s (mirrors the signal goroutine in buildCmd).
 	go func() {
-		time.Sleep(3 * time.Second)
+		time.Sleep(1 * time.Second)
 		t.Log("Simulating SIGINT: cancelling context")
 		cancel()
 	}()
@@ -198,7 +199,7 @@ func TestParallelBuilds_SIGINTCancelsAll(t *testing.T) {
 	errs := runParallelBuilds(ctx, vms, 2, longRunner)
 	elapsed := time.Since(start)
 
-	maxExpected := 8 * time.Second
+	maxExpected := 4 * time.Second
 	if elapsed > maxExpected {
 		t.Errorf("expected finish within %v after SIGINT, took %v", maxExpected, elapsed)
 	}
@@ -275,7 +276,7 @@ func TestParallelBuilds_OSSIGINTSignal(t *testing.T) {
 //   - Zero errors are returned.
 //   - Execution order matches the input slice order.
 func TestSequentialBuilds_AllSucceed(t *testing.T) {
-	t.Log("Running 3 x 10s sequential builds (parallelism=1); expected ~30s total")
+	t.Log("Running 3 x 2s sequential builds (parallelism=1); expected ~6s total")
 
 	vms := []alchemy_build.VirtualMachineConfig{
 		{OS: "ubuntu", Arch: "amd64", UbuntuType: "server"},
