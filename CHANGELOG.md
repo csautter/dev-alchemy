@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Build job opt-in variables for manual workflow dispatches (`VM_USE_SPOT`, `CUSTOM_IMAGE_ID`, Hyper-V / VirtualBox flavor selection).
 - Fallback mechanism: if the self-hosted runner label is unavailable, the workflow automatically falls back to a GitHub-hosted runner.
 
+#### CI: Build-Runner Tests
+- Comprehensive unit-test suite for `runParallelBuilds` covering 6 scenarios: all succeed (parallelism=2), partial failure with others still running, SIGINT via context cancel, OS SIGINT signal wiring, sequential-all-succeed, and sequential-failure-does-not-skip-remainder (`cmd/cmd/build_parallel_test.go`).
+- New GitHub Actions workflow (`.github/workflows/test-build-runner.yml`) that runs the build-runner tests on push/PR changes to `cmd/cmd/build.go`, `cmd/cmd/build_parallel_test.go`, and the workflow file itself.
+- `make test-build-runner` Makefile target for running the build-runner unit tests locally.
+
 ---
 
 ### Changed
@@ -66,12 +71,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - macOS jobs now run on self-hosted Tart-based runners instead of GitHub-hosted macOS.
 - Tart runner prepare script simplified; GitHub CLI auth check added before VM build.
 
-#### Build Package (`pkg/build`)
+#### Build Package (`pkg/build`) / `cmd/cmd`
 - Windows build code extracted into dedicated file (`windows-build.go`); generic helpers moved to `generic_build.go`.
 - `checkIfBuildArtifactsExist` function extracted for reuse.
 - Build script handling refactored into smaller, focused functions.
 - VNC recording config now passed by reference.
 - Windows ISO path constant updated to `./cache` directory.
+- `runParallelBuilds` extracted to a standalone, context-aware function in `cmd/cmd/build.go`; errors from individual VM builds are now collected and reported (with VM identity) instead of being silently discarded.
 
 #### Hyper-V Setup
 - Setup logic refactored; PowerShell provisioning script extracted from inline Python code.
@@ -89,6 +95,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ### Fixed
+
+- Deadlock in `stopVncScreenCaptureOnMacosDarwin`: non-blocking channel send now used when the
+  VNC goroutine has already exited on a successful vncsnapshot run.
+- Build hanging after all VMs complete: `RunExternalProcessWithRetries` previously returned
+  `context.Background()` (never done) on retry exhaustion; now returns a cancelled context so
+  dependents unblock correctly.
+- SIGINT/SIGTERM during vncsnapshot retry-interval sleep no longer causes a hang; the sleep
+  is now interruptible via signal.
+- Removed hardcoded `-k de` (German keyboard layout) from QEMU args that caused incorrect
+  inputs in the `boot_command` sequence on non-German systems.
 
 #### Security & Auth
 - **Azure Function auth guard hardened**: JWT-based validation now enforced; dead key-based auth code removed (`fix(auth): harden function app auth guard`).

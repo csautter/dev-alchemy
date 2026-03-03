@@ -51,8 +51,8 @@ func successRunner(ctx context.Context, vm alchemy_build.VirtualMachineConfig) e
 // Test 1 - All builds succeed
 // =============================================================================
 
-// TestParallelBuilds_AllSucceed runs 4 dummy 10-second builds with parallelism=2.
-// Expected wall time ~20 s (2 batches x 10 s).
+// TestParallelBuilds_AllSucceed runs 4 dummy 2-second builds with parallelism=2.
+// Expected wall time ~4 s (2 batches x 2 s).
 func TestParallelBuilds_AllSucceed(t *testing.T) {
 	t.Log("Running 4 x 2s dummy builds with parallelism=2; expected ~4s total")
 

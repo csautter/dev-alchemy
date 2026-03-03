@@ -17,13 +17,13 @@ import (
 // BuildRunner is a function that executes a single VM build.
 // It receives a context that is cancelled when the process is interrupted (SIGINT/SIGTERM).
 // Implementations should honour ctx.Done() so they can abort early.
-type BuildRunner func(ctx context.Context, vm alchemy_build.VirtualMachineConfig) error
+type buildRunner func(ctx context.Context, vm alchemy_build.VirtualMachineConfig) error
 
 // runParallelBuilds launches up to parallelism concurrent builds for the provided VMs.
 // A failing build does NOT stop the remaining ones — all errors are collected and returned.
 // When ctx is cancelled (e.g. on SIGINT) no new goroutines are started; already-running
-// builds will be interrupted if their BuildRunner honours the context.
-func runParallelBuilds(ctx context.Context, vms []alchemy_build.VirtualMachineConfig, parallelism int, runner BuildRunner) []error {
+// builds will be interrupted if their buildRunner honours the context.
+func runParallelBuilds(ctx context.Context, vms []alchemy_build.VirtualMachineConfig, parallelism int, runner buildRunner) []error {
 	var mu sync.Mutex
 	var errs []error
 	var wg sync.WaitGroup
