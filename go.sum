@@ -10,8 +10,8 @@ cloud.google.com/go/longrunning v0.4.1/go.mod h1:4iWDqhBZ70CvZ6BfETbvam3T8FMvLK+
 cloud.google.com/go/storage v1.29.0 h1:6weCgzRvMg7lzuUurI4697AqIRPU1SvzHhynwpW31jI=
 cloud.google.com/go/storage v1.29.0/go.mod h1:4puEjyTKnku6gfKoTfNOU/W+a9JyuVNxjpS5GBrB8h4=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/KarpelesLab/vncpasswd v1.0.0 h1:Ja6ABQXHEPTni2UaGrT54fVW+5Dw6ZZp1UC+DfaQBsM=
-github.com/KarpelesLab/vncpasswd v1.0.0/go.mod h1:gh6AFDSUqRZwcdjAm/p8V81P9ePtOI65ajs7KT7D+Fc=
+github.com/KarpelesLab/vncpasswd v1.0.1 h1:w0dhjSXfo59bm9/LLKhO7hV+GUGEn4WjAZTLXTNSciU=
+github.com/KarpelesLab/vncpasswd v1.0.1/go.mod h1:gh6AFDSUqRZwcdjAm/p8V81P9ePtOI65ajs7KT7D+Fc=
 github.com/VividCortex/ewma v1.2.0 h1:f58SaIzcDXrSy3kWaHNvuJgJ3Nmz59Zji6XoJR/q1ow=
 github.com/VividCortex/ewma v1.2.0/go.mod h1:nz4BbCtbLyFDeC9SUHbtcT5644juEuWfUAUnGx7j5l4=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d h1:licZJFw2RwpHMqeKTCYkitsPqHNxTmd4SNR5r94FGM8=

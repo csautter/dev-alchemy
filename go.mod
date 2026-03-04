@@ -3,7 +3,7 @@ module github.com/csautter/dev-alchemy
 go 1.25
 
 require (
-	github.com/KarpelesLab/vncpasswd v1.0.0
+	github.com/KarpelesLab/vncpasswd v1.0.1
 	github.com/hashicorp/go-getter v1.8.3
 	github.com/spf13/cobra v1.10.1
 	github.com/vbauerster/mpb/v8 v8.12.0
