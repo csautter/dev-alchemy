@@ -1,0 +1,34 @@
+name: Test Build Runner (parallel & sequential)
+
+on:
+  push:
+    paths:
+      - "cmd/cmd/build.go"
+      - "cmd/cmd/build_parallel_test.go"
+      - ".github/workflows/test-build-runner.yml"
+      - "pkg/build/**"
+  pull_request:
+    paths:
+      - "cmd/cmd/build.go"
+      - "cmd/cmd/build_parallel_test.go"
+      - ".github/workflows/test-build-runner.yml"
+      - "pkg/build/**"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run build-runner unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run build-runner tests
+        run: make test-build-runner
