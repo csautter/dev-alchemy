@@ -19,7 +19,7 @@ Ensure you have the following installed:
 Load the Vagrant box and start the VM using Hyper-V as the provider:
 
 ```bash
-vagrant box add win11-packer .\vendor\windows\win11-hyperv.box --provider hyperv
+vagrant box add win11-packer .\cache\windows\hyperv-windows11-amd64.box --provider hyperv
 vagrant up --provider hyperv
 ```
 

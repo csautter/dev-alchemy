@@ -1,5 +1,9 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "win11-packer"
+  # Pin a Hyper-V switch to avoid interactive selection during `vagrant up`.
+  # Override with: $env:VAGRANT_HYPERV_SWITCH="Your Switch Name"
+  hyperv_switch = ENV.fetch("VAGRANT_HYPERV_SWITCH", "Default Switch")
+  config.vm.network "public_network", bridge: hyperv_switch
   
   config.vm.provider "hyperv" do |h|
     h.vmname = "win11-packer"

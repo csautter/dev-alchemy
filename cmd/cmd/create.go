@@ -36,7 +36,7 @@ Example:
 			fmt.Println("🔧 Creating all available VM configurations")
 			for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
 				fmt.Printf("➡️ Creating VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
-				alchemy_deploy.RunUtmDeployOnMacOS(vm)
+				runDeploy(vm)
 			}
 			return
 		}
@@ -57,8 +57,19 @@ Example:
 		}
 
 		fmt.Printf("🔧 Creating VM for OS: %s, Architecture: %s, Type: %s\n", osName, arch, osType)
-		alchemy_deploy.RunUtmDeployOnMacOS(VirtualMachineConfig)
+		runDeploy(VirtualMachineConfig)
 	},
+}
+
+func runDeploy(vm alchemy_build.VirtualMachineConfig) {
+	switch vm.VirtualizationEngine {
+	case alchemy_build.VirtualizationEngineUtm:
+		alchemy_deploy.RunUtmDeployOnMacOS(vm)
+	case alchemy_build.VirtualizationEngineHyperv:
+		alchemy_deploy.RunHypervVagrantDeployOnWindows(vm)
+	default:
+		fmt.Printf("❌ Deploy is not implemented for virtualization engine: %s\n", vm.VirtualizationEngine)
+	}
 }
 
 func init() {
