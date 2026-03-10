@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -235,13 +235,17 @@ func TestParallelBuilds_SIGINTCancelsAll(t *testing.T) {
 // and validates the signal-to-context wiring that buildCmd relies on.
 // This test does NOT invoke runParallelBuilds directly.
 func TestParallelBuilds_OSSIGINTSignal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("self-delivered OS interrupt signal is not reliable on Windows")
+	}
+
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
 
 	// Register signal.Notify BEFORE sending the signal so the OS routes it to
 	// sigCh instead of invoking the default handler (which would kill the process).
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT)
+	signal.Notify(sigCh, os.Interrupt)
 	defer signal.Stop(sigCh)
 
 	// Mirror the signal handler goroutine from buildCmd.
@@ -254,7 +258,14 @@ func TestParallelBuilds_OSSIGINTSignal(t *testing.T) {
 	// Deliver a real SIGINT to the process after signal.Notify is active.
 	go func() {
 		time.Sleep(200 * time.Millisecond)
-		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		p, err := os.FindProcess(os.Getpid())
+		if err != nil {
+			t.Logf("failed to find current process for signal delivery: %v", err)
+			return
+		}
+		if err := p.Signal(os.Interrupt); err != nil {
+			t.Logf("failed to deliver OS interrupt signal: %v", err)
+		}
 	}()
 
 	select {

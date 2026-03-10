@@ -25,7 +25,7 @@ Example:
   alchemy create all
 `,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		osName := args[0]
 
 		if osName != "ubuntu" {
@@ -36,9 +36,11 @@ Example:
 			fmt.Println("🔧 Creating all available VM configurations")
 			for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
 				fmt.Printf("➡️ Creating VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
-				runDeploy(vm)
+				if err := runDeploy(vm); err != nil {
+					return fmt.Errorf("failed creating VM for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+				}
 			}
-			return
+			return nil
 		}
 
 		available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
@@ -52,23 +54,27 @@ Example:
 			}
 		}
 		if !valid {
-			fmt.Printf("❌ Invalid combination: OS=%s, Type=%s, Arch=%s\n", osName, osType, arch)
-			return
+			return fmt.Errorf("❌ Invalid combination: OS=%s, Type=%s, Arch=%s", osName, osType, arch)
 		}
 
 		fmt.Printf("🔧 Creating VM for OS: %s, Architecture: %s, Type: %s\n", osName, arch, osType)
-		runDeploy(VirtualMachineConfig)
+		if err := runDeploy(VirtualMachineConfig); err != nil {
+			return fmt.Errorf("failed creating VM for OS=%s, type=%s, arch=%s: %w", osName, osType, arch, err)
+		}
+		return nil
 	},
 }
 
-func runDeploy(vm alchemy_build.VirtualMachineConfig) {
+func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
 	switch vm.VirtualizationEngine {
 	case alchemy_build.VirtualizationEngineUtm:
 		alchemy_deploy.RunUtmDeployOnMacOS(vm)
+		return nil
 	case alchemy_build.VirtualizationEngineHyperv:
 		alchemy_deploy.RunHypervVagrantDeployOnWindows(vm)
+		return nil
 	default:
-		fmt.Printf("❌ Deploy is not implemented for virtualization engine: %s\n", vm.VirtualizationEngine)
+		return fmt.Errorf("❌ deploy is not implemented for virtualization engine: %s", vm.VirtualizationEngine)
 	}
 }
 

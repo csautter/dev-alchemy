@@ -17,8 +17,11 @@ on:
 
 jobs:
   test:
-    name: Run build-runner unit tests
-    runs-on: ubuntu-latest
+    name: Run cmd unit tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -30,5 +33,5 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run build-runner tests
-        run: make test-build-runner
+      - name: Run cmd tests
+        run: go test ./cmd/cmd/...
