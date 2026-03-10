@@ -5,13 +5,13 @@ on:
     paths:
       - "cmd/cmd/build.go"
       - "cmd/cmd/build_parallel_test.go"
-      - ".github/workflows/test-build-runner.yml"
+      - ".github/workflows/test-cmd-unit-tests.yml"
       - "pkg/build/**"
   pull_request:
     paths:
       - "cmd/cmd/build.go"
       - "cmd/cmd/build_parallel_test.go"
-      - ".github/workflows/test-build-runner.yml"
+      - ".github/workflows/test-cmd-unit-tests.yml"
       - "pkg/build/**"
   workflow_dispatch:
 
