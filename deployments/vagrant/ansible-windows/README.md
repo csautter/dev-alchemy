@@ -16,7 +16,16 @@ Ensure you have the following installed:
 
 ## Adding the Vagrant Box
 
-Load the Vagrant box and start the VM using Hyper-V as the provider:
+Load the Vagrant box and start the VM using Hyper-V as the provider.
+The box artifact is expected at `.\cache\windows11\hyperv-windows11-amd64.box`.
+
+Set `VAGRANT_HYPERV_SWITCH` to avoid Hyper-V bridge selection prompts during `vagrant up`:
+
+```powershell
+$env:VAGRANT_HYPERV_SWITCH = "Default Switch"
+```
+
+Then add the box and boot the VM:
 
 ```bash
 vagrant box add win11-packer .\cache\windows11\hyperv-windows11-amd64.box --provider hyperv
