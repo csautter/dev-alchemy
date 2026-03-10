@@ -1,3 +1,6 @@
+//go:build darwin
+// +build darwin
+
 package deploy
 
 // When this tests are executed by VS Code integration it might be that bash scripts are not working as intended.
@@ -21,7 +24,9 @@ func TestDeployUtmUbuntuServerArm64OnMacos(t *testing.T) {
 		Arch:       "arm64",
 		UbuntuType: "server",
 	}
-	RunUtmDeployOnMacOS(VirtualMachineConfig)
+	if err := RunUtmDeployOnMacOS(VirtualMachineConfig); err != nil {
+		t.Fatalf("expected UTM deploy to succeed: %v", err)
+	}
 }
 
 func TestDeployUtmUbuntuServerAmd64OnMacos(t *testing.T) {
@@ -31,7 +36,9 @@ func TestDeployUtmUbuntuServerAmd64OnMacos(t *testing.T) {
 		Arch:       "amd64",
 		UbuntuType: "server",
 	}
-	RunUtmDeployOnMacOS(VirtualMachineConfig)
+	if err := RunUtmDeployOnMacOS(VirtualMachineConfig); err != nil {
+		t.Fatalf("expected UTM deploy to succeed: %v", err)
+	}
 }
 
 func TestDeployUtmUbuntuDesktopArm64OnMacos(t *testing.T) {
@@ -41,7 +48,9 @@ func TestDeployUtmUbuntuDesktopArm64OnMacos(t *testing.T) {
 		Arch:       "arm64",
 		UbuntuType: "desktop",
 	}
-	RunUtmDeployOnMacOS(VirtualMachineConfig)
+	if err := RunUtmDeployOnMacOS(VirtualMachineConfig); err != nil {
+		t.Fatalf("expected UTM deploy to succeed: %v", err)
+	}
 }
 
 func TestDeployUtmUbuntuDesktopAmd64OnMacos(t *testing.T) {
@@ -50,7 +59,9 @@ func TestDeployUtmUbuntuDesktopAmd64OnMacos(t *testing.T) {
 		Arch:       "amd64",
 		UbuntuType: "desktop",
 	}
-	RunUtmDeployOnMacOS(VirtualMachineConfig)
+	if err := RunUtmDeployOnMacOS(VirtualMachineConfig); err != nil {
+		t.Fatalf("expected UTM deploy to succeed: %v", err)
+	}
 }
 
 func TestDeployUtmWindows11Arm64OnMacos(t *testing.T) {
@@ -59,7 +70,9 @@ func TestDeployUtmWindows11Arm64OnMacos(t *testing.T) {
 		OS:   "windows11",
 		Arch: "arm64",
 	}
-	RunUtmDeployOnMacOS(VirtualMachineConfig)
+	if err := RunUtmDeployOnMacOS(VirtualMachineConfig); err != nil {
+		t.Fatalf("expected UTM deploy to succeed: %v", err)
+	}
 }
 
 func TestDeployUtmWindows11Amd64OnMacos(t *testing.T) {
@@ -68,5 +81,7 @@ func TestDeployUtmWindows11Amd64OnMacos(t *testing.T) {
 		OS:   "windows11",
 		Arch: "amd64",
 	}
-	RunUtmDeployOnMacOS(VirtualMachineConfig)
+	if err := RunUtmDeployOnMacOS(VirtualMachineConfig); err != nil {
+		t.Fatalf("expected UTM deploy to succeed: %v", err)
+	}
 }

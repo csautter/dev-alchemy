@@ -68,11 +68,9 @@ Example:
 func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
 	switch vm.VirtualizationEngine {
 	case alchemy_build.VirtualizationEngineUtm:
-		alchemy_deploy.RunUtmDeployOnMacOS(vm)
-		return nil
+		return alchemy_deploy.RunUtmDeployOnMacOS(vm)
 	case alchemy_build.VirtualizationEngineHyperv:
-		alchemy_deploy.RunHypervVagrantDeployOnWindows(vm)
-		return nil
+		return alchemy_deploy.RunHypervVagrantDeployOnWindows(vm)
 	default:
 		return fmt.Errorf("❌ deploy is not implemented for virtualization engine: %s", vm.VirtualizationEngine)
 	}

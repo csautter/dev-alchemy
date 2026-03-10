@@ -16,7 +16,7 @@ const (
 	scannerMaxBufferSize     = 1024 * 1024
 )
 
-func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, executable string, args []string, logPrefix string) {
+func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, executable string, args []string, logPrefix string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -25,15 +25,15 @@ func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, execu
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		panic("Failed to get stdout: " + err.Error())
+		return fmt.Errorf("failed to get stdout for %q: %w", executable, err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		panic("Failed to get stderr: " + err.Error())
+		return fmt.Errorf("failed to get stderr for %q: %w", executable, err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		panic("Failed to start command: " + err.Error())
+		return fmt.Errorf("failed to start command %q %v: %w", executable, args, err)
 	}
 
 	done := make(chan error, 1)
@@ -63,12 +63,16 @@ func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, execu
 	case err := <-done:
 		streamsWG.Wait()
 		if err != nil {
-			panic(fmt.Sprintf("Command failed (%s %v): %s", executable, args, err.Error()))
+			return fmt.Errorf("command failed (%s %v): %w", executable, args, err)
 		}
 		log.Printf("Command finished successfully: %s %v", executable, args)
+		return nil
 	case <-ctx.Done():
-		_ = cmd.Process.Kill()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		<-done
 		streamsWG.Wait()
-		panic("Command terminated due to timeout or interruption: " + ctx.Err().Error())
+		return fmt.Errorf("command terminated due to timeout or interruption (%s %v): %w", executable, args, ctx.Err())
 	}
 }
