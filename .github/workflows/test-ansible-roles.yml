@@ -17,6 +17,10 @@ on:
       - "inventory/**"
       - ".github/workflows/test-ansible-roles.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   test-ansible-roles:
     name: Ansible on ${{ matrix.os }} with protocol ${{ matrix.ansible_protocol }}
