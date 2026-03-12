@@ -16,6 +16,9 @@ test-build:
 test-deploy:
 	go test -timeout 20m -v ./pkg/deploy/*.go
 
+test-deploy-windows-hyperv:
+	RUN_INTEGRATION_TESTS=1 RUN_WINDOWS_HYPERV_DEPLOY_SMOKE=1 go test -timeout 60m -v ./pkg/deploy -run "TestGetHypervWindowsBoxPath_UsesExpectedBuildArtifact|TestGetHypervWindowsBoxPath_FallsBackToCachePath|TestRunHypervVagrantDeployOnWindows_Smoke"
+
 test-clean-testcache:
 	go clean -testcache
 

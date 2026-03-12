@@ -223,6 +223,7 @@ jobs:
         run: |
           go mod vendor
           make test-build-specific TEST_NAME=TestBuildVirtualBoxWindows11Amd64OnWindows
+          make test-deploy-windows-hyperv
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2

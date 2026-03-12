@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Windows Hyper-V Vagrant Deploy
+- Hyper-V Vagrant deployment path wired into the `create` command when the VM config uses the Hyper-V virtualization engine.
+- Hyper-V Vagrantfile now pins a switch via `VAGRANT_HYPERV_SWITCH` to avoid interactive network selection.
+
+#### Devcontainer
+- Added a Go devcontainer definition with Python and Packer features (`.devcontainer/devcontainer.json`).
+
 #### Azure Runner Broker (Function App)
 - New Azure Function App (`scripts/gh-runner-func/`) that provisions and tears down self-hosted GitHub runner VMs on demand.
 - HTTP endpoint `POST /api/request_runner` — creates runner resource group, network, and VM.
@@ -60,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ### Changed
+
+#### Deploy Command Runner
+- macOS UTM deploy now uses a shared command runner with streamed stdout/stderr and timeouts.
+- Hyper-V Vagrant instructions now reference the cache path for the Windows 11 box.
 
 #### CI Workflow Topology
 - `test-build.yml` restructured: separate matrix jobs for Hyper-V and VirtualBox flavors; `fail-fast: false` set on the matrix.
