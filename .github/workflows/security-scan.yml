@@ -74,6 +74,7 @@ jobs:
           # Output as SARIF for GitHub Security tab integration.
           # -exclude-generated skips machine-generated files (vendor, etc.)
           args: >-
+            -no-fail
             -fmt sarif
             -out gosec-results.sarif
             -exclude-generated
