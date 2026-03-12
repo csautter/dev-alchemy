@@ -69,7 +69,7 @@ jobs:
               [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2

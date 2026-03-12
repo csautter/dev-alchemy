@@ -30,7 +30,7 @@ jobs:
       IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/dev-alchemy-ansible
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
