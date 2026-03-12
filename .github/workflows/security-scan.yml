@@ -46,6 +46,7 @@ jobs:
       - name: Run govulncheck
         uses: golang/govulncheck-action@v1
         with:
+          repo-checkout: false  # We already checked out the code in a previous step
           go-version-file: go.mod
           # Output as SARIF so results appear in the GitHub Security tab
           output-format: sarif
