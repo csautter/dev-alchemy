@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — feat/build-vms-on-windows
+## [Unreleased]
+
+## [v0.2.0] - 2026-03-15
 
 > Commits `bdbed922..c9927fb5` · 2025-11-23 → 2026-02-22
 >
@@ -236,4 +238,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/csautter/dev-alchemy/compare/baf420f5c468ef2fbe6ee5d4989e358697b2f653...c9927fb5d1bb3b2738214a4ea8a1c7ce0a8d8d4b
+[Unreleased]: https://github.com/csautter/dev-alchemy/compare/v0.2.0...HEAD
+[v0.2.0]: https://github.com/csautter/dev-alchemy/compare/v0.1.1...v0.2.0

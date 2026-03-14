@@ -1,0 +1,63 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "bdbed922d3f263bfd103eeb929be50f617bc9198",
+  "release-type": "go",
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "packages": {
+    ".": {
+      "changelog-path": "CHANGELOG.md",
+      "changelog-sections": [
+        {
+          "type": "feat",
+          "section": "Added"
+        },
+        {
+          "type": "fix",
+          "section": "Fixed"
+        },
+        {
+          "type": "perf",
+          "section": "Changed"
+        },
+        {
+          "type": "refactor",
+          "section": "Changed"
+        },
+        {
+          "type": "deps",
+          "section": "Dependencies"
+        },
+        {
+          "type": "build",
+          "section": "Build"
+        },
+        {
+          "type": "ci",
+          "section": "CI"
+        },
+        {
+          "type": "docs",
+          "section": "Documentation",
+          "hidden": true
+        },
+        {
+          "type": "style",
+          "section": "Miscellaneous",
+          "hidden": true
+        },
+        {
+          "type": "test",
+          "section": "Tests",
+          "hidden": true
+        },
+        {
+          "type": "chore",
+          "section": "Miscellaneous",
+          "hidden": true
+        }
+      ],
+      "pull-request-title-pattern": "chore(main): release ${version}"
+    }
+  }
+}
