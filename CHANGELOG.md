@@ -209,6 +209,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows 11 ISO is now cached under `./cache/windows11/iso/` (was `vendor/windows/`).
 - Update any local scripts or documentation that reference the old path.
 
+#### Hyper-V Windows Provisioning Inventory Removal (Migration Required)
+- `inventory/hyperv_windows_winrm.yml` is no longer created or updated by the project.
+- Old workflow: scripts/runbooks that invoked `ansible-playbook` with `-i inventory/hyperv_windows_winrm.yml` must be updated.
+- New workflow: run the provisioning wrapper from repo root:
+  - `go run cmd/main.go provision windows11 --arch amd64 --check`
+  - `go run cmd/main.go provision windows11 --arch amd64`
+- Required credentials are now read from environment (or project-root `.env`):
+  - `HYPERV_WINDOWS_ANSIBLE_USER`
+  - `HYPERV_WINDOWS_ANSIBLE_PASSWORD`
+- Optional connection overrides:
+  - `HYPERV_WINDOWS_ANSIBLE_CONNECTION`
+  - `HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT`
+  - `HYPERV_WINDOWS_ANSIBLE_PORT`
+
 ---
 
 ### Dependencies
