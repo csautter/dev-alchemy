@@ -31,6 +31,7 @@ Ethernet adapter Ethernet:
 }
 
 func TestBuildWindowsHypervProvisionArgs(t *testing.T) {
+	projectDir := t.TempDir()
 	config := windowsHypervAnsibleConnectionConfig{
 		User:           "Administrator",
 		Password:       "Top$ecret!",
@@ -39,10 +40,15 @@ func TestBuildWindowsHypervProvisionArgs(t *testing.T) {
 		Port:           "5985",
 	}
 
-	args, err := buildWindowsHypervProvisionArgs("172.25.125.159", config, true)
+	args, cleanup, err := buildWindowsHypervProvisionArgs(projectDir, "172.25.125.159", config, true)
 	if err != nil {
 		t.Fatalf("buildWindowsHypervProvisionArgs returned error: %v", err)
 	}
+	t.Cleanup(func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			t.Fatalf("failed to clean up extra vars file: %v", cleanupErr)
+		}
+	})
 
 	if !strings.Contains(strings.Join(args, " "), "-i 172.25.125.159,") {
 		t.Fatalf("expected inline inventory with discovered host IP, args: %v", args)
@@ -56,18 +62,30 @@ func TestBuildWindowsHypervProvisionArgs(t *testing.T) {
 
 	extraVarsIndex := -1
 	for index, arg := range args {
-		if arg == "-e" {
+		if arg == "--extra-vars" {
 			extraVarsIndex = index + 1
 			break
 		}
 	}
 	if extraVarsIndex <= 0 || extraVarsIndex >= len(args) {
-		t.Fatalf("expected -e with json payload, args: %v", args)
+		t.Fatalf("expected --extra-vars with @temp file reference, args: %v", args)
+	}
+	if strings.Contains(strings.Join(args, " "), "Top$ecret!") {
+		t.Fatalf("did not expect password in process arguments, args: %v", args)
+	}
+	if !strings.HasPrefix(args[extraVarsIndex], "@") {
+		t.Fatalf("expected @<file> notation for --extra-vars, got: %q", args[extraVarsIndex])
+	}
+
+	extraVarsFilePath := filepath.Join(projectDir, strings.TrimPrefix(args[extraVarsIndex], "@"))
+	content, readErr := os.ReadFile(extraVarsFilePath)
+	if readErr != nil {
+		t.Fatalf("failed to read extra vars file %q: %v", extraVarsFilePath, readErr)
 	}
 
 	extraVars := map[string]string{}
-	if err := json.Unmarshal([]byte(args[extraVarsIndex]), &extraVars); err != nil {
-		t.Fatalf("expected extra vars to be valid JSON, got error: %v", err)
+	if err := json.Unmarshal(content, &extraVars); err != nil {
+		t.Fatalf("expected extra vars file to contain valid JSON, got error: %v", err)
 	}
 
 	if extraVars["ansible_user"] != "Administrator" {
@@ -84,6 +102,13 @@ func TestBuildWindowsHypervProvisionArgs(t *testing.T) {
 	}
 	if extraVars["ansible_port"] != "5985" {
 		t.Fatalf("expected ansible_port in extra vars, got: %v", extraVars)
+	}
+
+	if cleanupErr := cleanup(); cleanupErr != nil {
+		t.Fatalf("cleanup failed: %v", cleanupErr)
+	}
+	if _, statErr := os.Stat(extraVarsFilePath); !os.IsNotExist(statErr) {
+		t.Fatalf("expected extra vars temp file to be deleted, stat error: %v", statErr)
 	}
 }
 

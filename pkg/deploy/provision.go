@@ -75,27 +75,34 @@ func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bo
 		return fmt.Errorf("failed to load hyper-v windows ansible configuration: %w", err)
 	}
 
-	args, err := buildWindowsHypervProvisionArgs(ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildWindowsHypervProvisionArgs(projectDir, ip, connectionConfig, check)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
 
+	runErr := error(nil)
 	if runtime.GOOS == "windows" {
-		if err := runAnsibleViaCygwinBash(projectDir, args, 90*time.Minute, fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch)); err != nil {
-			return fmt.Errorf("ansible provisioning failed for %s:%s: %w", vm.OS, vm.Arch, err)
-		}
-		return nil
+		runErr = runAnsibleViaCygwinBash(projectDir, args, 90*time.Minute, fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch))
+	} else {
+		runErr = runCommandWithStreamingLogsWithEnv(
+			projectDir,
+			90*time.Minute,
+			"ansible-playbook",
+			args,
+			ansibleColorEnv(),
+			fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch),
+		)
 	}
 
-	if err := runCommandWithStreamingLogsWithEnv(
-		projectDir,
-		90*time.Minute,
-		"ansible-playbook",
-		args,
-		ansibleColorEnv(),
-		fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch),
-	); err != nil {
-		return fmt.Errorf("ansible provisioning failed for %s:%s: %w", vm.OS, vm.Arch, err)
+	cleanupErr := cleanupExtraVarsFile()
+	if runErr != nil {
+		if cleanupErr != nil {
+			return fmt.Errorf("ansible provisioning failed for %s:%s: %w (also failed to remove ansible extra-vars temp file: %v)", vm.OS, vm.Arch, runErr, cleanupErr)
+		}
+		return fmt.Errorf("ansible provisioning failed for %s:%s: %w", vm.OS, vm.Arch, runErr)
+	}
+	if cleanupErr != nil {
+		return fmt.Errorf("failed to remove ansible extra-vars temp file for %s:%s: %w", vm.OS, vm.Arch, cleanupErr)
 	}
 
 	return nil
@@ -139,7 +146,7 @@ func extractWindowsIPv4FromIPConfig(output string) (string, error) {
 	return "", errors.New("only loopback or invalid IPv4 candidates found in command output")
 }
 
-func buildWindowsHypervProvisionArgs(ip string, connectionConfig windowsHypervAnsibleConnectionConfig, check bool) ([]string, error) {
+func buildWindowsHypervProvisionArgs(projectDir string, ip string, connectionConfig windowsHypervAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
 	extraVars, err := json.Marshal(map[string]string{
 		"ansible_user":            connectionConfig.User,
 		"ansible_password":        connectionConfig.Password,
@@ -148,7 +155,30 @@ func buildWindowsHypervProvisionArgs(ip string, connectionConfig windowsHypervAn
 		"ansible_port":            connectionConfig.Port,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	extraVarsFile, err := os.CreateTemp(projectDir, ".ansible-extra-vars-*.json")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create ansible extra-vars temp file: %w", err)
+	}
+	extraVarsFilePath := extraVarsFile.Name()
+	if _, err := extraVarsFile.Write(extraVars); err != nil {
+		_ = extraVarsFile.Close()
+		_ = os.Remove(extraVarsFilePath)
+		return nil, nil, fmt.Errorf("failed to write ansible extra-vars temp file: %w", err)
+	}
+	if err := extraVarsFile.Close(); err != nil {
+		_ = os.Remove(extraVarsFilePath)
+		return nil, nil, fmt.Errorf("failed to close ansible extra-vars temp file: %w", err)
+	}
+
+	cleanup := func() error {
+		err := os.Remove(extraVarsFilePath)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
 	}
 
 	args := []string{
@@ -157,15 +187,15 @@ func buildWindowsHypervProvisionArgs(ip string, connectionConfig windowsHypervAn
 		ip + ",",
 		"-l",
 		ip,
-		"-e",
-		string(extraVars),
+		"--extra-vars",
+		"@" + filepath.Base(extraVarsFilePath),
 		"-vvv",
 	}
 	if check {
 		args = append(args, "--check")
 	}
 
-	return args, nil
+	return args, cleanup, nil
 }
 
 func loadWindowsHypervAnsibleConnectionConfig(projectDir string) (windowsHypervAnsibleConnectionConfig, error) {
