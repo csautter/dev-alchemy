@@ -15,6 +15,10 @@ on:
       - "pkg/build/**"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Run cmd unit tests (${{ matrix.os }})

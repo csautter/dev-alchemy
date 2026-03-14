@@ -20,6 +20,10 @@ on:
     - cron: "0 8 * * 1"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   security-events: write   # required to upload SARIF results
@@ -42,6 +46,7 @@ jobs:
       - name: Run govulncheck
         uses: golang/govulncheck-action@v1
         with:
+          repo-checkout: false  # We already checked out the code in a previous step
           go-version-file: go.mod
           # Output as SARIF so results appear in the GitHub Security tab
           output-format: sarif
