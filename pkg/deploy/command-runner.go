@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -17,11 +18,18 @@ const (
 )
 
 func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, executable string, args []string, logPrefix string) error {
+	return runCommandWithStreamingLogsWithEnv(workingDir, timeout, executable, args, nil, logPrefix)
+}
+
+func runCommandWithStreamingLogsWithEnv(workingDir string, timeout time.Duration, executable string, args []string, extraEnv []string, logPrefix string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Dir = workingDir
+	if len(extraEnv) > 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -36,7 +44,6 @@ func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, execu
 		return fmt.Errorf("failed to start command %q %v: %w", executable, args, err)
 	}
 
-	done := make(chan error, 1)
 	var streamsWG sync.WaitGroup
 
 	streamOutput := func(output io.Reader, streamName string) {
@@ -55,13 +62,15 @@ func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, execu
 	go streamOutput(stdout, "stdout")
 	go streamOutput(stderr, "stderr")
 
+	streamsDone := make(chan struct{})
 	go func() {
-		done <- cmd.Wait()
+		streamsWG.Wait()
+		close(streamsDone)
 	}()
 
 	select {
-	case err := <-done:
-		streamsWG.Wait()
+	case <-streamsDone:
+		err := cmd.Wait()
 		if err != nil {
 			return fmt.Errorf("command failed (%s %v): %w", executable, args, err)
 		}
@@ -71,8 +80,23 @@ func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, execu
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
-		<-done
-		streamsWG.Wait()
+		<-streamsDone
+		_ = cmd.Wait()
 		return fmt.Errorf("command terminated due to timeout or interruption (%s %v): %w", executable, args, ctx.Err())
 	}
+}
+
+func runCommandWithCombinedOutput(workingDir string, timeout time.Duration, executable string, args []string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, executable, args...)
+	cmd.Dir = workingDir
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), fmt.Errorf("command failed (%s %v): %w", executable, args, err)
+	}
+
+	return string(output), nil
 }
