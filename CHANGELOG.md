@@ -5,6 +5,135 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/csautter/dev-alchemy/compare/v0.1.1...v0.2.0) (2026-03-14)
+
+
+### Added
+
+* added windows build on windows to go wrapper ([6d87a37](https://github.com/csautter/dev-alchemy/commit/6d87a3762e25215a326a0a6a0c8d8563143f4d48))
+* automatically handle max cpu count for vm configs ([d0c76b7](https://github.com/csautter/dev-alchemy/commit/d0c76b7cbdddf5f25aa5bb7cc2f154856fd55aa7))
+* **build:** propagate dynamic CPU and memory to macOS QEMU builds ([d704748](https://github.com/csautter/dev-alchemy/commit/d7047484e955c4dd0e72bb2bfbb77272c994b77c))
+* cache windows iso file to azure blob storage ([b065849](https://github.com/csautter/dev-alchemy/commit/b065849b17418d4bd4f5ac6207f6933a87a2af63))
+* **cache:** add local runner cache save after blob download in PowerShell script ([48a03ec](https://github.com/csautter/dev-alchemy/commit/48a03ecb68514a6fdb8a5926ec8cba04dfb6b48f))
+* check if windows iso can be downloaded from azure blob storage ([dea90ad](https://github.com/csautter/dev-alchemy/commit/dea90ad63fdeeeb0e4c45503966acf06cd955ac2))
+* **ci:** added runner iso cache dir ([4a1e79c](https://github.com/csautter/dev-alchemy/commit/4a1e79c1effbe5d481312f01de5f72ca679901e6))
+* **ci:** replace iso-cache with generic build-cache for ISOs and other dependencies ([e59656a](https://github.com/csautter/dev-alchemy/commit/e59656a84468c3d7fd081facb2621a55db30a3b4))
+* **ci:** use azure vm temp disk for builds ([67ae62a](https://github.com/csautter/dev-alchemy/commit/67ae62aa1548eb8c159186540f3e0fb3fb6f9aac))
+* **deploy:** add Windows Hyper-V create flow and unify deploy command execution ([8e2836c](https://github.com/csautter/dev-alchemy/commit/8e2836c4e25630a0233a08da8770487ae5972f59))
+* **deploy:** add Windows Hyper-V vagrant deploy and unify deploy command runner ([0a3f7be](https://github.com/csautter/dev-alchemy/commit/0a3f7bed39a68b1e849ee78bcf4a667fb5441adf))
+* gh runner vm set default switch ([cfccd43](https://github.com/csautter/dev-alchemy/commit/cfccd4305350011b6c4758137c9ba53a24eb023e))
+* macos tart runner script - create ephemeral runners in a loop ([5c26a00](https://github.com/csautter/dev-alchemy/commit/5c26a001a2845d321c2d657699a2f257e85a5828))
+* **provision:** add unified VM provision command for Hyper-V Windows ([f1063ba](https://github.com/csautter/dev-alchemy/commit/f1063bade3e5c5b85da8d250ed75192465dd3a0b))
+* **provision:** add unified VM provision command with Hyper-V Windows flow via Cygwin ([177c979](https://github.com/csautter/dev-alchemy/commit/177c979171d01e1fc4086ef7b69da9e88141067f))
+* **runners:** add parallel runner pool and VM CPU/memory configuration ([a444551](https://github.com/csautter/dev-alchemy/commit/a44455184eb619a05c77e1338569189f17d1aac2))
+* script for creating macos gh runners with tart ([422f884](https://github.com/csautter/dev-alchemy/commit/422f884a90c4876cf6d84a0c3961364c3550b410))
+
+
+### Fixed
+
+* add sudo check as prerequisite for test ([7f6c74b](https://github.com/csautter/dev-alchemy/commit/7f6c74b94e40987e2d709724946681bb6690682b))
+* added missing windows iso dependency ([4b12461](https://github.com/csautter/dev-alchemy/commit/4b12461f3fb0c7d833d6487e5a8f75a2801439a0))
+* **auth:** add OAuth2 scope and pre-authorize Azure CLI on app registration ([cd054b9](https://github.com/csautter/dev-alchemy/commit/cd054b950565335b892e2017a72ecb1757b64ae3))
+* **auth:** harden function app auth guard and remove dead key auth code ([603dacf](https://github.com/csautter/dev-alchemy/commit/603dacfbdf50fbd389d942ce137dfdfbbe08c527))
+* await context.cookies() in playwright_win11_iso.py ([66e96dc](https://github.com/csautter/dev-alchemy/commit/66e96dc788f9611ea0b3a79317c1766a0d606dd0))
+* az vm gh runner image id ([28551a8](https://github.com/csautter/dev-alchemy/commit/28551a87ccd26cb4ad7b4455cb73d5019e293b8c))
+* azure hyper-v github integration ([2e8ee76](https://github.com/csautter/dev-alchemy/commit/2e8ee763cda7396f154c7900f4d7f7a18eeb1387))
+* **build:** dependency download bar speed calculation ([1cd7da5](https://github.com/csautter/dev-alchemy/commit/1cd7da5ef213fc16904b697340457eaa5ddc56b7))
+* **build:** propagate dependency bootstrap failures immediately ([2f801f9](https://github.com/csautter/dev-alchemy/commit/2f801f9ce2d8b739cf69184ca04b88c8dd41339d))
+* **build:** propagate packer init errors in Windows build path ([f1cf041](https://github.com/csautter/dev-alchemy/commit/f1cf0415c9de7d01827f0bbc2763cfd10d171928))
+* **build:** remove duplicate cmd.Wait() causing spurious "wait: no child processes" failure ([0c3e93c](https://github.com/csautter/dev-alchemy/commit/0c3e93c09c30aa93be601fac08a525ec719b6223))
+* **build:** removed de keymap from qemu args to avoid wrong inputs in boot_command ([00b924f](https://github.com/csautter/dev-alchemy/commit/00b924f262bc3797b52d71e5c566b204ce1b86ba))
+* **cache:** removed special chars to ensure powershell compatibility ([58a1908](https://github.com/csautter/dev-alchemy/commit/58a19080376e4dcfabceebc7a2194f3d2470410c))
+* **ci:** added go mod vendor before go test ([a6586fe](https://github.com/csautter/dev-alchemy/commit/a6586fe478b95b041a512df8ca582b4ea8cdf936))
+* **ci:** added iso-path output to download action ([fcee7bc](https://github.com/csautter/dev-alchemy/commit/fcee7bcfd077ce98604c42bd42e97987d655c007))
+* **ci:** added permissions for win iso blob uploads ([6d36c0f](https://github.com/csautter/dev-alchemy/commit/6d36c0f68bcb2639536a9ef27c12d803ff2e0b42))
+* **ci:** added safe remove of tart ephemeral runners ([326b00b](https://github.com/csautter/dev-alchemy/commit/326b00bfe62fada7d9e6cbd8926dd81e8ea2ade9))
+* **ci:** blob up and download - use iso-path filename ([74a1cf8](https://github.com/csautter/dev-alchemy/commit/74a1cf82e1fcbbdf1e2034b787d8ecc0d9814ab7))
+* **ci:** check if file exists before upload to az blob storage ([864787e](https://github.com/csautter/dev-alchemy/commit/864787e0cc60624fcf8aef6402b4efaeb21b710d))
+* **ci:** continue on windows iso from az download error ([5ee61eb](https://github.com/csautter/dev-alchemy/commit/5ee61eb6fc76ce7102d921f6c9eaacbd0a7732b9))
+* **ci:** download iso from az blob - don't mask issues ([dbf8f49](https://github.com/csautter/dev-alchemy/commit/dbf8f498ef44f13a8842a44f665fcfa939df478f))
+* **ci:** go test run - use package path not file ([3d41b7e](https://github.com/csautter/dev-alchemy/commit/3d41b7e3514e4040852874ecdcde5cf6a534c009))
+* **ci:** macos runner - include homebrew installed binaries in PATH ([14e2b14](https://github.com/csautter/dev-alchemy/commit/14e2b144a7f9f10225e069cd5ffdb34966e862ee))
+* **ci:** macos tart iso caching - fixed cache volume path ([125f89a](https://github.com/csautter/dev-alchemy/commit/125f89a97896322e7411fe51b1dfeaf430b50df4))
+* **ci:** removed az blob storage creation in gh actions ([1a8a62a](https://github.com/csautter/dev-alchemy/commit/1a8a62a729f0b7747154793727acb3b206fbe3b6))
+* **ci:** run go build tests with sudo ([0dfde0a](https://github.com/csautter/dev-alchemy/commit/0dfde0a695a2e879c4d05f26dc1b7dd05241094e))
+* **ci:** shortened runner name ([17cefc5](https://github.com/csautter/dev-alchemy/commit/17cefc502886d753b415acb88530dbb6345561cc))
+* **ci:** updated win11 packer temp path ([fd6b6ff](https://github.com/csautter/dev-alchemy/commit/fd6b6ff61d9f3b32d375d8c7f4687a717256ddad))
+* **ci:** updated workflow trigger path ([36befeb](https://github.com/csautter/dev-alchemy/commit/36befebafcf11c03ddef4b8ac0fd257451b997c7))
+* **ci:** win11 packer build - increased os memory headroom ([87c8af6](https://github.com/csautter/dev-alchemy/commit/87c8af65f99cf7e8e40fb5bddad1d735648a2c69))
+* collapse multiline python -c scripts to fix YAML block scalar parsing ([1f5ec78](https://github.com/csautter/dev-alchemy/commit/1f5ec78cb7246978b0d6ce3c6ad1b395cf94a79a))
+* **dependencies:** install playwright stealth for reconciliation ([22d406c](https://github.com/csautter/dev-alchemy/commit/22d406ca5ba6b2a863e3e9af06f48eed39826a7f))
+* **dependencies:** reverted playwright win11 download approach ([23345d3](https://github.com/csautter/dev-alchemy/commit/23345d38440a1fb154d69f6fd48639cbba7a443d))
+* **deploy:** fail fast when Cygwin bash is missing on Windows provisioning ([c34f0cc](https://github.com/csautter/dev-alchemy/commit/c34f0cc74b15c35b1d1574dba2189f663e10fdd1))
+* **deploy:** prevent truncated streamed logs and surface scanner errors ([7724f4a](https://github.com/csautter/dev-alchemy/commit/7724f4a91bad9cda12bd89883fec822077a52f3e))
+* **deploy:** remove windows build constraints from hyperv deploy file ([5c86ebe](https://github.com/csautter/dev-alchemy/commit/5c86ebe52e85f7bbf5dce9cca867a8c4ca07e04f))
+* **deploy:** return command execution errors instead of panicking ([9d881bf](https://github.com/csautter/dev-alchemy/commit/9d881bfc6344015ce512068e780d07ca9fbaae9e))
+* handle empty cookies.json by catching JSONDecodeError ([477fe1d](https://github.com/csautter/dev-alchemy/commit/477fe1dce64b5bbf1ab248a1838b0e304b6e744e))
+* hyper-v setup handle existing resources ([6a3370f](https://github.com/csautter/dev-alchemy/commit/6a3370f08d8421517745a0d0869d64f57922e72e))
+* hyper-v setup restart order ([965d6f0](https://github.com/csautter/dev-alchemy/commit/965d6f0cc54a52e889797dba000da8feabca5598))
+* hyper-v windows11 boot_command timing ([1b6966e](https://github.com/csautter/dev-alchemy/commit/1b6966eb34da36b9271cbef1ae64f5707812a25e))
+* **hyperv:** retry early build failures to handle transient Default Switch IP race ([e115bde](https://github.com/csautter/dev-alchemy/commit/e115bde82fbd4a07e3c9413964da4151a23dd465))
+* limit az vm name to 15 chars ([3efcb43](https://github.com/csautter/dev-alchemy/commit/3efcb439031f4b5360676598137389024f07472f))
+* listener bar null check ([25a688a](https://github.com/csautter/dev-alchemy/commit/25a688ab32b5949e05bc0b83445d802f68de3a95))
+* make vncsnapshot retry loop interruptible by SIGINT/SIGTERM ([a18eb8d](https://github.com/csautter/dev-alchemy/commit/a18eb8df7aaf750b9d175243c5d428f315b6c1cf))
+* pass cache files JSON via env vars to avoid PowerShell string parsing errors ([24a6e73](https://github.com/csautter/dev-alchemy/commit/24a6e73eacb02c8893e4d5dd70866109bd12a64a))
+* pass vnc_recording_config by reference ([3c0129f](https://github.com/csautter/dev-alchemy/commit/3c0129f93adb545f4a4d24ff0e7bbeddb43550b9))
+* power shell log file encoding ([3b53a6c](https://github.com/csautter/dev-alchemy/commit/3b53a6cde7f2c11fee670bd2f18b45142d52c5d1))
+* prevent deadlock in stopVncScreenCaptureOnMacosDarwin when vncsnapshot exits cleanly ([784183b](https://github.com/csautter/dev-alchemy/commit/784183bd0968f11f8d67ac428968f1183a5382eb))
+* prevent deadlock in stopVncScreenCaptureOnMacosDarwin when vncsnapshot exits cleanly ([9c2ca4f](https://github.com/csautter/dev-alchemy/commit/9c2ca4faecf2f783bd28e56ca86c3f9d54e557ff))
+* reboot after hyper-v install on azure instance ([1a9112f](https://github.com/csautter/dev-alchemy/commit/1a9112fd8e4fded6a94375232fec901caf4e97a3))
+* replace powershell backtick continuations with argument splatting in cache actions ([cabe95b](https://github.com/csautter/dev-alchemy/commit/cabe95b232b7ac0f6c01c39bdb7a74dbc81f2ebc))
+* secured az function app endpoint ([e40ff9b](https://github.com/csautter/dev-alchemy/commit/e40ff9b72d9369d5f951e977820aed7791e2527a))
+* secured az function app endpoint - allowed access by az cli ([18fa192](https://github.com/csautter/dev-alchemy/commit/18fa192858a156d57bf10c71ac2ac662a4a32246))
+* **security:** validate inputs and prevent error detail leakage in function app ([240c019](https://github.com/csautter/dev-alchemy/commit/240c0197f51bf458c07d8f6bac3fe994f4e7e56a))
+* set iso path depending on architecture ([2eb049a](https://github.com/csautter/dev-alchemy/commit/2eb049aa134ab95e4d2e0e1ee8d1b10386f54560))
+* set max cpu cores to 2 ([d85f99c](https://github.com/csautter/dev-alchemy/commit/d85f99c44154997d3d8e86f10346d0a449a9f18b))
+* stop re-rendering completed progress bars ([d5d4ee8](https://github.com/csautter/dev-alchemy/commit/d5d4ee8355d00c5e63471be3b77ae377782de7bf))
+* **tart-runner:** recover worker on SSH/VM failure instead of exiting ([f629934](https://github.com/csautter/dev-alchemy/commit/f629934d57d6563449ab9bfc8432586c0b595cfb))
+* **terraform:** restore random suffix range with stable lifecycle guard ([fefcd44](https://github.com/csautter/dev-alchemy/commit/fefcd4479d80e584e139adb179ab7a3519a67de8))
+* test utm build on darwin - added engine config ([6edefaf](https://github.com/csautter/dev-alchemy/commit/6edefafc242bf01f13d1e7d35a8d2fac1d61d4a6))
+* update downloadWebFileDependency call in test to pass progress argument ([c6a8cfc](https://github.com/csautter/dev-alchemy/commit/c6a8cfccc8d8b94c9e8277a738db05d17f901974))
+* use bash 3.2-compatible array append for WORKER_PIDS ([b4db84f](https://github.com/csautter/dev-alchemy/commit/b4db84f53943c23a44930daa791ec700d2c0c510))
+* **utm:** set arm64 cpu type to default to fix issues with vm boot ([0773b0f](https://github.com/csautter/dev-alchemy/commit/0773b0f61a828e7ddb191abba60ad9028ed5c380))
+* vbox build winrm_timeout increased ([ea38edc](https://github.com/csautter/dev-alchemy/commit/ea38edc6fd17af10a27ac448eae99283db85a73e))
+* win11 iso download func - check if file exists and skip ([02a1f67](https://github.com/csautter/dev-alchemy/commit/02a1f679a6cc89091c567cc3bb74352e417ed832))
+* **windows11:** fix arm64 QEMU boot hang and headless mode handling ([a9bb0ad](https://github.com/csautter/dev-alchemy/commit/a9bb0ad3f250a451515f4e31d864d8cbced622c9))
+
+
+### Changed
+
+* **actions:** extract inline scripts into separate files for download/upload-build-cache ([0d40c17](https://github.com/csautter/dev-alchemy/commit/0d40c173fd6d9d165de51c3b60a8107ae53d6ab2))
+* **build:** removed windows isos az storage container ([5b7843b](https://github.com/csautter/dev-alchemy/commit/5b7843bd1b2473606a18e9e01dd57aa3106cee93))
+* changed windows iso path to ./cache dir ([e06c7f1](https://github.com/csautter/dev-alchemy/commit/e06c7f1a4a7863d8e363700a5437a15960e34195))
+* **ci:** bundled blob up and down actions ([fd9707b](https://github.com/csautter/dev-alchemy/commit/fd9707b7be43d8b572dcbb0167e76de767b313b8))
+* **ci:** optimized job dependencies for faster az runner cleanup ([87dbf02](https://github.com/csautter/dev-alchemy/commit/87dbf02e49687f532dea9148e22ed7542f4a908e))
+* **deploy:** replace static winrm inventory with env-var-driven ansible config ([c87bf2b](https://github.com/csautter/dev-alchemy/commit/c87bf2bf388ddb2eb814a7b063f3c57a93bcf372))
+* extracted powershell script from python code ([b33545d](https://github.com/csautter/dev-alchemy/commit/b33545d3d6fb8a5801db0c6ff2343f24590f26bc))
+* gh actions - reusable iso up and download configs ([dcbedc9](https://github.com/csautter/dev-alchemy/commit/dcbedc93157dc967b23490b4f372e2e8e4da1898))
+* hyper-v setup ([16f2025](https://github.com/csautter/dev-alchemy/commit/16f20255b510d78dc654b8f8c0d573cb5120142a))
+* install gh runner in golden image for macos ([72b11d3](https://github.com/csautter/dev-alchemy/commit/72b11d34b64ecc6224ba088153c66b4b4a379d08))
+* **provision:** reject "all" target with explicit error ([d94c306](https://github.com/csautter/dev-alchemy/commit/d94c306270fd166f3c8f9eb512a0c78b51c7b537))
+* relocate build artifact paths from /vendor to /cache ([c7de8fa](https://github.com/csautter/dev-alchemy/commit/c7de8fa0b7700927ec50bd037bdee4f550fb4256))
+* resolve VirtualMachineConfig from available list instead of constructing manually ([f9730b4](https://github.com/csautter/dev-alchemy/commit/f9730b432b2cbb0dd14c46d0caed64ffc8c1b599))
+* tart runner prepare script simplified ([b626a17](https://github.com/csautter/dev-alchemy/commit/b626a17e309ea679727e62159bccd1c91c0d9dd0))
+
+
+### CI
+
+* **actions:** add workflow concurrency to prevent push/pr parallel runs ([f5498b1](https://github.com/csautter/dev-alchemy/commit/f5498b13a9b2c4a7be3c0972efcd3fae2383589b))
+* **actions:** add workflow concurrency to prevent push/pr parallel runs ([b875e69](https://github.com/csautter/dev-alchemy/commit/b875e690efa3d7e1591c5bb10ddff2efcd2c75a1))
+* add Go security scanning workflow (govulncheck + gosec) ([c786bd5](https://github.com/csautter/dev-alchemy/commit/c786bd55110db26b5599102bb65e45af6d172939))
+* add Makefile target and GitHub Actions workflow for build-runner tests ([4d7d305](https://github.com/csautter/dev-alchemy/commit/4d7d305b510f72a81ef09504318dadcdca24b622))
+* configure release-please for automated releases ([95e3fd7](https://github.com/csautter/dev-alchemy/commit/95e3fd762e6f811c5ad7b918ffeed31daa0b6d1d))
+* fix unit-test workflow path filters to self-reference current file ([0849419](https://github.com/csautter/dev-alchemy/commit/084941958fb36d505ab278cdea9d41e021c576b8))
+* **security-scan:** don't checkout the code a second time ([b65153b](https://github.com/csautter/dev-alchemy/commit/b65153b4c7a793e846277491c5327ce6a85a9849))
+* **security:** prevent gosec from failing workflow and gitignore sarif results ([e8e24e1](https://github.com/csautter/dev-alchemy/commit/e8e24e10491307f3f62c6d50fe8b2f94468a8738))
+
+
+### Miscellaneous
+
+* release 0.2.0 ([032ec53](https://github.com/csautter/dev-alchemy/commit/032ec53c14b2b687ef1cd4e6e70e871be14d7e88))
+
 ## [Unreleased]
 
 ## [v0.2.0] - 2026-03-15
