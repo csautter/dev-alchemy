@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hyper-V Vagrant deployment path wired into the `create` command when the VM config uses the Hyper-V virtualization engine.
 - Hyper-V Vagrantfile now pins a switch via `VAGRANT_HYPERV_SWITCH` to avoid interactive network selection.
 
+#### Provision Command
+- Added a unified provisioning command for VM targets: `go run cmd/main.go provision <osname>`.
+- Added Windows 11 Hyper-V provisioning flow through the Go wrapper (`pkg/deploy/provision.go`), including `--check` support.
+
 #### Devcontainer
 - Added a Go devcontainer definition with Python and Packer features (`.devcontainer/devcontainer.json`).
 
@@ -71,6 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Deploy Command Runner
 - macOS UTM deploy now uses a shared command runner with streamed stdout/stderr and timeouts.
 - Hyper-V Vagrant instructions now reference the cache path for the Windows 11 box.
+- Hyper-V Windows provisioning now discovers the VM host IP on demand and runs Ansible with an inline host target instead of mutating a tracked inventory file.
+- WinRM settings for Hyper-V Windows provisioning are sourced from process environment or project-root `.env`.
+- Command logging/error surfaces now redact `ansible_password` values in CLI arguments.
 
 #### CI Workflow Topology
 - `test-build.yml` restructured: separate matrix jobs for Hyper-V and VirtualBox flavors; `fail-fast: false` set on the matrix.

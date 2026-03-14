@@ -131,11 +131,11 @@ net localgroup Administrators ansible /add
 Dry run to check for issues:
 
 ```bash
-ansible-playbook playbooks/setup.yml -i inventory/localhost.yml --check
+ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml --check
 ```
 
 ```bash
-ansible-playbook playbooks/setup.yml -i inventory/localhost.yml
+ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml
 ```
 
 #### Run the Playbook on a remote host or in a VM
@@ -168,7 +168,7 @@ Apply the playbook via WinRM:
 
 ```powershell
 $DevAlchemyPath = "C:\path\to\dev-alchemy"
-C:\\cygwin64\\bin\\bash.exe -l -c "$DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows.yml -l windows_host"
+C:\\cygwin64\\bin\\bash.exe -l -c "$DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_winrm.yml -l windows_host"
 ```
 
 Apply the playbook via SSH:
@@ -187,7 +187,7 @@ devalchemy/
 │   ├── role2/
 │   └── role3/
 ├── inventory/
-│   └── localhost.yml
+│   └── localhost.yaml
 ├── playbooks/
 │   └── setup.yml
 └── README.md
@@ -306,6 +306,28 @@ Check [README.md](./build/packer/windows/README.md) for a guide to build a Windo
 ##### Run the Windows VM
 
 Check [README.md](./deployments/vagrant/ansible-windows/README.md) for a guide to run the built Windows VM with Vagrant and Hyper-V.
+
+##### Provision the Windows VM (via Go wrapper)
+
+After the VM is running, provision it from the repository root using the unified command:
+
+```bash
+go run cmd/main.go provision windows11 --arch amd64 --check
+go run cmd/main.go provision windows11 --arch amd64
+```
+
+The command discovers the VM IP automatically and runs Ansible through the Windows/Cygwin wrapper.
+
+Set WinRM credentials in project-root `.env` (or process environment):
+
+```dotenv
+HYPERV_WINDOWS_ANSIBLE_USER=Administrator
+HYPERV_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
+# Optional (defaults shown):
+HYPERV_WINDOWS_ANSIBLE_CONNECTION=winrm
+HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT=basic
+HYPERV_WINDOWS_ANSIBLE_PORT=5985
+```
 
 ## macOS specific test approaches
 
