@@ -68,6 +68,23 @@ HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT=basic
 HYPERV_WINDOWS_ANSIBLE_PORT=5985
 ```
 
+Optional shell path overrides for Cygwin execution:
+
+```powershell
+$env:CYGWIN_BASH_PATH = "C:\tools\cygwin\bin\bash.exe"
+# or set your Cygwin terminal path:
+$env:CYGWIN_TERMINAL_PATH = "C:\tools\cygwin\bin\mintty.exe"
+```
+
+Path resolution precedence used by provisioning:
+
+1. `CYGWIN_BASH_PATH` (highest priority)
+2. `CYGWIN_TERMINAL_PATH` (used only when `CYGWIN_BASH_PATH` is unset)
+3. Auto-detect `C:\tools\cygwin\bin\bash.exe`
+4. Auto-detect `C:\cygwin64\bin\bash.exe`
+
+If `CYGWIN_TERMINAL_PATH` points to `mintty.exe`, provisioning resolves it to the sibling `bash.exe`.
+
 ## Run Provisioning
 
 Run provisioning from the repository root. The wrapper resolves IP address via `vagrant winrm -c ipconfig` and runs `ansible-playbook` through Cygwin.
