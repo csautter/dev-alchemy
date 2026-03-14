@@ -18,6 +18,7 @@ Usage:
 Available Commands:
   build       Build the project for the given OS
   create      Create a new VM on your system with the defined OS
+  provision   Provision a VM with Ansible
   help        Help about any command
 `,
 	// Uncomment the following line if your bare application

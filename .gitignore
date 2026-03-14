@@ -58,6 +58,7 @@ terraform.rc
 **/modules/**/.terraform.lock.hcl
 
 env_local.hcl
+.env
 **/cookies.json
 REVIEW.md
 gosec-results.sarif

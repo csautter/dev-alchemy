@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — feat/build-vms-on-windows
+## [Unreleased]
+
+## [v0.2.0] - 2026-03-15
 
 > Commits `bdbed922..c9927fb5` · 2025-11-23 → 2026-02-22
 >
@@ -18,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Windows Hyper-V Vagrant Deploy
 - Hyper-V Vagrant deployment path wired into the `create` command when the VM config uses the Hyper-V virtualization engine.
 - Hyper-V Vagrantfile now pins a switch via `VAGRANT_HYPERV_SWITCH` to avoid interactive network selection.
+
+#### Provision Command
+- Added a unified provisioning command for VM targets: `go run cmd/main.go provision <osname>`.
+- Added Windows 11 Hyper-V provisioning flow through the Go wrapper (`pkg/deploy/provision.go`), including `--check` support.
 
 #### Devcontainer
 - Added a Go devcontainer definition with Python and Packer features (`.devcontainer/devcontainer.json`).
@@ -71,6 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Deploy Command Runner
 - macOS UTM deploy now uses a shared command runner with streamed stdout/stderr and timeouts.
 - Hyper-V Vagrant instructions now reference the cache path for the Windows 11 box.
+- Hyper-V Windows provisioning now discovers the VM host IP on demand and runs Ansible with an inline host target instead of mutating a tracked inventory file.
+- WinRM settings for Hyper-V Windows provisioning are sourced from process environment or project-root `.env`.
+- Command logging/error surfaces now redact `ansible_password` values in CLI arguments.
 
 #### CI Workflow Topology
 - `test-build.yml` restructured: separate matrix jobs for Hyper-V and VirtualBox flavors; `fail-fast: false` set on the matrix.
@@ -202,6 +211,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows 11 ISO is now cached under `./cache/windows11/iso/` (was `vendor/windows/`).
 - Update any local scripts or documentation that reference the old path.
 
+#### Hyper-V Windows Provisioning Inventory Removal (Migration Required)
+- `inventory/hyperv_windows_winrm.yml` is no longer created or updated by the project.
+- Old workflow: scripts/runbooks that invoked `ansible-playbook` with `-i inventory/hyperv_windows_winrm.yml` must be updated.
+- New workflow: run the provisioning wrapper from repo root:
+  - `go run cmd/main.go provision windows11 --arch amd64 --check`
+  - `go run cmd/main.go provision windows11 --arch amd64`
+- Required credentials are now read from environment (or project-root `.env`):
+  - `HYPERV_WINDOWS_ANSIBLE_USER`
+  - `HYPERV_WINDOWS_ANSIBLE_PASSWORD`
+- Optional connection overrides:
+  - `HYPERV_WINDOWS_ANSIBLE_CONNECTION`
+  - `HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT`
+  - `HYPERV_WINDOWS_ANSIBLE_PORT`
+
 ---
 
 ### Dependencies
@@ -215,4 +238,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/csautter/dev-alchemy/compare/baf420f5c468ef2fbe6ee5d4989e358697b2f653...c9927fb5d1bb3b2738214a4ea8a1c7ce0a8d8d4b
+[Unreleased]: https://github.com/csautter/dev-alchemy/compare/v0.2.0...HEAD
+[v0.2.0]: https://github.com/csautter/dev-alchemy/compare/v0.1.1...v0.2.0

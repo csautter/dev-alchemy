@@ -13,6 +13,7 @@ Ensure you have the following installed:
 - [Hyper-V](https://docs.microsoft.com/en-us/virtualization/hyper-v-on-windows/quick-start/enable-hyper-v)
 - [Cygwin](https://www.cygwin.com/install.html)
 - [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html) (via Cygwin)
+- [Go](https://go.dev/doc/install)
 
 ## Adding the Vagrant Box
 
@@ -37,9 +38,9 @@ After the VM is up, you can connect to it using Hyper-V Manager or via RDP. The 
 - Username: `Administrator`
 - Password: `P@ssw0rd!`
 
-## Determine the IP Address of the Vagrant Box
+## Optional: Determine the IP Address of the Vagrant Box
 
-You can find the IP address of the Vagrant box using the following command:
+The provisioning wrapper discovers the VM IP automatically, but you can inspect it manually:
 
 ```bash
 vagrant winrm -c "ipconfig"
@@ -52,40 +53,45 @@ $vagrant_ip = (vagrant winrm -c "ipconfig" | Select-String -Pattern 'IPv4 Addres
 Write-Output "Vagrant Box IP Address: $vagrant_ip"
 ```
 
-## Write the Inventory File
+## Configure WinRM Credentials for Provisioning
 
-You can create the inventory file using PowerShell and the `$vagrant_ip` variable:
+Do not create `inventory/hyperv_windows_winrm.yml`. Hyper-V provisioning now passes the discovered host directly to Ansible and reads credentials from environment variables.
 
-```powershell
-$inventory = @"
-all:
-    children:
-        windows:
-            hosts:
-                windows_host:
-                    ansible_host: $vagrant_ip
-                    ansible_user: Administrator
-                    ansible_password: P@ssw0rd!
-                    ansible_connection: winrm
-                    ansible_winrm_transport: basic
-                    ansible_port: 5985
-"@
-$inventory | Set-Content -Path "./inventory/hyperv_windows_winrm.yml"
-Write-Output "Inventory file created at ./inventory/hyperv_windows_winrm.yml"
+Set these values in a project-root `.env` file (or process environment):
+
+```dotenv
+HYPERV_WINDOWS_ANSIBLE_USER=Administrator
+HYPERV_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
+# Optional (defaults shown):
+HYPERV_WINDOWS_ANSIBLE_CONNECTION=winrm
+HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT=basic
+HYPERV_WINDOWS_ANSIBLE_PORT=5985
 ```
 
-## Run Ansible Playbook
+Optional shell path overrides for Cygwin execution:
 
-Run the Ansible playbook using the created inventory file. Make sure to replace `<path-to-your-repo>` with the actual path to your repository.
-On Windows, you need to use Cygwin to run Ansible commands.
+```powershell
+$env:CYGWIN_BASH_PATH = "C:\tools\cygwin\bin\bash.exe"
+# or set your Cygwin terminal path:
+$env:CYGWIN_TERMINAL_PATH = "C:\tools\cygwin\bin\mintty.exe"
+```
+
+Path resolution precedence used by provisioning:
+
+1. `CYGWIN_BASH_PATH` (highest priority)
+2. `CYGWIN_TERMINAL_PATH` (used only when `CYGWIN_BASH_PATH` is unset)
+3. Auto-detect `C:\tools\cygwin\bin\bash.exe`
+4. Auto-detect `C:\cygwin64\bin\bash.exe`
+
+If `CYGWIN_TERMINAL_PATH` points to `mintty.exe`, provisioning resolves it to the sibling `bash.exe`.
+
+## Run Provisioning
+
+Run provisioning from the repository root. The wrapper resolves IP address via `vagrant winrm -c ipconfig` and runs `ansible-playbook` through Cygwin.
 
 ```bash
-# start a Cygwin bash session
-cygwin bash
-# navigate to the dev-alchemy directory
-cd /cygdrive/c/<path-to-your-repo>/dev-alchemy/
-ansible-playbook ./playbooks/setup.yml -i ./inventory/hyperv_windows_winrm.yml -l windows_host -vvv --check
-ansible-playbook ./playbooks/setup.yml -i ./inventory/hyperv_windows_winrm.yml -l windows_host -vvv
+go run cmd/main.go provision windows11 --arch amd64 --check
+go run cmd/main.go provision windows11 --arch amd64
 ```
 
 ## Destroying the Vagrant Box
