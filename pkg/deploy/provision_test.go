@@ -281,6 +281,61 @@ func TestResolveCygwinBashPath_LeavesBashPathUntouched(t *testing.T) {
 	}
 }
 
+func TestGetCygwinBashExecutable_UsesConfiguredBashPath(t *testing.T) {
+	tempDir := t.TempDir()
+	bashPath := filepath.Join(tempDir, "bash.exe")
+	if err := os.WriteFile(bashPath, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("failed to create fake bash executable: %v", err)
+	}
+
+	t.Setenv("CYGWIN_BASH_PATH", bashPath)
+	t.Setenv("CYGWIN_TERMINAL_PATH", "")
+
+	got, err := getCygwinBashExecutable()
+	if err != nil {
+		t.Fatalf("expected configured cygwin bash path to succeed, got error: %v", err)
+	}
+	if got != bashPath {
+		t.Fatalf("expected %q, got %q", bashPath, got)
+	}
+}
+
+func TestGetCygwinBashExecutable_UsesConfiguredTerminalPath(t *testing.T) {
+	tempDir := t.TempDir()
+	terminalPath := filepath.Join(tempDir, "mintty.exe")
+	bashPath := filepath.Join(tempDir, "bash.exe")
+	if err := os.WriteFile(terminalPath, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("failed to create fake terminal executable: %v", err)
+	}
+	if err := os.WriteFile(bashPath, []byte("fake"), 0o644); err != nil {
+		t.Fatalf("failed to create fake bash executable: %v", err)
+	}
+
+	t.Setenv("CYGWIN_BASH_PATH", "")
+	t.Setenv("CYGWIN_TERMINAL_PATH", terminalPath)
+
+	got, err := getCygwinBashExecutable()
+	if err != nil {
+		t.Fatalf("expected configured cygwin terminal path to succeed, got error: %v", err)
+	}
+	if got != bashPath {
+		t.Fatalf("expected %q, got %q", bashPath, got)
+	}
+}
+
+func TestGetCygwinBashExecutable_ReturnsErrorForInvalidConfiguredPath(t *testing.T) {
+	t.Setenv("CYGWIN_BASH_PATH", filepath.Join(t.TempDir(), "missing-bash.exe"))
+	t.Setenv("CYGWIN_TERMINAL_PATH", "")
+
+	_, err := getCygwinBashExecutable()
+	if err == nil {
+		t.Fatal("expected getCygwinBashExecutable to fail for invalid configured path")
+	}
+	if !strings.Contains(err.Error(), "CYGWIN_BASH_PATH") {
+		t.Fatalf("expected CYGWIN_BASH_PATH in error, got: %v", err)
+	}
+}
+
 func TestAnsibleColorEnv(t *testing.T) {
 	entries := ansibleColorEnv()
 	combined := strings.Join(entries, ";")

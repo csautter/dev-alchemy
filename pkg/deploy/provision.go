@@ -308,6 +308,10 @@ func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout ti
 	if err != nil {
 		return fmt.Errorf("failed to convert working directory to cygwin path: %w", err)
 	}
+	cygwinBashExecutable, err := getCygwinBashExecutable()
+	if err != nil {
+		return fmt.Errorf("failed to locate cygwin bash executable: %w", err)
+	}
 
 	quotedArgs := make([]string, 0, len(ansibleArgs))
 	for _, arg := range ansibleArgs {
@@ -319,19 +323,27 @@ func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout ti
 	return runCommandWithStreamingLogsWithEnv(
 		workingDir,
 		timeout,
-		getCygwinBashExecutable(),
+		cygwinBashExecutable,
 		[]string{"-l", "-c", bashCommand},
 		ansibleColorEnv(),
 		logPrefix,
 	)
 }
 
-func getCygwinBashExecutable() string {
+func getCygwinBashExecutable() (string, error) {
 	if configuredPath := strings.TrimSpace(os.Getenv("CYGWIN_BASH_PATH")); configuredPath != "" {
-		return resolveCygwinBashPath(configuredPath)
+		resolvedPath := resolveCygwinBashPath(configuredPath)
+		if err := validateCygwinBashExecutable(resolvedPath); err != nil {
+			return "", fmt.Errorf("CYGWIN_BASH_PATH is set to %q (resolved to %q), but cygwin bash is unavailable: %w", configuredPath, resolvedPath, err)
+		}
+		return resolvedPath, nil
 	}
 	if configuredTerminalPath := strings.TrimSpace(os.Getenv("CYGWIN_TERMINAL_PATH")); configuredTerminalPath != "" {
-		return resolveCygwinBashPath(configuredTerminalPath)
+		resolvedPath := resolveCygwinBashPath(configuredTerminalPath)
+		if err := validateCygwinBashExecutable(resolvedPath); err != nil {
+			return "", fmt.Errorf("CYGWIN_TERMINAL_PATH is set to %q (resolved to %q), but cygwin bash is unavailable: %w", configuredTerminalPath, resolvedPath, err)
+		}
+		return resolvedPath, nil
 	}
 
 	candidates := []string{
@@ -340,11 +352,22 @@ func getCygwinBashExecutable() string {
 	}
 	for _, candidate := range candidates {
 		if _, err := os.Stat(candidate); err == nil {
-			return candidate
+			return candidate, nil
 		}
 	}
 
-	return "bash"
+	return "", fmt.Errorf("cygwin bash executable not found; checked %q and %q. Install Cygwin or set CYGWIN_BASH_PATH (or CYGWIN_TERMINAL_PATH) to your cygwin bash.exe", candidates[0], candidates[1])
+}
+
+func validateCygwinBashExecutable(path string) error {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if fileInfo.IsDir() {
+		return fmt.Errorf("expected executable file but found directory")
+	}
+	return nil
 }
 
 func resolveCygwinBashPath(path string) string {
