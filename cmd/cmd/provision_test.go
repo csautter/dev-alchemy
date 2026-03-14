@@ -23,3 +23,26 @@ func TestRunProvisionReturnsErrorForUnsupportedConfig(t *testing.T) {
 		t.Fatalf("expected error to mention not implemented, got: %v", err)
 	}
 }
+
+func TestProvisionCommandRejectsAllTarget(t *testing.T) {
+	previousArch := arch
+	previousOsType := osType
+	previousCheck := check
+	t.Cleanup(func() {
+		arch = previousArch
+		osType = previousOsType
+		check = previousCheck
+	})
+
+	arch = "amd64"
+	osType = "server"
+	check = false
+
+	err := provisionCmd.RunE(provisionCmd, []string{"all"})
+	if err == nil {
+		t.Fatal("expected an error when using provision all")
+	}
+	if !strings.Contains(err.Error(), "\"all\" is not supported for provision") {
+		t.Fatalf("expected explicit unsupported-all error, got: %v", err)
+	}
+}

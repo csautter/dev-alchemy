@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
@@ -17,35 +16,20 @@ var provisionCmd = &cobra.Command{
 	Use:   "provision <osname>",
 	Short: "Provision and test Ansible configuration against a VM",
 	Long: `Runs Ansible provisioning against VM targets.
-Use "all" to provision all VM configurations available for the current host OS.
 
 Examples:
   alchemy provision windows11 --arch amd64 --check
-  alchemy provision all --check
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		osName := args[0]
 
-		if osName != "ubuntu" {
-			osType = ""
+		if osName == "all" {
+			return fmt.Errorf("❌ \"all\" is not supported for provision; provide one target, for example: alchemy provision windows11 --arch amd64 --check")
 		}
 
-		if osName == "all" {
-			fmt.Printf("🔧 Provisioning all available VM configurations (check=%t)\n", check)
-			var errs []error
-			for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
-				fmt.Printf("➡️ Provisioning VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
-				if err := runProvision(vm, check); err != nil {
-					errs = append(errs, fmt.Errorf("%s/%s/%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err))
-					fmt.Printf("⚠️ Provisioning skipped/failed for OS: %s, Type: %s, Architecture: %s — %v\n", vm.OS, vm.UbuntuType, vm.Arch, err)
-				}
-			}
-
-			if len(errs) > 0 {
-				return errors.Join(errs...)
-			}
-			return nil
+		if osName != "ubuntu" {
+			osType = ""
 		}
 
 		availableVirtualMachines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
