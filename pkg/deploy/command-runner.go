@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -15,6 +16,11 @@ import (
 const (
 	scannerInitialBufferSize = 64 * 1024
 	scannerMaxBufferSize     = 1024 * 1024
+)
+
+var (
+	ansiblePasswordJSONRegex     = regexp.MustCompile(`(?i)(\"ansible_password\"\s*:\s*\")[^\"]*(\")`)
+	ansiblePasswordKeyValueRegex = regexp.MustCompile(`(?i)(ansible_password=)\S+`)
 )
 
 func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, executable string, args []string, logPrefix string) error {
@@ -26,6 +32,7 @@ func runCommandWithStreamingLogsWithEnv(workingDir string, timeout time.Duration
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, executable, args...)
+	sanitizedArgs := sanitizeCommandArgsForLogs(args)
 	cmd.Dir = workingDir
 	if len(extraEnv) > 0 {
 		cmd.Env = append(os.Environ(), extraEnv...)
@@ -41,7 +48,7 @@ func runCommandWithStreamingLogsWithEnv(workingDir string, timeout time.Duration
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start command %q %v: %w", executable, args, err)
+		return fmt.Errorf("failed to start command %q %v: %w", executable, sanitizedArgs, err)
 	}
 
 	var streamsWG sync.WaitGroup
@@ -72,9 +79,9 @@ func runCommandWithStreamingLogsWithEnv(workingDir string, timeout time.Duration
 	case <-streamsDone:
 		err := cmd.Wait()
 		if err != nil {
-			return fmt.Errorf("command failed (%s %v): %w", executable, args, err)
+			return fmt.Errorf("command failed (%s %v): %w", executable, sanitizedArgs, err)
 		}
-		log.Printf("Command finished successfully: %s %v", executable, args)
+		log.Printf("Command finished successfully: %s %v", executable, sanitizedArgs)
 		return nil
 	case <-ctx.Done():
 		if cmd.Process != nil {
@@ -82,7 +89,7 @@ func runCommandWithStreamingLogsWithEnv(workingDir string, timeout time.Duration
 		}
 		<-streamsDone
 		_ = cmd.Wait()
-		return fmt.Errorf("command terminated due to timeout or interruption (%s %v): %w", executable, args, ctx.Err())
+		return fmt.Errorf("command terminated due to timeout or interruption (%s %v): %w", executable, sanitizedArgs, ctx.Err())
 	}
 }
 
@@ -95,8 +102,22 @@ func runCommandWithCombinedOutput(workingDir string, timeout time.Duration, exec
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return string(output), fmt.Errorf("command failed (%s %v): %w", executable, args, err)
+		return string(output), fmt.Errorf("command failed (%s %v): %w", executable, sanitizeCommandArgsForLogs(args), err)
 	}
 
 	return string(output), nil
+}
+
+func sanitizeCommandArgsForLogs(args []string) []string {
+	if len(args) == 0 {
+		return nil
+	}
+
+	sanitized := make([]string, len(args))
+	for index, arg := range args {
+		redacted := ansiblePasswordJSONRegex.ReplaceAllString(arg, `${1}***REDACTED***${2}`)
+		redacted = ansiblePasswordKeyValueRegex.ReplaceAllString(redacted, `${1}***REDACTED***`)
+		sanitized[index] = redacted
+	}
+	return sanitized
 }

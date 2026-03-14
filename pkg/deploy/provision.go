@@ -1,26 +1,43 @@
 package deploy
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 )
 
+const (
+	hypervWindowsAnsibleUserEnvVar           = "HYPERV_WINDOWS_ANSIBLE_USER"
+	hypervWindowsAnsiblePasswordEnvVar       = "HYPERV_WINDOWS_ANSIBLE_PASSWORD"
+	hypervWindowsAnsibleConnectionEnvVar     = "HYPERV_WINDOWS_ANSIBLE_CONNECTION"
+	hypervWindowsAnsibleWinrmTransportEnvVar = "HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT"
+	hypervWindowsAnsiblePortEnvVar           = "HYPERV_WINDOWS_ANSIBLE_PORT"
+)
+
 var (
 	windowsIPv4Regex   = regexp.MustCompile(`(?mi)IPv4 Address[^:]*:\s*((?:\d{1,3}\.){3}\d{1,3})`)
-	ansibleHostRegex   = regexp.MustCompile(`(?m)^(\s*ansible_host:\s*).*$`)
 	loopbackAddressSet = map[string]struct{}{
 		"127.0.0.1": {},
 		"0.0.0.0":   {},
 	}
 )
+
+type windowsHypervAnsibleConnectionConfig struct {
+	User           string
+	Password       string
+	Connection     string
+	WinrmTransport string
+	Port           string
+}
 
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	if isHypervWindows11Amd64ProvisionTarget(vm) {
@@ -47,27 +64,20 @@ func isHypervWindows11Amd64ProvisionTarget(vm alchemy_build.VirtualMachineConfig
 func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 	vagrantDir := filepath.Join(projectDir, "deployments", "vagrant", "ansible-windows")
-	inventoryPath := filepath.Join(projectDir, "inventory", "hyperv_windows_winrm.yml")
 
 	ip, err := discoverWindowsVagrantIPv4(vagrantDir)
 	if err != nil {
 		return fmt.Errorf("failed to determine vagrant VM IPv4 address: %w", err)
 	}
 
-	if err := upsertWindowsHypervInventory(inventoryPath, ip); err != nil {
-		return fmt.Errorf("failed to update inventory file %q: %w", inventoryPath, err)
+	connectionConfig, err := loadWindowsHypervAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to load hyper-v windows ansible configuration: %w", err)
 	}
 
-	args := []string{
-		"./playbooks/setup.yml",
-		"-i",
-		"./inventory/hyperv_windows_winrm.yml",
-		"-l",
-		"windows_host",
-		"-vvv",
-	}
-	if check {
-		args = append(args, "--check")
+	args, err := buildWindowsHypervProvisionArgs(ip, connectionConfig, check)
+	if err != nil {
+		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
 
 	if runtime.GOOS == "windows" {
@@ -129,36 +139,138 @@ func extractWindowsIPv4FromIPConfig(output string) (string, error) {
 	return "", errors.New("only loopback or invalid IPv4 candidates found in command output")
 }
 
-func upsertWindowsHypervInventory(inventoryPath string, ip string) error {
-	content, err := os.ReadFile(inventoryPath)
+func buildWindowsHypervProvisionArgs(ip string, connectionConfig windowsHypervAnsibleConnectionConfig, check bool) ([]string, error) {
+	extraVars, err := json.Marshal(map[string]string{
+		"ansible_user":            connectionConfig.User,
+		"ansible_password":        connectionConfig.Password,
+		"ansible_connection":      connectionConfig.Connection,
+		"ansible_winrm_transport": connectionConfig.WinrmTransport,
+		"ansible_port":            connectionConfig.Port,
+	})
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return os.WriteFile(inventoryPath, []byte(defaultHypervWindowsInventory(ip)), 0o644)
-		}
-		return err
+		return nil, err
 	}
 
-	updated := ansibleHostRegex.ReplaceAllString(string(content), "${1}"+ip)
-	if updated == string(content) {
-		updated = defaultHypervWindowsInventory(ip)
+	args := []string{
+		"./playbooks/setup.yml",
+		"-i",
+		ip + ",",
+		"-l",
+		ip,
+		"-e",
+		string(extraVars),
+		"-vvv",
+	}
+	if check {
+		args = append(args, "--check")
 	}
 
-	return os.WriteFile(inventoryPath, []byte(updated), 0o644)
+	return args, nil
 }
 
-func defaultHypervWindowsInventory(ip string) string {
-	return fmt.Sprintf(`all:
-    children:
-        windows:
-            hosts:
-                windows_host:
-                    ansible_host: %s
-                    ansible_user: Administrator
-                    ansible_password: P@ssw0rd!
-                    ansible_connection: winrm
-                    ansible_winrm_transport: basic
-                    ansible_port: 5985
-`, ip)
+func loadWindowsHypervAnsibleConnectionConfig(projectDir string) (windowsHypervAnsibleConnectionConfig, error) {
+	envFilePath := filepath.Join(projectDir, ".env")
+	valuesFromFile, err := parseDotEnvFile(envFilePath)
+	if err != nil {
+		return windowsHypervAnsibleConnectionConfig{}, err
+	}
+
+	connectionConfig := windowsHypervAnsibleConnectionConfig{
+		User:           resolveEnvValue(hypervWindowsAnsibleUserEnvVar, valuesFromFile),
+		Password:       resolveEnvValue(hypervWindowsAnsiblePasswordEnvVar, valuesFromFile),
+		Connection:     defaultIfEmpty(resolveEnvValue(hypervWindowsAnsibleConnectionEnvVar, valuesFromFile), "winrm"),
+		WinrmTransport: defaultIfEmpty(resolveEnvValue(hypervWindowsAnsibleWinrmTransportEnvVar, valuesFromFile), "basic"),
+		Port:           defaultIfEmpty(resolveEnvValue(hypervWindowsAnsiblePortEnvVar, valuesFromFile), "5985"),
+	}
+
+	missing := make([]string, 0, 2)
+	if connectionConfig.User == "" {
+		missing = append(missing, hypervWindowsAnsibleUserEnvVar)
+	}
+	if connectionConfig.Password == "" {
+		missing = append(missing, hypervWindowsAnsiblePasswordEnvVar)
+	}
+	if len(missing) > 0 {
+		return windowsHypervAnsibleConnectionConfig{}, fmt.Errorf(
+			"missing required values %s; define them in process environment or in %q",
+			strings.Join(missing, ", "),
+			envFilePath,
+		)
+	}
+
+	return connectionConfig, nil
+}
+
+func parseDotEnvFile(dotEnvPath string) (map[string]string, error) {
+	content, err := os.ReadFile(dotEnvPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return map[string]string{}, nil
+		}
+		return nil, fmt.Errorf("failed to read %q: %w", dotEnvPath, err)
+	}
+
+	values := make(map[string]string)
+	lines := strings.Split(string(content), "\n")
+	for lineNumber, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "export ") {
+			line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+		}
+
+		key, value, hasSeparator := strings.Cut(line, "=")
+		if !hasSeparator {
+			return nil, fmt.Errorf("invalid .env format at %s:%d: expected KEY=VALUE", dotEnvPath, lineNumber+1)
+		}
+
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" {
+			return nil, fmt.Errorf("invalid .env format at %s:%d: key must not be empty", dotEnvPath, lineNumber+1)
+		}
+
+		parsedValue, parseErr := parseDotEnvValue(value)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid .env value for %q at %s:%d: %w", key, dotEnvPath, lineNumber+1, parseErr)
+		}
+		values[key] = parsedValue
+	}
+
+	return values, nil
+}
+
+func parseDotEnvValue(value string) (string, error) {
+	if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+		unquoted, err := strconv.Unquote(value)
+		if err != nil {
+			return "", err
+		}
+		return unquoted, nil
+	}
+	if len(value) >= 2 && value[0] == '\'' && value[len(value)-1] == '\'' {
+		return value[1 : len(value)-1], nil
+	}
+	return value, nil
+}
+
+func resolveEnvValue(key string, valuesFromFile map[string]string) string {
+	if envValue, exists := os.LookupEnv(key); exists {
+		trimmed := strings.TrimSpace(envValue)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return strings.TrimSpace(valuesFromFile[key])
+}
+
+func defaultIfEmpty(value string, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout time.Duration, logPrefix string) error {

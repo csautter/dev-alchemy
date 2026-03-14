@@ -97,3 +97,28 @@ func TestCommandRunnerHelperProcess(t *testing.T) {
 		os.Exit(2)
 	}
 }
+
+func TestSanitizeCommandArgsForLogs_RedactsJSONPassword(t *testing.T) {
+	args := []string{
+		"./playbooks/setup.yml",
+		"-e",
+		`{"ansible_user":"Administrator","ansible_password":"Secret123!","ansible_port":"5985"}`,
+	}
+
+	sanitized := sanitizeCommandArgsForLogs(args)
+	if strings.Contains(strings.Join(sanitized, " "), "Secret123!") {
+		t.Fatalf("expected sanitized args to hide password, got: %v", sanitized)
+	}
+	if !strings.Contains(strings.Join(sanitized, " "), "***REDACTED***") {
+		t.Fatalf("expected redaction marker in sanitized args, got: %v", sanitized)
+	}
+}
+
+func TestSanitizeCommandArgsForLogs_RedactsKeyValuePassword(t *testing.T) {
+	args := []string{"-e", "ansible_password=Secret123!"}
+
+	sanitized := sanitizeCommandArgsForLogs(args)
+	if strings.Contains(strings.Join(sanitized, " "), "Secret123!") {
+		t.Fatalf("expected sanitized args to hide password, got: %v", sanitized)
+	}
+}

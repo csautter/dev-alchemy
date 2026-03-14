@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,60 +30,165 @@ Ethernet adapter Ethernet:
 	}
 }
 
-func TestUpsertWindowsHypervInventory_ReplacesExistingHostIP(t *testing.T) {
-	tempDir := t.TempDir()
-	inventoryPath := filepath.Join(tempDir, "hyperv_windows_winrm.yml")
-
-	initial := `all:
-    children:
-        windows:
-            hosts:
-                windows_host:
-                    ansible_host: 10.0.0.5
-                    ansible_user: Administrator
-`
-
-	if err := os.WriteFile(inventoryPath, []byte(initial), 0o644); err != nil {
-		t.Fatalf("failed to write initial inventory: %v", err)
+func TestBuildWindowsHypervProvisionArgs(t *testing.T) {
+	config := windowsHypervAnsibleConnectionConfig{
+		User:           "Administrator",
+		Password:       "Top$ecret!",
+		Connection:     "winrm",
+		WinrmTransport: "basic",
+		Port:           "5985",
 	}
 
-	if err := upsertWindowsHypervInventory(inventoryPath, "172.25.125.159"); err != nil {
-		t.Fatalf("upsertWindowsHypervInventory returned error: %v", err)
-	}
-
-	content, err := os.ReadFile(inventoryPath)
+	args, err := buildWindowsHypervProvisionArgs("172.25.125.159", config, true)
 	if err != nil {
-		t.Fatalf("failed to read updated inventory: %v", err)
+		t.Fatalf("buildWindowsHypervProvisionArgs returned error: %v", err)
 	}
 
-	updated := string(content)
-	if !strings.Contains(updated, "ansible_host: 172.25.125.159") {
-		t.Fatalf("expected updated inventory to contain new ansible_host, content: %s", updated)
+	if !strings.Contains(strings.Join(args, " "), "-i 172.25.125.159,") {
+		t.Fatalf("expected inline inventory with discovered host IP, args: %v", args)
 	}
-	if strings.Contains(updated, "ansible_host: 10.0.0.5") {
-		t.Fatalf("expected old ansible_host value to be replaced, content: %s", updated)
+	if !strings.Contains(strings.Join(args, " "), "-l 172.25.125.159") {
+		t.Fatalf("expected limit to discovered host IP, args: %v", args)
+	}
+	if args[len(args)-1] != "--check" {
+		t.Fatalf("expected --check to be passed through when requested, args: %v", args)
+	}
+
+	extraVarsIndex := -1
+	for index, arg := range args {
+		if arg == "-e" {
+			extraVarsIndex = index + 1
+			break
+		}
+	}
+	if extraVarsIndex <= 0 || extraVarsIndex >= len(args) {
+		t.Fatalf("expected -e with json payload, args: %v", args)
+	}
+
+	extraVars := map[string]string{}
+	if err := json.Unmarshal([]byte(args[extraVarsIndex]), &extraVars); err != nil {
+		t.Fatalf("expected extra vars to be valid JSON, got error: %v", err)
+	}
+
+	if extraVars["ansible_user"] != "Administrator" {
+		t.Fatalf("expected ansible_user in extra vars, got: %v", extraVars)
+	}
+	if extraVars["ansible_password"] != "Top$ecret!" {
+		t.Fatalf("expected ansible_password in extra vars, got: %v", extraVars)
+	}
+	if extraVars["ansible_connection"] != "winrm" {
+		t.Fatalf("expected ansible_connection in extra vars, got: %v", extraVars)
+	}
+	if extraVars["ansible_winrm_transport"] != "basic" {
+		t.Fatalf("expected ansible_winrm_transport in extra vars, got: %v", extraVars)
+	}
+	if extraVars["ansible_port"] != "5985" {
+		t.Fatalf("expected ansible_port in extra vars, got: %v", extraVars)
 	}
 }
 
-func TestUpsertWindowsHypervInventory_CreatesDefaultWhenMissing(t *testing.T) {
-	tempDir := t.TempDir()
-	inventoryPath := filepath.Join(tempDir, "hyperv_windows_winrm.yml")
+func TestLoadWindowsHypervAnsibleConnectionConfig_UsesDotEnvValues(t *testing.T) {
+	projectDir := t.TempDir()
+	dotEnvPath := filepath.Join(projectDir, ".env")
 
-	if err := upsertWindowsHypervInventory(inventoryPath, "172.25.125.159"); err != nil {
-		t.Fatalf("upsertWindowsHypervInventory returned error: %v", err)
+	content := strings.Join([]string{
+		hypervWindowsAnsibleUserEnvVar + "=Administrator",
+		hypervWindowsAnsiblePasswordEnvVar + "='P@ssw0rd! with spaces'",
+		hypervWindowsAnsibleConnectionEnvVar + "=winrm",
+		hypervWindowsAnsibleWinrmTransportEnvVar + "=basic",
+		hypervWindowsAnsiblePortEnvVar + "=5985",
+		"",
+	}, "\n")
+	if err := os.WriteFile(dotEnvPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to create .env fixture: %v", err)
 	}
 
-	content, err := os.ReadFile(inventoryPath)
+	connectionConfig, err := loadWindowsHypervAnsibleConnectionConfig(projectDir)
 	if err != nil {
-		t.Fatalf("failed to read created inventory: %v", err)
+		t.Fatalf("loadWindowsHypervAnsibleConnectionConfig returned error: %v", err)
 	}
 
-	created := string(content)
-	if !strings.Contains(created, "windows_host:") {
-		t.Fatalf("expected default inventory to define windows_host, content: %s", created)
+	if connectionConfig.User != "Administrator" {
+		t.Fatalf("expected user from .env, got %q", connectionConfig.User)
 	}
-	if !strings.Contains(created, "ansible_host: 172.25.125.159") {
-		t.Fatalf("expected default inventory to contain injected ip, content: %s", created)
+	if connectionConfig.Password != "P@ssw0rd! with spaces" {
+		t.Fatalf("expected password from .env, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.Connection != "winrm" {
+		t.Fatalf("expected connection from .env, got %q", connectionConfig.Connection)
+	}
+	if connectionConfig.WinrmTransport != "basic" {
+		t.Fatalf("expected winrm transport from .env, got %q", connectionConfig.WinrmTransport)
+	}
+	if connectionConfig.Port != "5985" {
+		t.Fatalf("expected port from .env, got %q", connectionConfig.Port)
+	}
+}
+
+func TestLoadWindowsHypervAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T) {
+	projectDir := t.TempDir()
+	dotEnvPath := filepath.Join(projectDir, ".env")
+
+	content := strings.Join([]string{
+		hypervWindowsAnsibleUserEnvVar + "=file-user",
+		hypervWindowsAnsiblePasswordEnvVar + "=file-pass",
+		"",
+	}, "\n")
+	if err := os.WriteFile(dotEnvPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to create .env fixture: %v", err)
+	}
+
+	t.Setenv(hypervWindowsAnsibleUserEnvVar, "env-user")
+	t.Setenv(hypervWindowsAnsiblePasswordEnvVar, "env-pass")
+	t.Setenv(hypervWindowsAnsibleConnectionEnvVar, "winrm")
+	t.Setenv(hypervWindowsAnsibleWinrmTransportEnvVar, "basic")
+	t.Setenv(hypervWindowsAnsiblePortEnvVar, "5986")
+
+	connectionConfig, err := loadWindowsHypervAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadWindowsHypervAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "env-user" {
+		t.Fatalf("expected environment user to override .env, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "env-pass" {
+		t.Fatalf("expected environment password to override .env, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.Port != "5986" {
+		t.Fatalf("expected environment port to override .env, got %q", connectionConfig.Port)
+	}
+}
+
+func TestLoadWindowsHypervAnsibleConnectionConfig_ReturnsErrorWhenRequiredValuesMissing(t *testing.T) {
+	projectDir := t.TempDir()
+
+	_, err := loadWindowsHypervAnsibleConnectionConfig(projectDir)
+	if err == nil {
+		t.Fatal("expected missing configuration to return an error")
+	}
+	if !strings.Contains(err.Error(), hypervWindowsAnsibleUserEnvVar) {
+		t.Fatalf("expected missing user env var name in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), hypervWindowsAnsiblePasswordEnvVar) {
+		t.Fatalf("expected missing password env var name in error, got: %v", err)
+	}
+}
+
+func TestParseDotEnvFile_ReturnsErrorForInvalidLine(t *testing.T) {
+	projectDir := t.TempDir()
+	dotEnvPath := filepath.Join(projectDir, ".env")
+
+	if err := os.WriteFile(dotEnvPath, []byte("INVALID_LINE"), 0o644); err != nil {
+		t.Fatalf("failed to create .env fixture: %v", err)
+	}
+
+	_, err := parseDotEnvFile(dotEnvPath)
+	if err == nil {
+		t.Fatal("expected parseDotEnvFile to return an error")
+	}
+	if !strings.Contains(err.Error(), "expected KEY=VALUE") {
+		t.Fatalf("unexpected parse error: %v", err)
 	}
 }
 
