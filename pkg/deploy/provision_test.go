@@ -346,3 +346,150 @@ func TestAnsibleColorEnv(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractLinuxIPv4FromHostOutput(t *testing.T) {
+	output := `
+default:
+  127.0.0.1
+  172.24.78.254 172.24.78.255
+`
+
+	ip, err := extractLinuxIPv4FromHostOutput(output)
+	if err != nil {
+		t.Fatalf("expected IP extraction to succeed, got error: %v", err)
+	}
+	if ip != "172.24.78.254" {
+		t.Fatalf("expected 172.24.78.254, got %s", ip)
+	}
+}
+
+func TestBuildUbuntuHypervProvisionArgs(t *testing.T) {
+	projectDir := t.TempDir()
+	config := ubuntuHypervAnsibleConnectionConfig{
+		User:           "packer",
+		Password:       "P@ssw0rd!",
+		BecomePassword: "P@ssw0rd!",
+		Connection:     "ssh",
+		SshCommonArgs:  "-o StrictHostKeyChecking=no",
+		SshTimeout:     "120",
+		SshRetries:     "3",
+	}
+
+	args, cleanup, err := buildUbuntuHypervProvisionArgs(projectDir, "172.24.78.254", config, true)
+	if err != nil {
+		t.Fatalf("buildUbuntuHypervProvisionArgs returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			t.Fatalf("failed to clean up extra vars file: %v", cleanupErr)
+		}
+	})
+
+	if !strings.Contains(strings.Join(args, " "), "-i 172.24.78.254,") {
+		t.Fatalf("expected inline inventory with discovered host IP, args: %v", args)
+	}
+	if !strings.Contains(strings.Join(args, " "), "-l 172.24.78.254") {
+		t.Fatalf("expected limit to discovered host IP, args: %v", args)
+	}
+	if args[len(args)-1] != "--check" {
+		t.Fatalf("expected --check to be passed through when requested, args: %v", args)
+	}
+
+	extraVarsIndex := -1
+	for index, arg := range args {
+		if arg == "--extra-vars" {
+			extraVarsIndex = index + 1
+			break
+		}
+	}
+	if extraVarsIndex <= 0 || extraVarsIndex >= len(args) {
+		t.Fatalf("expected --extra-vars with @temp file reference, args: %v", args)
+	}
+	if strings.Contains(strings.Join(args, " "), "P@ssw0rd!") {
+		t.Fatalf("did not expect password in process arguments, args: %v", args)
+	}
+	if !strings.HasPrefix(args[extraVarsIndex], "@") {
+		t.Fatalf("expected @<file> notation for --extra-vars, got: %q", args[extraVarsIndex])
+	}
+
+	extraVarsFilePath := filepath.Join(projectDir, strings.TrimPrefix(args[extraVarsIndex], "@"))
+	content, readErr := os.ReadFile(extraVarsFilePath)
+	if readErr != nil {
+		t.Fatalf("failed to read extra vars file %q: %v", extraVarsFilePath, readErr)
+	}
+
+	extraVars := map[string]string{}
+	if err := json.Unmarshal(content, &extraVars); err != nil {
+		t.Fatalf("expected extra vars file to contain valid JSON, got error: %v", err)
+	}
+
+	for key, expected := range map[string]string{
+		"ansible_user":            "packer",
+		"ansible_password":        "P@ssw0rd!",
+		"ansible_become_password": "P@ssw0rd!",
+		"ansible_connection":      "ssh",
+		"ansible_ssh_common_args": "-o StrictHostKeyChecking=no",
+		"ansible_ssh_timeout":     "120",
+		"ansible_ssh_retries":     "3",
+	} {
+		if extraVars[key] != expected {
+			t.Fatalf("expected %s=%q in extra vars, got: %v", key, expected, extraVars)
+		}
+	}
+}
+
+func TestLoadUbuntuHypervAnsibleConnectionConfig_UsesDefaults(t *testing.T) {
+	projectDir := t.TempDir()
+
+	connectionConfig, err := loadUbuntuHypervAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadUbuntuHypervAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "packer" {
+		t.Fatalf("expected default user packer, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "P@ssw0rd!" {
+		t.Fatalf("expected default password, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.BecomePassword != "P@ssw0rd!" {
+		t.Fatalf("expected default become password, got %q", connectionConfig.BecomePassword)
+	}
+	if connectionConfig.Connection != "ssh" {
+		t.Fatalf("expected default connection ssh, got %q", connectionConfig.Connection)
+	}
+}
+
+func TestLoadUbuntuHypervAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T) {
+	projectDir := t.TempDir()
+	dotEnvPath := filepath.Join(projectDir, ".env")
+
+	content := strings.Join([]string{
+		hypervUbuntuAnsibleUserEnvVar + "=file-user",
+		hypervUbuntuAnsiblePasswordEnvVar + "=file-pass",
+		hypervUbuntuAnsibleBecomePasswordEnvVar + "=file-become",
+		"",
+	}, "\n")
+	if err := os.WriteFile(dotEnvPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to create .env fixture: %v", err)
+	}
+
+	t.Setenv(hypervUbuntuAnsibleUserEnvVar, "env-user")
+	t.Setenv(hypervUbuntuAnsiblePasswordEnvVar, "env-pass")
+	t.Setenv(hypervUbuntuAnsibleBecomePasswordEnvVar, "env-become")
+
+	connectionConfig, err := loadUbuntuHypervAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadUbuntuHypervAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "env-user" {
+		t.Fatalf("expected environment user to override .env, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "env-pass" {
+		t.Fatalf("expected environment password to override .env, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.BecomePassword != "env-become" {
+		t.Fatalf("expected environment become password to override .env, got %q", connectionConfig.BecomePassword)
+	}
+}

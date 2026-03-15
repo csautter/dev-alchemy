@@ -1,43 +1,56 @@
-# Ubuntu Packer Template
+# Ubuntu Packer Templates
 
-This directory contains Packer templates for building Ubuntu images.
+This directory contains Packer templates used by the Go wrapper to build Ubuntu images.
 
-## Build Ubuntu on Windows Hosts
+## Build Ubuntu on Windows Hosts (Hyper-V)
 
-### Prerequisites
-
-- [Packer](https://www.packer.io/downloads) installed
-- Windows host or compatible environment
-
-### Usage
-
-To build the Ubuntu image, run:
+Use the wrapper from repository root:
 
 ```powershell
-# build ubuntu server
-packer build -var "desktop_version=false" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
-# build ubuntu desktop
-packer build -var "desktop_version=true" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
+# build ubuntu server (Hyper-V)
+go run cmd/main.go build ubuntu --type server --arch amd64
+# build ubuntu desktop (Hyper-V)
+go run cmd/main.go build ubuntu --type desktop --arch amd64
 ```
 
-You can reduce build time by disabling compression in the Vagrant post-processor. Edit the `compression_level` in the `post-processor "vagrant"` block of [windows.pkr.hcl](windows.pkr.hcl) and set it to `0` for no compression.
-Default for packer is `6`.
-[Compression Level Reference](https://developer.hashicorp.com/packer/docs/post-processors/compress#compression_level)
+The Hyper-V template is [linux-ubuntu-hyperv.pkr.hcl](linux-ubuntu-hyperv.pkr.hcl).
+Both server and desktop builds use the Ubuntu **live-server** ISO for unattended installation.
+Hyper-V cloud-init input is split by type:
+- `cloud-init/hyperv-server/meta-data` + `cloud-init/hyperv-server/user-data`
+- `cloud-init/hyperv-desktop/meta-data` + `cloud-init/hyperv-desktop/user-data`
+Both Hyper-V variants use cloud-init apt offline mode (`fallback: offline-install`, `geoip: false`) like the QEMU variants.
 
-### Output
-
-The build process will generate a Ubuntu image in Vagrant box format as defined in [linux-ubuntu-hyperv.pkr.hcl](linux-ubuntu-hyperv.pkr.hcl).
-
-## Build Ubuntu on MacOS Hosts
-
-### Usage
-
-To build the Ubuntu image, run:
+Manual Packer usage:
 
 ```powershell
-# build ubuntu server
-packer build -var "desktop_version=false" build/packer/linux/ubuntu/linux-ubuntu-amd64-on-macos.pkr.hcl
-PACKER_LOG=1 packer build -var "desktop_version=false" build/packer/linux/ubuntu/linux-ubuntu-amd64-on-macos.pkr.hcl
-# build ubuntu desktop
-PACKER_LOG=1 packer build -var "desktop_version=true" build/packer/linux/ubuntu/linux-ubuntu-amd64-on-macos.pkr.hcl
+packer init build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
+
+# server
+packer build -var "ubuntu_type=server" -var "iso_url=./cache/linux/ubuntu-24.04.3-live-server-amd64.iso" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
+
+# desktop
+packer build -var "ubuntu_type=desktop" -var "iso_url=./cache/linux/ubuntu-24.04.3-live-server-amd64.iso" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
+```
+
+Output boxes:
+
+- `cache/ubuntu/hyperv-ubuntu-server-amd64.box`
+- `cache/ubuntu/hyperv-ubuntu-desktop-amd64.box`
+
+## Build Ubuntu on macOS Hosts (UTM/QEMU)
+
+Use the wrapper from repository root:
+
+```bash
+# amd64 or arm64
+arch=amd64
+go run cmd/main.go build ubuntu --type server --arch $arch
+go run cmd/main.go build ubuntu --type desktop --arch $arch
+```
+
+Manual script usage:
+
+```bash
+build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch amd64 --ubuntu-type server
+build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
 ```

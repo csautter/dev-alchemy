@@ -39,6 +39,36 @@ func TestGetHypervWindowsBoxPath_FallsBackToCachePath(t *testing.T) {
 	}
 }
 
+func TestGetHypervUbuntuBoxPath_UsesExpectedBuildArtifact(t *testing.T) {
+	artifactPath := filepath.Join(t.TempDir(), "custom-ubuntu-hyperv.box")
+	config := alchemy_build.VirtualMachineConfig{
+		ExpectedBuildArtifacts: []string{artifactPath},
+	}
+
+	if got := getHypervUbuntuBoxPath(config); got != artifactPath {
+		t.Fatalf("expected box path %q, got %q", artifactPath, got)
+	}
+}
+
+func TestGetHypervUbuntuBoxPath_FallsBackToCachePath(t *testing.T) {
+	dirs := alchemy_build.GetDirectoriesInstance()
+	originalCacheDir := dirs.CacheDir
+	cacheDir := filepath.Join(t.TempDir(), "cache-root")
+	dirs.CacheDir = cacheDir
+	t.Cleanup(func() {
+		dirs.CacheDir = originalCacheDir
+	})
+
+	config := alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "desktop",
+	}
+	want := filepath.Join(cacheDir, "ubuntu", "hyperv-ubuntu-desktop-amd64.box")
+	if got := getHypervUbuntuBoxPath(config); got != want {
+		t.Fatalf("expected fallback box path %q, got %q", want, got)
+	}
+}
+
 func TestRunHypervVagrantDeployOnWindows_Smoke(t *testing.T) {
 	if os.Getenv("RUN_INTEGRATION_TESTS") == "" || os.Getenv("RUN_WINDOWS_HYPERV_DEPLOY_SMOKE") == "" {
 		t.Skip("skipping smoke test; set RUN_INTEGRATION_TESTS=1 and RUN_WINDOWS_HYPERV_DEPLOY_SMOKE=1")

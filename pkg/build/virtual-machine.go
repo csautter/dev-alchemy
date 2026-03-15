@@ -125,6 +125,32 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			VirtualizationEngine: VirtualizationEngineHyperv,
 		},
 		{
+			OS:         "ubuntu",
+			Arch:       "amd64",
+			UbuntuType: "server",
+			VncPort:    5914,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/hyperv-ubuntu-server-amd64.box"),
+			},
+			HostOs:               HostOsWindows,
+			VirtualizationEngine: VirtualizationEngineHyperv,
+			Cpus:                 4,
+			MemoryMB:             8192,
+		},
+		{
+			OS:         "ubuntu",
+			Arch:       "amd64",
+			UbuntuType: "desktop",
+			VncPort:    5915,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/hyperv-ubuntu-desktop-amd64.box"),
+			},
+			HostOs:               HostOsWindows,
+			VirtualizationEngine: VirtualizationEngineHyperv,
+			Cpus:                 4,
+			MemoryMB:             8192,
+		},
+		{
 			OS:      "windows11",
 			Arch:    "amd64",
 			VncPort: 5913,

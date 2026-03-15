@@ -2,7 +2,7 @@
 autoinstall:
   version: 1
   identity:
-    hostname: ubuntu-server
+    hostname: ubuntu-desktop
     username: packer
     password: "$6$K0/99yci1FVwggFy$/v7bEfr0MBcNq6teIkKkTjHMzJo9UE8q0IdrIORqycbldC.WgYtDhVdlEfqNgM7kN/zEuJX1KAr4kRAgHKn/.." # mkpasswd --method=SHA-512
   ssh:
@@ -10,10 +10,21 @@ autoinstall:
   storage:
     layout:
       name: direct
+  network:
+    version: 2
+    ethernets:
+      default:
+        dhcp4: true
+        dhcp6: true
+        match:
+          name: e*
   language: de
   locale: de_DE.UTF-8
   keyboard:
     layout: de
+  apt:
+    fallback: offline-install
+    geoip: false
   packages:
     - openssh-server
     - linux-virtual
@@ -24,5 +35,4 @@ autoinstall:
     - net-tools
     - cloud-init
   late-commands:
-    - curtin in-target -- apt-get update
-    - curtin in-target -- apt-get upgrade -y
+    - curtin in-target -- apt-get install -y ubuntu-desktop-minimal
