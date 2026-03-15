@@ -3,11 +3,18 @@
     url: "{{ kind_download_url }}"
     dest: "/tmp/kind"
     mode: '0755'
+  when: not ansible_check_mode
 
 - name: Move kind binary to install path
-  become: yes
+  become: true
   copy:
     src: "/tmp/kind"
     dest: "{{ kind_install_path }}"
     mode: '0755'
     remote_src: yes
+  when: not ansible_check_mode
+
+- name: Skip kind installation in check mode (Linux)
+  debug:
+    msg: "Skipping kind installation in check mode."
+  when: ansible_check_mode

@@ -31,6 +31,7 @@
     update_cache: yes
   loop: "{{ jdk_versions }}"
   become: true
+  when: not ansible_check_mode
 
 
 - name: Register Java alternatives (Temurin)
@@ -41,6 +42,7 @@
     priority: "{{ item }}"
   loop: "{{ jdk_versions }}"
   become: true
+  when: not ansible_check_mode
 
 
 - name: Register Javac alternatives (Temurin)
@@ -51,3 +53,9 @@
     priority: "{{ item }}"
   loop: "{{ jdk_versions }}"
   become: true
+  when: not ansible_check_mode
+
+- name: Skip Temurin installation in check mode (Debian/Ubuntu)
+  debug:
+    msg: "Skipping Temurin JDK installation in check mode."
+  when: ansible_check_mode

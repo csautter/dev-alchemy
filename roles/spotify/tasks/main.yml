@@ -29,8 +29,13 @@
     name: spotify-client
     state: present
     update_cache: yes
-  when: ansible_facts['os_family'] == 'Debian' and ansible_architecture == 'x86_64'
+  when: ansible_facts['os_family'] == 'Debian' and ansible_architecture == 'x86_64' and not ansible_check_mode
   become: true
+
+- name: Skip Spotify install in check mode (Linux)
+  debug:
+    msg: "Skipping Spotify package install in check mode."
+  when: ansible_facts['os_family'] == 'Debian' and ansible_architecture == 'x86_64' and ansible_check_mode
 
 - name: Log warning for unsupported platforms
   debug:
