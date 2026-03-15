@@ -8,36 +8,48 @@
     install_options: cask
   when: ansible_facts['os_family'] == 'Darwin'
 
-- name: Add Spotify GPG key (Linux)
-  ansible.builtin.apt_key:
-    url: https://download.spotify.com/debian/pubkey_C85668DF69375001.gpg
-    state: present
-    keyring: /etc/apt/trusted.gpg.d/spotify.gpg
-  when: ansible_facts['os_family'] == 'Debian'
-  become: true
+- name: Install Spotify on Debian/Ubuntu via APT (with auto snap fallback)
+  block:
+    - name: Install Spotify via APT
+      ansible.builtin.include_tasks: debian_apt.yml
+  rescue:
+    - name: Install Spotify via snap fallback
+      ansible.builtin.include_tasks: debian_snap.yml
+      when: spotify_linux_package_type == 'auto'
+    - name: Fail when APT install fails and fallback is disabled
+      ansible.builtin.fail:
+        msg: "Spotify APT installation failed and spotify_linux_package_type={{ spotify_linux_package_type }} does not allow automatic snap fallback."
+      when: spotify_linux_package_type != 'auto'
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - ansible_architecture in spotify_linux_supported_architectures
+    - not ansible_check_mode
+    - spotify_linux_package_type in ['auto', 'apt']
 
-- name: Add Spotify APT repository (Linux)
-  apt_repository:
-    repo: "deb https://repository.spotify.com stable non-free"
-    state: present
-    filename: spotify
-  when: ansible_facts['os_family'] == 'Debian'
-  become: true
+- name: Install Spotify on Debian/Ubuntu via snap
+  ansible.builtin.include_tasks: debian_snap.yml
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - ansible_architecture in spotify_linux_supported_architectures
+    - not ansible_check_mode
+    - spotify_linux_package_type == 'snap'
 
-- name: Install Spotify (Linux)
-  apt:
-    name: spotify-client
-    state: present
-    update_cache: yes
-  when: ansible_facts['os_family'] == 'Debian' and ansible_architecture == 'x86_64' and not ansible_check_mode
-  become: true
+- name: Skip Spotify install in check mode (Debian/Ubuntu)
+  ansible.builtin.debug:
+    msg: "Skipping Spotify installation in check mode."
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - ansible_architecture in spotify_linux_supported_architectures
+    - ansible_check_mode
 
-- name: Skip Spotify install in check mode (Linux)
-  debug:
-    msg: "Skipping Spotify package install in check mode."
-  when: ansible_facts['os_family'] == 'Debian' and ansible_architecture == 'x86_64' and ansible_check_mode
+- name: Log warning for unsupported Linux architecture
+  ansible.builtin.debug:
+    msg: "Spotify installation on Debian is only supported for x86_64/amd64."
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - ansible_architecture not in spotify_linux_supported_architectures
 
 - name: Log warning for unsupported platforms
-  debug:
+  ansible.builtin.debug:
     msg: "Spotify installation is not supported on this OS."
   when: ansible_facts['os_family'] not in ['Debian', 'Darwin']
