@@ -3,6 +3,7 @@ package deploy
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
@@ -10,6 +11,10 @@ import (
 
 const (
 	windowsHypervVagrantBoxName = "win11-packer"
+	hypervVagrantBoxNameEnvVar  = "VAGRANT_BOX_NAME"
+	hypervVagrantVMNameEnvVar   = "VAGRANT_VM_NAME"
+	hypervVagrantCpuEnvVar      = "VAGRANT_VM_CPUS"
+	hypervVagrantMemoryEnvVar   = "VAGRANT_VM_MEMORY_MB"
 )
 
 type hypervVagrantDeploySettings struct {
@@ -53,10 +58,15 @@ func RunHypervVagrantDeployOnWindows(config alchemy_build.VirtualMachineConfig) 
 func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfig, projectDir string) (hypervVagrantDeploySettings, error) {
 	switch config.OS {
 	case "windows11":
+		boxName := windowsHypervVagrantBoxName
 		return hypervVagrantDeploySettings{
-			BoxName:    windowsHypervVagrantBoxName,
+			BoxName:    boxName,
 			BoxPath:    getHypervWindowsBoxPath(config),
 			VagrantDir: filepath.Join(projectDir, "deployments", "vagrant", "ansible-windows"),
+			VagrantEnv: append([]string{
+				hypervVagrantBoxNameEnvVar + "=" + boxName,
+				hypervVagrantVMNameEnvVar + "=" + boxName,
+			}, buildHypervVagrantResourceEnv(config)...),
 		}, nil
 	case "ubuntu":
 		ubuntuType := config.UbuntuType
@@ -68,10 +78,10 @@ func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfi
 			BoxName:    boxName,
 			BoxPath:    getHypervUbuntuBoxPath(config),
 			VagrantDir: filepath.Join(projectDir, "deployments", "vagrant", "linux-ubuntu-hyperv"),
-			VagrantEnv: []string{
-				"VAGRANT_BOX_NAME=" + boxName,
-				"VAGRANT_VM_NAME=" + boxName,
-			},
+			VagrantEnv: append([]string{
+				hypervVagrantBoxNameEnvVar + "=" + boxName,
+				hypervVagrantVMNameEnvVar + "=" + boxName,
+			}, buildHypervVagrantResourceEnv(config)...),
 		}, nil
 	default:
 		return hypervVagrantDeploySettings{}, fmt.Errorf(
@@ -80,6 +90,13 @@ func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfi
 			config.UbuntuType,
 			config.Arch,
 		)
+	}
+}
+
+func buildHypervVagrantResourceEnv(config alchemy_build.VirtualMachineConfig) []string {
+	return []string{
+		hypervVagrantCpuEnvVar + "=" + strconv.Itoa(alchemy_build.GetVmCpuCount(config)),
+		hypervVagrantMemoryEnvVar + "=" + strconv.Itoa(alchemy_build.GetVmMemoryMB(config)),
 	}
 }
 

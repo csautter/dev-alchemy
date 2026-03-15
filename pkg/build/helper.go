@@ -33,6 +33,11 @@ func getVmCpuCountString(config VirtualMachineConfig) string {
 	return strconv.Itoa(getVmCpuCountInt(config))
 }
 
+// GetVmCpuCount returns the resolved CPU count for the given VM config.
+func GetVmCpuCount(config VirtualMachineConfig) int {
+	return getVmCpuCountInt(config)
+}
+
 // getVmMemoryMB determines the memory to allocate to the VM in megabytes.
 //
 // Logic:
@@ -61,6 +66,11 @@ func getVmMemoryMB(config VirtualMachineConfig) int {
 	}
 
 	return vmMemory
+}
+
+// GetVmMemoryMB returns the resolved memory allocation in megabytes for the given VM config.
+func GetVmMemoryMB(config VirtualMachineConfig) int {
+	return getVmMemoryMB(config)
 }
 
 func getTempDiskPathForHypervBuild() string {

@@ -123,6 +123,8 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsWindows,
 			VirtualizationEngine: VirtualizationEngineHyperv,
+			Cpus:                 4,
+			MemoryMB:             8192,
 		},
 		{
 			OS:         "ubuntu",

@@ -2,11 +2,14 @@ Vagrant.configure("2") do |config|
   config.vm.box = ENV.fetch("VAGRANT_BOX_NAME", "linux-ubuntu-server-packer")
   hyperv_switch = ENV.fetch("VAGRANT_HYPERV_SWITCH", "Default Switch")
   config.vm.network "public_network", bridge: hyperv_switch
+  # This image is intended to run without host folder mounts.
+  # Prevent Vagrant from touching /etc/fstab for synced folders.
+  config.vm.allow_fstab_modification = false
   
   config.vm.provider "hyperv" do |h|
     h.vmname = ENV.fetch("VAGRANT_VM_NAME", "linux-ubuntu-packer")
-    h.memory = 4096
-    h.cpus = 2
+    h.memory = ENV.fetch("VAGRANT_VM_MEMORY_MB", "8192").to_i
+    h.cpus = ENV.fetch("VAGRANT_VM_CPUS", "4").to_i
     h.enable_virtualization_extensions = true
   end
 
@@ -18,6 +21,6 @@ Vagrant.configure("2") do |config|
   config.ssh.username = "packer"
   config.ssh.password = "P@ssw0rd!"
 
-  # Disable all synced folders (including default /vagrant)
-  config.vm.synced_folder ".", "/vagrant", disabled: true
+  # Disable the default root synced folder.
+  config.vm.synced_folder ".", "/vagrant", id: "vagrant-root", disabled: true
 end
