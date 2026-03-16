@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
@@ -38,8 +39,13 @@ func TestResolveHypervVagrantDeploySettings_UbuntuIncludesConfigResources(t *tes
 	if env[hypervVagrantVMNameEnvVar] != "linux-ubuntu-server-packer" {
 		t.Fatalf("expected %s env var to match box name, got %q", hypervVagrantVMNameEnvVar, env[hypervVagrantVMNameEnvVar])
 	}
-	if env[hypervVagrantCpuEnvVar] != "6" {
-		t.Fatalf("expected cpu env var to match config value, got %q", env[hypervVagrantCpuEnvVar])
+	expectedCPU := strconv.Itoa(alchemy_build.GetVmCpuCount(config))
+	if env[hypervVagrantCpuEnvVar] != expectedCPU {
+		t.Fatalf(
+			"expected cpu env var %s to match resolved value, got %q",
+			expectedCPU,
+			env[hypervVagrantCpuEnvVar],
+		)
 	}
 	if env[hypervVagrantMemoryEnvVar] != "12288" {
 		t.Fatalf("expected memory env var to match config value, got %q", env[hypervVagrantMemoryEnvVar])
@@ -76,8 +82,13 @@ func TestResolveHypervVagrantDeploySettings_WindowsIncludesConfigResources(t *te
 	if env[hypervVagrantVMNameEnvVar] != windowsHypervVagrantBoxName {
 		t.Fatalf("expected %s env var to match windows vm name, got %q", hypervVagrantVMNameEnvVar, env[hypervVagrantVMNameEnvVar])
 	}
-	if env[hypervVagrantCpuEnvVar] != "2" {
-		t.Fatalf("expected cpu env var to match config value, got %q", env[hypervVagrantCpuEnvVar])
+	expectedCPU := strconv.Itoa(alchemy_build.GetVmCpuCount(config))
+	if env[hypervVagrantCpuEnvVar] != expectedCPU {
+		t.Fatalf(
+			"expected cpu env var %s to match resolved value, got %q",
+			expectedCPU,
+			env[hypervVagrantCpuEnvVar],
+		)
 	}
 	if env[hypervVagrantMemoryEnvVar] != "4096" {
 		t.Fatalf("expected memory env var to match config value, got %q", env[hypervVagrantMemoryEnvVar])
