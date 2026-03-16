@@ -100,6 +100,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' || inputs.enable_az_hyperv }}
     name: build TestBuildHypervWindows11Amd64OnWindows
     needs: [provision-hyperv-runner]
+    timeout-minutes: 60
     env:
       PACKER_TEMP_PATH: "D:\\hyperv-temp" # Use Azure VM temp disk for packer temp files to speed up build
     runs-on:
