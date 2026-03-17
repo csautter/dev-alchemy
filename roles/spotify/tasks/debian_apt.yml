@@ -1,0 +1,29 @@
+- name: Ensure APT keyring directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Download Spotify repository key
+  ansible.builtin.get_url:
+    url: "{{ spotify_apt_key_url }}"
+    dest: "{{ spotify_apt_keyring_path }}"
+    mode: "0644"
+    force: true
+  become: true
+
+- name: Add Spotify APT repository
+  ansible.builtin.apt_repository:
+    repo: "{{ spotify_apt_repo }}"
+    state: present
+    filename: spotify
+    mode: "0644"
+  become: true
+
+- name: Install Spotify via APT
+  ansible.builtin.apt:
+    name: "{{ spotify_apt_package_name }}"
+    state: present
+    update_cache: true
+  become: true

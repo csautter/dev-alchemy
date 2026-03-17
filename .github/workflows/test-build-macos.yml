@@ -33,6 +33,7 @@ jobs:
         include:
           - vm_os: windows11
             go_test_name: TestBuildQemuWindows11Arm64OnMacos
+            deploy_test_name: TestDeployUtmWindows11Arm64OnMacos
             runs_on: macos-26-tart
             cache_files: >-
               [{"local-path":"./cache/windows11/iso/win11_25h2_english_arm64.iso","container":"build-cache"},
@@ -41,29 +42,34 @@ jobs:
                {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
           - vm_os: windows11
             go_test_name: TestBuildQemuWindows11Amd64OnMacos
+            deploy_test_name: TestDeployUtmWindows11Amd64OnMacos
             runs_on: macos-26-tart
             cache_files: >-
               [{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},
                {"local-path":"./cache/utm/utm-guest-tools-latest.iso"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
+            deploy_test_name: TestDeployUtmUbuntuServerArm64OnMacos
             runs_on: macos-26-tart
             cache_files: >-
               [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
                {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
+            deploy_test_name: TestDeployUtmUbuntuServerAmd64OnMacos
             runs_on: macos-26-tart
             cache_files: >-
               [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
+            deploy_test_name: TestDeployUtmUbuntuDesktopArm64OnMacos
             runs_on: macos-26-tart
             cache_files: >-
               [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
                {"local-path":"./cache/qemu-efi-aarch64_all.deb"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
+            deploy_test_name: TestDeployUtmUbuntuDesktopAmd64OnMacos
             runs_on: macos-26-tart
             cache_files: >-
               [{"local-path":"./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
@@ -106,6 +112,17 @@ jobs:
           go mod vendor
           sudo -E make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
+      - name: Run deploy smoke test TEST_NAME=${{ matrix.deploy_test_name }}
+        if: steps.packer_build.outcome == 'success'
+        id: deploy_smoke
+        shell: bash
+        continue-on-error: true
+        env:
+          RUN_INTEGRATION_TESTS: "1"
+          RUN_MACOS_UTM_DEPLOY_SMOKE: "1"
+        run: |
+          go test -timeout 60m -v ./pkg/deploy -run "^${{ matrix.deploy_test_name }}$"
+
       - name: Move .vnc.mp4 files to artifact directory
         if: contains(matrix.runs_on, 'macos')
         run: |
@@ -133,8 +150,8 @@ jobs:
           files: ${{ matrix.cache_files }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Fail if Packer build failed
-        if: steps.packer_build.outcome == 'failure'
+      - name: Fail if build or deploy smoke test failed
+        if: always() && (steps.packer_build.outcome == 'failure' || steps.deploy_smoke.outcome == 'failure')
         run: |
-          echo "Packer build failed. Failing workflow."
+          echo "Build and/or deploy smoke test failed. Failing workflow."
           exit 1

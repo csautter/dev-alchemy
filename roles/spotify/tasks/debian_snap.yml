@@ -1,0 +1,26 @@
+- name: Install snapd
+  ansible.builtin.apt:
+    name: snapd
+    state: present
+    update_cache: true
+  become: true
+
+- name: Ensure snapd service is started
+  ansible.builtin.systemd:
+    name: snapd
+    enabled: true
+    state: started
+  when: ansible_service_mgr == "systemd"
+  become: true
+
+- name: Check whether Spotify snap is already installed
+  ansible.builtin.command: "snap list {{ spotify_snap_package_name }}"
+  register: spotify_snap_list
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Install Spotify via snap
+  ansible.builtin.command: "snap install {{ spotify_snap_package_name }}"
+  when: spotify_snap_list.rc != 0
+  become: true

@@ -392,6 +392,13 @@ func getWebFileDependencies() []WebFileDependency {
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
 				},
+				{
+					OS:                   "ubuntu",
+					UbuntuType:           "server",
+					Arch:                 "amd64",
+					HostOs:               HostOsWindows,
+					VirtualizationEngine: VirtualizationEngineHyperv,
+				},
 			},
 		},
 		{
@@ -419,6 +426,13 @@ func getWebFileDependencies() []WebFileDependency {
 					Arch:                 "amd64",
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "ubuntu",
+					UbuntuType:           "desktop",
+					Arch:                 "amd64",
+					HostOs:               HostOsWindows,
+					VirtualizationEngine: VirtualizationEngineHyperv,
 				},
 			},
 		},

@@ -1,18 +1,24 @@
-name: Test Build Runner (parallel & sequential)
+name: Test Go Unit Tests
 
 on:
   push:
     paths:
       - "cmd/cmd/build.go"
       - "cmd/cmd/build_parallel_test.go"
+      - "cmd/cmd/provision.go"
+      - "cmd/cmd/provision_test.go"
       - ".github/workflows/test-cmd-unit-tests.yml"
       - "pkg/build/**"
+      - "pkg/deploy/**"
   pull_request:
     paths:
       - "cmd/cmd/build.go"
       - "cmd/cmd/build_parallel_test.go"
+      - "cmd/cmd/provision.go"
+      - "cmd/cmd/provision_test.go"
       - ".github/workflows/test-cmd-unit-tests.yml"
       - "pkg/build/**"
+      - "pkg/deploy/**"
   workflow_dispatch:
 
 concurrency:
@@ -39,3 +45,6 @@ jobs:
 
       - name: Run cmd tests
         run: go test ./cmd/cmd/...
+
+      - name: Run deploy package tests
+        run: go test ./pkg/deploy/...

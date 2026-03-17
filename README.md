@@ -257,15 +257,40 @@ docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 
 #### Local tests for Ubuntu on Windows with Hyper-v
 
-To test changes locally on Ubuntu with a Windows Host System using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
+To test changes locally on Ubuntu with a Windows host system using Hyper-V, use the Go wrapper workflow from repository root.
 
-##### Build a Ubuntu VM
+##### Build the Ubuntu box
 
-Check [README.md](./build/packer/linux/ubuntu/README.md) for a guide to build an Ubuntu VM with packer and Hyper-V.
+```powershell
+# server
+go run cmd/main.go build ubuntu --type server --arch amd64
+# desktop
+go run cmd/main.go build ubuntu --type desktop --arch amd64
+```
 
-##### Run the Ubuntu VM
+##### Create/start the Ubuntu VM
 
-Check [README.md](./deployments/vagrant/linux-ubuntu-hyperv/README.md) for a guide to run the Ubuntu VM with Vagrant and Hyper-V.
+```powershell
+$env:VAGRANT_HYPERV_SWITCH = "Default Switch"
+go run cmd/main.go create ubuntu --type server --arch amd64
+# or desktop
+go run cmd/main.go create ubuntu --type desktop --arch amd64
+```
+
+##### Provision the Ubuntu VM
+
+```powershell
+go run cmd/main.go provision ubuntu --type server --arch amd64 --check
+go run cmd/main.go provision ubuntu --type server --arch amd64
+```
+
+The command discovers the VM IP automatically and runs Ansible through the Windows/Cygwin wrapper.
+Optional Ubuntu provisioning overrides can be set in `.env` using `HYPERV_UBUNTU_ANSIBLE_*`.
+
+For complete manual/advanced steps, see:
+
+- [Ubuntu Packer README](./build/packer/linux/ubuntu/README.md)
+- [Ubuntu Hyper-V deployment README](./deployments/vagrant/linux-ubuntu-hyperv/README.md)
 
 ### Local tests for windows (on windows)
 

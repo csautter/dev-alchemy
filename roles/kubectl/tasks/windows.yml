@@ -22,6 +22,10 @@
     name: kubernetes-cli
     state: latest
     version: "{{ kubectl_version }}"
+  register: kubectl_choco_result
+  failed_when: >
+    (kubectl_choco_result.rc | default(0)) != 0 and
+    ('A newer version of kubernetes-cli' not in (kubectl_choco_result.stdout | default('')))
   when: ansible_facts['os_family'] == "Windows" and (choco_check.rc | default(1)) == 0
 
 - name: Create target directory for kubectl fallback install

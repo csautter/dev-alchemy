@@ -26,5 +26,10 @@
     name: kubectl
     state: present
     update_cache: yes
-  when: ansible_facts['os_family'] == "Debian"
+  when: ansible_facts['os_family'] == "Debian" and not ansible_check_mode
   become: true
+
+- name: Skip kubectl install in check mode (Debian/Ubuntu)
+  debug:
+    msg: "Skipping kubectl package install in check mode."
+  when: ansible_facts['os_family'] == "Debian" and ansible_check_mode

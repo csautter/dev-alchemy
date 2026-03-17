@@ -19,6 +19,7 @@ var provisionCmd = &cobra.Command{
 
 Examples:
   alchemy provision windows11 --arch amd64 --check
+  alchemy provision ubuntu --type server --arch amd64 --check
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

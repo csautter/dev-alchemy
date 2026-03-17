@@ -17,11 +17,14 @@ autoinstall:
         dhcp4: true
         dhcp6: true
         match:
-          name: en*
+          name: e*
   language: de
   locale: de_DE.UTF-8
   keyboard:
     layout: de
+  apt:
+    fallback: offline-install
+    geoip: false
   packages:
     - openssh-server
     - linux-virtual
@@ -31,6 +34,4 @@ autoinstall:
     - qemu-guest-agent
     - spice-vdagent
   late-commands:
-    - curtin in-target -- apt-get update
-    - curtin in-target -- apt-get upgrade -y
     - curtin in-target -- apt-get install -y ubuntu-desktop-minimal

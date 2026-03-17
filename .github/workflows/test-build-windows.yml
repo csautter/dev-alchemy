@@ -100,6 +100,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' || inputs.enable_az_hyperv }}
     name: build TestBuildHypervWindows11Amd64OnWindows
     needs: [provision-hyperv-runner]
+    timeout-minutes: 60
     env:
       PACKER_TEMP_PATH: "D:\\hyperv-temp" # Use Azure VM temp disk for packer temp files to speed up build
     runs-on:
@@ -149,6 +150,16 @@ jobs:
           go mod vendor
           make test-build-specific TEST_NAME=TestBuildHypervWindows11Amd64OnWindows
 
+      - name: Run HyperV deploy smoke test
+        if: steps.packer_build.outcome == 'success'
+        id: deploy_smoke
+        shell: bash
+        continue-on-error: true
+        env:
+          RUN_INTEGRATION_TESTS: "1"
+          RUN_WINDOWS_HYPERV_DEPLOY_SMOKE: "1"
+        run: |
+          go test -timeout 60m -v ./pkg/deploy -run "^TestRunHypervVagrantDeployOnWindows_Smoke$"
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -163,10 +174,10 @@ jobs:
           files: '[{"local-path":"./cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Fail if Packer build failed
-        if: steps.packer_build.outcome == 'failure'
+      - name: Fail if build or deploy smoke test failed
+        if: always() && (steps.packer_build.outcome == 'failure' || steps.deploy_smoke.outcome == 'failure')
         run: |
-          echo "Packer build failed. Failing workflow."
+          echo "Build and/or deploy smoke test failed. Failing workflow."
           exit 1
 
   test-virtualbox-build:

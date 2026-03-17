@@ -4,6 +4,9 @@
 	"name": "Go",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"image": "mcr.microsoft.com/devcontainers/go:2-1.25-trixie",
+	"containerEnv": {
+    	"GOTOOLCHAIN": "auto"
+  	},
 	"features": {
 		"ghcr.io/devcontainers/features/python:1": {},
 		"ghcr.io/devcontainers-extra/features/packer-asdf:2": {}

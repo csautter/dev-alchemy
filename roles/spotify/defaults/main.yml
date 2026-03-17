@@ -1,0 +1,12 @@
+spotify_linux_package_type: "auto"  # valid values: auto, apt, snap
+
+spotify_linux_supported_architectures:
+  - x86_64
+  - amd64
+
+spotify_apt_key_url: "https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc"
+spotify_apt_keyring_path: "/etc/apt/keyrings/spotify.asc"
+spotify_apt_repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/spotify.asc] https://repository.spotify.com stable non-free"
+spotify_apt_package_name: "spotify-client"
+
+spotify_snap_package_name: "spotify"

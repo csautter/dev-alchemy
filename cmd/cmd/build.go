@@ -64,6 +64,44 @@ func runParallelBuilds(ctx context.Context, vms []alchemy_build.VirtualMachineCo
 	return errs
 }
 
+func runBuild(vm alchemy_build.VirtualMachineConfig) error {
+	switch vm.HostOs {
+	case alchemy_build.HostOsDarwin:
+		switch vm.VirtualizationEngine {
+		case alchemy_build.VirtualizationEngineUtm:
+			if vm.OS == "ubuntu" {
+				return alchemy_build.RunQemuUbuntuBuildOnMacOS(vm)
+			}
+			if vm.OS == "windows11" {
+				return alchemy_build.RunQemuWindowsBuildOnMacOS(vm)
+			}
+		}
+	case alchemy_build.HostOsWindows:
+		switch vm.VirtualizationEngine {
+		case alchemy_build.VirtualizationEngineHyperv:
+			if vm.OS == "windows11" {
+				return alchemy_build.RunHypervWindowsBuildOnWindows(vm)
+			}
+			if vm.OS == "ubuntu" {
+				return alchemy_build.RunHypervUbuntuBuildOnWindows(vm)
+			}
+		case alchemy_build.VirtualizationEngineVirtualBox:
+			if vm.OS == "windows11" {
+				return alchemy_build.RunVirtualBoxWindowsBuildOnWindows(vm)
+			}
+		}
+	}
+
+	return fmt.Errorf(
+		"build is not implemented for OS=%s type=%s arch=%s host_os=%s virtualization_engine=%s",
+		vm.OS,
+		vm.UbuntuType,
+		vm.Arch,
+		vm.HostOs,
+		vm.VirtualizationEngine,
+	)
+}
+
 var (
 	arch     string
 	parallel int
@@ -112,13 +150,12 @@ Example:
 			}()
 
 			runner := func(ctx context.Context, vm alchemy_build.VirtualMachineConfig) error {
-				if vm.OS == "ubuntu" {
-					return alchemy_build.RunQemuUbuntuBuildOnMacOS(vm)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
 				}
-				if vm.OS == "windows11" {
-					return alchemy_build.RunQemuWindowsBuildOnMacOS(vm)
-				}
-				return fmt.Errorf("unknown OS: %s", vm.OS)
+				return runBuild(vm)
 			}
 
 			errs := runParallelBuilds(ctx, available_virtual_machines, parallel, runner)
@@ -154,11 +191,8 @@ Example:
 		VirtualMachineConfig.VncPort = port
 		VirtualMachineConfig.Headless = headless
 
-		if osName == "ubuntu" {
-			alchemy_build.RunQemuUbuntuBuildOnMacOS(VirtualMachineConfig)
-		}
-		if osName == "windows11" {
-			alchemy_build.RunQemuWindowsBuildOnMacOS(VirtualMachineConfig)
+		if err := runBuild(VirtualMachineConfig); err != nil {
+			fmt.Printf("❌ Build failed for OS: %s, Type: %s, Architecture: %s — %v\n", osName, osType, arch, err)
 		}
 	},
 }

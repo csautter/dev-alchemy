@@ -21,10 +21,19 @@ const (
 	hypervWindowsAnsibleConnectionEnvVar     = "HYPERV_WINDOWS_ANSIBLE_CONNECTION"
 	hypervWindowsAnsibleWinrmTransportEnvVar = "HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT"
 	hypervWindowsAnsiblePortEnvVar           = "HYPERV_WINDOWS_ANSIBLE_PORT"
+
+	hypervUbuntuAnsibleUserEnvVar           = "HYPERV_UBUNTU_ANSIBLE_USER"
+	hypervUbuntuAnsiblePasswordEnvVar       = "HYPERV_UBUNTU_ANSIBLE_PASSWORD"
+	hypervUbuntuAnsibleBecomePasswordEnvVar = "HYPERV_UBUNTU_ANSIBLE_BECOME_PASSWORD"
+	hypervUbuntuAnsibleConnectionEnvVar     = "HYPERV_UBUNTU_ANSIBLE_CONNECTION"
+	hypervUbuntuAnsibleSshCommonArgsEnvVar  = "HYPERV_UBUNTU_ANSIBLE_SSH_COMMON_ARGS"
+	hypervUbuntuAnsibleSshTimeoutEnvVar     = "HYPERV_UBUNTU_ANSIBLE_SSH_TIMEOUT"
+	hypervUbuntuAnsibleSshRetriesEnvVar     = "HYPERV_UBUNTU_ANSIBLE_SSH_RETRIES"
 )
 
 var (
 	windowsIPv4Regex   = regexp.MustCompile(`(?mi)IPv4 Address[^:]*:\s*((?:\d{1,3}\.){3}\d{1,3})`)
+	linuxIPv4Regex     = regexp.MustCompile(`(?m)\b((?:\d{1,3}\.){3}\d{1,3})\b`)
 	loopbackAddressSet = map[string]struct{}{
 		"127.0.0.1": {},
 		"0.0.0.0":   {},
@@ -39,9 +48,22 @@ type windowsHypervAnsibleConnectionConfig struct {
 	Port           string
 }
 
+type ubuntuHypervAnsibleConnectionConfig struct {
+	User           string
+	Password       string
+	BecomePassword string
+	Connection     string
+	SshCommonArgs  string
+	SshTimeout     string
+	SshRetries     string
+}
+
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	if isHypervWindows11Amd64ProvisionTarget(vm) {
 		return runHypervWindows11Provision(vm, check)
+	}
+	if isHypervUbuntuAmd64ProvisionTarget(vm) {
+		return runHypervUbuntuProvision(vm, check)
 	}
 
 	return fmt.Errorf(
@@ -56,6 +78,13 @@ func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 
 func isHypervWindows11Amd64ProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
 	return vm.OS == "windows11" &&
+		vm.Arch == "amd64" &&
+		vm.HostOs == alchemy_build.HostOsWindows &&
+		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineHyperv
+}
+
+func isHypervUbuntuAmd64ProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
+	return vm.OS == "ubuntu" &&
 		vm.Arch == "amd64" &&
 		vm.HostOs == alchemy_build.HostOsWindows &&
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineHyperv
@@ -80,19 +109,7 @@ func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bo
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
 
-	runErr := error(nil)
-	if runtime.GOOS == "windows" {
-		runErr = runAnsibleViaCygwinBash(projectDir, args, 90*time.Minute, fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch))
-	} else {
-		runErr = runCommandWithStreamingLogsWithEnv(
-			projectDir,
-			90*time.Minute,
-			"ansible-playbook",
-			args,
-			ansibleColorEnv(),
-			fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch),
-		)
-	}
+	runErr := runAnsibleProvisionCommand(projectDir, args, 90*time.Minute, fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch))
 
 	cleanupErr := cleanupExtraVarsFile()
 	if runErr != nil {
@@ -103,6 +120,46 @@ func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bo
 	}
 	if cleanupErr != nil {
 		return fmt.Errorf("failed to remove ansible extra-vars temp file for %s:%s: %w", vm.OS, vm.Arch, cleanupErr)
+	}
+
+	return nil
+}
+
+func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	vagrantDir := filepath.Join(projectDir, "deployments", "vagrant", "linux-ubuntu-hyperv")
+
+	ip, err := discoverLinuxVagrantIPv4(vagrantDir)
+	if err != nil {
+		return fmt.Errorf("failed to determine vagrant VM IPv4 address: %w", err)
+	}
+
+	connectionConfig, err := loadUbuntuHypervAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to load hyper-v ubuntu ansible configuration: %w", err)
+	}
+
+	args, cleanupExtraVarsFile, err := buildUbuntuHypervProvisionArgs(projectDir, ip, connectionConfig, check)
+	if err != nil {
+		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
+	}
+
+	runErr := runAnsibleProvisionCommand(
+		projectDir,
+		args,
+		90*time.Minute,
+		fmt.Sprintf("%s:%s:%s:provision", vm.OS, vm.UbuntuType, vm.Arch),
+	)
+
+	cleanupErr := cleanupExtraVarsFile()
+	if runErr != nil {
+		if cleanupErr != nil {
+			return fmt.Errorf("ansible provisioning failed for %s:%s:%s: %w (also failed to remove ansible extra-vars temp file: %v)", vm.OS, vm.UbuntuType, vm.Arch, runErr, cleanupErr)
+		}
+		return fmt.Errorf("ansible provisioning failed for %s:%s:%s: %w", vm.OS, vm.UbuntuType, vm.Arch, runErr)
+	}
+	if cleanupErr != nil {
+		return fmt.Errorf("failed to remove ansible extra-vars temp file for %s:%s:%s: %w", vm.OS, vm.UbuntuType, vm.Arch, cleanupErr)
 	}
 
 	return nil
@@ -126,8 +183,46 @@ func discoverWindowsVagrantIPv4(vagrantDir string) (string, error) {
 	return ip, nil
 }
 
+func discoverLinuxVagrantIPv4(vagrantDir string) (string, error) {
+	output, err := runCommandWithCombinedOutput(
+		vagrantDir,
+		3*time.Minute,
+		"vagrant",
+		[]string{"ssh", "-c", "hostname -I"},
+	)
+	if err != nil {
+		return "", fmt.Errorf("vagrant ssh call failed: %w; output: %s", err, strings.TrimSpace(output))
+	}
+
+	ip, parseErr := extractLinuxIPv4FromHostOutput(output)
+	if parseErr != nil {
+		return "", fmt.Errorf("could not parse IPv4 address from vagrant output: %w", parseErr)
+	}
+	return ip, nil
+}
+
 func extractWindowsIPv4FromIPConfig(output string) (string, error) {
 	matches := windowsIPv4Regex.FindAllStringSubmatch(output, -1)
+	if len(matches) == 0 {
+		return "", errors.New("no IPv4 address found in command output")
+	}
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		ip := strings.TrimSpace(match[1])
+		if _, isLoopback := loopbackAddressSet[ip]; isLoopback {
+			continue
+		}
+		return ip, nil
+	}
+
+	return "", errors.New("only loopback or invalid IPv4 candidates found in command output")
+}
+
+func extractLinuxIPv4FromHostOutput(output string) (string, error) {
+	matches := linuxIPv4Regex.FindAllStringSubmatch(output, -1)
 	if len(matches) == 0 {
 		return "", errors.New("no IPv4 address found in command output")
 	}
@@ -157,6 +252,28 @@ func buildWindowsHypervProvisionArgs(projectDir string, ip string, connectionCon
 	if err != nil {
 		return nil, nil, err
 	}
+
+	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, check)
+}
+
+func buildUbuntuHypervProvisionArgs(projectDir string, ip string, connectionConfig ubuntuHypervAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
+	extraVars, err := json.Marshal(map[string]string{
+		"ansible_user":            connectionConfig.User,
+		"ansible_password":        connectionConfig.Password,
+		"ansible_become_password": connectionConfig.BecomePassword,
+		"ansible_connection":      connectionConfig.Connection,
+		"ansible_ssh_common_args": connectionConfig.SshCommonArgs,
+		"ansible_ssh_timeout":     connectionConfig.SshTimeout,
+		"ansible_ssh_retries":     connectionConfig.SshRetries,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, check)
+}
+
+func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, check bool) ([]string, func() error, error) {
 
 	extraVarsFile, err := os.CreateTemp(projectDir, ".ansible-extra-vars-*.json")
 	if err != nil {
@@ -226,6 +343,30 @@ func loadWindowsHypervAnsibleConnectionConfig(projectDir string) (windowsHypervA
 			strings.Join(missing, ", "),
 			envFilePath,
 		)
+	}
+
+	return connectionConfig, nil
+}
+
+func loadUbuntuHypervAnsibleConnectionConfig(projectDir string) (ubuntuHypervAnsibleConnectionConfig, error) {
+	envFilePath := filepath.Join(projectDir, ".env")
+	valuesFromFile, err := parseDotEnvFile(envFilePath)
+	if err != nil {
+		return ubuntuHypervAnsibleConnectionConfig{}, err
+	}
+
+	password := defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsiblePasswordEnvVar, valuesFromFile), "P@ssw0rd!")
+	connectionConfig := ubuntuHypervAnsibleConnectionConfig{
+		User:           defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleUserEnvVar, valuesFromFile), "packer"),
+		Password:       password,
+		BecomePassword: defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleBecomePasswordEnvVar, valuesFromFile), password),
+		Connection:     defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleConnectionEnvVar, valuesFromFile), "ssh"),
+		SshCommonArgs: defaultIfEmpty(
+			resolveEnvValue(hypervUbuntuAnsibleSshCommonArgsEnvVar, valuesFromFile),
+			"-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no",
+		),
+		SshTimeout: defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleSshTimeoutEnvVar, valuesFromFile), "120"),
+		SshRetries: defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleSshRetriesEnvVar, valuesFromFile), "3"),
 	}
 
 	return connectionConfig, nil
@@ -301,6 +442,21 @@ func defaultIfEmpty(value string, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func runAnsibleProvisionCommand(projectDir string, args []string, timeout time.Duration, logPrefix string) error {
+	if runtime.GOOS == "windows" {
+		return runAnsibleViaCygwinBash(projectDir, args, timeout, logPrefix)
+	}
+
+	return runCommandWithStreamingLogsWithEnv(
+		projectDir,
+		timeout,
+		"ansible-playbook",
+		args,
+		ansibleColorEnv(),
+		logPrefix,
+	)
 }
 
 func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout time.Duration, logPrefix string) error {
