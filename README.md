@@ -413,37 +413,30 @@ go run cmd/main.go create windows11 --arch $arch --headless
 
 Open UTM and start the created Windows VM.
 
-Get the IP address of the created UTM VM
+Set WinRM credentials for the provisioning wrapper in project-root `.env` (or process environment):
+
+```dotenv
+UTM_WINDOWS_ANSIBLE_USER=Administrator
+UTM_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
+# Optional (defaults shown):
+UTM_WINDOWS_ANSIBLE_CONNECTION=winrm
+UTM_WINDOWS_ANSIBLE_WINRM_TRANSPORT=basic
+UTM_WINDOWS_ANSIBLE_PORT=5985
+```
+
+Now provision the running UTM VM from the repository root:
+
+```bash
+go run cmd/main.go provision windows11 --arch $arch --check
+go run cmd/main.go provision windows11 --arch $arch
+```
+
+The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target. On macOS it also sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for the ansible process automatically.
+
+If you need to inspect the discovered IP manually for troubleshooting:
 
 ```bash
 bash ./deployments/utm/determine-vm-ip-address.sh --arch $arch --os windows11
-```
-
-You can create the inventory file using a Bash script and the `$vagrant_ip` variable:
-
-```bash
-vagrant_ip="YOUR_VM_IP_HERE"
-cat <<EOF > ./inventory/utm_windows_winrm.yml
-all:
-  children:
-    windows:
-      hosts:
-        windows_host:
-          ansible_host: $vagrant_ip
-          ansible_user: Administrator
-          ansible_password: P@ssw0rd!
-          ansible_connection: winrm
-          ansible_winrm_transport: basic
-          ansible_port: 5985
-EOF
-```
-
-Now you can run the ansible playbook against the UTM Windows VM:
-
-```bash
-export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
-ansible-playbook ./playbooks/setup.yml -i ./inventory/utm_windows_winrm.yml -l windows_host -vvv --check
-ansible-playbook ./playbooks/setup.yml -i ./inventory/utm_windows_winrm.yml -l windows_host -vvv
 ```
 
 > ℹ️ Note: there is a known issue, that ansible might fail to connect via winrm when the VM has configured the Network interface as Public network. Switching it to Private network should resolve the issue.

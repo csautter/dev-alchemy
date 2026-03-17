@@ -59,3 +59,17 @@ arch=arm64 # or amd64
 go run cmd/main.go build windows11 --arch $arch
 go run cmd/main.go create windows11 --arch $arch
 ```
+
+Start the VM in UTM and provision it from repository root with the unified wrapper:
+
+```bash
+go run cmd/main.go provision windows11 --arch $arch --check
+go run cmd/main.go provision windows11 --arch $arch
+```
+
+Set the required WinRM credentials in project-root `.env` or process environment before provisioning:
+
+```dotenv
+UTM_WINDOWS_ANSIBLE_USER=Administrator
+UTM_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
+```

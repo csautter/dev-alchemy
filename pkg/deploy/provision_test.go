@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -30,9 +31,9 @@ Ethernet adapter Ethernet:
 	}
 }
 
-func TestBuildWindowsHypervProvisionArgs(t *testing.T) {
+func TestBuildWindowsProvisionArgs(t *testing.T) {
 	projectDir := t.TempDir()
-	config := windowsHypervAnsibleConnectionConfig{
+	config := windowsAnsibleConnectionConfig{
 		User:           "Administrator",
 		Password:       "Top$ecret!",
 		Connection:     "winrm",
@@ -40,9 +41,9 @@ func TestBuildWindowsHypervProvisionArgs(t *testing.T) {
 		Port:           "5985",
 	}
 
-	args, cleanup, err := buildWindowsHypervProvisionArgs(projectDir, "172.25.125.159", config, true)
+	args, cleanup, err := buildWindowsProvisionArgs(projectDir, "172.25.125.159", config, true)
 	if err != nil {
-		t.Fatalf("buildWindowsHypervProvisionArgs returned error: %v", err)
+		t.Fatalf("buildWindowsProvisionArgs returned error: %v", err)
 	}
 	t.Cleanup(func() {
 		if cleanupErr := cleanup(); cleanupErr != nil {
@@ -150,6 +151,44 @@ func TestLoadWindowsHypervAnsibleConnectionConfig_UsesDotEnvValues(t *testing.T)
 	}
 }
 
+func TestLoadWindowsUtmAnsibleConnectionConfig_UsesDotEnvValues(t *testing.T) {
+	projectDir := t.TempDir()
+	dotEnvPath := filepath.Join(projectDir, ".env")
+
+	content := strings.Join([]string{
+		utmWindowsAnsibleUserEnvVar + "=Administrator",
+		utmWindowsAnsiblePasswordEnvVar + "='P@ssw0rd! with spaces'",
+		utmWindowsAnsibleConnectionEnvVar + "=winrm",
+		utmWindowsAnsibleWinrmTransportEnvVar + "=basic",
+		utmWindowsAnsiblePortEnvVar + "=5985",
+		"",
+	}, "\n")
+	if err := os.WriteFile(dotEnvPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to create .env fixture: %v", err)
+	}
+
+	connectionConfig, err := loadWindowsUtmAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadWindowsUtmAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "Administrator" {
+		t.Fatalf("expected user from .env, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "P@ssw0rd! with spaces" {
+		t.Fatalf("expected password from .env, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.Connection != "winrm" {
+		t.Fatalf("expected connection from .env, got %q", connectionConfig.Connection)
+	}
+	if connectionConfig.WinrmTransport != "basic" {
+		t.Fatalf("expected winrm transport from .env, got %q", connectionConfig.WinrmTransport)
+	}
+	if connectionConfig.Port != "5985" {
+		t.Fatalf("expected port from .env, got %q", connectionConfig.Port)
+	}
+}
+
 func TestLoadWindowsHypervAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T) {
 	projectDir := t.TempDir()
 	dotEnvPath := filepath.Join(projectDir, ".env")
@@ -196,6 +235,21 @@ func TestLoadWindowsHypervAnsibleConnectionConfig_ReturnsErrorWhenRequiredValues
 		t.Fatalf("expected missing user env var name in error, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), hypervWindowsAnsiblePasswordEnvVar) {
+		t.Fatalf("expected missing password env var name in error, got: %v", err)
+	}
+}
+
+func TestLoadWindowsUtmAnsibleConnectionConfig_ReturnsErrorWhenRequiredValuesMissing(t *testing.T) {
+	projectDir := t.TempDir()
+
+	_, err := loadWindowsUtmAnsibleConnectionConfig(projectDir)
+	if err == nil {
+		t.Fatal("expected missing configuration to return an error")
+	}
+	if !strings.Contains(err.Error(), utmWindowsAnsibleUserEnvVar) {
+		t.Fatalf("expected missing user env var name in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), utmWindowsAnsiblePasswordEnvVar) {
 		t.Fatalf("expected missing password env var name in error, got: %v", err)
 	}
 }
@@ -347,6 +401,24 @@ func TestAnsibleColorEnv(t *testing.T) {
 	}
 }
 
+func TestAnsibleRuntimeEnv(t *testing.T) {
+	entries := ansibleRuntimeEnv()
+	combined := strings.Join(entries, ";")
+
+	for _, required := range []string{"ANSIBLE_FORCE_COLOR=true", "PY_COLORS=1", "TERM=xterm-256color"} {
+		if !strings.Contains(combined, required) {
+			t.Fatalf("expected env %q in %q", required, combined)
+		}
+	}
+
+	if runtime.GOOS == "darwin" && !strings.Contains(combined, "OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES") {
+		t.Fatalf("expected macOS ansible runtime env to disable fork safety, got %q", combined)
+	}
+	if runtime.GOOS != "darwin" && strings.Contains(combined, "OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES") {
+		t.Fatalf("did not expect macOS-specific env on %s, got %q", runtime.GOOS, combined)
+	}
+}
+
 func TestExtractLinuxIPv4FromHostOutput(t *testing.T) {
 	output := `
 default:
@@ -360,6 +432,62 @@ default:
 	}
 	if ip != "172.24.78.254" {
 		t.Fatalf("expected 172.24.78.254, got %s", ip)
+	}
+}
+
+func TestExtractUtmMacAddressFromConfig(t *testing.T) {
+	content := `
+<dict>
+  <key>Network</key>
+  <array>
+    <dict>
+      <key>MacAddress</key>
+      <string>A6:1:B:0C:0d:EF</string>
+    </dict>
+  </array>
+</dict>
+`
+
+	macAddress, err := extractUtmMacAddressFromConfig(content)
+	if err != nil {
+		t.Fatalf("expected UTM MAC extraction to succeed, got error: %v", err)
+	}
+	if macAddress != "a6:01:0b:0c:0d:ef" {
+		t.Fatalf("expected normalized UTM MAC address, got %q", macAddress)
+	}
+}
+
+func TestExtractIPv4ForMacAddress(t *testing.T) {
+	output := `
+? (127.0.0.1) at 00:00:00:00:00:00 on lo0 ifscope [loopback]
+? (192.168.64.21) at a6:1:b:c:d:ef on en0 ifscope [ethernet]
+`
+
+	ip, err := extractIPv4ForMacAddress(output, "A6:01:0B:0C:0D:EF")
+	if err != nil {
+		t.Fatalf("expected ARP IP extraction to succeed, got error: %v", err)
+	}
+	if ip != "192.168.64.21" {
+		t.Fatalf("expected 192.168.64.21, got %s", ip)
+	}
+}
+
+func TestUtmConfigPlistPath(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	path, err := utmConfigPlistPath(alchemy_build.VirtualMachineConfig{
+		OS:   "windows11",
+		Arch: "amd64",
+	})
+	if err != nil {
+		t.Fatalf("utmConfigPlistPath returned error: %v", err)
+	}
+
+	expected := filepath.Join(homeDir, "Library", "Containers", "com.utmapp.UTM", "Data", "Documents", "windows11-amd64-dev-alchemy.utm", "config.plist")
+	if path != expected {
+		t.Fatalf("expected %q, got %q", expected, path)
 	}
 }
 

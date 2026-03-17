@@ -94,6 +94,26 @@ func TestIsProvisionSupported(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "darwin utm windows11 arm64 supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "windows11",
+				Arch:                 "arm64",
+				HostOs:               alchemy_build.HostOsDarwin,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineUtm,
+			},
+			want: true,
+		},
+		{
+			name: "darwin utm windows11 amd64 supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "windows11",
+				Arch:                 "amd64",
+				HostOs:               alchemy_build.HostOsDarwin,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineUtm,
+			},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {

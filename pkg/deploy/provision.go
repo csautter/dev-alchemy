@@ -22,6 +22,12 @@ const (
 	hypervWindowsAnsibleWinrmTransportEnvVar = "HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT"
 	hypervWindowsAnsiblePortEnvVar           = "HYPERV_WINDOWS_ANSIBLE_PORT"
 
+	utmWindowsAnsibleUserEnvVar           = "UTM_WINDOWS_ANSIBLE_USER"
+	utmWindowsAnsiblePasswordEnvVar       = "UTM_WINDOWS_ANSIBLE_PASSWORD"
+	utmWindowsAnsibleConnectionEnvVar     = "UTM_WINDOWS_ANSIBLE_CONNECTION"
+	utmWindowsAnsibleWinrmTransportEnvVar = "UTM_WINDOWS_ANSIBLE_WINRM_TRANSPORT"
+	utmWindowsAnsiblePortEnvVar           = "UTM_WINDOWS_ANSIBLE_PORT"
+
 	hypervUbuntuAnsibleUserEnvVar           = "HYPERV_UBUNTU_ANSIBLE_USER"
 	hypervUbuntuAnsiblePasswordEnvVar       = "HYPERV_UBUNTU_ANSIBLE_PASSWORD"
 	hypervUbuntuAnsibleBecomePasswordEnvVar = "HYPERV_UBUNTU_ANSIBLE_BECOME_PASSWORD"
@@ -34,13 +40,23 @@ const (
 var (
 	windowsIPv4Regex   = regexp.MustCompile(`(?mi)IPv4 Address[^:]*:\s*((?:\d{1,3}\.){3}\d{1,3})`)
 	linuxIPv4Regex     = regexp.MustCompile(`(?m)\b((?:\d{1,3}\.){3}\d{1,3})\b`)
+	utmMacAddressRegex = regexp.MustCompile(`(?s)<key>MacAddress</key>\s*<string>([^<]+)</string>`)
+	arpEntryRegex      = regexp.MustCompile(`(?i)\((\d{1,3}(?:\.\d{1,3}){3})\)\s+at\s+([0-9a-f:-]+|<incomplete>)`)
 	loopbackAddressSet = map[string]struct{}{
 		"127.0.0.1": {},
 		"0.0.0.0":   {},
 	}
 )
 
-type windowsHypervAnsibleConnectionConfig struct {
+type windowsAnsibleConnectionConfig struct {
+	User           string
+	Password       string
+	Connection     string
+	WinrmTransport string
+	Port           string
+}
+
+type windowsAnsibleConnectionEnvVars struct {
 	User           string
 	Password       string
 	Connection     string
@@ -61,6 +77,9 @@ type ubuntuHypervAnsibleConnectionConfig struct {
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	if isHypervWindows11Amd64ProvisionTarget(vm) {
 		return runHypervWindows11Provision(vm, check)
+	}
+	if isUtmWindows11ProvisionTarget(vm) {
+		return runUtmWindows11Provision(vm, check)
 	}
 	if isHypervUbuntuAmd64ProvisionTarget(vm) {
 		return runHypervUbuntuProvision(vm, check)
@@ -90,6 +109,13 @@ func isHypervUbuntuAmd64ProvisionTarget(vm alchemy_build.VirtualMachineConfig) b
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineHyperv
 }
 
+func isUtmWindows11ProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
+	return vm.OS == "windows11" &&
+		(vm.Arch == "amd64" || vm.Arch == "arm64") &&
+		vm.HostOs == alchemy_build.HostOsDarwin &&
+		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineUtm
+}
+
 func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 	vagrantDir := filepath.Join(projectDir, "deployments", "vagrant", "ansible-windows")
@@ -104,7 +130,41 @@ func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bo
 		return fmt.Errorf("failed to load hyper-v windows ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildWindowsHypervProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildWindowsProvisionArgs(projectDir, ip, connectionConfig, check)
+	if err != nil {
+		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
+	}
+
+	runErr := runAnsibleProvisionCommand(projectDir, args, 90*time.Minute, fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch))
+
+	cleanupErr := cleanupExtraVarsFile()
+	if runErr != nil {
+		if cleanupErr != nil {
+			return fmt.Errorf("ansible provisioning failed for %s:%s: %w (also failed to remove ansible extra-vars temp file: %v)", vm.OS, vm.Arch, runErr, cleanupErr)
+		}
+		return fmt.Errorf("ansible provisioning failed for %s:%s: %w", vm.OS, vm.Arch, runErr)
+	}
+	if cleanupErr != nil {
+		return fmt.Errorf("failed to remove ansible extra-vars temp file for %s:%s: %w", vm.OS, vm.Arch, cleanupErr)
+	}
+
+	return nil
+}
+
+func runUtmWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+
+	ip, err := discoverUtmVMIPv4(projectDir, vm)
+	if err != nil {
+		return fmt.Errorf("failed to determine UTM VM IPv4 address: %w", err)
+	}
+
+	connectionConfig, err := loadWindowsUtmAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to load UTM windows ansible configuration: %w", err)
+	}
+
+	args, cleanupExtraVarsFile, err := buildWindowsProvisionArgs(projectDir, ip, connectionConfig, check)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -241,7 +301,132 @@ func extractLinuxIPv4FromHostOutput(output string) (string, error) {
 	return "", errors.New("only loopback or invalid IPv4 candidates found in command output")
 }
 
-func buildWindowsHypervProvisionArgs(projectDir string, ip string, connectionConfig windowsHypervAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
+func discoverUtmVMIPv4(projectDir string, vm alchemy_build.VirtualMachineConfig) (string, error) {
+	configPath, err := utmConfigPlistPath(vm)
+	if err != nil {
+		return "", err
+	}
+
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read UTM config %q: %w", configPath, err)
+	}
+
+	macAddress, err := extractUtmMacAddressFromConfig(string(content))
+	if err != nil {
+		return "", fmt.Errorf("failed to extract UTM MAC address from %q: %w", configPath, err)
+	}
+
+	output, err := runCommandWithCombinedOutput(projectDir, time.Minute, "arp", []string{"-a"})
+	if err != nil {
+		return "", fmt.Errorf("arp lookup failed: %w; output: %s", err, strings.TrimSpace(output))
+	}
+
+	ip, parseErr := extractIPv4ForMacAddress(output, macAddress)
+	if parseErr != nil {
+		return "", fmt.Errorf("could not determine IPv4 address for UTM MAC %q from arp output: %w", macAddress, parseErr)
+	}
+	return ip, nil
+}
+
+func utmConfigPlistPath(vm alchemy_build.VirtualMachineConfig) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine user home directory: %w", err)
+	}
+
+	vmName := alchemy_build.GetVirtualMachineNameWithType(vm)
+	return filepath.Join(
+		homeDir,
+		"Library",
+		"Containers",
+		"com.utmapp.UTM",
+		"Data",
+		"Documents",
+		fmt.Sprintf("%s-%s-dev-alchemy.utm", vmName, vm.Arch),
+		"config.plist",
+	), nil
+}
+
+func extractUtmMacAddressFromConfig(content string) (string, error) {
+	match := utmMacAddressRegex.FindStringSubmatch(content)
+	if len(match) < 2 {
+		return "", errors.New("no MacAddress entry found in config.plist")
+	}
+
+	return normalizeMACAddress(match[1])
+}
+
+func extractIPv4ForMacAddress(output string, targetMacAddress string) (string, error) {
+	normalizedTargetMAC, err := normalizeMACAddress(targetMacAddress)
+	if err != nil {
+		return "", fmt.Errorf("invalid target MAC address %q: %w", targetMacAddress, err)
+	}
+
+	matches := arpEntryRegex.FindAllStringSubmatch(output, -1)
+	if len(matches) == 0 {
+		return "", errors.New("no ARP entries found in command output")
+	}
+
+	for _, match := range matches {
+		if len(match) < 3 {
+			continue
+		}
+
+		ip := strings.TrimSpace(match[1])
+		if _, isLoopback := loopbackAddressSet[ip]; isLoopback {
+			continue
+		}
+
+		normalizedCandidateMAC, normalizeErr := normalizeMACAddress(match[2])
+		if normalizeErr != nil {
+			continue
+		}
+		if normalizedCandidateMAC == normalizedTargetMAC {
+			return ip, nil
+		}
+	}
+
+	return "", errors.New("no IPv4 address found for MAC address in arp output")
+}
+
+func normalizeMACAddress(value string) (string, error) {
+	cleaned := strings.TrimSpace(strings.Trim(value, "<>"))
+	if cleaned == "" {
+		return "", errors.New("MAC address is empty")
+	}
+
+	separator := ":"
+	switch {
+	case strings.Contains(cleaned, ":"):
+		separator = ":"
+	case strings.Contains(cleaned, "-"):
+		separator = "-"
+	default:
+		return "", fmt.Errorf("unsupported MAC address format %q", value)
+	}
+
+	parts := strings.Split(cleaned, separator)
+	if len(parts) != 6 {
+		return "", fmt.Errorf("expected 6 MAC address segments, got %d", len(parts))
+	}
+
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if len(part) == 0 || len(part) > 2 {
+			return "", fmt.Errorf("invalid MAC address segment %q", part)
+		}
+		octet, err := strconv.ParseUint(part, 16, 8)
+		if err != nil {
+			return "", fmt.Errorf("invalid MAC address segment %q: %w", part, err)
+		}
+		normalized = append(normalized, fmt.Sprintf("%02x", octet))
+	}
+
+	return strings.Join(normalized, ":"), nil
+}
+
+func buildWindowsProvisionArgs(projectDir string, ip string, connectionConfig windowsAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
 	extraVars, err := json.Marshal(map[string]string{
 		"ansible_user":            connectionConfig.User,
 		"ansible_password":        connectionConfig.Password,
@@ -315,30 +500,50 @@ func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, c
 	return args, cleanup, nil
 }
 
-func loadWindowsHypervAnsibleConnectionConfig(projectDir string) (windowsHypervAnsibleConnectionConfig, error) {
+func loadWindowsHypervAnsibleConnectionConfig(projectDir string) (windowsAnsibleConnectionConfig, error) {
+	return loadWindowsAnsibleConnectionConfig(projectDir, windowsAnsibleConnectionEnvVars{
+		User:           hypervWindowsAnsibleUserEnvVar,
+		Password:       hypervWindowsAnsiblePasswordEnvVar,
+		Connection:     hypervWindowsAnsibleConnectionEnvVar,
+		WinrmTransport: hypervWindowsAnsibleWinrmTransportEnvVar,
+		Port:           hypervWindowsAnsiblePortEnvVar,
+	})
+}
+
+func loadWindowsUtmAnsibleConnectionConfig(projectDir string) (windowsAnsibleConnectionConfig, error) {
+	return loadWindowsAnsibleConnectionConfig(projectDir, windowsAnsibleConnectionEnvVars{
+		User:           utmWindowsAnsibleUserEnvVar,
+		Password:       utmWindowsAnsiblePasswordEnvVar,
+		Connection:     utmWindowsAnsibleConnectionEnvVar,
+		WinrmTransport: utmWindowsAnsibleWinrmTransportEnvVar,
+		Port:           utmWindowsAnsiblePortEnvVar,
+	})
+}
+
+func loadWindowsAnsibleConnectionConfig(projectDir string, envVars windowsAnsibleConnectionEnvVars) (windowsAnsibleConnectionConfig, error) {
 	envFilePath := filepath.Join(projectDir, ".env")
 	valuesFromFile, err := parseDotEnvFile(envFilePath)
 	if err != nil {
-		return windowsHypervAnsibleConnectionConfig{}, err
+		return windowsAnsibleConnectionConfig{}, err
 	}
 
-	connectionConfig := windowsHypervAnsibleConnectionConfig{
-		User:           resolveEnvValue(hypervWindowsAnsibleUserEnvVar, valuesFromFile),
-		Password:       resolveEnvValue(hypervWindowsAnsiblePasswordEnvVar, valuesFromFile),
-		Connection:     defaultIfEmpty(resolveEnvValue(hypervWindowsAnsibleConnectionEnvVar, valuesFromFile), "winrm"),
-		WinrmTransport: defaultIfEmpty(resolveEnvValue(hypervWindowsAnsibleWinrmTransportEnvVar, valuesFromFile), "basic"),
-		Port:           defaultIfEmpty(resolveEnvValue(hypervWindowsAnsiblePortEnvVar, valuesFromFile), "5985"),
+	connectionConfig := windowsAnsibleConnectionConfig{
+		User:           resolveEnvValue(envVars.User, valuesFromFile),
+		Password:       resolveEnvValue(envVars.Password, valuesFromFile),
+		Connection:     defaultIfEmpty(resolveEnvValue(envVars.Connection, valuesFromFile), "winrm"),
+		WinrmTransport: defaultIfEmpty(resolveEnvValue(envVars.WinrmTransport, valuesFromFile), "basic"),
+		Port:           defaultIfEmpty(resolveEnvValue(envVars.Port, valuesFromFile), "5985"),
 	}
 
 	missing := make([]string, 0, 2)
 	if connectionConfig.User == "" {
-		missing = append(missing, hypervWindowsAnsibleUserEnvVar)
+		missing = append(missing, envVars.User)
 	}
 	if connectionConfig.Password == "" {
-		missing = append(missing, hypervWindowsAnsiblePasswordEnvVar)
+		missing = append(missing, envVars.Password)
 	}
 	if len(missing) > 0 {
-		return windowsHypervAnsibleConnectionConfig{}, fmt.Errorf(
+		return windowsAnsibleConnectionConfig{}, fmt.Errorf(
 			"missing required values %s; define them in process environment or in %q",
 			strings.Join(missing, ", "),
 			envFilePath,
@@ -454,7 +659,7 @@ func runAnsibleProvisionCommand(projectDir string, args []string, timeout time.D
 		timeout,
 		"ansible-playbook",
 		args,
-		ansibleColorEnv(),
+		ansibleRuntimeEnv(),
 		logPrefix,
 	)
 }
@@ -481,7 +686,7 @@ func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout ti
 		timeout,
 		cygwinBashExecutable,
 		[]string{"-l", "-c", bashCommand},
-		ansibleColorEnv(),
+		ansibleRuntimeEnv(),
 		logPrefix,
 	)
 }
@@ -577,4 +782,12 @@ func ansibleColorEnv() []string {
 		"PY_COLORS=1",
 		"TERM=xterm-256color",
 	}
+}
+
+func ansibleRuntimeEnv() []string {
+	env := ansibleColorEnv()
+	if runtime.GOOS == "darwin" {
+		env = append(env, "OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES")
+	}
+	return env
 }
