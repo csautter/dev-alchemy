@@ -22,3 +22,47 @@ func TestRunDeployReturnsErrorForUnsupportedEngine(t *testing.T) {
 		t.Fatalf("expected error to mention engine %q, got %q", vm.VirtualizationEngine, err.Error())
 	}
 }
+
+func TestIsCreateSupported(t *testing.T) {
+	tests := []struct {
+		name string
+		vm   alchemy_build.VirtualMachineConfig
+		want bool
+	}{
+		{
+			name: "utm supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				VirtualizationEngine: alchemy_build.VirtualizationEngineUtm,
+			},
+			want: true,
+		},
+		{
+			name: "hyperv supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+			},
+			want: true,
+		},
+		{
+			name: "virtualbox unsupported",
+			vm: alchemy_build.VirtualMachineConfig{
+				VirtualizationEngine: alchemy_build.VirtualizationEngineVirtualBox,
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		if got := isCreateSupported(tt.vm); got != tt.want {
+			t.Fatalf("%s: expected %v, got %v", tt.name, tt.want, got)
+		}
+	}
+}
+
+func TestAvailableCreateVirtualMachinesOnlyReturnsSupportedConfigs(t *testing.T) {
+	for _, vm := range availableCreateVirtualMachines() {
+		if !isCreateSupported(vm) {
+			t.Fatalf("expected only supported create configs, got engine %q", vm.VirtualizationEngine)
+		}
+	}
+}

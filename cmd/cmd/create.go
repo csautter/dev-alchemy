@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 	alchemy_deploy "github.com/csautter/dev-alchemy/pkg/deploy"
@@ -11,6 +12,82 @@ import (
 var (
 	osType string
 )
+
+func isCreateSupported(vm alchemy_build.VirtualMachineConfig) bool {
+	switch vm.VirtualizationEngine {
+	case alchemy_build.VirtualizationEngineUtm, alchemy_build.VirtualizationEngineHyperv:
+		return true
+	default:
+		return false
+	}
+}
+
+func availableCreateVirtualMachines() []alchemy_build.VirtualMachineConfig {
+	var supported []alchemy_build.VirtualMachineConfig
+	for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
+		if isCreateSupported(vm) {
+			supported = append(supported, vm)
+		}
+	}
+	return supported
+}
+
+func createVirtualizationEngines(vms []alchemy_build.VirtualMachineConfig) []alchemy_build.VirtualizationEngine {
+	engineSet := make(map[alchemy_build.VirtualizationEngine]struct{})
+	for _, vm := range vms {
+		engineSet[vm.VirtualizationEngine] = struct{}{}
+	}
+
+	engines := make([]alchemy_build.VirtualizationEngine, 0, len(engineSet))
+	for engine := range engineSet {
+		engines = append(engines, engine)
+	}
+	sort.Slice(engines, func(i, j int) bool {
+		return engines[i] < engines[j]
+	})
+	return engines
+}
+
+func printAvailableCreateCombinations() error {
+	vms := availableCreateVirtualMachines()
+	fmt.Printf("Available create combinations for host OS: %s\n", alchemy_build.GetCurrentHostOs())
+	if len(vms) == 0 {
+		fmt.Printf("No create combinations are available for the current host OS.\n")
+		return nil
+	}
+
+	grouped := make(map[alchemy_build.VirtualizationEngine][]alchemy_build.VirtualMachineConfig)
+	for _, vm := range vms {
+		grouped[vm.VirtualizationEngine] = append(grouped[vm.VirtualizationEngine], vm)
+	}
+
+	for _, engine := range createVirtualizationEngines(vms) {
+		fmt.Printf("\nVirtualization engine: %s\n", engine)
+		fmt.Printf("%-12s %-10s %-8s %-10s %-18s\n", "OS", "Type", "Arch", "Artifact", "Create")
+		for _, vm := range grouped[engine] {
+			artifactsExist, err := alchemy_build.BuildArtifactsExistQuiet(vm)
+			if err != nil {
+				return fmt.Errorf("failed to check build artifacts for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+			}
+
+			vmType := vm.UbuntuType
+			if vmType == "" {
+				vmType = "-"
+			}
+
+			artifactState := "missing"
+			createState := "build required"
+			if artifactsExist {
+				artifactState = "exists"
+				createState = "ready to create"
+			}
+
+			fmt.Printf("%-12s %-10s %-8s %-10s %-18s\n", vm.OS, vmType, vm.Arch, artifactState, createState)
+		}
+	}
+
+	return nil
+}
 
 // createCmd represents the create command
 var createCmd = &cobra.Command{
@@ -34,7 +111,7 @@ Example:
 
 		if osName == "all" {
 			fmt.Println("🔧 Creating all available VM configurations")
-			for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
+			for _, vm := range availableCreateVirtualMachines() {
 				fmt.Printf("➡️ Creating VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
 				if err := runDeploy(vm); err != nil {
 					return fmt.Errorf("failed creating VM for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
@@ -43,7 +120,7 @@ Example:
 			return nil
 		}
 
-		available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+		available_virtual_machines := availableCreateVirtualMachines()
 		var VirtualMachineConfig alchemy_build.VirtualMachineConfig
 		valid := false
 		for _, vm := range available_virtual_machines {
@@ -65,6 +142,15 @@ Example:
 	},
 }
 
+var createListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List available create combinations and artifact readiness",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return printAvailableCreateCombinations()
+	},
+}
+
 func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
 	switch vm.VirtualizationEngine {
 	case alchemy_build.VirtualizationEngineUtm:
@@ -78,6 +164,7 @@ func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
 
 func init() {
 	rootCmd.AddCommand(createCmd)
+	createCmd.AddCommand(createListCmd)
 
 	createCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	createCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")

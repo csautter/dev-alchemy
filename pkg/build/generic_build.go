@@ -107,6 +107,20 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	return nil
 }
 
+func resolveExpectedBuildArtifacts(config VirtualMachineConfig) ([]string, error) {
+	if len(config.ExpectedBuildArtifacts) > 0 {
+		return config.ExpectedBuildArtifacts, nil
+	}
+
+	for _, vm := range AvailableVirtualMachineConfigs() {
+		if string(vm.HostOs) == string(config.HostOs) && vm.OS == config.OS && vm.UbuntuType == config.UbuntuType && vm.Arch == config.Arch && string(vm.VirtualizationEngine) == string(config.VirtualizationEngine) {
+			return vm.ExpectedBuildArtifacts, nil
+		}
+	}
+
+	return nil, errors.New("no build artifacts defined for the given configuration")
+}
+
 func stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan chan bool) {
 	if runtime.GOOS != "darwin" {
 		return
@@ -228,36 +242,50 @@ func getFreeVncPort(config *VirtualMachineConfig) int {
 }
 
 func checkIfBuildArtifactsExist(config VirtualMachineConfig) (bool, error) {
-	if len(config.ExpectedBuildArtifacts) == 0 {
-		for _, vm := range AvailableVirtualMachineConfigs() {
-			if string(vm.HostOs) == string(config.HostOs) && vm.OS == config.OS && vm.UbuntuType == config.UbuntuType && vm.Arch == config.Arch && string(vm.VirtualizationEngine) == string(config.VirtualizationEngine) {
-				config.ExpectedBuildArtifacts = vm.ExpectedBuildArtifacts
-				break
-			}
+	return BuildArtifactsExist(config)
+}
+
+func BuildArtifactsExist(config VirtualMachineConfig) (bool, error) {
+	return buildArtifactsExist(config, true)
+}
+
+func BuildArtifactsExistQuiet(config VirtualMachineConfig) (bool, error) {
+	return buildArtifactsExist(config, false)
+}
+
+func buildArtifactsExist(config VirtualMachineConfig, verbose bool) (bool, error) {
+	artifacts, err := resolveExpectedBuildArtifacts(config)
+	if err != nil {
+		if verbose {
+			log.Printf("No build artifacts defined. Aborting build.")
 		}
+		return false, err
 	}
 
-	if len(config.ExpectedBuildArtifacts) == 0 {
-		log.Printf("No build artifacts defined. Aborting build.")
-		return false, errors.New("no build artifacts defined for the given configuration")
-	}
-
-	if len(config.ExpectedBuildArtifacts) > 0 {
-		artifacts_exist := true
-		for _, artifact := range config.ExpectedBuildArtifacts {
+	artifacts_exist := true
+	for _, artifact := range artifacts {
+		if verbose {
 			log.Printf("Checking artifact: %s", artifact)
-			if _, err := os.Stat(artifact); os.IsNotExist(err) {
-				artifacts_exist = false
+		}
+		if _, err := os.Stat(artifact); os.IsNotExist(err) {
+			artifacts_exist = false
+			if verbose {
 				log.Printf("Expected build artifact does not exist: %s", artifact)
 				log.Printf("Proceeding with build...")
-				break
 			}
+			break
 		}
-		if artifacts_exist {
-			log.Printf("Build artifacts already exist, skipping build: %v", config.ExpectedBuildArtifacts)
-			return true, nil
+		if err != nil {
+			return false, err
 		}
 	}
+	if artifacts_exist {
+		if verbose {
+			log.Printf("Build artifacts already exist, skipping build: %v", artifacts)
+		}
+		return true, nil
+	}
+
 	return false, nil
 }
 
