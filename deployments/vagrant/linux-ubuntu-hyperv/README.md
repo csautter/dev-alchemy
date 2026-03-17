@@ -10,14 +10,17 @@ All commands are intended for PowerShell on a Windows host.
 
 ## Prerequisites
 
+- Run the dependency installer from repository root in an elevated PowerShell session:
+
+```powershell
+go run cmd/main.go install
+```
+
 - [Vagrant](https://www.vagrantup.com/downloads)
 - [Hyper-V](https://docs.microsoft.com/en-us/virtualization/hyper-v-on-windows/quick-start/enable-hyper-v)
 - [Cygwin](https://www.cygwin.com/install.html)
 - [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html) via Cygwin
 - [Go](https://go.dev/doc/install)
-
-You can bootstrap most Windows requirements with:
-[dev-alchemy-self-setup.ps1](../../../scripts/windows/dev-alchemy-self-setup.ps1)
 
 ## Build Ubuntu Hyper-V Box
 

@@ -48,43 +48,34 @@ git clone https://github.com/csautter/dev-alchemy.git
 cd dev-alchemy
 ```
 
-### 2. Install Ansible
+### 2. Install Host Dependencies
 
-> Make sure Ansible is installed on your system.
+Use the unified CLI command from the repository root.
 
-#### macOS (via Homebrew):
+#### macOS
 
 ```bash
-brew install ansible
+go run cmd/main.go install
 ```
 
-#### Ubuntu / Debian:
+This runs [scripts/macos/dev-alchemy-install-dependencies.sh](./scripts/macos/dev-alchemy-install-dependencies.sh).
+
+#### Windows
+
+Run the command in an elevated PowerShell session (Run as Administrator):
+
+```powershell
+go run cmd/main.go install
+```
+
+This runs [scripts/windows/dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1).
+
+#### Ubuntu / Debian
+
+The `install` command is currently intended for macOS and Windows hosts. On Linux, install Ansible manually:
 
 ```bash
 sudo apt update && sudo apt install ansible
-```
-
-#### Windows:
-
-For the most native Windows experience, use cygwin and install ansible via pip.
-
-> ⚠️ Make sure to run the commands in an elevated PowerShell (Run as Administrator).<br>
-
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-choco install -y cygwin --params \"/InstallDir:C:\cygwin64 /NoAdmin /NoStartMenu\"
-choco install -y cyg-get
-cyg-get python39 python39-pip python39-cryptography openssh git make gcc-core gcc-g++ libffi-devel libssl-devel sshpass
-C:\\cygwin64\\bin\\python3.9.exe -m pip install ansible
-C:\\cygwin64\\bin\\python3.9.exe -m pip install pywinrm
-```
-
-> ℹ️ Instead of using the powershell snippet above, you can also install all windows dependencies with following powershell script:<br> [dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1)
-
-Run the powershell script in an elevated PowerShell session (Run as Administrator):
-
-```powershell
-./scripts/windows/dev-alchemy-self-setup.ps1
 ```
 
 ##### Enable ansible remote access on Windows
@@ -259,6 +250,12 @@ docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 
 To test changes locally on Ubuntu with a Windows host system using Hyper-V, use the Go wrapper workflow from repository root.
 
+Install host dependencies first:
+
+```powershell
+go run cmd/main.go install
+```
+
 ##### Build the Ubuntu box
 
 ```powershell
@@ -317,6 +314,12 @@ Check the [README](deployments/docker-compose/ansible-windows/README.md) in the 
 #### Use Hyper-V VM
 
 To test changes locally on Windows using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
+
+Install host dependencies first:
+
+```powershell
+go run cmd/main.go install
+```
 
 ##### Download a Windows .iso file
 
@@ -399,6 +402,12 @@ This will delete the temporary VM.
 On macOS you can use UTM to run a Windows VM for testing ansible changes on windows. UTM is a powerful and easy-to-use virtual machine manager for macOS.
 Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and qemu on macos.
 
+Install host dependencies first:
+
+```bash
+go run cmd/main.go install
+```
+
 You can run the following commands to build and create the Windows 11 VM in UTM:
 
 ```bash
@@ -446,6 +455,12 @@ bash ./deployments/utm/determine-vm-ip-address.sh --arch $arch --os windows11
 ### Local tests for Ubuntu (on macos)
 
 On macOS you can use UTM to run a Ubuntu VM for testing ansible changes on Ubuntu. UTM is a powerful and easy-to-use virtual machine manager for macOS.
+
+Install host dependencies first:
+
+```bash
+go run cmd/main.go install
+```
 
 You can run the following commands to build and create the Ubuntu VM in UTM:
 

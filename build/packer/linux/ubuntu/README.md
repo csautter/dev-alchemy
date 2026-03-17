@@ -7,6 +7,8 @@ This directory contains Packer templates used by the Go wrapper to build Ubuntu 
 Use the wrapper from repository root:
 
 ```powershell
+go run cmd/main.go install
+
 # build ubuntu server (Hyper-V)
 go run cmd/main.go build ubuntu --type server --arch amd64
 # build ubuntu desktop (Hyper-V)
@@ -44,6 +46,7 @@ Use the wrapper from repository root:
 ```bash
 # amd64 or arm64
 arch=amd64
+go run cmd/main.go install
 go run cmd/main.go build ubuntu --type server --arch $arch
 go run cmd/main.go build ubuntu --type desktop --arch $arch
 ```

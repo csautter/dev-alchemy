@@ -8,6 +8,7 @@ This directory contains a Packer template for building Windows images.
 
 - [Packer](https://www.packer.io/downloads) installed
 - Windows host or compatible environment
+- For repository-managed host dependencies, run `go run cmd/main.go install` from repo root on macOS or Windows before building.
 
 ### Usage
 
@@ -56,6 +57,7 @@ The process is idempotent, so you can re-run commands without issues.
 
 ```bash
 arch=arm64 # or amd64
+go run cmd/main.go install
 go run cmd/main.go build windows11 --arch $arch
 go run cmd/main.go create windows11 --arch $arch
 ```

@@ -5,7 +5,11 @@ All commands are meant to be run in a powershell terminal on a Windows host mach
 
 ## Prerequisites
 
-Use the [dev-alchemy-self-setup.ps1](../../../scripts/windows/dev-alchemy-self-setup.ps1) script to set up your Windows host machine with the necessary tools and configurations.
+Run the dependency installer from repository root in an elevated PowerShell session:
+
+```powershell
+go run cmd/main.go install
+```
 
 Ensure you have the following installed:
 
@@ -87,7 +91,7 @@ If `CYGWIN_TERMINAL_PATH` points to `mintty.exe`, provisioning resolves it to th
 
 ## Run Provisioning
 
-Run provisioning from the repository root. The wrapper resolves IP address via `vagrant winrm -c ipconfig` and runs `ansible-playbook` through Cygwin.
+After installing host dependencies, run provisioning from the repository root. The wrapper resolves IP address via `vagrant winrm -c ipconfig` and runs `ansible-playbook` through Cygwin.
 
 ```bash
 go run cmd/main.go provision windows11 --arch amd64 --check
