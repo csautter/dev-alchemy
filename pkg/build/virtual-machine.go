@@ -3,6 +3,7 @@ package build
 import (
 	"path"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -180,13 +181,41 @@ func GetCurrentHostOs() HostOsType {
 }
 
 func AvailableVirtualMachineConfigsForCurrentHostOS() []VirtualMachineConfig {
+	return AvailableVirtualMachineConfigsForHostOS(GetCurrentHostOs())
+}
+
+func AvailableVirtualMachineConfigsForHostOS(hostOs HostOsType) []VirtualMachineConfig {
 	var configs []VirtualMachineConfig
 	for _, config := range AvailableVirtualMachineConfigs() {
-		if config.HostOs == GetCurrentHostOs() {
+		if config.HostOs == hostOs {
 			configs = append(configs, config)
 		}
 	}
 	return configs
+}
+
+func AvailableVirtualMachineConfigsForCurrentHostOSByVirtualizationEngine() map[VirtualizationEngine][]VirtualMachineConfig {
+	grouped := make(map[VirtualizationEngine][]VirtualMachineConfig)
+	for _, config := range AvailableVirtualMachineConfigsForCurrentHostOS() {
+		grouped[config.VirtualizationEngine] = append(grouped[config.VirtualizationEngine], config)
+	}
+	return grouped
+}
+
+func CurrentHostVirtualizationEngines() []VirtualizationEngine {
+	engineSet := make(map[VirtualizationEngine]struct{})
+	for _, config := range AvailableVirtualMachineConfigsForCurrentHostOS() {
+		engineSet[config.VirtualizationEngine] = struct{}{}
+	}
+
+	engines := make([]VirtualizationEngine, 0, len(engineSet))
+	for engine := range engineSet {
+		engines = append(engines, engine)
+	}
+	sort.Slice(engines, func(i, j int) bool {
+		return engines[i] < engines[j]
+	})
+	return engines
 }
 
 func GenerateVirtualMachineSlug(config *VirtualMachineConfig) string {

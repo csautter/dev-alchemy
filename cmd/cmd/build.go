@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -108,6 +109,37 @@ var (
 	headless bool
 )
 
+func printAvailableBuildCombinations() {
+	engines := alchemy_build.CurrentHostVirtualizationEngines()
+	grouped := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOSByVirtualizationEngine()
+
+	fmt.Printf("Available build combinations for host OS: %s\n", alchemy_build.GetCurrentHostOs())
+	if len(engines) == 0 {
+		fmt.Printf("No build combinations are available for the current host OS.\n")
+		return
+	}
+
+	for _, engine := range engines {
+		fmt.Printf("\nVirtualization engine: %s\n", engine)
+		fmt.Printf("%-12s %-10s %-8s\n", "OS", "Type", "Arch")
+		for _, vm := range grouped[engine] {
+			vmType := vm.UbuntuType
+			if vmType == "" {
+				vmType = "-"
+			}
+			fmt.Printf("%-12s %-10s %-8s\n", vm.OS, vmType, vm.Arch)
+		}
+	}
+
+	if len(engines) > 1 {
+		engineNames := make([]string, 0, len(engines))
+		for _, engine := range engines {
+			engineNames = append(engineNames, string(engine))
+		}
+		fmt.Printf("\nCurrent host supports multiple virtualization engines: %s\n", strings.Join(engineNames, ", "))
+	}
+}
+
 // buildCmd represents the build command
 var buildCmd = &cobra.Command{
 	Use:   "build <osname>",
@@ -197,8 +229,18 @@ Example:
 	},
 }
 
+var buildListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List available OS, type, and architecture combinations for build",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		printAvailableBuildCombinations()
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(buildCmd)
+	buildCmd.AddCommand(buildListCmd)
 
 	buildCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	buildCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
