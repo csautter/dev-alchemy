@@ -283,6 +283,11 @@ $scripts = @(
             Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true;
             Enable-PSRemoting -SkipNetworkProfileCheck -Force;
             # Keep WinRM reachable even if Windows later reclassifies the NIC as Public.
+            # Attack surface note: this keeps WinRM Basic over HTTP exposed on TCP/5985 for all
+            # firewall profiles and remote addresses. Combined with the unattended Administrator
+            # credential configured earlier in this file, that is broader exposure than a
+            # private-network-only rule and should only be used on trusted build networks.
+            # A safer provisioning approach is planned for future releases.
             $winRmFirewallRuleName = 'DevAlchemy-WinRM-HTTP-In-TCP';
             if (-not (Get-NetFirewallRule -Name $winRmFirewallRuleName -ErrorAction SilentlyContinue)) {
                 New-NetFirewallRule -Name $winRmFirewallRuleName -DisplayName 'DevAlchemy WinRM HTTP' -Enabled True -Profile Any -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5985 -RemoteAddress Any;
