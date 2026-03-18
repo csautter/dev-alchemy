@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
@@ -35,6 +38,15 @@ const (
 	hypervUbuntuAnsibleSshCommonArgsEnvVar  = "HYPERV_UBUNTU_ANSIBLE_SSH_COMMON_ARGS"
 	hypervUbuntuAnsibleSshTimeoutEnvVar     = "HYPERV_UBUNTU_ANSIBLE_SSH_TIMEOUT"
 	hypervUbuntuAnsibleSshRetriesEnvVar     = "HYPERV_UBUNTU_ANSIBLE_SSH_RETRIES"
+
+	utmIPv4DiscoveryRetryWindow     = 45 * time.Second
+	utmIPv4DiscoveryRetryInterval   = 3 * time.Second
+	utmIPv4ARPCommandTimeout        = time.Minute
+	utmIPv4ProbeDialTimeout         = 250 * time.Millisecond
+	utmIPv4ProbeWorkerCount         = 32
+	utmIPv4ProbePortHTTP            = 5985
+	utmIPv4ProbePortHTTPS           = 5986
+	utmIPv4ProbeSubnetPrefixMinimum = 24
 )
 
 var (
@@ -72,6 +84,16 @@ type ubuntuHypervAnsibleConnectionConfig struct {
 	SshCommonArgs  string
 	SshTimeout     string
 	SshRetries     string
+}
+
+type utmIPv4DiscoveryOptions struct {
+	readFile        func(string) ([]byte, error)
+	runCommand      func(string, time.Duration, string, []string) (string, error)
+	sleep           func(time.Duration)
+	primeARPCache   func() error
+	retryInterval   time.Duration
+	maxAttempts     int
+	arpCommandTimer time.Duration
 }
 
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
@@ -302,12 +324,18 @@ func extractLinuxIPv4FromHostOutput(output string) (string, error) {
 }
 
 func discoverUtmVMIPv4(projectDir string, vm alchemy_build.VirtualMachineConfig) (string, error) {
+	return discoverUtmVMIPv4WithOptions(projectDir, vm, utmIPv4DiscoveryOptions{})
+}
+
+func discoverUtmVMIPv4WithOptions(projectDir string, vm alchemy_build.VirtualMachineConfig, options utmIPv4DiscoveryOptions) (string, error) {
+	options = withDefaultUtmIPv4DiscoveryOptions(options)
+
 	configPath, err := utmConfigPlistPath(vm)
 	if err != nil {
 		return "", err
 	}
 
-	content, err := os.ReadFile(configPath)
+	content, err := options.readFile(configPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read UTM config %q: %w", configPath, err)
 	}
@@ -317,16 +345,74 @@ func discoverUtmVMIPv4(projectDir string, vm alchemy_build.VirtualMachineConfig)
 		return "", fmt.Errorf("failed to extract UTM MAC address from %q: %w", configPath, err)
 	}
 
-	output, err := runCommandWithCombinedOutput(projectDir, time.Minute, "arp", []string{"-a"})
-	if err != nil {
-		return "", fmt.Errorf("arp lookup failed: %w; output: %s", err, strings.TrimSpace(output))
+	var lastLookupErr error
+	var primeErr error
+
+	for attempt := 1; attempt <= options.maxAttempts; attempt++ {
+		output, lookupErr := options.runCommand(projectDir, options.arpCommandTimer, "arp", []string{"-a"})
+		if lookupErr != nil {
+			lastLookupErr = fmt.Errorf("arp lookup failed: %w; output: %s", lookupErr, strings.TrimSpace(output))
+		} else {
+			ip, parseErr := extractIPv4ForMacAddress(output, macAddress)
+			if parseErr == nil {
+				return ip, nil
+			}
+			lastLookupErr = fmt.Errorf("could not determine IPv4 address for UTM MAC %q from arp output: %w", macAddress, parseErr)
+		}
+
+		if attempt == 1 {
+			primeErr = options.primeARPCache()
+		}
+
+		if attempt < options.maxAttempts {
+			options.sleep(options.retryInterval)
+		}
 	}
 
-	ip, parseErr := extractIPv4ForMacAddress(output, macAddress)
-	if parseErr != nil {
-		return "", fmt.Errorf("could not determine IPv4 address for UTM MAC %q from arp output: %w", macAddress, parseErr)
+	if primeErr != nil {
+		return "", fmt.Errorf(
+			"could not determine IPv4 address for UTM MAC %q after %d attempts over %s (ARP cache probe failed: %v): %w",
+			macAddress,
+			options.maxAttempts,
+			time.Duration(options.maxAttempts-1)*options.retryInterval,
+			primeErr,
+			lastLookupErr,
+		)
 	}
-	return ip, nil
+
+	return "", fmt.Errorf(
+		"could not determine IPv4 address for UTM MAC %q after %d attempts over %s: %w",
+		macAddress,
+		options.maxAttempts,
+		time.Duration(options.maxAttempts-1)*options.retryInterval,
+		lastLookupErr,
+	)
+}
+
+func withDefaultUtmIPv4DiscoveryOptions(options utmIPv4DiscoveryOptions) utmIPv4DiscoveryOptions {
+	if options.readFile == nil {
+		options.readFile = os.ReadFile
+	}
+	if options.runCommand == nil {
+		options.runCommand = runCommandWithCombinedOutput
+	}
+	if options.sleep == nil {
+		options.sleep = time.Sleep
+	}
+	if options.primeARPCache == nil {
+		options.primeARPCache = primeUtmARPCache
+	}
+	if options.retryInterval <= 0 {
+		options.retryInterval = utmIPv4DiscoveryRetryInterval
+	}
+	if options.maxAttempts <= 0 {
+		options.maxAttempts = int(utmIPv4DiscoveryRetryWindow/options.retryInterval) + 1
+	}
+	if options.arpCommandTimer <= 0 {
+		options.arpCommandTimer = utmIPv4ARPCommandTimeout
+	}
+
+	return options
 }
 
 func utmConfigPlistPath(vm alchemy_build.VirtualMachineConfig) (string, error) {
@@ -424,6 +510,167 @@ func normalizeMACAddress(value string) (string, error) {
 	}
 
 	return strings.Join(normalized, ":"), nil
+}
+
+func primeUtmARPCache() error {
+	candidateIPs, err := utmProbeCandidateIPs()
+	if err != nil {
+		return err
+	}
+	if len(candidateIPs) == 0 {
+		return errors.New("no private IPv4 probe candidates found on active host interfaces")
+	}
+
+	type probeTarget struct {
+		ip   string
+		port int
+	}
+
+	targets := make(chan probeTarget)
+	var workers sync.WaitGroup
+
+	for workerIndex := 0; workerIndex < utmIPv4ProbeWorkerCount; workerIndex++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for target := range targets {
+				address := net.JoinHostPort(target.ip, strconv.Itoa(target.port))
+				conn, err := net.DialTimeout("tcp4", address, utmIPv4ProbeDialTimeout)
+				if err == nil {
+					_ = conn.Close()
+				}
+			}
+		}()
+	}
+
+	for _, candidateIP := range candidateIPs {
+		targets <- probeTarget{ip: candidateIP, port: utmIPv4ProbePortHTTP}
+		targets <- probeTarget{ip: candidateIP, port: utmIPv4ProbePortHTTPS}
+	}
+	close(targets)
+	workers.Wait()
+
+	return nil
+}
+
+func utmProbeCandidateIPs() ([]string, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to enumerate host network interfaces: %w", err)
+	}
+
+	candidateSet := make(map[string]struct{})
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+
+			hostIP := ipNet.IP.To4()
+			if hostIP == nil || !isPrivateIPv4(hostIP) {
+				continue
+			}
+
+			for _, candidateIP := range probeCandidatesForHostNetwork(hostIP, ipNet.Mask) {
+				candidateSet[candidateIP] = struct{}{}
+			}
+		}
+	}
+
+	candidates := make([]string, 0, len(candidateSet))
+	for candidateIP := range candidateSet {
+		candidates = append(candidates, candidateIP)
+	}
+	sort.Strings(candidates)
+
+	return candidates, nil
+}
+
+func probeCandidatesForHostNetwork(hostIP net.IP, mask net.IPMask) []string {
+	ipv4 := hostIP.To4()
+	if ipv4 == nil {
+		return nil
+	}
+
+	ones, bits := mask.Size()
+	if bits != net.IPv4len*8 || ones <= 0 {
+		return nil
+	}
+
+	if ones < utmIPv4ProbeSubnetPrefixMinimum {
+		mask = net.CIDRMask(utmIPv4ProbeSubnetPrefixMinimum, net.IPv4len*8)
+	}
+
+	networkAddress := ipv4.Mask(mask)
+	broadcastAddress := make(net.IP, len(networkAddress))
+	copy(broadcastAddress, networkAddress)
+	for index := range broadcastAddress {
+		broadcastAddress[index] |= ^mask[index]
+	}
+
+	start := ipv4ToUint32(networkAddress) + 1
+	end := ipv4ToUint32(broadcastAddress) - 1
+	hostValue := ipv4ToUint32(ipv4)
+
+	if end < start {
+		return nil
+	}
+
+	candidates := make([]string, 0, int(end-start+1))
+	for candidateValue := start; candidateValue <= end; candidateValue++ {
+		if candidateValue == hostValue {
+			continue
+		}
+		candidates = append(candidates, uint32ToIPv4(candidateValue).String())
+	}
+
+	return candidates
+}
+
+func isPrivateIPv4(ip net.IP) bool {
+	ipv4 := ip.To4()
+	if ipv4 == nil {
+		return false
+	}
+
+	switch {
+	case ipv4[0] == 10:
+		return true
+	case ipv4[0] == 172 && ipv4[1] >= 16 && ipv4[1] <= 31:
+		return true
+	case ipv4[0] == 192 && ipv4[1] == 168:
+		return true
+	default:
+		return false
+	}
+}
+
+func ipv4ToUint32(ip net.IP) uint32 {
+	ipv4 := ip.To4()
+	if ipv4 == nil {
+		return 0
+	}
+
+	return uint32(ipv4[0])<<24 | uint32(ipv4[1])<<16 | uint32(ipv4[2])<<8 | uint32(ipv4[3])
+}
+
+func uint32ToIPv4(value uint32) net.IP {
+	return net.IPv4(
+		byte(value>>24),
+		byte(value>>16),
+		byte(value>>8),
+		byte(value),
+	).To4()
 }
 
 func buildWindowsProvisionArgs(projectDir string, ip string, connectionConfig windowsAnsibleConnectionConfig, check bool) ([]string, func() error, error) {

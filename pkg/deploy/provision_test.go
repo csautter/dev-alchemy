@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 )
@@ -488,6 +489,85 @@ func TestUtmConfigPlistPath(t *testing.T) {
 	expected := filepath.Join(homeDir, "Library", "Containers", "com.utmapp.UTM", "Data", "Documents", "windows11-amd64-dev-alchemy.utm", "config.plist")
 	if path != expected {
 		t.Fatalf("expected %q, got %q", expected, path)
+	}
+}
+
+func TestDiscoverUtmVMIPv4_RetriesAfterPrimingArpCache(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	vm := alchemy_build.VirtualMachineConfig{
+		OS:   "windows11",
+		Arch: "amd64",
+	}
+
+	configPath, err := utmConfigPlistPath(vm)
+	if err != nil {
+		t.Fatalf("utmConfigPlistPath returned error: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("failed to create config directory: %v", err)
+	}
+
+	configContent := `
+<dict>
+  <key>Network</key>
+  <array>
+    <dict>
+      <key>MacAddress</key>
+      <string>A6:1:B:0C:0d:EF</string>
+    </dict>
+  </array>
+</dict>
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0o644); err != nil {
+		t.Fatalf("failed to create UTM config fixture: %v", err)
+	}
+
+	arpOutputs := []string{
+		"? (192.168.64.1) at 00:11:22:33:44:55 on en0 ifscope [ethernet]",
+		"? (192.168.64.21) at a6:1:b:c:d:ef on en0 ifscope [ethernet]",
+	}
+
+	var arpCalls int
+	var primeCalls int
+
+	ip, err := discoverUtmVMIPv4WithOptions(t.TempDir(), vm, utmIPv4DiscoveryOptions{
+		readFile: os.ReadFile,
+		runCommand: func(_ string, _ time.Duration, executable string, args []string) (string, error) {
+			if executable != "arp" {
+				t.Fatalf("expected arp lookup, got executable %q", executable)
+			}
+			if len(args) != 1 || args[0] != "-a" {
+				t.Fatalf("expected arp -a invocation, got args %v", args)
+			}
+			if arpCalls >= len(arpOutputs) {
+				return arpOutputs[len(arpOutputs)-1], nil
+			}
+			output := arpOutputs[arpCalls]
+			arpCalls++
+			return output, nil
+		},
+		primeARPCache: func() error {
+			primeCalls++
+			return nil
+		},
+		sleep:         func(time.Duration) {},
+		retryInterval: time.Millisecond,
+		maxAttempts:   3,
+	})
+	if err != nil {
+		t.Fatalf("expected UTM IPv4 discovery to succeed after retry, got error: %v", err)
+	}
+	if ip != "192.168.64.21" {
+		t.Fatalf("expected discovered IP 192.168.64.21, got %q", ip)
+	}
+	if arpCalls != 2 {
+		t.Fatalf("expected 2 arp lookups before success, got %d", arpCalls)
+	}
+	if primeCalls != 1 {
+		t.Fatalf("expected ARP cache probe to run once after the first miss, got %d", primeCalls)
 	}
 }
 
