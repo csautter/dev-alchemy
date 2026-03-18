@@ -196,16 +196,24 @@ func AvailableVirtualMachineConfigsForHostOS(hostOs HostOsType) []VirtualMachine
 }
 
 func AvailableVirtualMachineConfigsForCurrentHostOSByVirtualizationEngine() map[VirtualizationEngine][]VirtualMachineConfig {
+	return GroupVirtualMachineConfigsByVirtualizationEngine(AvailableVirtualMachineConfigsForCurrentHostOS())
+}
+
+func CurrentHostVirtualizationEngines() []VirtualizationEngine {
+	return VirtualizationEnginesForVirtualMachineConfigs(AvailableVirtualMachineConfigsForCurrentHostOS())
+}
+
+func GroupVirtualMachineConfigsByVirtualizationEngine(configs []VirtualMachineConfig) map[VirtualizationEngine][]VirtualMachineConfig {
 	grouped := make(map[VirtualizationEngine][]VirtualMachineConfig)
-	for _, config := range AvailableVirtualMachineConfigsForCurrentHostOS() {
+	for _, config := range configs {
 		grouped[config.VirtualizationEngine] = append(grouped[config.VirtualizationEngine], config)
 	}
 	return grouped
 }
 
-func CurrentHostVirtualizationEngines() []VirtualizationEngine {
+func VirtualizationEnginesForVirtualMachineConfigs(configs []VirtualMachineConfig) []VirtualizationEngine {
 	engineSet := make(map[VirtualizationEngine]struct{})
-	for _, config := range AvailableVirtualMachineConfigsForCurrentHostOS() {
+	for _, config := range configs {
 		engineSet[config.VirtualizationEngine] = struct{}{}
 	}
 

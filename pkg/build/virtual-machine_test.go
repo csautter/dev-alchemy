@@ -62,3 +62,48 @@ func TestCurrentHostVirtualizationEngines(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupVirtualMachineConfigsByVirtualizationEngine(t *testing.T) {
+	configs := []VirtualMachineConfig{
+		{OS: "windows11", VirtualizationEngine: VirtualizationEngineHyperv},
+		{OS: "ubuntu", UbuntuType: "server", VirtualizationEngine: VirtualizationEngineUtm},
+		{OS: "ubuntu", UbuntuType: "desktop", VirtualizationEngine: VirtualizationEngineHyperv},
+	}
+
+	grouped := GroupVirtualMachineConfigsByVirtualizationEngine(configs)
+
+	if len(grouped) != 2 {
+		t.Fatalf("expected 2 virtualization engines, got %d", len(grouped))
+	}
+	if len(grouped[VirtualizationEngineHyperv]) != 2 {
+		t.Fatalf("expected 2 hyperv configs, got %d", len(grouped[VirtualizationEngineHyperv]))
+	}
+	if len(grouped[VirtualizationEngineUtm]) != 1 {
+		t.Fatalf("expected 1 utm config, got %d", len(grouped[VirtualizationEngineUtm]))
+	}
+}
+
+func TestVirtualizationEnginesForVirtualMachineConfigs(t *testing.T) {
+	configs := []VirtualMachineConfig{
+		{VirtualizationEngine: VirtualizationEngineVirtualBox},
+		{VirtualizationEngine: VirtualizationEngineHyperv},
+		{VirtualizationEngine: VirtualizationEngineUtm},
+		{VirtualizationEngine: VirtualizationEngineHyperv},
+	}
+
+	engines := VirtualizationEnginesForVirtualMachineConfigs(configs)
+	expected := []VirtualizationEngine{
+		VirtualizationEngineHyperv,
+		VirtualizationEngineUtm,
+		VirtualizationEngineVirtualBox,
+	}
+
+	if len(engines) != len(expected) {
+		t.Fatalf("expected %d engines, got %d", len(expected), len(engines))
+	}
+	for i, engine := range expected {
+		if engines[i] != engine {
+			t.Fatalf("expected engine %q at index %d, got %q", engine, i, engines[i])
+		}
+	}
+}

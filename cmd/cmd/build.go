@@ -110,26 +110,21 @@ var (
 	noCache  bool
 )
 
-func printAvailableBuildCombinations() {
+func printAvailableBuildCombinations() error {
 	engines := alchemy_build.CurrentHostVirtualizationEngines()
-	grouped := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOSByVirtualizationEngine()
+	vms := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
 
-	fmt.Printf("Available build combinations for host OS: %s\n", alchemy_build.GetCurrentHostOs())
-	if len(engines) == 0 {
-		fmt.Printf("No build combinations are available for the current host OS.\n")
-		return
-	}
-
-	for _, engine := range engines {
-		fmt.Printf("\nVirtualization engine: %s\n", engine)
-		fmt.Printf("%-12s %-10s %-8s\n", "OS", "Type", "Arch")
-		for _, vm := range grouped[engine] {
-			vmType := vm.UbuntuType
-			if vmType == "" {
-				vmType = "-"
-			}
-			fmt.Printf("%-12s %-10s %-8s\n", vm.OS, vmType, vm.Arch)
-		}
+	if err := printVirtualMachineCombinationTable(
+		os.Stdout,
+		fmt.Sprintf("Available build combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
+		"No build combinations are available for the current host OS.",
+		vms,
+		[]string{"OS", "Type", "Arch"},
+		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
+			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch}, nil
+		},
+	); err != nil {
+		return err
 	}
 
 	if len(engines) > 1 {
@@ -139,6 +134,8 @@ func printAvailableBuildCombinations() {
 		}
 		fmt.Printf("\nCurrent host supports multiple virtualization engines: %s\n", strings.Join(engineNames, ", "))
 	}
+
+	return nil
 }
 
 // buildCmd represents the build command
@@ -238,8 +235,8 @@ var buildListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available OS, type, and architecture combinations for build",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		printAvailableBuildCombinations()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return printAvailableBuildCombinations()
 	},
 }
 

@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"sort"
+	"os"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 	alchemy_deploy "github.com/csautter/dev-alchemy/pkg/deploy"
@@ -37,46 +37,18 @@ func availableProvisionVirtualMachines() []alchemy_build.VirtualMachineConfig {
 	return supported
 }
 
-func provisionVirtualizationEngines(vms []alchemy_build.VirtualMachineConfig) []alchemy_build.VirtualizationEngine {
-	engineSet := make(map[alchemy_build.VirtualizationEngine]struct{})
-	for _, vm := range vms {
-		engineSet[vm.VirtualizationEngine] = struct{}{}
-	}
-
-	engines := make([]alchemy_build.VirtualizationEngine, 0, len(engineSet))
-	for engine := range engineSet {
-		engines = append(engines, engine)
-	}
-	sort.Slice(engines, func(i, j int) bool {
-		return engines[i] < engines[j]
-	})
-	return engines
-}
-
-func printAvailableProvisionCombinations() {
+func printAvailableProvisionCombinations() error {
 	vms := availableProvisionVirtualMachines()
-	fmt.Printf("Available provision combinations for host OS: %s\n", alchemy_build.GetCurrentHostOs())
-	if len(vms) == 0 {
-		fmt.Printf("No provision combinations are available for the current host OS.\n")
-		return
-	}
-
-	grouped := make(map[alchemy_build.VirtualizationEngine][]alchemy_build.VirtualMachineConfig)
-	for _, vm := range vms {
-		grouped[vm.VirtualizationEngine] = append(grouped[vm.VirtualizationEngine], vm)
-	}
-
-	for _, engine := range provisionVirtualizationEngines(vms) {
-		fmt.Printf("\nVirtualization engine: %s\n", engine)
-		fmt.Printf("%-12s %-10s %-8s\n", "OS", "Type", "Arch")
-		for _, vm := range grouped[engine] {
-			vmType := vm.UbuntuType
-			if vmType == "" {
-				vmType = "-"
-			}
-			fmt.Printf("%-12s %-10s %-8s\n", vm.OS, vmType, vm.Arch)
-		}
-	}
+	return printVirtualMachineCombinationTable(
+		os.Stdout,
+		fmt.Sprintf("Available provision combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
+		"No provision combinations are available for the current host OS.",
+		vms,
+		[]string{"OS", "Type", "Arch"},
+		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
+			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch}, nil
+		},
+	)
 }
 
 var provisionCmd = &cobra.Command{
@@ -128,8 +100,8 @@ var provisionListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available provision combinations",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		printAvailableProvisionCombinations()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return printAvailableProvisionCombinations()
 	},
 }
 

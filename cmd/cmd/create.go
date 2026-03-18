@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"sort"
+	"os"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 	alchemy_deploy "github.com/csautter/dev-alchemy/pkg/deploy"
@@ -32,47 +32,18 @@ func availableCreateVirtualMachines() []alchemy_build.VirtualMachineConfig {
 	return supported
 }
 
-func createVirtualizationEngines(vms []alchemy_build.VirtualMachineConfig) []alchemy_build.VirtualizationEngine {
-	engineSet := make(map[alchemy_build.VirtualizationEngine]struct{})
-	for _, vm := range vms {
-		engineSet[vm.VirtualizationEngine] = struct{}{}
-	}
-
-	engines := make([]alchemy_build.VirtualizationEngine, 0, len(engineSet))
-	for engine := range engineSet {
-		engines = append(engines, engine)
-	}
-	sort.Slice(engines, func(i, j int) bool {
-		return engines[i] < engines[j]
-	})
-	return engines
-}
-
 func printAvailableCreateCombinations() error {
 	vms := availableCreateVirtualMachines()
-	fmt.Printf("Available create combinations for host OS: %s\n", alchemy_build.GetCurrentHostOs())
-	if len(vms) == 0 {
-		fmt.Printf("No create combinations are available for the current host OS.\n")
-		return nil
-	}
-
-	grouped := make(map[alchemy_build.VirtualizationEngine][]alchemy_build.VirtualMachineConfig)
-	for _, vm := range vms {
-		grouped[vm.VirtualizationEngine] = append(grouped[vm.VirtualizationEngine], vm)
-	}
-
-	for _, engine := range createVirtualizationEngines(vms) {
-		fmt.Printf("\nVirtualization engine: %s\n", engine)
-		fmt.Printf("%-12s %-10s %-8s %-10s %-18s\n", "OS", "Type", "Arch", "Artifact", "Create")
-		for _, vm := range grouped[engine] {
+	return printVirtualMachineCombinationTable(
+		os.Stdout,
+		fmt.Sprintf("Available create combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
+		"No create combinations are available for the current host OS.",
+		vms,
+		[]string{"OS", "Type", "Arch", "Artifact", "Create"},
+		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
 			artifactsExist, err := alchemy_build.BuildArtifactsExistQuiet(vm)
 			if err != nil {
-				return fmt.Errorf("failed to check build artifacts for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
-			}
-
-			vmType := vm.UbuntuType
-			if vmType == "" {
-				vmType = "-"
+				return nil, fmt.Errorf("failed to check build artifacts for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
 			}
 
 			artifactState := "missing"
@@ -82,11 +53,9 @@ func printAvailableCreateCombinations() error {
 				createState = "ready to create"
 			}
 
-			fmt.Printf("%-12s %-10s %-8s %-10s %-18s\n", vm.OS, vmType, vm.Arch, artifactState, createState)
-		}
-	}
-
-	return nil
+			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, artifactState, createState}, nil
+		},
+	)
 }
 
 // createCmd represents the create command
