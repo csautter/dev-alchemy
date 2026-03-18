@@ -70,6 +70,12 @@ go run cmd/main.go install
 
 This runs [scripts/windows/dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1).
 
+To force a VM rebuild even when the cached build artifact already exists, use:
+
+```bash
+go run cmd/main.go build windows11 --arch arm64 --no-cache
+```
+
 #### Ubuntu / Debian
 
 The `install` command is currently intended for macOS and Windows hosts. On Linux, install Ansible manually:

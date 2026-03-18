@@ -107,6 +107,7 @@ var (
 	arch     string
 	parallel int
 	headless bool
+	noCache  bool
 )
 
 func printAvailableBuildCombinations() {
@@ -165,6 +166,9 @@ Example:
 		if osName == "all" {
 			fmt.Printf("🔧 Building all available VM configurations with %d parallel builds\n", parallel)
 			available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+			for i := range available_virtual_machines {
+				available_virtual_machines[i].NoCache = noCache
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -222,6 +226,7 @@ Example:
 
 		VirtualMachineConfig.VncPort = port
 		VirtualMachineConfig.Headless = headless
+		VirtualMachineConfig.NoCache = noCache
 
 		if err := runBuild(VirtualMachineConfig); err != nil {
 			fmt.Printf("❌ Build failed for OS: %s, Type: %s, Architecture: %s — %v\n", osName, osType, arch, err)
@@ -246,4 +251,5 @@ func init() {
 	buildCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	buildCmd.Flags().IntVarP(&parallel, "parallel", "p", 1, "Number of parallel builds to run when building all VMs")
 	buildCmd.Flags().BoolVar(&headless, "headless", false, "Run QEMU in headless mode (no GUI, VNC only)")
+	buildCmd.Flags().BoolVar(&noCache, "no-cache", false, "Force a rebuild even when the build artifact already exists")
 }

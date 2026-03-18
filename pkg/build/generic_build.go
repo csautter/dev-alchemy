@@ -10,22 +10,22 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
 )
 
 func RunBuildScript(config VirtualMachineConfig, executable string, args []string) error {
-	// Ensure that the build artifact does not already exist
-
-	// if no ExpectedBuildArtifacts are provided, use the defaults for the given config
-	build_artifact_exists, err := checkIfBuildArtifactsExist(config)
+	skipBuild, cleanupArtifacts, err := prepareBuildArtifactsForBuild(config)
 	if err != nil {
 		return err
 	}
-	if build_artifact_exists {
+	if skipBuild {
 		return nil
 	}
+	buildSucceeded := false
+	defer cleanupArtifacts(buildSucceeded)
 
 	// Ensure all required dependencies are present
 	DependencyReconciliation(config)
@@ -76,11 +76,11 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
 
 		if err != nil {
-			RemoveBuildArtifactsForConfig(config)
 			runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 			log.Printf("Script failed: %v", err)
 			return err
 		}
+		buildSucceeded = true
 		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script finished successfully.")
 	case <-ctx.Done():
@@ -89,7 +89,6 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 
 		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
 
-		RemoveBuildArtifactsForConfig(config)
 		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script terminated due to timeout or interruption: %v", ctx.Err())
 		return ctx.Err()
@@ -98,7 +97,6 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 
 		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
 
-		RemoveBuildArtifactsForConfig(config)
 		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script terminated due to signal: %v", sig)
 		return fmt.Errorf("script terminated due to signal: %v", sig)
@@ -245,6 +243,45 @@ func checkIfBuildArtifactsExist(config VirtualMachineConfig) (bool, error) {
 	return BuildArtifactsExist(config)
 }
 
+type buildArtifactBackup struct {
+	originalPath string
+	backupPath   string
+}
+
+func prepareBuildArtifactsForBuild(config VirtualMachineConfig) (bool, func(bool), error) {
+	if !config.NoCache {
+		buildArtifactExists, err := checkIfBuildArtifactsExist(config)
+		if err != nil {
+			return false, nil, err
+		}
+		if buildArtifactExists {
+			return true, func(bool) {}, nil
+		}
+		return false, func(bool) {}, nil
+	}
+
+	artifacts, err := resolveExpectedBuildArtifacts(config)
+	if err != nil {
+		return false, nil, err
+	}
+
+	backups, err := backupBuildArtifacts(artifacts)
+	if err != nil {
+		return false, nil, err
+	}
+
+	cleanup := func(success bool) {
+		if success {
+			removeBackedUpArtifacts(backups)
+			return
+		}
+		RemoveBuildArtifacts(artifacts)
+		restoreBackedUpArtifacts(backups)
+	}
+
+	return false, cleanup, nil
+}
+
 func BuildArtifactsExist(config VirtualMachineConfig) (bool, error) {
 	return buildArtifactsExist(config, true)
 }
@@ -301,5 +338,75 @@ func RemoveBuildArtifacts(artifacts []string) {
 }
 
 func RemoveBuildArtifactsForConfig(config VirtualMachineConfig) {
-	RemoveBuildArtifacts(config.ExpectedBuildArtifacts)
+	artifacts, err := resolveExpectedBuildArtifacts(config)
+	if err != nil {
+		log.Printf("Failed to resolve build artifacts for cleanup: %v", err)
+		return
+	}
+	RemoveBuildArtifacts(artifacts)
+}
+
+func backupBuildArtifacts(artifacts []string) ([]buildArtifactBackup, error) {
+	backups := make([]buildArtifactBackup, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		if _, err := os.Stat(artifact); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			restoreBackedUpArtifacts(backups)
+			return nil, err
+		}
+
+		backupPath := fmt.Sprintf("%s.dev-alchemy-backup-%d", artifact, time.Now().UnixNano())
+		if err := os.Rename(artifact, backupPath); err != nil {
+			restoreBackedUpArtifacts(backups)
+			return nil, fmt.Errorf("failed to back up build artifact %s: %w", artifact, err)
+		}
+
+		log.Printf("Backed up existing build artifact: %s -> %s", artifact, backupPath)
+		backups = append(backups, buildArtifactBackup{
+			originalPath: artifact,
+			backupPath:   backupPath,
+		})
+	}
+
+	return backups, nil
+}
+
+func restoreBackedUpArtifacts(backups []buildArtifactBackup) {
+	for _, backup := range backups {
+		if _, err := os.Stat(backup.backupPath); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			log.Printf("Failed to stat backup artifact %s: %v", backup.backupPath, err)
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(backup.originalPath), 0755); err != nil {
+			log.Printf("Failed to recreate artifact directory for %s: %v", backup.originalPath, err)
+			continue
+		}
+
+		if err := os.Rename(backup.backupPath, backup.originalPath); err != nil {
+			log.Printf("Failed to restore backup artifact %s: %v", backup.originalPath, err)
+			continue
+		}
+		log.Printf("Restored build artifact backup: %s", backup.originalPath)
+	}
+}
+
+func removeBackedUpArtifacts(backups []buildArtifactBackup) {
+	for _, backup := range backups {
+		if _, err := os.Stat(backup.backupPath); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			log.Printf("Failed to stat backup artifact %s: %v", backup.backupPath, err)
+			continue
+		}
+
+		if err := os.RemoveAll(backup.backupPath); err != nil {
+			log.Printf("Failed to remove backup artifact %s: %v", backup.backupPath, err)
+			continue
+		}
+		log.Printf("Removed build artifact backup: %s", backup.backupPath)
+	}
 }
