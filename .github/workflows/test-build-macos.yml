@@ -106,6 +106,7 @@ jobs:
         shell: bash
         continue-on-error: true
         env:
+          RUN_INTEGRATION_TESTS: "1"
           PACKER_LOG: 1
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

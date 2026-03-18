@@ -14,6 +14,7 @@ func TestPrintSystemOsArch(t *testing.T) {
 }
 
 func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
+	requireIntegrationTests(t)
 	t.Parallel()
 
 	memoryMB := 4096
@@ -39,6 +40,7 @@ func TestBuildQemuUbuntuServerArm64OnMacos(t *testing.T) {
 }
 
 func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
+	requireIntegrationTests(t)
 	t.Parallel()
 
 	memoryMB := 4096
@@ -64,6 +66,7 @@ func TestBuildQemuUbuntuServerAmd64OnMacos(t *testing.T) {
 }
 
 func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
+	requireIntegrationTests(t)
 	t.Parallel()
 
 	memoryMB := 4096
@@ -89,6 +92,7 @@ func TestBuildQemuUbuntuDesktopArm64OnMacos(t *testing.T) {
 }
 
 func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
+	requireIntegrationTests(t)
 	t.Parallel()
 
 	memoryMB := 4096
@@ -114,6 +118,7 @@ func TestBuildQemuUbuntuDesktopAmd64OnMacos(t *testing.T) {
 }
 
 func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
+	requireIntegrationTests(t)
 	t.Parallel()
 
 	if os.Getuid() != 0 {
@@ -142,6 +147,7 @@ func TestBuildQemuWindows11Arm64OnMacos(t *testing.T) {
 }
 
 func TestBuildQemuWindows11Amd64OnMacos(t *testing.T) {
+	requireIntegrationTests(t)
 	t.Parallel()
 
 	memoryMB := 4096

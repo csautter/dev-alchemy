@@ -10,6 +10,7 @@ import (
 )
 
 func TestBuildHypervWindows11Amd64OnWindows(t *testing.T) {
+	requireIntegrationTests(t)
 	t.Parallel()
 
 	memoryMB := 4096
@@ -33,6 +34,7 @@ func TestBuildHypervWindows11Amd64OnWindows(t *testing.T) {
 }
 
 func TestBuildVirtualBoxWindows11Amd64OnWindows(t *testing.T) {
+	requireIntegrationTests(t)
 	t.Parallel()
 
 	memoryMB := 4096
