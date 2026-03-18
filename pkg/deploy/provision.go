@@ -360,11 +360,8 @@ func discoverUtmVMIPv4WithOptions(projectDir string, vm alchemy_build.VirtualMac
 			lastLookupErr = fmt.Errorf("could not determine IPv4 address for UTM MAC %q from arp output: %w", macAddress, parseErr)
 		}
 
-		if attempt == 1 {
-			primeErr = options.primeARPCache()
-		}
-
 		if attempt < options.maxAttempts {
+			primeErr = options.primeARPCache()
 			options.sleep(options.retryInterval)
 		}
 	}
