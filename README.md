@@ -448,7 +448,7 @@ If you need to inspect the discovered IP manually for troubleshooting:
 bash ./deployments/utm/determine-vm-ip-address.sh --arch $arch --os windows11
 ```
 
-> ℹ️ Note: there is a known issue, that ansible might fail to connect via winrm when the VM has configured the Network interface as Public network. Switching it to Private network should resolve the issue.
+> ℹ️ Note: newly built Windows images install a dedicated WinRM firewall rule for TCP `5985` on all network profiles, so later NIC or network-profile changes should not break reachability. Older images may still need their network switched to `Private` or an equivalent firewall rule added manually.
 
 ---
 
