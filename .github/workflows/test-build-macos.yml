@@ -27,6 +27,7 @@ jobs:
     if: github.event_name == 'pull_request' || inputs.enable_utm_qemu_macos
     name: build ${{ matrix.go_test_name }} VM_OS ${{ matrix.vm_os }} runner_os ${{ matrix.runs_on }}
     runs-on: ${{ matrix.runs_on }}
+    timeout-minutes: 260
     strategy:
       fail-fast: false
       matrix:

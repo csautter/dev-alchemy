@@ -187,6 +187,7 @@ jobs:
     if: false 
     name: build TestBuildVirtualBoxWindows11Amd64OnWindows
     needs: [provision-virtualbox-runner]
+    timeout-minutes: 80
     env:
       PACKER_TEMP_PATH: "D:\\vbox-temp" # Use Azure VM temp disk for packer temp files to speed up build
     runs-on:
