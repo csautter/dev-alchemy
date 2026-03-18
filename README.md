@@ -60,6 +60,24 @@ go run cmd/main.go install
 
 This runs [scripts/macos/dev-alchemy-install-dependencies.sh](./scripts/macos/dev-alchemy-install-dependencies.sh).
 
+#### Ubuntu / Debian
+
+The `install` command is currently intended for macOS and Windows hosts. On Linux, install Ansible manually:
+
+```bash
+sudo apt update && sudo apt install ansible
+```
+
+#### Discover supported targets
+
+Use the `list` subcommands to see what the current host can build, create, or provision before running a longer workflow:
+
+```bash
+go run cmd/main.go build list
+go run cmd/main.go create list
+go run cmd/main.go provision list
+```
+
 #### Windows
 
 Run the command in an elevated PowerShell session (Run as Administrator):
@@ -76,13 +94,7 @@ To force a VM rebuild even when the cached build artifact already exists, use:
 go run cmd/main.go build windows11 --arch arm64 --no-cache
 ```
 
-#### Ubuntu / Debian
 
-The `install` command is currently intended for macOS and Windows hosts. On Linux, install Ansible manually:
-
-```bash
-sudo apt update && sudo apt install ansible
-```
 
 ##### Enable ansible remote access on Windows
 
