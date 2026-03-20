@@ -1,3 +1,5 @@
+GOSEC ?= $(shell command -v gosec 2>/dev/null || echo "$$(go env GOPATH)/bin/gosec")
+
 build:
 	go build ./...
 
@@ -81,3 +83,10 @@ deploy-az-func-app:
 	# make deploy-az-func-app FUNCTION_APP_NAME=<function-app-name>
 	cd ./scripts/gh-runner-func/ && \
 	func azure functionapp publish $(FUNCTION_APP_NAME)
+
+gosec:
+	@if [ ! -x "$(GOSEC)" ]; then \
+		echo "gosec not found at $(GOSEC). Rebuild the dev container or run: go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0"; \
+		exit 1; \
+	fi
+	$(GOSEC) -no-fail -fmt sarif -out gosec-results.sarif -exclude-generated ./...
