@@ -34,7 +34,7 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 		log.Fatalf("Failed to remove snapshot directory: %v", err)
 	}
 
-	if err := os.MkdirAll(snapshot_dir, 0755); err != nil {
+	if err := os.MkdirAll(snapshot_dir, 0700); err != nil {
 		log.Fatalf("Failed to create snapshot directory: %v", err)
 	}
 	snapshot_file := filepath.Join(snapshot_dir, "qemu.vnc.jpg")

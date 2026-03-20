@@ -26,14 +26,14 @@ const (
 	hypervWindowsAnsiblePortEnvVar           = "HYPERV_WINDOWS_ANSIBLE_PORT"
 
 	utmWindowsAnsibleUserEnvVar           = "UTM_WINDOWS_ANSIBLE_USER"
-	utmWindowsAnsiblePasswordEnvVar       = "UTM_WINDOWS_ANSIBLE_PASSWORD"
+	utmWindowsAnsiblePasswordEnvVar       = "UTM_WINDOWS_ANSIBLE_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
 	utmWindowsAnsibleConnectionEnvVar     = "UTM_WINDOWS_ANSIBLE_CONNECTION"
 	utmWindowsAnsibleWinrmTransportEnvVar = "UTM_WINDOWS_ANSIBLE_WINRM_TRANSPORT"
 	utmWindowsAnsiblePortEnvVar           = "UTM_WINDOWS_ANSIBLE_PORT"
 
 	hypervUbuntuAnsibleUserEnvVar           = "HYPERV_UBUNTU_ANSIBLE_USER"
-	hypervUbuntuAnsiblePasswordEnvVar       = "HYPERV_UBUNTU_ANSIBLE_PASSWORD"
-	hypervUbuntuAnsibleBecomePasswordEnvVar = "HYPERV_UBUNTU_ANSIBLE_BECOME_PASSWORD"
+	hypervUbuntuAnsiblePasswordEnvVar       = "HYPERV_UBUNTU_ANSIBLE_PASSWORD"        // #nosec G101 -- environment variable name, not an embedded credential.
+	hypervUbuntuAnsibleBecomePasswordEnvVar = "HYPERV_UBUNTU_ANSIBLE_BECOME_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
 	hypervUbuntuAnsibleConnectionEnvVar     = "HYPERV_UBUNTU_ANSIBLE_CONNECTION"
 	hypervUbuntuAnsibleSshCommonArgsEnvVar  = "HYPERV_UBUNTU_ANSIBLE_SSH_COMMON_ARGS"
 	hypervUbuntuAnsibleSshTimeoutEnvVar     = "HYPERV_UBUNTU_ANSIBLE_SSH_TIMEOUT"
@@ -663,10 +663,10 @@ func ipv4ToUint32(ip net.IP) uint32 {
 
 func uint32ToIPv4(value uint32) net.IP {
 	return net.IPv4(
-		byte(value>>24),
-		byte(value>>16),
-		byte(value>>8),
-		byte(value),
+		byte(value>>24), // #nosec G115 -- IPv4 octet extraction intentionally truncates to the low 8 bits.
+		byte(value>>16), // #nosec G115 -- IPv4 octet extraction intentionally truncates to the low 8 bits.
+		byte(value>>8),  // #nosec G115 -- IPv4 octet extraction intentionally truncates to the low 8 bits.
+		byte(value),     // #nosec G115 -- IPv4 octet extraction intentionally truncates to the low 8 bits.
 	).To4()
 }
 
@@ -822,6 +822,7 @@ func loadUbuntuHypervAnsibleConnectionConfig(projectDir string) (ubuntuHypervAns
 }
 
 func parseDotEnvFile(dotEnvPath string) (map[string]string, error) {
+	// #nosec G304 -- dotEnvPath is derived from the repository project directory, not arbitrary user input.
 	content, err := os.ReadFile(dotEnvPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -965,6 +966,7 @@ func getCygwinBashExecutable() (string, error) {
 }
 
 func validateCygwinBashExecutable(path string) error {
+	// #nosec G703 -- this validates an operator-configured executable path before use.
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		return err

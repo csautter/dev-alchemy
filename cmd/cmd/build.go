@@ -219,6 +219,7 @@ Example:
 			return
 		}
 
+		// #nosec G404 -- this random value only spreads local VNC port selection and is not security-sensitive.
 		port := 5900 + (rand.Intn(100) + 1)
 
 		VirtualMachineConfig.VncPort = port

@@ -21,6 +21,7 @@ var runInstallCommand = func(spec installCommandSpec) error {
 		return fmt.Errorf("install script not found at %q: %w", spec.scriptPath, err)
 	}
 
+	// #nosec G204 -- installCommandForHost selects a fixed interpreter and repo-local script path for the detected host OS.
 	cmd := exec.Command(spec.executable, spec.args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

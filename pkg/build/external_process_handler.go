@@ -58,6 +58,7 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 
 	log.Printf("Starting process: %s %s", config.ExecutablePath, strings.Join(config.Args, " "))
 
+	// #nosec G204 -- callers pass explicit executables and argv slices; no shell parsing occurs here.
 	cmd := exec.CommandContext(ctx, config.ExecutablePath, config.Args...)
 	cmd.Dir = config.WorkingDir
 
@@ -183,21 +184,24 @@ func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
 	return cancelledContext()
 }
 
-func RunBashScript(config RunProcessConfig) {
+func RunBashScript(config RunProcessConfig) error {
 	scriptPath := config.ExecutablePath
 	config.ExecutablePath = "bash"
 	config.Args = append([]string{scriptPath}, config.Args...)
-	RunExternalProcess(config)
+	_, err := RunExternalProcess(config)
+	return err
 }
 
-func RunPowerShellScript(config RunProcessConfig) {
+func RunPowerShellScript(config RunProcessConfig) error {
 	scriptPath := config.ExecutablePath
 	config.ExecutablePath = "powershell"
 	config.Args = append([]string{"-File", scriptPath}, config.Args...)
-	RunExternalProcess(config)
+	_, err := RunExternalProcess(config)
+	return err
 }
 
 func RunCliCommand(workdir string, command string, args []string) ([]byte, error) {
+	// #nosec G204 -- this helper executes known CLI tools with explicit argv slices, not shell strings.
 	cmd := exec.Command(command, args...)
 	cmd.Dir = workdir
 	log.Printf("Running command: %s %s", command, strings.Join(args, " "))

@@ -45,6 +45,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	printCurrentWorkingDirectory()
 
 	fmt.Printf("Running Build with executable %s and args %v\n", executable, args)
+	// #nosec G204 -- executable and args are constructed by internal build flows; no shell is invoked.
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
 
@@ -229,7 +230,9 @@ func getFreeVncPort(config *VirtualMachineConfig) int {
 		addr := fmt.Sprintf("127.0.0.1:%d", port)
 		ln, err := net.Listen("tcp", addr)
 		if err == nil {
-			ln.Close()
+			if closeErr := ln.Close(); closeErr != nil {
+				log.Printf("Failed to release test listener on %s: %v", addr, closeErr)
+			}
 			break
 		}
 		port++
@@ -381,7 +384,7 @@ func restoreBackedUpArtifacts(backups []buildArtifactBackup) {
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(backup.originalPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(backup.originalPath), 0750); err != nil {
 			log.Printf("Failed to recreate artifact directory for %s: %v", backup.originalPath, err)
 			continue
 		}
