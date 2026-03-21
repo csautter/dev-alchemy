@@ -384,7 +384,8 @@ func restoreBackedUpArtifacts(backups []buildArtifactBackup) {
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(backup.originalPath), 0750); err != nil {
+		// #nosec G301 -- restored cache artifact directories must remain traversable for non-root CI steps after sudo-created builds.
+		if err := os.MkdirAll(filepath.Dir(backup.originalPath), 0755); err != nil {
 			log.Printf("Failed to recreate artifact directory for %s: %v", backup.originalPath, err)
 			continue
 		}

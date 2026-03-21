@@ -106,6 +106,11 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	// Remove VNC password file
 	if err := os.Remove(vnc_passwd_file); err != nil {
 		log.Printf("Failed to remove VNC password file: %v", err)
+	} else {
+		// #nosec G302 -- this relaxes a directory, not a secret file, after the password file has been removed.
+		if err := os.Chmod(snapshot_dir, 0755); err != nil {
+			log.Printf("Failed to relax VNC snapshot directory permissions after password removal: %v", err)
+		}
 	}
 
 	return ctx

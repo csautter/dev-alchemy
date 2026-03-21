@@ -90,5 +90,6 @@ func createHypervTempDir(dirs *Directories) error {
 	if tempPath == "" {
 		tempPath = filepath.Join(dirs.CacheDir, "windows11", "hyperv-temp")
 	}
-	return os.MkdirAll(tempPath, 0750)
+	// #nosec G301 -- this cache directory must remain traversable for non-root CI steps after sudo-created builds.
+	return os.MkdirAll(tempPath, 0755)
 }
