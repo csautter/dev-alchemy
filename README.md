@@ -491,13 +491,33 @@ go run cmd/main.go create ubuntu --arch $arch --type $type
 
 Open UTM and start the created Ubuntu VM.
 
-Get the IP address of the created UTM VM
+Set Ubuntu SSH credentials for the provisioning wrapper in project-root `.env` (or process environment):
+
+```dotenv
+UTM_UBUNTU_ANSIBLE_USER=packer
+UTM_UBUNTU_ANSIBLE_PASSWORD=P@ssw0rd!
+UTM_UBUNTU_ANSIBLE_BECOME_PASSWORD=P@ssw0rd!
+# Optional (defaults shown):
+UTM_UBUNTU_ANSIBLE_CONNECTION=ssh
+UTM_UBUNTU_ANSIBLE_SSH_COMMON_ARGS=-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no
+UTM_UBUNTU_ANSIBLE_SSH_TIMEOUT=120
+UTM_UBUNTU_ANSIBLE_SSH_RETRIES=3
+```
+
+Now provision the running UTM VM from the repository root:
+
+```bash
+go run cmd/main.go provision ubuntu --type $type --arch $arch --check
+go run cmd/main.go provision ubuntu --type $type --arch $arch
+```
+
+The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target. On macOS it also sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for the ansible process automatically.
+
+If you need to inspect the discovered IP manually for troubleshooting:
 
 ```bash
 bash ./deployments/utm/determine-vm-ip-address.sh --arch $arch --os "ubuntu-$type"
 ```
-
-Setting up the inventory file and running the ansible playbook is similar to the Windows UTM VM approach.
 
 ---
 
