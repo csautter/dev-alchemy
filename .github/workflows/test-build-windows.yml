@@ -1,7 +1,6 @@
 name: Test Packer Build on Windows for VMs
 
 permissions:
-  actions: write
   contents: read
   id-token: write
 
@@ -188,6 +187,9 @@ jobs:
     needs: [provision-hyperv-runner]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      actions: write
+      id-token: write
 
     steps:
       - name: Azure Login (OIDC)
