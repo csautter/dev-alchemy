@@ -17,6 +17,7 @@ import (
 )
 
 func TestMacOsDownloadArm64Uefi(t *testing.T) {
+	requireIntegrationTests(t)
 	t.Parallel()
 
 	// Remove files matching cache/qemu-efi*
@@ -88,6 +89,8 @@ func RunMacOsSiliconBuildHelperScript(t *testing.T, scriptPath string, args ...s
 }
 
 func TestRunVncSnapshotProcess(t *testing.T) {
+	requireIntegrationTests(t)
+
 	if runtime.GOOS != "darwin" {
 		t.Skip("Skipping VNC snapshot process test on non-MacOS host")
 	}

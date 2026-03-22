@@ -84,9 +84,14 @@ type WebFileDependency struct {
 // Debian package by querying the official Packages index for the given suite.
 // This avoids hardcoding version strings that change frequently and are purged quickly.
 func resolveDebianPackageURL(suite, packageName string) (string, error) {
+	if !isSafeDebianPackageSegment(suite) || !isSafeDebianPackageSegment(packageName) {
+		return "", fmt.Errorf("invalid Debian package lookup: suite=%q package=%q", suite, packageName)
+	}
+
 	packagesURL := fmt.Sprintf("https://deb.debian.org/debian/dists/%s/main/binary-all/Packages.gz", suite)
 	log.Printf("Resolving latest Debian package URL for %s from %s", packageName, packagesURL)
 
+	// #nosec G107 -- the host is fixed to deb.debian.org and the path segments are validated above.
 	resp, err := http.Get(packagesURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch Debian package index: %w", err)
@@ -260,6 +265,7 @@ func getWindows11Download(arch string, savePath string, download bool) (string, 
 		return "", nil
 	}
 
+	// #nosec G304 -- url_file is selected from a fixed arch allowlist and resolved under the repo cache directory.
 	content, err := os.ReadFile(filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/windows/"+url_file))
 	if err != nil {
 		return "", err
@@ -267,6 +273,23 @@ func getWindows11Download(arch string, savePath string, download bool) (string, 
 	url := string(content)
 
 	return url, nil
+}
+
+func isSafeDebianPackageSegment(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '.', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func getWebFileDependencies() []WebFileDependency {

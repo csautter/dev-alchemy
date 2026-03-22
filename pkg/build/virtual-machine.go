@@ -3,6 +3,7 @@ package build
 import (
 	"path"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -30,6 +31,7 @@ type VirtualMachineConfig struct {
 	VncPort                int
 	Slug                   string
 	ExpectedBuildArtifacts []string
+	NoCache                bool
 	HostOs                 HostOsType
 	VirtualizationEngine   VirtualizationEngine
 	Cpus                   int
@@ -180,13 +182,49 @@ func GetCurrentHostOs() HostOsType {
 }
 
 func AvailableVirtualMachineConfigsForCurrentHostOS() []VirtualMachineConfig {
+	return AvailableVirtualMachineConfigsForHostOS(GetCurrentHostOs())
+}
+
+func AvailableVirtualMachineConfigsForHostOS(hostOs HostOsType) []VirtualMachineConfig {
 	var configs []VirtualMachineConfig
 	for _, config := range AvailableVirtualMachineConfigs() {
-		if config.HostOs == GetCurrentHostOs() {
+		if config.HostOs == hostOs {
 			configs = append(configs, config)
 		}
 	}
 	return configs
+}
+
+func AvailableVirtualMachineConfigsForCurrentHostOSByVirtualizationEngine() map[VirtualizationEngine][]VirtualMachineConfig {
+	return GroupVirtualMachineConfigsByVirtualizationEngine(AvailableVirtualMachineConfigsForCurrentHostOS())
+}
+
+func CurrentHostVirtualizationEngines() []VirtualizationEngine {
+	return VirtualizationEnginesForVirtualMachineConfigs(AvailableVirtualMachineConfigsForCurrentHostOS())
+}
+
+func GroupVirtualMachineConfigsByVirtualizationEngine(configs []VirtualMachineConfig) map[VirtualizationEngine][]VirtualMachineConfig {
+	grouped := make(map[VirtualizationEngine][]VirtualMachineConfig)
+	for _, config := range configs {
+		grouped[config.VirtualizationEngine] = append(grouped[config.VirtualizationEngine], config)
+	}
+	return grouped
+}
+
+func VirtualizationEnginesForVirtualMachineConfigs(configs []VirtualMachineConfig) []VirtualizationEngine {
+	engineSet := make(map[VirtualizationEngine]struct{})
+	for _, config := range configs {
+		engineSet[config.VirtualizationEngine] = struct{}{}
+	}
+
+	engines := make([]VirtualizationEngine, 0, len(engineSet))
+	for engine := range engineSet {
+		engines = append(engines, engine)
+	}
+	sort.Slice(engines, func(i, j int) bool {
+		return engines[i] < engines[j]
+	})
+	return engines
 }
 
 func GenerateVirtualMachineSlug(config *VirtualMachineConfig) string {

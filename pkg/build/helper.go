@@ -60,7 +60,7 @@ func getVmMemoryMB(config VirtualMachineConfig) int {
 		osHeadroomMB = osHeadroomWindowsMB
 	}
 
-	vmMemory := int(totalMB) - osHeadroomMB
+	vmMemory := int(totalMB) - osHeadroomMB // #nosec G115 -- Windows hosts cannot report physical memory large enough to overflow int on supported targets.
 	if vmMemory < minVmMemoryMB {
 		vmMemory = minVmMemoryMB
 	}
@@ -90,5 +90,6 @@ func createHypervTempDir(dirs *Directories) error {
 	if tempPath == "" {
 		tempPath = filepath.Join(dirs.CacheDir, "windows11", "hyperv-temp")
 	}
+	// #nosec G301 -- this cache directory must remain traversable for non-root CI steps after sudo-created builds.
 	return os.MkdirAll(tempPath, 0755)
 }

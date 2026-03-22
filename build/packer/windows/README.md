@@ -8,6 +8,7 @@ This directory contains a Packer template for building Windows images.
 
 - [Packer](https://www.packer.io/downloads) installed
 - Windows host or compatible environment
+- For repository-managed host dependencies, run `go run cmd/main.go install` from repo root on macOS or Windows before building.
 
 ### Usage
 
@@ -56,6 +57,29 @@ The process is idempotent, so you can re-run commands without issues.
 
 ```bash
 arch=arm64 # or amd64
+go run cmd/main.go install
 go run cmd/main.go build windows11 --arch $arch
 go run cmd/main.go create windows11 --arch $arch
 ```
+
+Start the VM in UTM and provision it from repository root with the unified wrapper:
+
+```bash
+go run cmd/main.go provision windows11 --arch $arch --check
+go run cmd/main.go provision windows11 --arch $arch
+```
+
+Set the required WinRM credentials in project-root `.env` or process environment before provisioning:
+
+```dotenv
+UTM_WINDOWS_ANSIBLE_USER=Administrator
+UTM_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
+```
+
+### Security Note
+
+Current Windows templates keep WinRM provisioning reachable even when Windows reclassifies the NIC as `Public`. They do that by enabling WinRM Basic over HTTP, allowing unencrypted WSMan traffic, and creating an inbound firewall rule for TCP `5985` with `Profile Any` and `RemoteAddress Any`.
+
+That choice broadens the reachable attack surface compared with private-profile-only access. During unattended setup, the built-in `Administrator` credential is also configured in the answer file, so these images should only be built and booted on trusted, isolated networks.
+
+A safer provisioning approach is planned for future releases. Until then, treat the current WinRM path as a compatibility tradeoff rather than a hardened default.

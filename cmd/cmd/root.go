@@ -18,6 +18,7 @@ Usage:
 Available Commands:
   build       Build the project for the given OS
   create      Create a new VM on your system with the defined OS
+  install     Install host dependencies for the current OS
   provision   Provision a VM with Ansible
   help        Help about any command
 `,

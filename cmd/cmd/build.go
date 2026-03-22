@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -106,7 +107,36 @@ var (
 	arch     string
 	parallel int
 	headless bool
+	noCache  bool
 )
+
+func printAvailableBuildCombinations() error {
+	engines := alchemy_build.CurrentHostVirtualizationEngines()
+	vms := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+
+	if err := printVirtualMachineCombinationTable(
+		os.Stdout,
+		fmt.Sprintf("Available build combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
+		"No build combinations are available for the current host OS.",
+		vms,
+		[]string{"OS", "Type", "Arch"},
+		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
+			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch}, nil
+		},
+	); err != nil {
+		return err
+	}
+
+	if len(engines) > 1 {
+		engineNames := make([]string, 0, len(engines))
+		for _, engine := range engines {
+			engineNames = append(engineNames, string(engine))
+		}
+		fmt.Printf("\nCurrent host supports multiple virtualization engines: %s\n", strings.Join(engineNames, ", "))
+	}
+
+	return nil
+}
 
 // buildCmd represents the build command
 var buildCmd = &cobra.Command{
@@ -133,6 +163,9 @@ Example:
 		if osName == "all" {
 			fmt.Printf("🔧 Building all available VM configurations with %d parallel builds\n", parallel)
 			available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+			for i := range available_virtual_machines {
+				available_virtual_machines[i].NoCache = noCache
+			}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -186,10 +219,12 @@ Example:
 			return
 		}
 
+		// #nosec G404 -- this random value only spreads local VNC port selection and is not security-sensitive.
 		port := 5900 + (rand.Intn(100) + 1)
 
 		VirtualMachineConfig.VncPort = port
 		VirtualMachineConfig.Headless = headless
+		VirtualMachineConfig.NoCache = noCache
 
 		if err := runBuild(VirtualMachineConfig); err != nil {
 			fmt.Printf("❌ Build failed for OS: %s, Type: %s, Architecture: %s — %v\n", osName, osType, arch, err)
@@ -197,11 +232,22 @@ Example:
 	},
 }
 
+var buildListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List available OS, type, and architecture combinations for build",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return printAvailableBuildCombinations()
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(buildCmd)
+	buildCmd.AddCommand(buildListCmd)
 
 	buildCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	buildCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	buildCmd.Flags().IntVarP(&parallel, "parallel", "p", 1, "Number of parallel builds to run when building all VMs")
 	buildCmd.Flags().BoolVar(&headless, "headless", false, "Run QEMU in headless mode (no GUI, VNC only)")
+	buildCmd.Flags().BoolVar(&noCache, "no-cache", false, "Force a rebuild even when the build artifact already exists")
 }
