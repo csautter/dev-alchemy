@@ -19,6 +19,7 @@ type VirtualizationEngine string
 
 const (
 	VirtualizationEngineQemu       VirtualizationEngine = "qemu"
+	VirtualizationEngineTart       VirtualizationEngine = "tart"
 	VirtualizationEngineUtm        VirtualizationEngine = "utm"
 	VirtualizationEngineHyperv     VirtualizationEngine = "hyperv"
 	VirtualizationEngineVirtualBox VirtualizationEngine = "virtualbox"
@@ -44,6 +45,14 @@ type VirtualMachineConfig struct {
 
 func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 	return []VirtualMachineConfig{
+		{
+			OS:                   "macos",
+			Arch:                 "arm64",
+			HostOs:               HostOsDarwin,
+			VirtualizationEngine: VirtualizationEngineTart,
+			Cpus:                 4,
+			MemoryMB:             8192,
+		},
 		{
 			OS:         "ubuntu",
 			Arch:       "arm64",
@@ -249,6 +258,8 @@ func GetVirtualMachineNameWithType(config VirtualMachineConfig) string {
 		}
 		return config.OS
 	case "windows11":
+		return config.OS
+	case "macos":
 		return config.OS
 	default:
 		return "Unknown OS"

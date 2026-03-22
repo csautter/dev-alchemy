@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -835,5 +836,149 @@ func TestLoadUbuntuUtmAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T) {
 	}
 	if connectionConfig.BecomePassword != "env-become" {
 		t.Fatalf("expected environment become password to override .env, got %q", connectionConfig.BecomePassword)
+	}
+}
+
+func TestDiscoverTartVMIPv4_UsesFallbackARPResolver(t *testing.T) {
+	var calls int
+
+	ip, err := discoverTartVMIPv4WithOptions(t.TempDir(), "sequoia-base", tartIPv4DiscoveryOptions{
+		runCommand: func(_ string, _ time.Duration, executable string, args []string) (string, error) {
+			if executable != "tart" {
+				t.Fatalf("expected tart executable, got %q", executable)
+			}
+
+			calls++
+			switch calls {
+			case 1:
+				if len(args) != 2 || args[0] != "ip" || args[1] != "sequoia-base" {
+					t.Fatalf("unexpected default resolver args: %v", args)
+				}
+				return "", errors.New("vm is not running")
+			case 2:
+				if len(args) != 3 || args[0] != "ip" || args[1] != "--resolver=arp" || args[2] != "sequoia-base" {
+					t.Fatalf("unexpected arp resolver args: %v", args)
+				}
+				return "192.168.64.21\n", nil
+			default:
+				t.Fatalf("unexpected extra call with args %v", args)
+				return "", nil
+			}
+		},
+		sleep:         func(time.Duration) {},
+		retryInterval: time.Millisecond,
+		maxAttempts:   1,
+	})
+	if err != nil {
+		t.Fatalf("expected Tart IPv4 discovery to succeed, got error: %v", err)
+	}
+	if ip != "192.168.64.21" {
+		t.Fatalf("expected discovered IP 192.168.64.21, got %q", ip)
+	}
+	if calls != 2 {
+		t.Fatalf("expected two tart ip attempts, got %d", calls)
+	}
+}
+
+func TestLoadMacOSTartAnsibleConnectionConfig_UsesDefaults(t *testing.T) {
+	projectDir := t.TempDir()
+
+	connectionConfig, err := loadMacOSTartAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadMacOSTartAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "admin" {
+		t.Fatalf("expected default user admin, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "admin" {
+		t.Fatalf("expected default password admin, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.BecomePassword != "admin" {
+		t.Fatalf("expected default become password admin, got %q", connectionConfig.BecomePassword)
+	}
+	if connectionConfig.Connection != "ssh" {
+		t.Fatalf("expected default connection ssh, got %q", connectionConfig.Connection)
+	}
+}
+
+func TestLoadMacOSTartAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T) {
+	projectDir := t.TempDir()
+	dotEnvPath := filepath.Join(projectDir, ".env")
+
+	content := strings.Join([]string{
+		tartMacOSAnsibleUserEnvVar + "=file-user",
+		tartMacOSAnsiblePasswordEnvVar + "=file-pass",
+		tartMacOSAnsibleBecomePasswordEnvVar + "=file-become",
+		"",
+	}, "\n")
+	if err := os.WriteFile(dotEnvPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to create .env fixture: %v", err)
+	}
+
+	t.Setenv(tartMacOSAnsibleUserEnvVar, "env-user")
+	t.Setenv(tartMacOSAnsiblePasswordEnvVar, "env-pass")
+	t.Setenv(tartMacOSAnsibleBecomePasswordEnvVar, "env-become")
+
+	connectionConfig, err := loadMacOSTartAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadMacOSTartAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "env-user" {
+		t.Fatalf("expected environment user to override .env, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "env-pass" {
+		t.Fatalf("expected environment password to override .env, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.BecomePassword != "env-become" {
+		t.Fatalf("expected environment become password to override .env, got %q", connectionConfig.BecomePassword)
+	}
+}
+
+func TestEnsureTartVMReadyForProvision_ReturnsHelpfulErrorWhenVMDoesNotExist(t *testing.T) {
+	_, err := ensureTartVMReadyForProvision(t.TempDir(), "tahoe-base-alchemy", tartProvisionAvailabilityOptions{
+		localVMExists: func(_ string, vmName string) (bool, error) {
+			if vmName != "tahoe-base-alchemy" {
+				t.Fatalf("unexpected vmName %q", vmName)
+			}
+			return false, nil
+		},
+		discoverIPv4: func(_ string, _ string) (string, error) {
+			t.Fatal("discoverIPv4 should not be called when the VM does not exist")
+			return "", nil
+		},
+	})
+	if err == nil {
+		t.Fatal("expected missing Tart VM to return an error")
+	}
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("expected missing-vm error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "alchemy create macos --arch arm64") {
+		t.Fatalf("expected create hint in error, got %v", err)
+	}
+}
+
+func TestEnsureTartVMReadyForProvision_ReturnsHelpfulErrorWhenVMIsNotRunning(t *testing.T) {
+	_, err := ensureTartVMReadyForProvision(t.TempDir(), "tahoe-base-alchemy", tartProvisionAvailabilityOptions{
+		localVMExists: func(_ string, _ string) (bool, error) {
+			return true, nil
+		},
+		discoverIPv4: func(_ string, vmName string) (string, error) {
+			if vmName != "tahoe-base-alchemy" {
+				t.Fatalf("unexpected vmName %q", vmName)
+			}
+			return "", errors.New("default resolver failed: vm is not running")
+		},
+	})
+	if err == nil {
+		t.Fatal("expected stopped Tart VM to return an error")
+	}
+	if !strings.Contains(err.Error(), "is not running") {
+		t.Fatalf("expected not-running error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "alchemy create macos --arch arm64") {
+		t.Fatalf("expected create hint in error, got %v", err)
 	}
 }

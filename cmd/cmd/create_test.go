@@ -44,6 +44,13 @@ func TestIsCreateSupported(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "tart supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				VirtualizationEngine: alchemy_build.VirtualizationEngineTart,
+			},
+			want: true,
+		},
+		{
 			name: "virtualbox unsupported",
 			vm: alchemy_build.VirtualMachineConfig{
 				VirtualizationEngine: alchemy_build.VirtualizationEngineVirtualBox,

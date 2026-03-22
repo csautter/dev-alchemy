@@ -15,7 +15,7 @@ var (
 
 func isCreateSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	switch vm.VirtualizationEngine {
-	case alchemy_build.VirtualizationEngineUtm, alchemy_build.VirtualizationEngineHyperv:
+	case alchemy_build.VirtualizationEngineUtm, alchemy_build.VirtualizationEngineHyperv, alchemy_build.VirtualizationEngineTart:
 		return true
 	default:
 		return false
@@ -41,6 +41,10 @@ func printAvailableCreateCombinations() error {
 		vms,
 		[]string{"OS", "Type", "Arch", "Artifact", "Create"},
 		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
+			if vm.VirtualizationEngine == alchemy_build.VirtualizationEngineTart {
+				return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, "public image", "ready to create"}, nil
+			}
+
 			artifactsExist, err := alchemy_build.BuildArtifactsExistQuiet(vm)
 			if err != nil {
 				return nil, fmt.Errorf("failed to check build artifacts for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
@@ -67,6 +71,7 @@ Use "all" to create all available VM configurations.
 
 Example:
   alchemy create ubuntu --type server --arch amd64
+  alchemy create macos --arch arm64
   alchemy create windows11 --arch arm64
   alchemy create all
 `,
@@ -124,6 +129,8 @@ func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
 	switch vm.VirtualizationEngine {
 	case alchemy_build.VirtualizationEngineUtm:
 		return alchemy_deploy.RunUtmDeployOnMacOS(vm)
+	case alchemy_build.VirtualizationEngineTart:
+		return alchemy_deploy.RunTartDeployOnMacOS(vm)
 	case alchemy_build.VirtualizationEngineHyperv:
 		return alchemy_deploy.RunHypervVagrantDeployOnWindows(vm)
 	default:

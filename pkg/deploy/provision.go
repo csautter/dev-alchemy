@@ -47,6 +47,14 @@ const (
 	utmUbuntuAnsibleSshTimeoutEnvVar     = "UTM_UBUNTU_ANSIBLE_SSH_TIMEOUT"
 	utmUbuntuAnsibleSshRetriesEnvVar     = "UTM_UBUNTU_ANSIBLE_SSH_RETRIES"
 
+	tartMacOSAnsibleUserEnvVar           = "TART_MACOS_ANSIBLE_USER"
+	tartMacOSAnsiblePasswordEnvVar       = "TART_MACOS_ANSIBLE_PASSWORD"        // #nosec G101 -- environment variable name, not an embedded credential.
+	tartMacOSAnsibleBecomePasswordEnvVar = "TART_MACOS_ANSIBLE_BECOME_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
+	tartMacOSAnsibleConnectionEnvVar     = "TART_MACOS_ANSIBLE_CONNECTION"
+	tartMacOSAnsibleSshCommonArgsEnvVar  = "TART_MACOS_ANSIBLE_SSH_COMMON_ARGS"
+	tartMacOSAnsibleSshTimeoutEnvVar     = "TART_MACOS_ANSIBLE_SSH_TIMEOUT"
+	tartMacOSAnsibleSshRetriesEnvVar     = "TART_MACOS_ANSIBLE_SSH_RETRIES"
+
 	utmIPv4DiscoveryRetryWindow     = 45 * time.Second
 	utmIPv4DiscoveryRetryInterval   = 3 * time.Second
 	utmIPv4ARPCommandTimeout        = time.Minute
@@ -55,6 +63,8 @@ const (
 	utmIPv4ProbePortHTTP            = 5985
 	utmIPv4ProbePortHTTPS           = 5986
 	utmIPv4ProbeSubnetPrefixMinimum = 24
+
+	defaultAnsibleSSHCommonArgs = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
 )
 
 var (
@@ -114,6 +124,11 @@ type utmIPv4DiscoveryOptions struct {
 	arpCommandTimer time.Duration
 }
 
+type tartProvisionAvailabilityOptions struct {
+	localVMExists func(string, string) (bool, error)
+	discoverIPv4  func(string, string) (string, error)
+}
+
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	if isHypervWindows11Amd64ProvisionTarget(vm) {
 		return runHypervWindows11Provision(vm, check)
@@ -123,6 +138,9 @@ func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	}
 	if isUtmUbuntuProvisionTarget(vm) {
 		return runUtmUbuntuProvision(vm, check)
+	}
+	if isTartMacOSProvisionTarget(vm) {
+		return runTartMacOSProvision(vm, check)
 	}
 	if isHypervUbuntuAmd64ProvisionTarget(vm) {
 		return runHypervUbuntuProvision(vm, check)
@@ -164,6 +182,13 @@ func isUtmWindows11ProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
 		(vm.Arch == "amd64" || vm.Arch == "arm64") &&
 		vm.HostOs == alchemy_build.HostOsDarwin &&
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineUtm
+}
+
+func isTartMacOSProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
+	return vm.OS == "macos" &&
+		vm.Arch == "arm64" &&
+		vm.HostOs == alchemy_build.HostOsDarwin &&
+		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineTart
 }
 
 func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool) error {
@@ -312,6 +337,82 @@ func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) er
 	}
 
 	return nil
+}
+
+func runTartMacOSProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	vmName := tartMacOSVMName(vm)
+
+	ip, err := ensureTartVMReadyForProvision(projectDir, vmName, tartProvisionAvailabilityOptions{})
+	if err != nil {
+		return err
+	}
+
+	if err := waitForSSHPort(ip); err != nil {
+		return fmt.Errorf("Tart VM %q is not ready for SSH: %w", vmName, err)
+	}
+
+	connectionConfig, err := loadMacOSTartAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to load Tart macOS ansible configuration: %w", err)
+	}
+
+	args, cleanupExtraVarsFile, err := buildUbuntuProvisionArgs(projectDir, ip, connectionConfig, check)
+	if err != nil {
+		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
+	}
+
+	runErr := runAnsibleProvisionCommand(
+		projectDir,
+		args,
+		90*time.Minute,
+		fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch),
+	)
+
+	cleanupErr := cleanupExtraVarsFile()
+	if runErr != nil {
+		if cleanupErr != nil {
+			return fmt.Errorf("ansible provisioning failed for %s:%s: %w (also failed to remove ansible extra-vars temp file: %v)", vm.OS, vm.Arch, runErr, cleanupErr)
+		}
+		return fmt.Errorf("ansible provisioning failed for %s:%s: %w", vm.OS, vm.Arch, runErr)
+	}
+	if cleanupErr != nil {
+		return fmt.Errorf("failed to remove ansible extra-vars temp file for %s:%s: %w", vm.OS, vm.Arch, cleanupErr)
+	}
+
+	return nil
+}
+
+func ensureTartVMReadyForProvision(projectDir string, vmName string, options tartProvisionAvailabilityOptions) (string, error) {
+	options = withDefaultTartProvisionAvailabilityOptions(options)
+
+	exists, err := options.localVMExists(projectDir, vmName)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine whether Tart VM %q exists: %w", vmName, err)
+	}
+	if !exists {
+		return "", fmt.Errorf("Tart VM %q does not exist. Run `alchemy create macos --arch arm64` first", vmName)
+	}
+
+	ip, err := options.discoverIPv4(projectDir, vmName)
+	if err != nil {
+		return "", fmt.Errorf("Tart VM %q exists but is not running or has no IPv4 address yet. Start it with `alchemy create macos --arch arm64`: %w", vmName, err)
+	}
+
+	return ip, nil
+}
+
+func withDefaultTartProvisionAvailabilityOptions(options tartProvisionAvailabilityOptions) tartProvisionAvailabilityOptions {
+	if options.localVMExists == nil {
+		options.localVMExists = localTartVMExists
+	}
+	if options.discoverIPv4 == nil {
+		options.discoverIPv4 = func(projectDir string, vmName string) (string, error) {
+			return discoverTartVMIPv4WithOptions(projectDir, vmName, tartIPv4DiscoveryOptions{maxAttempts: 1})
+		}
+	}
+
+	return options
 }
 
 func discoverWindowsVagrantIPv4(vagrantDir string) (string, error) {
@@ -903,10 +1004,34 @@ func loadUbuntuAnsibleConnectionConfig(projectDir string, envVars ubuntuAnsibleC
 		Connection:     defaultIfEmpty(resolveEnvValue(envVars.Connection, valuesFromFile), "ssh"),
 		SshCommonArgs: defaultIfEmpty(
 			resolveEnvValue(envVars.SshCommonArgs, valuesFromFile),
-			"-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no",
+			defaultAnsibleSSHCommonArgs,
 		),
 		SshTimeout: defaultIfEmpty(resolveEnvValue(envVars.SshTimeout, valuesFromFile), "120"),
 		SshRetries: defaultIfEmpty(resolveEnvValue(envVars.SshRetries, valuesFromFile), "3"),
+	}
+
+	return connectionConfig, nil
+}
+
+func loadMacOSTartAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConnectionConfig, error) {
+	envFilePath := filepath.Join(projectDir, ".env")
+	valuesFromFile, err := parseDotEnvFile(envFilePath)
+	if err != nil {
+		return ubuntuAnsibleConnectionConfig{}, err
+	}
+
+	password := defaultIfEmpty(resolveEnvValue(tartMacOSAnsiblePasswordEnvVar, valuesFromFile), "admin")
+	connectionConfig := ubuntuAnsibleConnectionConfig{
+		User:           defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleUserEnvVar, valuesFromFile), "admin"),
+		Password:       password,
+		BecomePassword: defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleBecomePasswordEnvVar, valuesFromFile), password),
+		Connection:     defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleConnectionEnvVar, valuesFromFile), "ssh"),
+		SshCommonArgs: defaultIfEmpty(
+			resolveEnvValue(tartMacOSAnsibleSshCommonArgsEnvVar, valuesFromFile),
+			defaultAnsibleSSHCommonArgs,
+		),
+		SshTimeout: defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleSshTimeoutEnvVar, valuesFromFile), "120"),
+		SshRetries: defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleSshRetriesEnvVar, valuesFromFile), "3"),
 	}
 
 	return connectionConfig, nil
