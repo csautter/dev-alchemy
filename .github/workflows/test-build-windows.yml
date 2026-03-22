@@ -220,22 +220,10 @@ jobs:
                 -H "X-GitHub-Api-Version: ${github_api_version}" \
                 "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100"
             )"
-            read -r job_status job_conclusion < <(
-              TARGET_JOB_NAME="${TARGET_JOB_NAME}" python3 - <<'PY' <<< "${jobs_json}"
-            import json
-            import os
-            import sys
-
-            target_name = os.environ["TARGET_JOB_NAME"]
-
-            for job in json.load(sys.stdin).get("jobs", []):
-                if job.get("name") == target_name:
-                    print(f'{job.get("status", "")}\t{job.get("conclusion") or ""}')
-                    break
-            else:
-                print("\t")
-            PY
-            )
+            job_state="$(
+              TARGET_JOB_NAME="${TARGET_JOB_NAME}" python3 -c 'import json, os, sys; target_name = os.environ["TARGET_JOB_NAME"]; match = next((job for job in json.load(sys.stdin).get("jobs", []) if job.get("name") == target_name), None); print((match.get("status", "") if match else "") + "\t" + ((match.get("conclusion") or "") if match else ""))' <<< "${jobs_json}"
+            )"
+            IFS=$'\t' read -r job_status job_conclusion <<< "${job_state}"
 
             if [[ -n "${job_status}" ]]; then
               echo "Observed ${TARGET_JOB_NAME}: status=${job_status} conclusion=${job_conclusion:-none}"
