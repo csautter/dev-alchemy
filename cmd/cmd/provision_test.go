@@ -85,14 +85,26 @@ func TestIsProvisionSupported(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "darwin utm unsupported",
+			name: "darwin utm ubuntu arm64 supported",
 			vm: alchemy_build.VirtualMachineConfig{
 				OS:                   "ubuntu",
 				Arch:                 "arm64",
+				UbuntuType:           "server",
 				HostOs:               alchemy_build.HostOsDarwin,
 				VirtualizationEngine: alchemy_build.VirtualizationEngineUtm,
 			},
-			want: false,
+			want: true,
+		},
+		{
+			name: "darwin utm ubuntu amd64 supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "ubuntu",
+				Arch:                 "amd64",
+				UbuntuType:           "desktop",
+				HostOs:               alchemy_build.HostOsDarwin,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineUtm,
+			},
+			want: true,
 		},
 		{
 			name: "darwin utm windows11 arm64 supported",

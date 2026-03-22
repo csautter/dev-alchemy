@@ -181,6 +181,115 @@ jobs:
           echo "Build and/or deploy smoke test failed. Failing workflow."
           exit 1
 
+  watch-hyperv-runner-queue:
+    if: ${{ github.event_name == 'pull_request' || inputs.enable_az_hyperv }}
+    name: watch HyperV runner queue
+    needs: [provision-hyperv-runner]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      id-token: write
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Wait for HyperV build job to leave queue
+        env:
+          DELETE_RETRY_ATTEMPTS: "5"
+          DELETE_RETRY_DELAY_SECONDS: "15"
+          GH_TOKEN: ${{ github.token }}
+          POLL_INTERVAL_SECONDS: "30"
+          REPO: ${{ github.repository }}
+          RESOURCE_GROUP: ${{ needs.provision-hyperv-runner.outputs.resource-group }}
+          RUN_ID: ${{ github.run_id }}
+          RUNNER_NAME: ${{ needs.provision-hyperv-runner.outputs.runner-name }}
+          TARGET_JOB_NAME: "build TestBuildHypervWindows11Amd64OnWindows"
+          WAIT_TIMEOUT_SECONDS: "900"
+        run: |
+          deadline=$(( $(date +%s) + WAIT_TIMEOUT_SECONDS ))
+          github_api_version="2022-11-28"
+
+          while true; do
+            now=$(date +%s)
+            jobs_json="$(
+              curl -fsSL \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "X-GitHub-Api-Version: ${github_api_version}" \
+                "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100"
+            )"
+            job_state="$(
+              TARGET_JOB_NAME="${TARGET_JOB_NAME}" python3 -c 'import json, os, sys; target_name = os.environ["TARGET_JOB_NAME"]; match = next((job for job in json.load(sys.stdin).get("jobs", []) if job.get("name") == target_name), None); print((match.get("status", "") if match else "") + "\t" + ((match.get("conclusion") or "") if match else ""))' <<< "${jobs_json}"
+            )"
+            IFS=$'\t' read -r job_status job_conclusion <<< "${job_state}"
+
+            if [[ -n "${job_status}" ]]; then
+              echo "Observed ${TARGET_JOB_NAME}: status=${job_status} conclusion=${job_conclusion:-none}"
+            else
+              echo "Waiting for ${TARGET_JOB_NAME} to appear in workflow jobs list"
+            fi
+
+            if [[ "${job_status}" == "in_progress" || "${job_status}" == "completed" ]]; then
+              echo "${TARGET_JOB_NAME} has left the queue"
+              exit 0
+            fi
+
+            if (( now >= deadline )); then
+              echo "${TARGET_JOB_NAME} stayed queued too long. Deleting ${RESOURCE_GROUP} before canceling workflow run ${RUN_ID}."
+
+              delete_succeeded=false
+              for attempt in $(seq 1 "${DELETE_RETRY_ATTEMPTS}"); do
+                echo "Delete attempt ${attempt}/${DELETE_RETRY_ATTEMPTS} for ${RESOURCE_GROUP}"
+                if az rest \
+                  --method post \
+                  --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
+                  --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+                  --body "{
+                    \"resource-group\": \"${RESOURCE_GROUP}\",
+                    \"runner-name\": \"${RUNNER_NAME}\"
+                  }"; then
+                  delete_succeeded=true
+                  break
+                fi
+
+                if (( attempt < DELETE_RETRY_ATTEMPTS )); then
+                  echo "Delete failed. Retrying in ${DELETE_RETRY_DELAY_SECONDS}s..."
+                  sleep "${DELETE_RETRY_DELAY_SECONDS}"
+                fi
+              done
+
+              if [[ "${delete_succeeded}" != "true" ]]; then
+                echo "Failed to delete ${RESOURCE_GROUP} after ${DELETE_RETRY_ATTEMPTS} attempts. Leaving workflow active so cleanup-hyperv can retry."
+                exit 1
+              fi
+
+              echo "Confirmed cleanup for ${RESOURCE_GROUP}. Canceling workflow run ${RUN_ID}."
+
+              curl -fsSL \
+                -X POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "X-GitHub-Api-Version: ${github_api_version}" \
+                "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/force-cancel" >/dev/null || \
+              curl -fsSL \
+                -X POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "X-GitHub-Api-Version: ${github_api_version}" \
+                "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/cancel" >/dev/null || true
+
+              exit 1
+            fi
+
+            sleep "${POLL_INTERVAL_SECONDS}"
+          done
+
   test-virtualbox-build:
     # if: ${{ github.event_name == 'pull_request' || inputs.enable_az_virtualbox }}
     # TODO: Re-enable after fixing VirtualBox provisioning issue
@@ -259,7 +368,7 @@ jobs:
           exit 1
 
   cleanup-hyperv:
-    needs: [provision-hyperv-runner, test-hyperv-build]
+    needs: [provision-hyperv-runner, test-hyperv-build, watch-hyperv-runner-queue]
     if: always() && (github.event_name == 'pull_request' || inputs.enable_az_hyperv)
     runs-on: ubuntu-latest
 
@@ -274,14 +383,30 @@ jobs:
       - name: Delete HyperV resource group
         run: |
           echo "Deleting resource group ${{ needs.provision-hyperv-runner.outputs.resource-group }}"
-          az rest \
-            --method post \
-            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
-            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
-            --body "{
-              \"resource-group\": \"${{ needs.provision-hyperv-runner.outputs.resource-group }}\",
-              \"runner-name\": \"${{ needs.provision-hyperv-runner.outputs.runner-name }}\"
-            }" || echo "Failed to delete resource group, continuing..."
+          delete_succeeded=false
+          for attempt in $(seq 1 5); do
+            echo "Delete attempt ${attempt}/5 for ${{ needs.provision-hyperv-runner.outputs.resource-group }}"
+            if az rest \
+              --method post \
+              --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
+              --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+              --body "{
+                \"resource-group\": \"${{ needs.provision-hyperv-runner.outputs.resource-group }}\",
+                \"runner-name\": \"${{ needs.provision-hyperv-runner.outputs.runner-name }}\"
+              }"; then
+              delete_succeeded=true
+              break
+            fi
+
+            if (( attempt < 5 )); then
+              echo "Delete failed. Retrying in 15s..."
+              sleep 15
+            fi
+          done
+
+          if [[ "${delete_succeeded}" != "true" ]]; then
+            echo "Failed to delete resource group after 5 attempts, continuing..."
+          fi
 
   cleanup-virtualbox:
     needs: [provision-virtualbox-runner, test-virtualbox-build]
