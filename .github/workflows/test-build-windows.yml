@@ -201,6 +201,8 @@ jobs:
 
       - name: Wait for HyperV build job to leave queue
         env:
+          DELETE_RETRY_ATTEMPTS: "5"
+          DELETE_RETRY_DELAY_SECONDS: "15"
           GH_TOKEN: ${{ github.token }}
           POLL_INTERVAL_SECONDS: "30"
           REPO: ${{ github.repository }}
@@ -239,16 +241,35 @@ jobs:
             fi
 
             if (( now >= deadline )); then
-              echo "${TARGET_JOB_NAME} stayed queued too long. Deleting ${RESOURCE_GROUP} and force-canceling workflow run ${RUN_ID}."
+              echo "${TARGET_JOB_NAME} stayed queued too long. Deleting ${RESOURCE_GROUP} before canceling workflow run ${RUN_ID}."
 
-              az rest \
-                --method post \
-                --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
-                --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
-                --body "{
-                  \"resource-group\": \"${RESOURCE_GROUP}\",
-                  \"runner-name\": \"${RUNNER_NAME}\"
-                }" || echo "Failed to delete resource group, continuing with force-cancel..."
+              delete_succeeded=false
+              for attempt in $(seq 1 "${DELETE_RETRY_ATTEMPTS}"); do
+                echo "Delete attempt ${attempt}/${DELETE_RETRY_ATTEMPTS} for ${RESOURCE_GROUP}"
+                if az rest \
+                  --method post \
+                  --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
+                  --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+                  --body "{
+                    \"resource-group\": \"${RESOURCE_GROUP}\",
+                    \"runner-name\": \"${RUNNER_NAME}\"
+                  }"; then
+                  delete_succeeded=true
+                  break
+                fi
+
+                if (( attempt < DELETE_RETRY_ATTEMPTS )); then
+                  echo "Delete failed. Retrying in ${DELETE_RETRY_DELAY_SECONDS}s..."
+                  sleep "${DELETE_RETRY_DELAY_SECONDS}"
+                fi
+              done
+
+              if [[ "${delete_succeeded}" != "true" ]]; then
+                echo "Failed to delete ${RESOURCE_GROUP} after ${DELETE_RETRY_ATTEMPTS} attempts. Leaving workflow active so cleanup-hyperv can retry."
+                exit 1
+              fi
+
+              echo "Confirmed cleanup for ${RESOURCE_GROUP}. Canceling workflow run ${RUN_ID}."
 
               curl -fsSL \
                 -X POST \
@@ -362,14 +383,30 @@ jobs:
       - name: Delete HyperV resource group
         run: |
           echo "Deleting resource group ${{ needs.provision-hyperv-runner.outputs.resource-group }}"
-          az rest \
-            --method post \
-            --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
-            --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
-            --body "{
-              \"resource-group\": \"${{ needs.provision-hyperv-runner.outputs.resource-group }}\",
-              \"runner-name\": \"${{ needs.provision-hyperv-runner.outputs.runner-name }}\"
-            }" || echo "Failed to delete resource group, continuing..."
+          delete_succeeded=false
+          for attempt in $(seq 1 5); do
+            echo "Delete attempt ${attempt}/5 for ${{ needs.provision-hyperv-runner.outputs.resource-group }}"
+            if az rest \
+              --method post \
+              --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
+              --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+              --body "{
+                \"resource-group\": \"${{ needs.provision-hyperv-runner.outputs.resource-group }}\",
+                \"runner-name\": \"${{ needs.provision-hyperv-runner.outputs.runner-name }}\"
+              }"; then
+              delete_succeeded=true
+              break
+            fi
+
+            if (( attempt < 5 )); then
+              echo "Delete failed. Retrying in 15s..."
+              sleep 15
+            fi
+          done
+
+          if [[ "${delete_succeeded}" != "true" ]]; then
+            echo "Failed to delete resource group after 5 attempts, continuing..."
+          fi
 
   cleanup-virtualbox:
     needs: [provision-virtualbox-runner, test-virtualbox-build]
