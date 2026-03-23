@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/csautter/dev-alchemy/compare/v0.4.0...v0.5.0) (2026-03-23)
+
+
+### Added
+
+* **provision:** add Ubuntu UTM provisioning support on macOS ([33dace4](https://github.com/csautter/dev-alchemy/commit/33dace45b6b2e9b32251c32a29f5cf97f8308884))
+* **provision:** add Ubuntu UTM provisioning support on macOS ([cc83f38](https://github.com/csautter/dev-alchemy/commit/cc83f381030f2e95fd42a10894faa98375bbee0f))
+
+
+### Fixed
+
+* **actions:** simplify Hyper-V queue watcher job parsing ([4bbaff8](https://github.com/csautter/dev-alchemy/commit/4bbaff841f83280acac627448eb126f4132bd536))
+* **ci:** retry HyperV runner cleanup before canceling queued builds ([a4a710c](https://github.com/csautter/dev-alchemy/commit/a4a710cfb89f85d58fd5dab275851d1d41187e35))
+
+
+### CI
+
+* cancel Windows Hyper-V test runs when the runner stays queued ([30c9852](https://github.com/csautter/dev-alchemy/commit/30c98526f07c44d4a87a20a58b2c140591c6191c))
+* scope Windows workflow actions write permission to queue watcher job ([4d3c23e](https://github.com/csautter/dev-alchemy/commit/4d3c23e20c1aa849e19fb82360cb6ea1df1c60a0))
+* trigger macOS VM workflow for provision code changes ([907cc21](https://github.com/csautter/dev-alchemy/commit/907cc21a9047316af0dbbeb987871dbb5e61a924))
+
 ## [0.4.0](https://github.com/csautter/dev-alchemy/compare/v0.3.0...v0.4.0) (2026-03-22)
 
 
