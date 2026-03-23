@@ -2,6 +2,8 @@ package deploy
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -87,8 +89,9 @@ func TestWaitForTartVMToBecomeReachableWithOptions_ReturnsEarlyLogFailure(t *tes
 		t.TempDir(),
 		"tahoe-base-alchemy",
 		tartDetachedRun{
-			pid:     4242,
-			logPath: "/tmp/tahoe-base-alchemy.log",
+			pid:         4242,
+			logDir:      "/tmp",
+			logFileName: "tahoe-base-alchemy.log",
 		},
 		tartReachabilityWaitOptions{
 			detectIPv4: func() (string, error) {
@@ -100,9 +103,12 @@ func TestWaitForTartVMToBecomeReachableWithOptions_ReturnsEarlyLogFailure(t *tes
 				}
 				return false, nil
 			},
-			readLogSummary: func(path string) string {
-				if path != "/tmp/tahoe-base-alchemy.log" {
-					t.Fatalf("unexpected log path %q", path)
+			readLogSummary: func(logDir string, logFileName string) string {
+				if logDir != "/tmp" {
+					t.Fatalf("unexpected log dir %q", logDir)
+				}
+				if logFileName != "tahoe-base-alchemy.log" {
+					t.Fatalf("unexpected log file name %q", logFileName)
 				}
 				return "The number of VMs exceeds the system limit"
 			},
@@ -122,5 +128,44 @@ func TestWaitForTartVMToBecomeReachableWithOptions_ReturnsEarlyLogFailure(t *tes
 	}
 	if !strings.Contains(err.Error(), "system limit") {
 		t.Fatalf("expected tart log summary in error, got %v", err)
+	}
+}
+
+func TestTartRunLogFileName_SanitizesVMName(t *testing.T) {
+	got := tartRunLogFileName("../Tahoe Base/Alchemy")
+
+	if got != "Tahoe_Base_Alchemy.log" {
+		t.Fatalf("expected sanitized log filename, got %q", got)
+	}
+}
+
+func TestReadTartRunLogSummary_ReadsScopedLogFile(t *testing.T) {
+	logDir := t.TempDir()
+	logPath := filepath.Join(logDir, "vm.log")
+	if err := os.WriteFile(logPath, []byte("line1\nline2\nline3\n"), 0o600); err != nil {
+		t.Fatalf("failed to write test log: %v", err)
+	}
+
+	got := readTartRunLogSummary(logDir, "vm.log")
+	if got != "line1 | line2 | line3" {
+		t.Fatalf("expected joined log summary, got %q", got)
+	}
+}
+
+func TestReadTartRunLogSummary_RejectsTraversal(t *testing.T) {
+	tempDir := t.TempDir()
+	logDir := filepath.Join(tempDir, "logs")
+	if err := os.Mkdir(logDir, 0o750); err != nil {
+		t.Fatalf("failed to create log dir: %v", err)
+	}
+
+	outsideLogPath := filepath.Join(tempDir, "outside.log")
+	if err := os.WriteFile(outsideLogPath, []byte("outside"), 0o600); err != nil {
+		t.Fatalf("failed to write outside log: %v", err)
+	}
+
+	got := readTartRunLogSummary(logDir, "../outside.log")
+	if got != "" {
+		t.Fatalf("expected traversal attempt to be rejected, got %q", got)
 	}
 }

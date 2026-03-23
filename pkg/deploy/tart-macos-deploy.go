@@ -36,8 +36,9 @@ type tartIPv4DiscoveryOptions struct {
 }
 
 type tartDetachedRun struct {
-	logPath string
-	pid     int
+	logDir      string
+	logFileName string
+	pid         int
 }
 
 type tartLocalVMState struct {
@@ -48,7 +49,7 @@ type tartLocalVMState struct {
 type tartReachabilityWaitOptions struct {
 	detectIPv4       func() (string, error)
 	isProcessRunning func(int) (bool, error)
-	readLogSummary   func(string) string
+	readLogSummary   func(string, string) string
 	sleep            func(time.Duration)
 	retryInterval    time.Duration
 	maxAttempts      int
@@ -237,11 +238,12 @@ func tartListColumnIndexes(lines []string) (int, int, int, bool) {
 
 func startTartVMDetached(projectDir string, vmName string) (tartDetachedRun, error) {
 	logDir := filepath.Join(projectDir, ".dev-alchemy", "tart")
-	if err := os.MkdirAll(logDir, 0o755); err != nil {
+	if err := os.MkdirAll(logDir, 0o750); err != nil {
 		return tartDetachedRun{}, fmt.Errorf("failed to create Tart log directory %q: %w", logDir, err)
 	}
 
-	logPath := filepath.Join(logDir, vmName+".log")
+	logFileName := tartRunLogFileName(vmName)
+	logPath := filepath.Join(logDir, logFileName)
 	commandParts := []string{"tart", "run"}
 	if bridgedInterface := strings.TrimSpace(os.Getenv(tartMacOSBridgedInterfaceEnvVar)); bridgedInterface != "" {
 		commandParts = append(commandParts, fmt.Sprintf("--net-bridged=%s", bridgedInterface))
@@ -265,9 +267,33 @@ func startTartVMDetached(projectDir string, vmName string) (tartDetachedRun, err
 	}
 
 	return tartDetachedRun{
-		logPath: logPath,
-		pid:     pid,
+		logDir:      logDir,
+		logFileName: logFileName,
+		pid:         pid,
 	}, nil
+}
+
+func tartRunLogFileName(vmName string) string {
+	sanitized := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r
+		case r >= '0' && r <= '9':
+			return r
+		case r == '.', r == '-', r == '_':
+			return r
+		default:
+			return '_'
+		}
+	}, strings.TrimSpace(vmName))
+	sanitized = strings.Trim(sanitized, "._")
+	if sanitized == "" {
+		sanitized = "tart-vm"
+	}
+
+	return sanitized + ".log"
 }
 
 func discoverTartVMIPv4(projectDir string, vmName string) (string, error) {
@@ -380,7 +406,7 @@ func waitForTartVMToBecomeReachableWithOptions(
 				return "", fmt.Errorf("failed to inspect Tart process %d for %q: %w", runState.pid, vmName, runErr)
 			}
 			if !running {
-				logSummary := waitOptions.readLogSummary(runState.logPath)
+				logSummary := waitOptions.readLogSummary(runState.logDir, runState.logFileName)
 				if logSummary != "" {
 					return "", fmt.Errorf("failed to start Tart VM %q: tart run exited early: %s", vmName, logSummary)
 				}
@@ -393,8 +419,8 @@ func waitForTartVMToBecomeReachableWithOptions(
 		}
 	}
 
-	if runState.logPath != "" {
-		logSummary := waitOptions.readLogSummary(runState.logPath)
+	if runState.logFileName != "" {
+		logSummary := waitOptions.readLogSummary(runState.logDir, runState.logFileName)
 		if logSummary != "" {
 			return "", fmt.Errorf("Tart VM %q did not expose an IPv4 address before timeout. Last tart run log output: %s. Last IP discovery error: %w", vmName, logSummary, lastErr)
 		}
@@ -473,12 +499,18 @@ func isProcessRunning(pid int) (bool, error) {
 	return false, err
 }
 
-func readTartRunLogSummary(logPath string) string {
-	if strings.TrimSpace(logPath) == "" {
+func readTartRunLogSummary(logDir string, logFileName string) string {
+	if strings.TrimSpace(logDir) == "" || strings.TrimSpace(logFileName) == "" {
 		return ""
 	}
 
-	content, err := os.ReadFile(logPath)
+	logRoot, err := os.OpenRoot(logDir)
+	if err != nil {
+		return ""
+	}
+	defer logRoot.Close()
+
+	content, err := logRoot.ReadFile(logFileName)
 	if err != nil {
 		return ""
 	}
