@@ -3,7 +3,6 @@ package deploy
 import (
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,9 +25,6 @@ const (
 	tartMacOSIPv4DiscoveryRetryWindow   = 5 * time.Minute
 	tartMacOSIPv4DiscoveryRetryInterval = 2 * time.Second
 	tartMacOSCommandTimeout             = time.Minute
-	tartMacOSSSHWaitWindow              = 5 * time.Minute
-	tartMacOSSSHWaitInterval            = 2 * time.Second
-	tartMacOSSSHPort                    = 22
 )
 
 type tartIPv4DiscoveryOptions struct {
@@ -326,23 +322,6 @@ func withDefaultTartReachabilityWaitOptions(
 	}
 
 	return options
-}
-
-func waitForSSHPort(ip string) error {
-	deadline := time.Now().Add(tartMacOSSSHWaitWindow)
-	var lastErr error
-
-	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, "22"), 5*time.Second)
-		if err == nil {
-			_ = conn.Close()
-			return nil
-		}
-		lastErr = err
-		time.Sleep(tartMacOSSSHWaitInterval)
-	}
-
-	return fmt.Errorf("SSH on %s:%d did not become reachable within %s: %w", ip, tartMacOSSSHPort, tartMacOSSSHWaitWindow, lastErr)
 }
 
 func parseBackgroundPID(output string) (int, error) {
