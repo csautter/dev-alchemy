@@ -651,9 +651,9 @@ func TestDiscoverUtmVMIPv4_RePrimesArpCacheUntilMacAddressAppears(t *testing.T) 
 	}
 }
 
-func TestBuildUbuntuHypervProvisionArgs(t *testing.T) {
+func TestBuildUbuntuProvisionArgs(t *testing.T) {
 	projectDir := t.TempDir()
-	config := ubuntuHypervAnsibleConnectionConfig{
+	config := ubuntuAnsibleConnectionConfig{
 		User:           "packer",
 		Password:       "P@ssw0rd!",
 		BecomePassword: "P@ssw0rd!",
@@ -663,9 +663,9 @@ func TestBuildUbuntuHypervProvisionArgs(t *testing.T) {
 		SshRetries:     "3",
 	}
 
-	args, cleanup, err := buildUbuntuHypervProvisionArgs(projectDir, "172.24.78.254", config, true)
+	args, cleanup, err := buildUbuntuProvisionArgs(projectDir, "172.24.78.254", config, true)
 	if err != nil {
-		t.Fatalf("buildUbuntuHypervProvisionArgs returned error: %v", err)
+		t.Fatalf("buildUbuntuProvisionArgs returned error: %v", err)
 	}
 	t.Cleanup(func() {
 		if cleanupErr := cleanup(); cleanupErr != nil {
@@ -769,6 +769,62 @@ func TestLoadUbuntuHypervAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T
 	connectionConfig, err := loadUbuntuHypervAnsibleConnectionConfig(projectDir)
 	if err != nil {
 		t.Fatalf("loadUbuntuHypervAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "env-user" {
+		t.Fatalf("expected environment user to override .env, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "env-pass" {
+		t.Fatalf("expected environment password to override .env, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.BecomePassword != "env-become" {
+		t.Fatalf("expected environment become password to override .env, got %q", connectionConfig.BecomePassword)
+	}
+}
+
+func TestLoadUbuntuUtmAnsibleConnectionConfig_UsesDefaults(t *testing.T) {
+	projectDir := t.TempDir()
+
+	connectionConfig, err := loadUbuntuUtmAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadUbuntuUtmAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "packer" {
+		t.Fatalf("expected default user packer, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "P@ssw0rd!" {
+		t.Fatalf("expected default password, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.BecomePassword != "P@ssw0rd!" {
+		t.Fatalf("expected default become password, got %q", connectionConfig.BecomePassword)
+	}
+	if connectionConfig.Connection != "ssh" {
+		t.Fatalf("expected default connection ssh, got %q", connectionConfig.Connection)
+	}
+}
+
+func TestLoadUbuntuUtmAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T) {
+	projectDir := t.TempDir()
+	dotEnvPath := filepath.Join(projectDir, ".env")
+
+	content := strings.Join([]string{
+		utmUbuntuAnsibleUserEnvVar + "=file-user",
+		utmUbuntuAnsiblePasswordEnvVar + "=file-pass",
+		utmUbuntuAnsibleBecomePasswordEnvVar + "=file-become",
+		"",
+	}, "\n")
+	if err := os.WriteFile(dotEnvPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to create .env fixture: %v", err)
+	}
+
+	t.Setenv(utmUbuntuAnsibleUserEnvVar, "env-user")
+	t.Setenv(utmUbuntuAnsiblePasswordEnvVar, "env-pass")
+	t.Setenv(utmUbuntuAnsibleBecomePasswordEnvVar, "env-become")
+
+	connectionConfig, err := loadUbuntuUtmAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadUbuntuUtmAnsibleConnectionConfig returned error: %v", err)
 	}
 
 	if connectionConfig.User != "env-user" {

@@ -39,6 +39,14 @@ const (
 	hypervUbuntuAnsibleSshTimeoutEnvVar     = "HYPERV_UBUNTU_ANSIBLE_SSH_TIMEOUT"
 	hypervUbuntuAnsibleSshRetriesEnvVar     = "HYPERV_UBUNTU_ANSIBLE_SSH_RETRIES"
 
+	utmUbuntuAnsibleUserEnvVar           = "UTM_UBUNTU_ANSIBLE_USER"
+	utmUbuntuAnsiblePasswordEnvVar       = "UTM_UBUNTU_ANSIBLE_PASSWORD"        // #nosec G101 -- environment variable name, not an embedded credential.
+	utmUbuntuAnsibleBecomePasswordEnvVar = "UTM_UBUNTU_ANSIBLE_BECOME_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
+	utmUbuntuAnsibleConnectionEnvVar     = "UTM_UBUNTU_ANSIBLE_CONNECTION"
+	utmUbuntuAnsibleSshCommonArgsEnvVar  = "UTM_UBUNTU_ANSIBLE_SSH_COMMON_ARGS"
+	utmUbuntuAnsibleSshTimeoutEnvVar     = "UTM_UBUNTU_ANSIBLE_SSH_TIMEOUT"
+	utmUbuntuAnsibleSshRetriesEnvVar     = "UTM_UBUNTU_ANSIBLE_SSH_RETRIES"
+
 	utmIPv4DiscoveryRetryWindow     = 45 * time.Second
 	utmIPv4DiscoveryRetryInterval   = 3 * time.Second
 	utmIPv4ARPCommandTimeout        = time.Minute
@@ -76,7 +84,17 @@ type windowsAnsibleConnectionEnvVars struct {
 	Port           string
 }
 
-type ubuntuHypervAnsibleConnectionConfig struct {
+type ubuntuAnsibleConnectionConfig struct {
+	User           string
+	Password       string
+	BecomePassword string
+	Connection     string
+	SshCommonArgs  string
+	SshTimeout     string
+	SshRetries     string
+}
+
+type ubuntuAnsibleConnectionEnvVars struct {
 	User           string
 	Password       string
 	BecomePassword string
@@ -102,6 +120,9 @@ func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	}
 	if isUtmWindows11ProvisionTarget(vm) {
 		return runUtmWindows11Provision(vm, check)
+	}
+	if isUtmUbuntuProvisionTarget(vm) {
+		return runUtmUbuntuProvision(vm, check)
 	}
 	if isHypervUbuntuAmd64ProvisionTarget(vm) {
 		return runHypervUbuntuProvision(vm, check)
@@ -129,6 +150,13 @@ func isHypervUbuntuAmd64ProvisionTarget(vm alchemy_build.VirtualMachineConfig) b
 		vm.Arch == "amd64" &&
 		vm.HostOs == alchemy_build.HostOsWindows &&
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineHyperv
+}
+
+func isUtmUbuntuProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
+	return vm.OS == "ubuntu" &&
+		(vm.Arch == "amd64" || vm.Arch == "arm64") &&
+		vm.HostOs == alchemy_build.HostOsDarwin &&
+		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineUtm
 }
 
 func isUtmWindows11ProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
@@ -221,7 +249,46 @@ func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool)
 		return fmt.Errorf("failed to load hyper-v ubuntu ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildUbuntuHypervProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildUbuntuProvisionArgs(projectDir, ip, connectionConfig, check)
+	if err != nil {
+		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
+	}
+
+	runErr := runAnsibleProvisionCommand(
+		projectDir,
+		args,
+		90*time.Minute,
+		fmt.Sprintf("%s:%s:%s:provision", vm.OS, vm.UbuntuType, vm.Arch),
+	)
+
+	cleanupErr := cleanupExtraVarsFile()
+	if runErr != nil {
+		if cleanupErr != nil {
+			return fmt.Errorf("ansible provisioning failed for %s:%s:%s: %w (also failed to remove ansible extra-vars temp file: %v)", vm.OS, vm.UbuntuType, vm.Arch, runErr, cleanupErr)
+		}
+		return fmt.Errorf("ansible provisioning failed for %s:%s:%s: %w", vm.OS, vm.UbuntuType, vm.Arch, runErr)
+	}
+	if cleanupErr != nil {
+		return fmt.Errorf("failed to remove ansible extra-vars temp file for %s:%s:%s: %w", vm.OS, vm.UbuntuType, vm.Arch, cleanupErr)
+	}
+
+	return nil
+}
+
+func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+
+	ip, err := discoverUtmVMIPv4(projectDir, vm)
+	if err != nil {
+		return fmt.Errorf("failed to determine UTM VM IPv4 address: %w", err)
+	}
+
+	connectionConfig, err := loadUbuntuUtmAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to load UTM ubuntu ansible configuration: %w", err)
+	}
+
+	args, cleanupExtraVarsFile, err := buildUbuntuProvisionArgs(projectDir, ip, connectionConfig, check)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -685,7 +752,7 @@ func buildWindowsProvisionArgs(projectDir string, ip string, connectionConfig wi
 	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, check)
 }
 
-func buildUbuntuHypervProvisionArgs(projectDir string, ip string, connectionConfig ubuntuHypervAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
+func buildUbuntuProvisionArgs(projectDir string, ip string, connectionConfig ubuntuAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
 	extraVars, err := json.Marshal(map[string]string{
 		"ansible_user":            connectionConfig.User,
 		"ansible_password":        connectionConfig.Password,
@@ -797,25 +864,49 @@ func loadWindowsAnsibleConnectionConfig(projectDir string, envVars windowsAnsibl
 	return connectionConfig, nil
 }
 
-func loadUbuntuHypervAnsibleConnectionConfig(projectDir string) (ubuntuHypervAnsibleConnectionConfig, error) {
+func loadUbuntuHypervAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConnectionConfig, error) {
+	return loadUbuntuAnsibleConnectionConfig(projectDir, ubuntuAnsibleConnectionEnvVars{
+		User:           hypervUbuntuAnsibleUserEnvVar,
+		Password:       hypervUbuntuAnsiblePasswordEnvVar,
+		BecomePassword: hypervUbuntuAnsibleBecomePasswordEnvVar,
+		Connection:     hypervUbuntuAnsibleConnectionEnvVar,
+		SshCommonArgs:  hypervUbuntuAnsibleSshCommonArgsEnvVar,
+		SshTimeout:     hypervUbuntuAnsibleSshTimeoutEnvVar,
+		SshRetries:     hypervUbuntuAnsibleSshRetriesEnvVar,
+	})
+}
+
+func loadUbuntuUtmAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConnectionConfig, error) {
+	return loadUbuntuAnsibleConnectionConfig(projectDir, ubuntuAnsibleConnectionEnvVars{
+		User:           utmUbuntuAnsibleUserEnvVar,
+		Password:       utmUbuntuAnsiblePasswordEnvVar,
+		BecomePassword: utmUbuntuAnsibleBecomePasswordEnvVar,
+		Connection:     utmUbuntuAnsibleConnectionEnvVar,
+		SshCommonArgs:  utmUbuntuAnsibleSshCommonArgsEnvVar,
+		SshTimeout:     utmUbuntuAnsibleSshTimeoutEnvVar,
+		SshRetries:     utmUbuntuAnsibleSshRetriesEnvVar,
+	})
+}
+
+func loadUbuntuAnsibleConnectionConfig(projectDir string, envVars ubuntuAnsibleConnectionEnvVars) (ubuntuAnsibleConnectionConfig, error) {
 	envFilePath := filepath.Join(projectDir, ".env")
 	valuesFromFile, err := parseDotEnvFile(envFilePath)
 	if err != nil {
-		return ubuntuHypervAnsibleConnectionConfig{}, err
+		return ubuntuAnsibleConnectionConfig{}, err
 	}
 
-	password := defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsiblePasswordEnvVar, valuesFromFile), "P@ssw0rd!")
-	connectionConfig := ubuntuHypervAnsibleConnectionConfig{
-		User:           defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleUserEnvVar, valuesFromFile), "packer"),
+	password := defaultIfEmpty(resolveEnvValue(envVars.Password, valuesFromFile), "P@ssw0rd!")
+	connectionConfig := ubuntuAnsibleConnectionConfig{
+		User:           defaultIfEmpty(resolveEnvValue(envVars.User, valuesFromFile), "packer"),
 		Password:       password,
-		BecomePassword: defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleBecomePasswordEnvVar, valuesFromFile), password),
-		Connection:     defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleConnectionEnvVar, valuesFromFile), "ssh"),
+		BecomePassword: defaultIfEmpty(resolveEnvValue(envVars.BecomePassword, valuesFromFile), password),
+		Connection:     defaultIfEmpty(resolveEnvValue(envVars.Connection, valuesFromFile), "ssh"),
 		SshCommonArgs: defaultIfEmpty(
-			resolveEnvValue(hypervUbuntuAnsibleSshCommonArgsEnvVar, valuesFromFile),
+			resolveEnvValue(envVars.SshCommonArgs, valuesFromFile),
 			"-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no",
 		),
-		SshTimeout: defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleSshTimeoutEnvVar, valuesFromFile), "120"),
-		SshRetries: defaultIfEmpty(resolveEnvValue(hypervUbuntuAnsibleSshRetriesEnvVar, valuesFromFile), "3"),
+		SshTimeout: defaultIfEmpty(resolveEnvValue(envVars.SshTimeout, valuesFromFile), "120"),
+		SshRetries: defaultIfEmpty(resolveEnvValue(envVars.SshRetries, valuesFromFile), "3"),
 	}
 
 	return connectionConfig, nil
