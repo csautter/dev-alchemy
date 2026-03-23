@@ -17,6 +17,40 @@ func TestParseBackgroundPID(t *testing.T) {
 	}
 }
 
+func TestTartListIncludesLocalVM_UsesNamedColumns(t *testing.T) {
+	output := `
+NAME                    STATUS    SOURCE
+sonoma-base-alchemy     stopped   remote
+tahoe-base-alchemy      running   local
+`
+
+	if !tartListIncludesLocalVM(output, "tahoe-base-alchemy") {
+		t.Fatal("expected Tart list parser to find local VM by named columns")
+	}
+}
+
+func TestTartListIncludesLocalVM_DoesNotMatchSubstringNames(t *testing.T) {
+	output := `
+local tahoe-base-alchemy-old running
+local tahoe-base-alchemy-copy stopped
+`
+
+	if tartListIncludesLocalVM(output, "tahoe-base-alchemy") {
+		t.Fatal("did not expect Tart list parser to match substring VM names")
+	}
+}
+
+func TestTartListIncludesLocalVM_FallsBackToCurrentTwoFieldLayout(t *testing.T) {
+	output := `
+local tahoe-base-alchemy running
+remote sonoma-base-alchemy stopped
+`
+
+	if !tartListIncludesLocalVM(output, "tahoe-base-alchemy") {
+		t.Fatal("expected Tart list parser to support the current Tart list layout")
+	}
+}
+
 func TestWaitForTartVMToBecomeReachableWithOptions_ReturnsEarlyLogFailure(t *testing.T) {
 	ip, err := waitForTartVMToBecomeReachableWithOptions(
 		t.TempDir(),

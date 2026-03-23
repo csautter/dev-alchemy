@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -121,8 +120,68 @@ func localTartVMExists(projectDir string, vmName string) (bool, error) {
 		return false, fmt.Errorf("failed to list Tart VMs: %w; output: %s", err, strings.TrimSpace(output))
 	}
 
-	pattern := regexp.MustCompile(`(?m)^local.*\b` + regexp.QuoteMeta(vmName) + `\b.*$`)
-	return pattern.MatchString(output), nil
+	return tartListIncludesLocalVM(output, vmName), nil
+}
+
+func tartListIncludesLocalVM(output string, vmName string) bool {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) == 0 {
+		return false
+	}
+
+	if nameColumn, sourceColumn, ok := tartListColumnIndexes(lines); ok {
+		for _, line := range lines[1:] {
+			fields := strings.Fields(line)
+			if len(fields) <= nameColumn || len(fields) <= sourceColumn {
+				continue
+			}
+			if fields[sourceColumn] == "local" && fields[nameColumn] == vmName {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		if fields[0] == "local" && fields[1] == vmName {
+			return true
+		}
+	}
+
+	return false
+}
+
+func tartListColumnIndexes(lines []string) (int, int, bool) {
+	for _, line := range lines {
+		header := strings.Fields(strings.ToLower(strings.TrimSpace(line)))
+		if len(header) == 0 {
+			continue
+		}
+
+		nameColumn := -1
+		sourceColumn := -1
+		for index, field := range header {
+			switch field {
+			case "name":
+				nameColumn = index
+			case "source":
+				sourceColumn = index
+			}
+		}
+
+		if nameColumn >= 0 && sourceColumn >= 0 {
+			return nameColumn, sourceColumn, true
+		}
+
+		break
+	}
+
+	return 0, 0, false
 }
 
 func startTartVMDetached(projectDir string, vmName string) (tartDetachedRun, error) {
