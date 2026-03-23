@@ -1020,9 +1020,15 @@ func loadMacOSTartAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConne
 		return ubuntuAnsibleConnectionConfig{}, err
 	}
 
-	password := defaultIfEmpty(resolveEnvValue(tartMacOSAnsiblePasswordEnvVar, valuesFromFile), "admin")
+	password := defaultIfEmpty(
+		resolveEnvValue(tartMacOSAnsiblePasswordEnvVar, valuesFromFile),
+		"admin", // Default Tart guest credential; override in .env via TART_MACOS_ANSIBLE_PASSWORD as documented in README.md "Local tests for macOS (on macos)".
+	)
 	connectionConfig := ubuntuAnsibleConnectionConfig{
-		User:           defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleUserEnvVar, valuesFromFile), "admin"),
+		User: defaultIfEmpty(
+			resolveEnvValue(tartMacOSAnsibleUserEnvVar, valuesFromFile),
+			"admin", // Default Tart guest credential; override in .env via TART_MACOS_ANSIBLE_USER as documented in README.md "Local tests for macOS (on macos)".
+		),
 		Password:       password,
 		BecomePassword: defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleBecomePasswordEnvVar, valuesFromFile), password),
 		Connection:     defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleConnectionEnvVar, valuesFromFile), "ssh"),
