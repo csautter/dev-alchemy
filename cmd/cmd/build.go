@@ -23,6 +23,7 @@ type buildRunner func(ctx context.Context, vm alchemy_build.VirtualMachineConfig
 func isBuildSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	switch vm.HostOs {
 	case alchemy_build.HostOsDarwin:
+		// Tart VMs are pulled from OCI registries via `tart clone`; local packer builds are not applicable.
 		return vm.VirtualizationEngine == alchemy_build.VirtualizationEngineUtm &&
 			(vm.OS == "ubuntu" || vm.OS == "windows11")
 	case alchemy_build.HostOsWindows:
