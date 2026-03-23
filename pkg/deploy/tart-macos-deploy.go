@@ -3,6 +3,7 @@ package deploy
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -39,6 +40,11 @@ type tartDetachedRun struct {
 	pid     int
 }
 
+type tartLocalVMState struct {
+	exists  bool
+	running bool
+}
+
 type tartReachabilityWaitOptions struct {
 	detectIPv4       func() (string, error)
 	isProcessRunning func(int) (bool, error)
@@ -56,11 +62,32 @@ func RunTartDeployOnMacOS(config alchemy_build.VirtualMachineConfig) error {
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 	vmName := tartMacOSVMName(config)
 
-	if err := ensureLocalTartVM(projectDir, vmName); err != nil {
+	vmState, err := localTartVMState(projectDir, vmName)
+	if err != nil {
 		return err
 	}
 
+	if !vmState.exists {
+		if err := ensureLocalTartVM(projectDir, vmName); err != nil {
+			return err
+		}
+	} else {
+		log.Printf("Tart VM %q already exists", vmName)
+	}
+
 	if ip, err := discoverTartVMIPv4WithOptions(projectDir, vmName, tartIPv4DiscoveryOptions{maxAttempts: 1}); err == nil && ip != "" {
+		if vmState.exists {
+			log.Printf("Tart VM %q is already reachable at %s", vmName, ip)
+		}
+		return nil
+	}
+
+	if vmState.running {
+		ip, err := discoverTartVMIPv4(projectDir, vmName)
+		if err != nil {
+			return fmt.Errorf("Tart VM %q is already running but no IPv4 address became available: %w", vmName, err)
+		}
+		log.Printf("Tart VM %q is already running and reachable at %s", vmName, ip)
 		return nil
 	}
 
@@ -69,9 +96,11 @@ func RunTartDeployOnMacOS(config alchemy_build.VirtualMachineConfig) error {
 		return err
 	}
 
-	if _, err := waitForTartVMToBecomeReachable(projectDir, vmName, runState); err != nil {
+	ip, err := waitForTartVMToBecomeReachable(projectDir, vmName, runState)
+	if err != nil {
 		return err
 	}
+	log.Printf("Tart VM %q is reachable at %s", vmName, ip)
 
 	return nil
 }
@@ -115,32 +144,48 @@ func ensureLocalTartVM(projectDir string, vmName string) error {
 }
 
 func localTartVMExists(projectDir string, vmName string) (bool, error) {
-	output, err := runCommandWithCombinedOutput(projectDir, tartMacOSCommandTimeout, "tart", []string{"list"})
+	state, err := localTartVMState(projectDir, vmName)
 	if err != nil {
-		return false, fmt.Errorf("failed to list Tart VMs: %w; output: %s", err, strings.TrimSpace(output))
+		return false, err
 	}
 
-	return tartListIncludesLocalVM(output, vmName), nil
+	return state.exists, nil
+}
+
+func localTartVMState(projectDir string, vmName string) (tartLocalVMState, error) {
+	output, err := runCommandWithCombinedOutput(projectDir, tartMacOSCommandTimeout, "tart", []string{"list"})
+	if err != nil {
+		return tartLocalVMState{}, fmt.Errorf("failed to list Tart VMs: %w; output: %s", err, strings.TrimSpace(output))
+	}
+
+	return tartListLocalVMState(output, vmName), nil
 }
 
 func tartListIncludesLocalVM(output string, vmName string) bool {
+	return tartListLocalVMState(output, vmName).exists
+}
+
+func tartListLocalVMState(output string, vmName string) tartLocalVMState {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) == 0 {
-		return false
+		return tartLocalVMState{}
 	}
 
-	if nameColumn, sourceColumn, ok := tartListColumnIndexes(lines); ok {
+	if nameColumn, statusColumn, sourceColumn, ok := tartListColumnIndexes(lines); ok {
 		for _, line := range lines[1:] {
 			fields := strings.Fields(line)
 			if len(fields) <= nameColumn || len(fields) <= sourceColumn {
 				continue
 			}
 			if fields[sourceColumn] == "local" && fields[nameColumn] == vmName {
-				return true
+				return tartLocalVMState{
+					exists:  true,
+					running: statusColumn >= 0 && len(fields) > statusColumn && strings.EqualFold(fields[statusColumn], "running"),
+				}
 			}
 		}
 
-		return false
+		return tartLocalVMState{}
 	}
 
 	for _, line := range lines {
@@ -149,14 +194,17 @@ func tartListIncludesLocalVM(output string, vmName string) bool {
 			continue
 		}
 		if fields[0] == "local" && fields[1] == vmName {
-			return true
+			return tartLocalVMState{
+				exists:  true,
+				running: len(fields) > 2 && strings.EqualFold(fields[2], "running"),
+			}
 		}
 	}
 
-	return false
+	return tartLocalVMState{}
 }
 
-func tartListColumnIndexes(lines []string) (int, int, bool) {
+func tartListColumnIndexes(lines []string) (int, int, int, bool) {
 	for _, line := range lines {
 		header := strings.Fields(strings.ToLower(strings.TrimSpace(line)))
 		if len(header) == 0 {
@@ -164,24 +212,27 @@ func tartListColumnIndexes(lines []string) (int, int, bool) {
 		}
 
 		nameColumn := -1
+		statusColumn := -1
 		sourceColumn := -1
 		for index, field := range header {
 			switch field {
 			case "name":
 				nameColumn = index
+			case "status":
+				statusColumn = index
 			case "source":
 				sourceColumn = index
 			}
 		}
 
 		if nameColumn >= 0 && sourceColumn >= 0 {
-			return nameColumn, sourceColumn, true
+			return nameColumn, statusColumn, sourceColumn, true
 		}
 
 		break
 	}
 
-	return 0, 0, false
+	return 0, 0, 0, false
 }
 
 func startTartVMDetached(projectDir string, vmName string) (tartDetachedRun, error) {

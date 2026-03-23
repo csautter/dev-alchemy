@@ -29,6 +29,22 @@ tahoe-base-alchemy      running   local
 	}
 }
 
+func TestTartListLocalVMState_TracksRunningStatusFromNamedColumns(t *testing.T) {
+	output := `
+NAME                    STATUS    SOURCE
+sonoma-base-alchemy     stopped   remote
+tahoe-base-alchemy      running   local
+`
+
+	state := tartListLocalVMState(output, "tahoe-base-alchemy")
+	if !state.exists {
+		t.Fatal("expected Tart list parser to find local VM")
+	}
+	if !state.running {
+		t.Fatal("expected Tart list parser to mark running VM as running")
+	}
+}
+
 func TestTartListIncludesLocalVM_DoesNotMatchSubstringNames(t *testing.T) {
 	output := `
 local tahoe-base-alchemy-old running
@@ -48,6 +64,21 @@ remote sonoma-base-alchemy stopped
 
 	if !tartListIncludesLocalVM(output, "tahoe-base-alchemy") {
 		t.Fatal("expected Tart list parser to support the current Tart list layout")
+	}
+}
+
+func TestTartListLocalVMState_FallsBackToCurrentLayoutStatus(t *testing.T) {
+	output := `
+local tahoe-base-alchemy stopped
+remote sonoma-base-alchemy running
+`
+
+	state := tartListLocalVMState(output, "tahoe-base-alchemy")
+	if !state.exists {
+		t.Fatal("expected Tart list parser to find local VM in fallback layout")
+	}
+	if state.running {
+		t.Fatal("expected stopped fallback-layout VM to not be marked as running")
 	}
 }
 
