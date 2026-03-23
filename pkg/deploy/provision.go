@@ -274,7 +274,7 @@ func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool)
 		return fmt.Errorf("failed to load hyper-v ubuntu ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildUbuntuProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, check)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -313,7 +313,7 @@ func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) er
 		return fmt.Errorf("failed to load UTM ubuntu ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildUbuntuProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, check)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -357,7 +357,7 @@ func runTartMacOSProvision(vm alchemy_build.VirtualMachineConfig, check bool) er
 		return fmt.Errorf("failed to load Tart macOS ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildUbuntuProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, check)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -853,7 +853,7 @@ func buildWindowsProvisionArgs(projectDir string, ip string, connectionConfig wi
 	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, check)
 }
 
-func buildUbuntuProvisionArgs(projectDir string, ip string, connectionConfig ubuntuAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
+func buildSSHProvisionArgs(projectDir string, ip string, connectionConfig ubuntuAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
 	extraVars, err := json.Marshal(map[string]string{
 		"ansible_user":            connectionConfig.User,
 		"ansible_password":        connectionConfig.Password,

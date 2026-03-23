@@ -652,7 +652,7 @@ func TestDiscoverUtmVMIPv4_RePrimesArpCacheUntilMacAddressAppears(t *testing.T) 
 	}
 }
 
-func TestBuildUbuntuProvisionArgs(t *testing.T) {
+func TestBuildSSHProvisionArgs(t *testing.T) {
 	projectDir := t.TempDir()
 	config := ubuntuAnsibleConnectionConfig{
 		User:           "packer",
@@ -664,9 +664,9 @@ func TestBuildUbuntuProvisionArgs(t *testing.T) {
 		SshRetries:     "3",
 	}
 
-	args, cleanup, err := buildUbuntuProvisionArgs(projectDir, "172.24.78.254", config, true)
+	args, cleanup, err := buildSSHProvisionArgs(projectDir, "172.24.78.254", config, true)
 	if err != nil {
-		t.Fatalf("buildUbuntuProvisionArgs returned error: %v", err)
+		t.Fatalf("buildSSHProvisionArgs returned error: %v", err)
 	}
 	t.Cleanup(func() {
 		if cleanupErr := cleanup(); cleanupErr != nil {
