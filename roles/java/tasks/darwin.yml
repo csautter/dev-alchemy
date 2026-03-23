@@ -53,13 +53,18 @@
     insertafter: EOF
     create: yes
 
+- name: Discover Java home paths
+  command: /usr/libexec/java_home -v {{ item }}
+  loop: "{{ jdk_versions }}"
+  register: java_home_paths
+  changed_when: false
+  failed_when: false
+
 - name: Add Java versions to jenv
   shell: |
     export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-    jenv add "$JAVA_HOME"
-  environment:
-    JAVA_HOME: "{{ lookup('pipe', '/usr/libexec/java_home -v ' ~ item) }}"
-  loop: "{{ jdk_versions }}"
+    jenv add "{{ item.stdout }}"
+  loop: "{{ java_home_paths.results | selectattr('rc', 'equalto', 0) | list }}"
 
 - name: Create .zshrc if it does not exist
   file:
