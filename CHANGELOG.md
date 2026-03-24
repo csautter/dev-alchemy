@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/csautter/dev-alchemy/compare/v0.5.0...v0.6.0) (2026-03-24)
+
+
+### Added
+
+* **tart:** add macOS Tart target for create and provision ([e721799](https://github.com/csautter/dev-alchemy/commit/e7217997e0b7672d81347202d7462f454034b905))
+* **tart:** add macOS Tart target for create and provision ([e0203c9](https://github.com/csautter/dev-alchemy/commit/e0203c9bb1624ebee751fc0502eb535ec9feef12))
+
+
+### Fixed
+
+* **ansible:** resolve macOS Java homes on target before jenv add ([a408ef2](https://github.com/csautter/dev-alchemy/commit/a408ef24ee458ceb8f85807d9d4c19d50aa45b18))
+* **deploy:** address gosec findings in tart deploy helpers ([b564d3f](https://github.com/csautter/dev-alchemy/commit/b564d3f28cb6c90bc658b6c199dfd7e6f3380d6c))
+* **deploy:** handle existing running Tart macOS VMs explicitly ([6ee6e8c](https://github.com/csautter/dev-alchemy/commit/6ee6e8ce06dc4edd1157a61fb4567277ff1491dc))
+* **deploy:** parse tart list output by columns for local VM lookup ([715b704](https://github.com/csautter/dev-alchemy/commit/715b70498ed060c91442d635111f23deda6929a9))
+
+
+### Changed
+
+* **deploy:** extract shared SSH wait helper ([35d32cd](https://github.com/csautter/dev-alchemy/commit/35d32cd503f4733f8692bc88c09b2fccde43f54b))
+* rename shared SSH provision arg builder ([f1b0629](https://github.com/csautter/dev-alchemy/commit/f1b0629a6949361a3034d6e255e33c30e2aef729))
+
 ## [0.5.0](https://github.com/csautter/dev-alchemy/compare/v0.4.0...v0.5.0) (2026-03-23)
 
 
