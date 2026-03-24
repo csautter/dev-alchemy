@@ -157,6 +157,59 @@ func RunTartDestroyOnMacOS(config alchemy_build.VirtualMachineConfig) error {
 	return nil
 }
 
+func RunTartStartOnMacOS(config alchemy_build.VirtualMachineConfig) error {
+	if !isTartMacOSDeployTarget(config) {
+		return fmt.Errorf("Tart start is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	vmName := tartMacOSVMName(config)
+
+	vmState, err := localTartVMState(projectDir, vmName)
+	if err != nil {
+		return err
+	}
+	if !vmState.exists {
+		return fmt.Errorf("Tart VM %q does not exist. Run `alchemy create %s` first", vmName, startCommandArguments(config))
+	}
+	if vmState.running {
+		log.Printf("Tart VM %q is already running", vmName)
+		return nil
+	}
+
+	runState, err := startTartVMDetached(projectDir, vmName)
+	if err != nil {
+		return err
+	}
+
+	ip, err := waitForTartVMToBecomeReachable(projectDir, vmName, runState)
+	if err != nil {
+		return err
+	}
+	log.Printf("Tart VM %q is reachable at %s", vmName, ip)
+	return nil
+}
+
+func inspectTartStartTarget(config alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
+	if !isTartMacOSDeployTarget(config) {
+		return StartTargetState{}, fmt.Errorf("Tart start target inspection is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+
+	state, err := localTartVMState(alchemy_build.GetDirectoriesInstance().ProjectDir, tartMacOSVMName(config))
+	if err != nil {
+		return StartTargetState{}, err
+	}
+
+	if !state.exists {
+		return StartTargetState{State: "missing"}, nil
+	}
+	if state.running {
+		return StartTargetState{Exists: true, Running: true, State: "running"}, nil
+	}
+
+	return StartTargetState{Exists: true, State: "stopped"}, nil
+}
+
 func isTartMacOSDeployTarget(vm alchemy_build.VirtualMachineConfig) bool {
 	return vm.OS == "macos" &&
 		vm.Arch == "arm64" &&

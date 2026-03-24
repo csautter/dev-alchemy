@@ -11,6 +11,7 @@ import (
 	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
+	alchemy_deploy "github.com/csautter/dev-alchemy/pkg/deploy"
 )
 
 func TestExtractWindowsIPv4FromIPConfig(t *testing.T) {
@@ -978,7 +979,56 @@ func TestEnsureTartVMReadyForProvision_ReturnsHelpfulErrorWhenVMIsNotRunning(t *
 	if !strings.Contains(err.Error(), "is not running") {
 		t.Fatalf("expected not-running error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "alchemy create macos --arch arm64") {
-		t.Fatalf("expected create hint in error, got %v", err)
+	if !strings.Contains(err.Error(), "alchemy start macos --arch arm64") {
+		t.Fatalf("expected start hint in error, got %v", err)
+	}
+}
+
+func TestEnsureProvisionTargetRunning_ReturnsCreateHintWhenMissing(t *testing.T) {
+	previousInspector := inspectProvisionTarget
+	t.Cleanup(func() {
+		inspectProvisionTarget = previousInspector
+	})
+
+	inspectProvisionTarget = func(vm alchemy_build.VirtualMachineConfig) (alchemy_deploy.StartTargetState, error) {
+		return alchemy_deploy.StartTargetState{State: "missing"}, nil
+	}
+
+	err := ensureProvisionTargetRunning(alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "arm64",
+	})
+	if err == nil {
+		t.Fatal("expected missing provision target to return an error")
+	}
+	if !strings.Contains(err.Error(), "alchemy create ubuntu --type server --arch arm64") {
+		t.Fatalf("expected create hint, got %v", err)
+	}
+}
+
+func TestEnsureProvisionTargetRunning_ReturnsStartHintWhenStopped(t *testing.T) {
+	previousInspector := inspectProvisionTarget
+	t.Cleanup(func() {
+		inspectProvisionTarget = previousInspector
+	})
+
+	inspectProvisionTarget = func(vm alchemy_build.VirtualMachineConfig) (alchemy_deploy.StartTargetState, error) {
+		return alchemy_deploy.StartTargetState{Exists: true, State: "stopped"}, nil
+	}
+
+	err := ensureProvisionTargetRunning(alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "arm64",
+	})
+	if err == nil {
+		t.Fatal("expected stopped provision target to return an error")
+	}
+	if !strings.Contains(err.Error(), "state=stopped") {
+		t.Fatalf("expected state in error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "alchemy start ubuntu --type server --arch arm64") {
+		t.Fatalf("expected start hint, got %v", err)
 	}
 }

@@ -1,0 +1,78 @@
+package deploy
+
+import (
+	"fmt"
+	"strings"
+
+	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
+)
+
+type StartTargetState struct {
+	Exists  bool
+	Running bool
+	State   string
+}
+
+func SupportsStart(config alchemy_build.VirtualMachineConfig) bool {
+	switch {
+	case isUtmDeployTarget(config):
+		return true
+	case isTartMacOSDeployTarget(config):
+		return true
+	case isHypervVagrantTarget(config):
+		return true
+	default:
+		return false
+	}
+}
+
+func InspectStartTarget(config alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
+	switch {
+	case isUtmDeployTarget(config):
+		return inspectUtmStartTarget(config)
+	case isTartMacOSDeployTarget(config):
+		return inspectTartStartTarget(config)
+	case isHypervVagrantTarget(config):
+		return inspectHypervVagrantStartTarget(config)
+	default:
+		return StartTargetState{}, fmt.Errorf(
+			"start target inspection is not implemented for OS=%s type=%s arch=%s host=%s engine=%s",
+			config.OS,
+			config.UbuntuType,
+			config.Arch,
+			config.HostOs,
+			config.VirtualizationEngine,
+		)
+	}
+}
+
+func RunStart(config alchemy_build.VirtualMachineConfig) error {
+	switch {
+	case isUtmDeployTarget(config):
+		return RunUtmStartOnMacOS(config)
+	case isTartMacOSDeployTarget(config):
+		return RunTartStartOnMacOS(config)
+	case isHypervVagrantTarget(config):
+		return RunHypervVagrantStartOnWindows(config)
+	default:
+		return fmt.Errorf(
+			"start is not implemented for OS=%s type=%s arch=%s host=%s engine=%s",
+			config.OS,
+			config.UbuntuType,
+			config.Arch,
+			config.HostOs,
+			config.VirtualizationEngine,
+		)
+	}
+}
+
+func startCommandArguments(config alchemy_build.VirtualMachineConfig) string {
+	args := []string{config.OS}
+	if config.UbuntuType != "" {
+		args = append(args, "--type", config.UbuntuType)
+	}
+	if config.Arch != "" {
+		args = append(args, "--arch", config.Arch)
+	}
+	return strings.Join(args, " ")
+}

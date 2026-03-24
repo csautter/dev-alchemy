@@ -44,6 +44,26 @@ func TestVagrantMachineExistsInStatusOutputTreatsAbortedAsPresent(t *testing.T) 
 	}
 }
 
+func TestVagrantMachineStateFromStatusOutput(t *testing.T) {
+	output := "1737600000,default,state,poweroff\n1737600000,default,provider-name,hyperv\n"
+
+	if got := vagrantMachineStateFromStatusOutput(output); got != "poweroff" {
+		t.Fatalf("expected poweroff state, got %q", got)
+	}
+}
+
+func TestStartTargetStateFromVagrantStatusOutput(t *testing.T) {
+	state := startTargetStateFromVagrantStatusOutput("1737600000,default,state,running\n")
+	if !state.Exists || !state.Running || state.State != "running" {
+		t.Fatalf("expected running start target state, got %#v", state)
+	}
+
+	missing := startTargetStateFromVagrantStatusOutput("1737600000,default,state,not_created\n")
+	if missing.Exists || missing.Running || missing.State != "missing" {
+		t.Fatalf("expected missing start target state, got %#v", missing)
+	}
+}
+
 func TestVagrantBoxListIncludesMatchesExactNameAndProvider(t *testing.T) {
 	output := "win11-packer (hyperv, 0)\nlinux-ubuntu-server-packer (hyperv, 0)\n"
 

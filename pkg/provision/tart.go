@@ -1,6 +1,7 @@
 package provision
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,13 @@ import (
 type tartLocalVMState struct {
 	exists  bool
 	running bool
+}
+
+type tartListJSONEntry struct {
+	Source  string `json:"Source"`
+	Name    string `json:"Name"`
+	Running bool   `json:"Running"`
+	State   string `json:"State"`
 }
 
 func tartMacOSVMName(_ alchemy_build.VirtualMachineConfig) string {
@@ -29,12 +37,39 @@ func localTartVMExists(projectDir string, vmName string) (bool, error) {
 }
 
 func localTartVMState(projectDir string, vmName string) (tartLocalVMState, error) {
-	output, err := runCommandWithCombinedOutput(projectDir, tartMacOSCommandTimeout, "tart", []string{"list"})
+	output, err := runCommandWithCombinedOutput(projectDir, tartMacOSCommandTimeout, "tart", []string{"list", "--format", "json"})
+	if err == nil {
+		if state, ok := tartListLocalVMStateFromJSON(output, vmName); ok {
+			return state, nil
+		}
+	}
+
+	output, err = runCommandWithCombinedOutput(projectDir, tartMacOSCommandTimeout, "tart", []string{"list"})
 	if err != nil {
 		return tartLocalVMState{}, fmt.Errorf("failed to list Tart VMs: %w; output: %s", err, strings.TrimSpace(output))
 	}
 
 	return tartListLocalVMState(output, vmName), nil
+}
+
+func tartListLocalVMStateFromJSON(output string, vmName string) (tartLocalVMState, bool) {
+	var entries []tartListJSONEntry
+	if err := json.Unmarshal([]byte(output), &entries); err != nil {
+		return tartLocalVMState{}, false
+	}
+
+	for _, entry := range entries {
+		if !strings.EqualFold(entry.Source, "local") || entry.Name != vmName {
+			continue
+		}
+
+		return tartLocalVMState{
+			exists:  true,
+			running: entry.Running || strings.EqualFold(entry.State, "running"),
+		}, true
+	}
+
+	return tartLocalVMState{}, true
 }
 
 func tartListLocalVMState(output string, vmName string) tartLocalVMState {
@@ -43,16 +78,21 @@ func tartListLocalVMState(output string, vmName string) tartLocalVMState {
 		return tartLocalVMState{}
 	}
 
-	if nameColumn, statusColumn, sourceColumn, ok := tartListColumnIndexes(lines); ok {
+	if nameColumn, statusColumn, runningColumn, sourceColumn, ok := tartListColumnIndexes(lines); ok {
 		for _, line := range lines[1:] {
 			fields := strings.Fields(line)
 			if len(fields) <= nameColumn || len(fields) <= sourceColumn {
 				continue
 			}
 			if fields[sourceColumn] == "local" && fields[nameColumn] == vmName {
+				isRunning := statusColumn >= 0 && len(fields) > statusColumn && strings.EqualFold(fields[statusColumn], "running")
+				if !isRunning && runningColumn >= 0 && len(fields) > runningColumn {
+					isRunning = strings.EqualFold(fields[runningColumn], "true") || strings.EqualFold(fields[runningColumn], "running")
+				}
+
 				return tartLocalVMState{
 					exists:  true,
-					running: statusColumn >= 0 && len(fields) > statusColumn && strings.EqualFold(fields[statusColumn], "running"),
+					running: isRunning,
 				}
 			}
 		}
@@ -76,7 +116,7 @@ func tartListLocalVMState(output string, vmName string) tartLocalVMState {
 	return tartLocalVMState{}
 }
 
-func tartListColumnIndexes(lines []string) (int, int, int, bool) {
+func tartListColumnIndexes(lines []string) (int, int, int, int, bool) {
 	for _, line := range lines {
 		header := strings.Fields(strings.ToLower(strings.TrimSpace(line)))
 		if len(header) == 0 {
@@ -85,6 +125,7 @@ func tartListColumnIndexes(lines []string) (int, int, int, bool) {
 
 		nameColumn := -1
 		statusColumn := -1
+		runningColumn := -1
 		sourceColumn := -1
 		for index, field := range header {
 			switch field {
@@ -92,19 +133,21 @@ func tartListColumnIndexes(lines []string) (int, int, int, bool) {
 				nameColumn = index
 			case "status":
 				statusColumn = index
+			case "running", "state":
+				runningColumn = index
 			case "source":
 				sourceColumn = index
 			}
 		}
 
 		if nameColumn >= 0 && sourceColumn >= 0 {
-			return nameColumn, statusColumn, sourceColumn, true
+			return nameColumn, statusColumn, runningColumn, sourceColumn, true
 		}
 
 		break
 	}
 
-	return 0, 0, 0, false
+	return 0, 0, 0, 0, false
 }
 
 func discoverTartVMIPv4WithOptions(projectDir string, vmName string, options tartIPv4DiscoveryOptions) (string, error) {

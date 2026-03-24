@@ -114,6 +114,42 @@ func RunHypervVagrantDestroyOnWindows(config alchemy_build.VirtualMachineConfig)
 	return nil
 }
 
+func RunHypervVagrantStartOnWindows(config alchemy_build.VirtualMachineConfig) error {
+	if !isHypervVagrantTarget(config) {
+		return fmt.Errorf("hyper-v vagrant start is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+
+	state, err := inspectHypervVagrantStartTarget(config)
+	if err != nil {
+		return err
+	}
+	if !state.Exists {
+		return fmt.Errorf("Hyper-V VM for %s does not exist. Run `alchemy create %s` first", startCommandArguments(config), startCommandArguments(config))
+	}
+	if state.Running {
+		return nil
+	}
+
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	settings, err := resolveHypervVagrantDeploySettings(config, projectDir)
+	if err != nil {
+		return err
+	}
+
+	if err := runCommandWithStreamingLogsWithEnv(
+		settings.VagrantDir,
+		45*time.Minute,
+		"vagrant",
+		[]string{"up", "--provider", "hyperv"},
+		settings.VagrantEnv,
+		fmt.Sprintf("%s:%s:%s:vagrant-up", config.OS, config.UbuntuType, config.Arch),
+	); err != nil {
+		return fmt.Errorf("failed to start Vagrant VM for %s:%s:%s: %w", config.OS, config.UbuntuType, config.Arch, err)
+	}
+
+	return nil
+}
+
 func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfig, projectDir string) (hypervVagrantDeploySettings, error) {
 	switch config.OS {
 	case "windows11":
@@ -174,6 +210,27 @@ func hypervVagrantMachineExists(vagrantDir string, env []string) (bool, error) {
 	return vagrantMachineExistsInStatusOutput(output), nil
 }
 
+func inspectHypervVagrantStartTarget(config alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	settings, err := resolveHypervVagrantDeploySettings(config, projectDir)
+	if err != nil {
+		return StartTargetState{}, err
+	}
+
+	output, err := runCommandWithCombinedOutputWithEnv(
+		settings.VagrantDir,
+		time.Minute,
+		"vagrant",
+		[]string{"status", "--machine-readable"},
+		settings.VagrantEnv,
+	)
+	if err != nil {
+		return StartTargetState{}, fmt.Errorf("failed to inspect Vagrant machine status in %q: %w; output: %s", settings.VagrantDir, err, strings.TrimSpace(output))
+	}
+
+	return startTargetStateFromVagrantStatusOutput(output), nil
+}
+
 func hypervVagrantBoxInstalled(projectDir string, boxName string) (bool, error) {
 	output, err := runCommandWithCombinedOutput(projectDir, time.Minute, "vagrant", []string{"box", "list"})
 	if err != nil {
@@ -199,6 +256,33 @@ func vagrantMachineExistsInStatusOutput(output string) bool {
 	}
 
 	return false
+}
+
+func startTargetStateFromVagrantStatusOutput(output string) StartTargetState {
+	state := vagrantMachineStateFromStatusOutput(output)
+	switch state {
+	case "", "not_created":
+		return StartTargetState{State: "missing"}
+	case "running":
+		return StartTargetState{Exists: true, Running: true, State: state}
+	default:
+		return StartTargetState{Exists: true, State: state}
+	}
+}
+
+func vagrantMachineStateFromStatusOutput(output string) string {
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		fields := strings.Split(line, ",")
+		if len(fields) < 4 {
+			continue
+		}
+		if fields[2] != "state" {
+			continue
+		}
+		return strings.TrimSpace(fields[3])
+	}
+
+	return ""
 }
 
 func vagrantBoxListIncludes(output string, boxName string, provider string) bool {

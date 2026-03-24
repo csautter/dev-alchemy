@@ -21,6 +21,7 @@ Available Commands:
   destroy     Destroy a VM previously created on your system
   install     Install host dependencies for the current OS
   provision   Provision a VM with Ansible
+  start       Start an existing VM on your system
   help        Help about any command
 `,
 	// Uncomment the following line if your bare application

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
+	alchemy_deploy "github.com/csautter/dev-alchemy/pkg/deploy"
 )
 
 const (
@@ -142,6 +143,8 @@ type tartProvisionAvailabilityOptions struct {
 	discoverIPv4  func(string, string) (string, error)
 }
 
+var inspectProvisionTarget = alchemy_deploy.InspectStartTarget
+
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	if isHypervWindows11Amd64ProvisionTarget(vm) {
 		return runHypervWindows11Provision(vm, check)
@@ -205,6 +208,10 @@ func isTartMacOSProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
 }
 
 func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	if err := ensureProvisionTargetRunning(vm); err != nil {
+		return err
+	}
+
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 	vagrantDir := filepath.Join(projectDir, "deployments", "vagrant", "ansible-windows")
 
@@ -240,6 +247,10 @@ func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bo
 }
 
 func runUtmWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	if err := ensureProvisionTargetRunning(vm); err != nil {
+		return err
+	}
+
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 
 	ip, err := discoverUtmVMIPv4(projectDir, vm)
@@ -274,6 +285,10 @@ func runUtmWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool)
 }
 
 func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	if err := ensureProvisionTargetRunning(vm); err != nil {
+		return err
+	}
+
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 	vagrantDir := filepath.Join(projectDir, "deployments", "vagrant", "linux-ubuntu-hyperv")
 
@@ -314,6 +329,10 @@ func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool)
 }
 
 func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	if err := ensureProvisionTargetRunning(vm); err != nil {
+		return err
+	}
+
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 
 	ip, err := discoverUtmVMIPv4(projectDir, vm)
@@ -353,6 +372,10 @@ func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) er
 }
 
 func runTartMacOSProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	if err := ensureProvisionTargetRunning(vm); err != nil {
+		return err
+	}
+
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 	vmName := tartMacOSVMName(vm)
 
@@ -396,6 +419,50 @@ func runTartMacOSProvision(vm alchemy_build.VirtualMachineConfig, check bool) er
 	return nil
 }
 
+func ensureProvisionTargetRunning(vm alchemy_build.VirtualMachineConfig) error {
+	state, err := inspectProvisionTarget(vm)
+	if err != nil {
+		return fmt.Errorf("failed to inspect VM state before provisioning: %w", err)
+	}
+
+	if !state.Exists {
+		return fmt.Errorf(
+			"VM for OS=%s, type=%s, arch=%s does not exist. Run `alchemy create %s` first",
+			vm.OS,
+			vm.UbuntuType,
+			vm.Arch,
+			provisionCommandTarget(vm),
+		)
+	}
+	if !state.Running {
+		currentState := state.State
+		if currentState == "" {
+			currentState = "stopped"
+		}
+		return fmt.Errorf(
+			"VM for OS=%s, type=%s, arch=%s is not running (state=%s). Run `alchemy start %s` first",
+			vm.OS,
+			vm.UbuntuType,
+			vm.Arch,
+			currentState,
+			provisionCommandTarget(vm),
+		)
+	}
+
+	return nil
+}
+
+func provisionCommandTarget(vm alchemy_build.VirtualMachineConfig) string {
+	parts := []string{vm.OS}
+	if vm.UbuntuType != "" {
+		parts = append(parts, "--type", vm.UbuntuType)
+	}
+	if vm.Arch != "" {
+		parts = append(parts, "--arch", vm.Arch)
+	}
+	return strings.Join(parts, " ")
+}
+
 func ensureTartVMReadyForProvision(projectDir string, vmName string, options tartProvisionAvailabilityOptions) (string, error) {
 	options = withDefaultTartProvisionAvailabilityOptions(options)
 
@@ -409,7 +476,7 @@ func ensureTartVMReadyForProvision(projectDir string, vmName string, options tar
 
 	ip, err := options.discoverIPv4(projectDir, vmName)
 	if err != nil {
-		return "", fmt.Errorf("Tart VM %q exists but is not running or has no IPv4 address yet. Start it with `alchemy create macos --arch arm64`: %w", vmName, err)
+		return "", fmt.Errorf("Tart VM %q exists but is not running or has no IPv4 address yet. Start it with `alchemy start macos --arch arm64`: %w", vmName, err)
 	}
 
 	return ip, nil

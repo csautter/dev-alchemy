@@ -58,3 +58,15 @@ func TestUtmVirtualMachinePathUsesUtmDocumentsBundle(t *testing.T) {
 		t.Fatalf("expected UTM VM path %q to end with %q", got, wantSuffix)
 	}
 }
+
+func TestUtmStatusIndicatesRunning(t *testing.T) {
+	if !utmStatusIndicatesRunning("started") {
+		t.Fatal("expected started status to be running")
+	}
+	if !utmStatusIndicatesRunning("resuming") {
+		t.Fatal("expected resuming status to be running")
+	}
+	if utmStatusIndicatesRunning("stopped") {
+		t.Fatal("did not expect stopped status to be running")
+	}
+}
