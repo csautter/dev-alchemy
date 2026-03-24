@@ -126,6 +126,16 @@ func TestIsProvisionSupported(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "darwin tart macos arm64 supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "macos",
+				Arch:                 "arm64",
+				HostOs:               alchemy_build.HostOsDarwin,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineTart,
+			},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {

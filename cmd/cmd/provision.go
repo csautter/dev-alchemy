@@ -22,9 +22,12 @@ func isProvisionSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	}
 
 	return vm.HostOs == alchemy_build.HostOsDarwin &&
-		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineUtm &&
-		(vm.OS == "windows11" || vm.OS == "ubuntu") &&
-		(vm.Arch == "amd64" || vm.Arch == "arm64")
+		((vm.VirtualizationEngine == alchemy_build.VirtualizationEngineUtm &&
+			(vm.OS == "windows11" || vm.OS == "ubuntu") &&
+			(vm.Arch == "amd64" || vm.Arch == "arm64")) ||
+			(vm.VirtualizationEngine == alchemy_build.VirtualizationEngineTart &&
+				vm.OS == "macos" &&
+				vm.Arch == "arm64"))
 }
 
 func availableProvisionVirtualMachines() []alchemy_build.VirtualMachineConfig {
@@ -57,6 +60,7 @@ var provisionCmd = &cobra.Command{
 	Long: `Runs Ansible provisioning against VM targets.
 
 Examples:
+  alchemy provision macos --arch arm64 --check
   alchemy provision windows11 --arch amd64 --check
   alchemy provision windows11 --arch arm64 --check
   alchemy provision ubuntu --type server --arch amd64 --check

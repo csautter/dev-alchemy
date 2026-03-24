@@ -405,6 +405,15 @@ To test changes locally on macOS, you can use the provided script:
 The script will run the ansible playbook against a temporary virtual machine managed by Tart.
 Tart is a lightweight VM manager for macOS. You can find more information about Tart [here](https://github.com/cirruslabs/tart).
 
+By default, Dev Alchemy uses the Tart image's development credentials for Ansible access (`admin` / `admin`). Override them in `.env` if your image uses different credentials or if you want to avoid relying on the documented defaults:
+
+```bash
+TART_MACOS_ANSIBLE_USER=admin
+TART_MACOS_ANSIBLE_PASSWORD=admin
+```
+
+`TART_MACOS_ANSIBLE_BECOME_PASSWORD` also defaults to `TART_MACOS_ANSIBLE_PASSWORD` when unset.
+
 To cleanup afterwards, run:
 
 ```bash

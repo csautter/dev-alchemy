@@ -20,6 +20,36 @@ import (
 // Implementations should honour ctx.Done() so they can abort early.
 type buildRunner func(ctx context.Context, vm alchemy_build.VirtualMachineConfig) error
 
+func isBuildSupported(vm alchemy_build.VirtualMachineConfig) bool {
+	switch vm.HostOs {
+	case alchemy_build.HostOsDarwin:
+		// Tart VMs are pulled from OCI registries via `tart clone`; local packer builds are not applicable.
+		return vm.VirtualizationEngine == alchemy_build.VirtualizationEngineUtm &&
+			(vm.OS == "ubuntu" || vm.OS == "windows11")
+	case alchemy_build.HostOsWindows:
+		switch vm.VirtualizationEngine {
+		case alchemy_build.VirtualizationEngineHyperv:
+			return vm.OS == "ubuntu" || vm.OS == "windows11"
+		case alchemy_build.VirtualizationEngineVirtualBox:
+			return vm.OS == "windows11"
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+func availableBuildVirtualMachines() []alchemy_build.VirtualMachineConfig {
+	var supported []alchemy_build.VirtualMachineConfig
+	for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
+		if isBuildSupported(vm) {
+			supported = append(supported, vm)
+		}
+	}
+	return supported
+}
+
 // runParallelBuilds launches up to parallelism concurrent builds for the provided VMs.
 // A failing build does NOT stop the remaining ones — all errors are collected and returned.
 // When ctx is cancelled (e.g. on SIGINT) no new goroutines are started; already-running
@@ -111,8 +141,8 @@ var (
 )
 
 func printAvailableBuildCombinations() error {
-	engines := alchemy_build.CurrentHostVirtualizationEngines()
-	vms := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+	vms := availableBuildVirtualMachines()
+	engines := alchemy_build.VirtualizationEnginesForVirtualMachineConfigs(vms)
 
 	if err := printVirtualMachineCombinationTable(
 		os.Stdout,
@@ -162,7 +192,7 @@ Example:
 
 		if osName == "all" {
 			fmt.Printf("🔧 Building all available VM configurations with %d parallel builds\n", parallel)
-			available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+			available_virtual_machines := availableBuildVirtualMachines()
 			for i := range available_virtual_machines {
 				available_virtual_machines[i].NoCache = noCache
 			}
@@ -204,7 +234,7 @@ Example:
 		}
 
 		fmt.Printf("🔧 Building VM for OS: %s, Type: %s, Architecture: %s\n", osName, osType, arch)
-		available_virtual_machines := alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS()
+		available_virtual_machines := availableBuildVirtualMachines()
 		var VirtualMachineConfig alchemy_build.VirtualMachineConfig
 		valid := false
 		for _, vm := range available_virtual_machines {
