@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -101,5 +102,67 @@ func TestEveryCreateSupportedVirtualMachineAlsoSupportsDestroy(t *testing.T) {
 				vm.VirtualizationEngine,
 			)
 		}
+	}
+}
+
+func TestPrintAvailableDestroyCombinationsIncludesDestroyReadiness(t *testing.T) {
+	previousInspector := inspectDestroyTargetExists
+	t.Cleanup(func() {
+		inspectDestroyTargetExists = previousInspector
+	})
+
+	inspectDestroyTargetExists = func(vm alchemy_build.VirtualMachineConfig) (bool, error) {
+		return vm.OS == "macos", nil
+	}
+
+	var buf bytes.Buffer
+	err := printVirtualMachineCombinationTable(
+		&buf,
+		"Available destroy combinations for host OS: darwin",
+		"No destroy combinations are available for the current host OS.",
+		[]alchemy_build.VirtualMachineConfig{
+			{
+				OS:                   "macos",
+				Arch:                 "arm64",
+				HostOs:               alchemy_build.HostOsDarwin,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineTart,
+			},
+			{
+				OS:                   "windows11",
+				Arch:                 "amd64",
+				HostOs:               alchemy_build.HostOsDarwin,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineUtm,
+			},
+		},
+		[]string{"OS", "Type", "Arch", "State", "Destroy"},
+		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
+			exists, err := inspectDestroyTargetExists(vm)
+			if err != nil {
+				return nil, err
+			}
+
+			state := "missing"
+			destroyState := "already absent"
+			if exists {
+				state = "exists"
+				destroyState = "ready to destroy"
+			}
+
+			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, state, destroyState}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "State") || !strings.Contains(output, "Destroy") {
+		t.Fatalf("expected destroy readiness headers, got %q", output)
+	}
+	if !strings.Contains(output, "macos  -     arm64  exists") || !strings.Contains(output, "ready to destroy") {
+		t.Fatalf("expected existing macos destroy target row, got %q", output)
+	}
+	if !strings.Contains(output, "windows11  -     amd64  missing") || !strings.Contains(output, "already absent") {
+		t.Fatalf("expected missing windows destroy target row, got %q", output)
 	}
 }

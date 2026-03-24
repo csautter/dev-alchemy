@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var inspectDestroyTargetExists = alchemy_deploy.DestroyTargetExists
+
 func isDestroySupported(vm alchemy_build.VirtualMachineConfig) bool {
 	return alchemy_deploy.SupportsDestroy(vm)
 }
@@ -30,9 +32,21 @@ func printAvailableDestroyCombinations() error {
 		fmt.Sprintf("Available destroy combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
 		"No destroy combinations are available for the current host OS.",
 		vms,
-		[]string{"OS", "Type", "Arch"},
+		[]string{"OS", "Type", "Arch", "State", "Destroy"},
 		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
-			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch}, nil
+			exists, err := inspectDestroyTargetExists(vm)
+			if err != nil {
+				return nil, fmt.Errorf("failed to inspect destroy target for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+			}
+
+			state := "missing"
+			destroyState := "already absent"
+			if exists {
+				state = "exists"
+				destroyState = "ready to destroy"
+			}
+
+			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, state, destroyState}, nil
 		},
 	)
 }
@@ -93,7 +107,7 @@ Examples:
 
 var destroyListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List available destroy combinations",
+	Short: "List available destroy combinations and destroy readiness",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return printAvailableDestroyCombinations()
