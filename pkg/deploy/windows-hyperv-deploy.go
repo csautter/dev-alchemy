@@ -150,6 +150,42 @@ func RunHypervVagrantStartOnWindows(config alchemy_build.VirtualMachineConfig) e
 	return nil
 }
 
+func RunHypervVagrantStopOnWindows(config alchemy_build.VirtualMachineConfig) error {
+	if !isHypervVagrantTarget(config) {
+		return fmt.Errorf("hyper-v vagrant stop is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+
+	state, err := inspectHypervVagrantStartTarget(config)
+	if err != nil {
+		return err
+	}
+	if !state.Exists {
+		return nil
+	}
+	if !state.Running {
+		return nil
+	}
+
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	settings, err := resolveHypervVagrantDeploySettings(config, projectDir)
+	if err != nil {
+		return err
+	}
+
+	if err := runCommandWithStreamingLogsWithEnv(
+		settings.VagrantDir,
+		20*time.Minute,
+		"vagrant",
+		[]string{"halt"},
+		settings.VagrantEnv,
+		fmt.Sprintf("%s:%s:%s:vagrant-halt", config.OS, config.UbuntuType, config.Arch),
+	); err != nil {
+		return fmt.Errorf("failed to stop Vagrant VM for %s:%s:%s: %w", config.OS, config.UbuntuType, config.Arch, err)
+	}
+
+	return nil
+}
+
 func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfig, projectDir string) (hypervVagrantDeploySettings, error) {
 	switch config.OS {
 	case "windows11":

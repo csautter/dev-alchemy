@@ -7,11 +7,13 @@ import (
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 )
 
-type StartTargetState struct {
+type VirtualMachineState struct {
 	Exists  bool
 	Running bool
 	State   string
 }
+
+type StartTargetState = VirtualMachineState
 
 func SupportsStart(config alchemy_build.VirtualMachineConfig) bool {
 	switch {
@@ -26,7 +28,7 @@ func SupportsStart(config alchemy_build.VirtualMachineConfig) bool {
 	}
 }
 
-func InspectStartTarget(config alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
+func InspectStartTarget(config alchemy_build.VirtualMachineConfig) (VirtualMachineState, error) {
 	switch {
 	case isUtmDeployTarget(config):
 		return inspectUtmStartTarget(config)
@@ -35,7 +37,7 @@ func InspectStartTarget(config alchemy_build.VirtualMachineConfig) (StartTargetS
 	case isHypervVagrantTarget(config):
 		return inspectHypervVagrantStartTarget(config)
 	default:
-		return StartTargetState{}, fmt.Errorf(
+		return VirtualMachineState{}, fmt.Errorf(
 			"start target inspection is not implemented for OS=%s type=%s arch=%s host=%s engine=%s",
 			config.OS,
 			config.UbuntuType,

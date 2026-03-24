@@ -190,6 +190,41 @@ func RunTartStartOnMacOS(config alchemy_build.VirtualMachineConfig) error {
 	return nil
 }
 
+func RunTartStopOnMacOS(config alchemy_build.VirtualMachineConfig) error {
+	if !isTartMacOSDeployTarget(config) {
+		return fmt.Errorf("Tart stop is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	vmName := tartMacOSVMName(config)
+
+	vmState, err := localTartVMState(projectDir, vmName)
+	if err != nil {
+		return err
+	}
+	if !vmState.exists {
+		log.Printf("Tart VM %q is already absent", vmName)
+		return nil
+	}
+	if !vmState.running {
+		log.Printf("Tart VM %q is already stopped", vmName)
+		return nil
+	}
+
+	if err := runTartCommandAllowingMissingVM(
+		projectDir,
+		tartMacOSCommandTimeout,
+		"stop",
+		vmName,
+		false,
+	); err != nil {
+		return fmt.Errorf("failed to stop Tart VM %q: %w", vmName, err)
+	}
+
+	log.Printf("Tart VM %q stopped", vmName)
+	return nil
+}
+
 func inspectTartStartTarget(config alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
 	if !isTartMacOSDeployTarget(config) {
 		return StartTargetState{}, fmt.Errorf("Tart start target inspection is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)

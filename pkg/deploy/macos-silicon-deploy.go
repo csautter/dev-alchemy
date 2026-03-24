@@ -14,6 +14,8 @@ import (
 
 const (
 	utmAutomationCommandTimeout = time.Minute
+	utmGracefulStopTimeout      = 45 * time.Second
+	utmGracefulStopPollInterval = 2 * time.Second
 )
 
 func RunUtmDeployOnMacOS(config alchemy_build.VirtualMachineConfig) error {
@@ -98,6 +100,57 @@ func RunUtmStartOnMacOS(config alchemy_build.VirtualMachineConfig) error {
 	return nil
 }
 
+func RunUtmStopOnMacOS(config alchemy_build.VirtualMachineConfig) error {
+	if !isUtmDeployTarget(config) {
+		return fmt.Errorf("UTM stop is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+
+	state, err := inspectUtmStartTarget(config)
+	if err != nil {
+		return err
+	}
+	if !state.Exists {
+		log.Printf("UTM VM %q is already absent", utmVirtualMachineName(config))
+		return nil
+	}
+	if !state.Running {
+		log.Printf("UTM VM %q is already %s", utmVirtualMachineName(config), state.State)
+		return nil
+	}
+
+	if _, err := runUtmAppleScript(
+		[]string{
+			`tell application "UTM"`,
+			fmt.Sprintf(`set targetVM to virtual machine named %q`, utmVirtualMachineName(config)),
+			`stop targetVM by request`,
+			`end tell`,
+		},
+	); err != nil {
+		return fmt.Errorf("failed to request graceful shutdown for UTM VM %q: %w", utmVirtualMachineName(config), err)
+	}
+
+	if err := waitForUtmStop(config, utmGracefulStopTimeout); err == nil {
+		log.Printf("UTM VM %q shut down cleanly", utmVirtualMachineName(config))
+		return nil
+	}
+
+	log.Printf("UTM VM %q did not stop after graceful shutdown request; forcing stop", utmVirtualMachineName(config))
+
+	if _, err := runUtmAppleScript(
+		[]string{
+			`tell application "UTM"`,
+			fmt.Sprintf(`set targetVM to virtual machine named %q`, utmVirtualMachineName(config)),
+			`stop targetVM by force`,
+			`end tell`,
+		},
+	); err != nil {
+		return fmt.Errorf("failed to force stop UTM VM %q after graceful shutdown attempt: %w", utmVirtualMachineName(config), err)
+	}
+
+	log.Printf("UTM VM %q force stop requested", utmVirtualMachineName(config))
+	return nil
+}
+
 func inspectUtmStartTarget(config alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
 	vmPath, err := utmVirtualMachinePath(config)
 	if err != nil {
@@ -174,6 +227,26 @@ func utmStatusIndicatesRunning(status string) bool {
 	default:
 		return false
 	}
+}
+
+func waitForUtmStop(config alchemy_build.VirtualMachineConfig, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastState string
+
+	for time.Now().Before(deadline) {
+		status, err := utmVirtualMachineStatus(config)
+		if err != nil {
+			return err
+		}
+		lastState = status
+		if !utmStatusIndicatesRunning(status) {
+			return nil
+		}
+
+		time.Sleep(utmGracefulStopPollInterval)
+	}
+
+	return fmt.Errorf("UTM VM %q remained running after %s (last state=%s)", utmVirtualMachineName(config), timeout, lastState)
 }
 
 func runUtmAppleScript(lines []string) (string, error) {

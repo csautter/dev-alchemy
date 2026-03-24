@@ -22,6 +22,7 @@ Available Commands:
   install     Install host dependencies for the current OS
   provision   Provision a VM with Ansible
   start       Start an existing VM on your system
+  stop        Stop an existing VM on your system
   help        Help about any command
 `,
 	// Uncomment the following line if your bare application
