@@ -1,4 +1,4 @@
-package deploy
+package provision
 
 import (
 	"encoding/json"
@@ -54,6 +54,11 @@ const (
 	tartMacOSAnsibleSshCommonArgsEnvVar  = "TART_MACOS_ANSIBLE_SSH_COMMON_ARGS"
 	tartMacOSAnsibleSshTimeoutEnvVar     = "TART_MACOS_ANSIBLE_SSH_TIMEOUT"
 	tartMacOSAnsibleSshRetriesEnvVar     = "TART_MACOS_ANSIBLE_SSH_RETRIES"
+	tartMacOSVMNameEnvVar                = "TART_MACOS_VM_NAME"
+	tartMacOSDefaultVMName               = "tahoe-base-alchemy"
+	tartMacOSIPv4DiscoveryRetryWindow    = 5 * time.Minute
+	tartMacOSIPv4DiscoveryRetryInterval  = 2 * time.Second
+	tartMacOSCommandTimeout              = time.Minute
 
 	utmIPv4DiscoveryRetryWindow     = 45 * time.Second
 	utmIPv4DiscoveryRetryInterval   = 3 * time.Second
@@ -122,6 +127,14 @@ type utmIPv4DiscoveryOptions struct {
 	retryInterval   time.Duration
 	maxAttempts     int
 	arpCommandTimer time.Duration
+}
+
+type tartIPv4DiscoveryOptions struct {
+	runCommand     func(string, time.Duration, string, []string) (string, error)
+	sleep          func(time.Duration)
+	retryInterval  time.Duration
+	maxAttempts    int
+	commandTimeout time.Duration
 }
 
 type tartProvisionAvailabilityOptions struct {
