@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -44,6 +45,13 @@ type tartDetachedRun struct {
 type tartLocalVMState struct {
 	exists  bool
 	running bool
+}
+
+type tartListJSONEntry struct {
+	Source  string `json:"Source"`
+	Name    string `json:"Name"`
+	Running bool   `json:"Running"`
+	State   string `json:"State"`
 }
 
 type tartReachabilityWaitOptions struct {
@@ -106,6 +114,49 @@ func RunTartDeployOnMacOS(config alchemy_build.VirtualMachineConfig) error {
 	return nil
 }
 
+func RunTartDestroyOnMacOS(config alchemy_build.VirtualMachineConfig) error {
+	if !isTartMacOSDeployTarget(config) {
+		return fmt.Errorf("Tart destroy is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	vmName := tartMacOSVMName(config)
+
+	vmState, err := localTartVMState(projectDir, vmName)
+	if err != nil {
+		return err
+	}
+	if !vmState.exists {
+		log.Printf("Tart VM %q is already absent", vmName)
+		return nil
+	}
+
+	if vmState.running {
+		if err := runTartCommandAllowingMissingVM(
+			projectDir,
+			tartMacOSCommandTimeout,
+			"stop",
+			vmName,
+			false,
+		); err != nil {
+			return fmt.Errorf("failed to stop Tart VM %q: %w", vmName, err)
+		}
+	}
+
+	if err := runTartCommandAllowingMissingVM(
+		projectDir,
+		tartMacOSCommandTimeout,
+		"delete",
+		vmName,
+		true,
+	); err != nil {
+		return fmt.Errorf("failed to delete Tart VM %q: %w", vmName, err)
+	}
+
+	log.Printf("Tart VM %q deleted", vmName)
+	return nil
+}
+
 func isTartMacOSDeployTarget(vm alchemy_build.VirtualMachineConfig) bool {
 	return vm.OS == "macos" &&
 		vm.Arch == "arm64" &&
@@ -154,7 +205,14 @@ func localTartVMExists(projectDir string, vmName string) (bool, error) {
 }
 
 func localTartVMState(projectDir string, vmName string) (tartLocalVMState, error) {
-	output, err := runCommandWithCombinedOutput(projectDir, tartMacOSCommandTimeout, "tart", []string{"list"})
+	output, err := runCommandWithCombinedOutput(projectDir, tartMacOSCommandTimeout, "tart", []string{"list", "--format", "json"})
+	if err == nil {
+		if state, ok := tartListLocalVMStateFromJSON(output, vmName); ok {
+			return state, nil
+		}
+	}
+
+	output, err = runCommandWithCombinedOutput(projectDir, tartMacOSCommandTimeout, "tart", []string{"list"})
 	if err != nil {
 		return tartLocalVMState{}, fmt.Errorf("failed to list Tart VMs: %w; output: %s", err, strings.TrimSpace(output))
 	}
@@ -162,8 +220,47 @@ func localTartVMState(projectDir string, vmName string) (tartLocalVMState, error
 	return tartListLocalVMState(output, vmName), nil
 }
 
+func runTartCommandAllowingMissingVM(projectDir string, timeout time.Duration, subcommand string, vmName string, allowMissing bool) error {
+	output, err := runCommandWithCombinedOutput(projectDir, timeout, "tart", []string{subcommand, vmName})
+	if err == nil {
+		return nil
+	}
+
+	trimmedOutput := strings.TrimSpace(output)
+	switch {
+	case allowMissing && strings.Contains(trimmedOutput, "does not exist"):
+		log.Printf("Tart VM %q is already absent during %s", vmName, subcommand)
+		return nil
+	case !allowMissing && strings.Contains(trimmedOutput, "is not running"):
+		log.Printf("Tart VM %q is already stopped", vmName)
+		return nil
+	default:
+		return fmt.Errorf("%w; output: %s", err, trimmedOutput)
+	}
+}
+
 func tartListIncludesLocalVM(output string, vmName string) bool {
 	return tartListLocalVMState(output, vmName).exists
+}
+
+func tartListLocalVMStateFromJSON(output string, vmName string) (tartLocalVMState, bool) {
+	var entries []tartListJSONEntry
+	if err := json.Unmarshal([]byte(output), &entries); err != nil {
+		return tartLocalVMState{}, false
+	}
+
+	for _, entry := range entries {
+		if !strings.EqualFold(entry.Source, "local") || entry.Name != vmName {
+			continue
+		}
+
+		return tartLocalVMState{
+			exists:  true,
+			running: entry.Running || strings.EqualFold(entry.State, "running"),
+		}, true
+	}
+
+	return tartLocalVMState{}, true
 }
 
 func tartListLocalVMState(output string, vmName string) tartLocalVMState {
@@ -172,16 +269,21 @@ func tartListLocalVMState(output string, vmName string) tartLocalVMState {
 		return tartLocalVMState{}
 	}
 
-	if nameColumn, statusColumn, sourceColumn, ok := tartListColumnIndexes(lines); ok {
+	if nameColumn, statusColumn, runningColumn, sourceColumn, ok := tartListColumnIndexes(lines); ok {
 		for _, line := range lines[1:] {
 			fields := strings.Fields(line)
 			if len(fields) <= nameColumn || len(fields) <= sourceColumn {
 				continue
 			}
 			if fields[sourceColumn] == "local" && fields[nameColumn] == vmName {
+				isRunning := statusColumn >= 0 && len(fields) > statusColumn && strings.EqualFold(fields[statusColumn], "running")
+				if !isRunning && runningColumn >= 0 && len(fields) > runningColumn {
+					isRunning = strings.EqualFold(fields[runningColumn], "true") || strings.EqualFold(fields[runningColumn], "running")
+				}
+
 				return tartLocalVMState{
 					exists:  true,
-					running: statusColumn >= 0 && len(fields) > statusColumn && strings.EqualFold(fields[statusColumn], "running"),
+					running: isRunning,
 				}
 			}
 		}
@@ -205,7 +307,7 @@ func tartListLocalVMState(output string, vmName string) tartLocalVMState {
 	return tartLocalVMState{}
 }
 
-func tartListColumnIndexes(lines []string) (int, int, int, bool) {
+func tartListColumnIndexes(lines []string) (int, int, int, int, bool) {
 	for _, line := range lines {
 		header := strings.Fields(strings.ToLower(strings.TrimSpace(line)))
 		if len(header) == 0 {
@@ -214,6 +316,7 @@ func tartListColumnIndexes(lines []string) (int, int, int, bool) {
 
 		nameColumn := -1
 		statusColumn := -1
+		runningColumn := -1
 		sourceColumn := -1
 		for index, field := range header {
 			switch field {
@@ -221,19 +324,21 @@ func tartListColumnIndexes(lines []string) (int, int, int, bool) {
 				nameColumn = index
 			case "status":
 				statusColumn = index
+			case "running", "state":
+				runningColumn = index
 			case "source":
 				sourceColumn = index
 			}
 		}
 
 		if nameColumn >= 0 && sourceColumn >= 0 {
-			return nameColumn, statusColumn, sourceColumn, true
+			return nameColumn, statusColumn, runningColumn, sourceColumn, true
 		}
 
 		break
 	}
 
-	return 0, 0, 0, false
+	return 0, 0, 0, 0, false
 }
 
 func startTartVMDetached(projectDir string, vmName string) (tartDetachedRun, error) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
@@ -24,7 +25,18 @@ type hypervVagrantDeploySettings struct {
 	VagrantEnv []string
 }
 
+func isHypervVagrantTarget(config alchemy_build.VirtualMachineConfig) bool {
+	return config.HostOs == alchemy_build.HostOsWindows &&
+		config.VirtualizationEngine == alchemy_build.VirtualizationEngineHyperv &&
+		config.Arch == "amd64" &&
+		(config.OS == "windows11" || config.OS == "ubuntu")
+}
+
 func RunHypervVagrantDeployOnWindows(config alchemy_build.VirtualMachineConfig) error {
+	if !isHypervVagrantTarget(config) {
+		return fmt.Errorf("hyper-v vagrant deploy is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 	settings, err := resolveHypervVagrantDeploySettings(config, projectDir)
 	if err != nil {
@@ -50,6 +62,53 @@ func RunHypervVagrantDeployOnWindows(config alchemy_build.VirtualMachineConfig) 
 		fmt.Sprintf("%s:%s:%s:vagrant-up", config.OS, config.UbuntuType, config.Arch),
 	); err != nil {
 		return fmt.Errorf("failed to start Vagrant VM for %s:%s:%s: %w", config.OS, config.UbuntuType, config.Arch, err)
+	}
+
+	return nil
+}
+
+func RunHypervVagrantDestroyOnWindows(config alchemy_build.VirtualMachineConfig) error {
+	if !isHypervVagrantTarget(config) {
+		return fmt.Errorf("hyper-v vagrant destroy is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	settings, err := resolveHypervVagrantDeploySettings(config, projectDir)
+	if err != nil {
+		return err
+	}
+
+	exists, err := hypervVagrantMachineExists(settings.VagrantDir, settings.VagrantEnv)
+	if err != nil {
+		return err
+	}
+	if exists {
+		if err := runCommandWithStreamingLogsWithEnv(
+			settings.VagrantDir,
+			20*time.Minute,
+			"vagrant",
+			[]string{"destroy", "-f"},
+			settings.VagrantEnv,
+			fmt.Sprintf("%s:%s:%s:vagrant-destroy", config.OS, config.UbuntuType, config.Arch),
+		); err != nil {
+			return fmt.Errorf("failed to destroy Vagrant VM for %s:%s:%s: %w", config.OS, config.UbuntuType, config.Arch, err)
+		}
+	}
+
+	boxInstalled, err := hypervVagrantBoxInstalled(projectDir, settings.BoxName)
+	if err != nil {
+		return err
+	}
+	if boxInstalled {
+		if err := runCommandWithStreamingLogs(
+			projectDir,
+			5*time.Minute,
+			"vagrant",
+			[]string{"box", "remove", settings.BoxName, "--provider", "hyperv", "--force"},
+			fmt.Sprintf("%s:%s:%s:box-remove", config.OS, config.UbuntuType, config.Arch),
+		); err != nil {
+			return fmt.Errorf("failed to remove Vagrant box for %s:%s:%s: %w", config.OS, config.UbuntuType, config.Arch, err)
+		}
 	}
 
 	return nil
@@ -98,6 +157,72 @@ func buildHypervVagrantResourceEnv(config alchemy_build.VirtualMachineConfig) []
 		hypervVagrantCpuEnvVar + "=" + strconv.Itoa(alchemy_build.GetVmCpuCount(config)),
 		hypervVagrantMemoryEnvVar + "=" + strconv.Itoa(alchemy_build.GetVmMemoryMB(config)),
 	}
+}
+
+func hypervVagrantMachineExists(vagrantDir string, env []string) (bool, error) {
+	output, err := runCommandWithCombinedOutputWithEnv(
+		vagrantDir,
+		time.Minute,
+		"vagrant",
+		[]string{"status", "--machine-readable"},
+		env,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect Vagrant machine status in %q: %w; output: %s", vagrantDir, err, strings.TrimSpace(output))
+	}
+
+	return vagrantMachineExistsInStatusOutput(output), nil
+}
+
+func hypervVagrantBoxInstalled(projectDir string, boxName string) (bool, error) {
+	output, err := runCommandWithCombinedOutput(projectDir, time.Minute, "vagrant", []string{"box", "list"})
+	if err != nil {
+		return false, fmt.Errorf("failed to list Vagrant boxes: %w; output: %s", err, strings.TrimSpace(output))
+	}
+
+	return vagrantBoxListIncludes(output, boxName, "hyperv"), nil
+}
+
+func vagrantMachineExistsInStatusOutput(output string) bool {
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		fields := strings.Split(line, ",")
+		if len(fields) < 4 {
+			continue
+		}
+		if fields[2] != "state" {
+			continue
+		}
+		state := strings.TrimSpace(fields[3])
+		if state != "" && state != "not_created" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func vagrantBoxListIncludes(output string, boxName string, provider string) bool {
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		name, remainder, ok := strings.Cut(line, " (")
+		if !ok || name != boxName {
+			continue
+		}
+
+		providerValue, _, ok := strings.Cut(remainder, ",")
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(providerValue) == provider {
+			return true
+		}
+	}
+
+	return false
 }
 
 func getHypervWindowsBoxPath(config alchemy_build.VirtualMachineConfig) string {

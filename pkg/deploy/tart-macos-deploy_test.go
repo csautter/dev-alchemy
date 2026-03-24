@@ -47,6 +47,24 @@ tahoe-base-alchemy      running   local
 	}
 }
 
+func TestTartListLocalVMState_TracksRunningStatusFromJSON(t *testing.T) {
+	output := `[
+  {"Source":"local","Name":"tahoe-base-alchemy","Running":true,"State":"running"},
+  {"Source":"OCI","Name":"sonoma-base-alchemy","Running":false,"State":"stopped"}
+]`
+
+	state, ok := tartListLocalVMStateFromJSON(output, "tahoe-base-alchemy")
+	if !ok {
+		t.Fatal("expected JSON Tart list parser to parse valid JSON output")
+	}
+	if !state.exists {
+		t.Fatal("expected JSON Tart list parser to find local VM")
+	}
+	if !state.running {
+		t.Fatal("expected JSON Tart list parser to mark running VM as running")
+	}
+}
+
 func TestTartListIncludesLocalVM_DoesNotMatchSubstringNames(t *testing.T) {
 	output := `
 local tahoe-base-alchemy-old running
