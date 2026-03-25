@@ -177,10 +177,31 @@ func inspectUtmStartTarget(config alchemy_build.VirtualMachineConfig) (StartTarg
 }
 
 func isUtmDeployTarget(vm alchemy_build.VirtualMachineConfig) bool {
-	return vm.HostOs == alchemy_build.HostOsDarwin &&
-		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineUtm &&
-		(vm.OS == "ubuntu" || vm.OS == "windows11") &&
-		(vm.Arch == "amd64" || vm.Arch == "arm64")
+	_, ok := resolveUtmDeployTarget(vm)
+	return ok
+}
+
+func resolveUtmDeployTarget(vm alchemy_build.VirtualMachineConfig) (alchemy_build.VirtualMachineConfig, bool) {
+	for _, candidate := range alchemy_build.AvailableVirtualMachineConfigs() {
+		if candidate.HostOs != alchemy_build.HostOsDarwin {
+			continue
+		}
+		if candidate.VirtualizationEngine != alchemy_build.VirtualizationEngineUtm {
+			continue
+		}
+		if candidate.OS != vm.OS || candidate.UbuntuType != vm.UbuntuType || candidate.Arch != vm.Arch {
+			continue
+		}
+		if vm.HostOs != "" && vm.HostOs != candidate.HostOs {
+			continue
+		}
+		if vm.VirtualizationEngine != "" && vm.VirtualizationEngine != candidate.VirtualizationEngine {
+			continue
+		}
+		return candidate, true
+	}
+
+	return alchemy_build.VirtualMachineConfig{}, false
 }
 
 func utmVirtualMachineName(config alchemy_build.VirtualMachineConfig) string {

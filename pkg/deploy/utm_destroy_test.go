@@ -22,6 +22,30 @@ func TestIsUtmDeployTarget(t *testing.T) {
 	}
 }
 
+func TestIsUtmDeployTargetInfersCanonicalDarwinUtmConfig(t *testing.T) {
+	config := alchemy_build.VirtualMachineConfig{
+		OS:   "windows11",
+		Arch: "arm64",
+	}
+
+	if !isUtmDeployTarget(config) {
+		t.Fatal("expected windows11 arm64 config to resolve to darwin utm target")
+	}
+}
+
+func TestIsUtmDeployTargetRejectsExplicitNonUtmConfig(t *testing.T) {
+	config := alchemy_build.VirtualMachineConfig{
+		OS:                   "windows11",
+		Arch:                 "arm64",
+		HostOs:               alchemy_build.HostOsWindows,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+	}
+
+	if isUtmDeployTarget(config) {
+		t.Fatal("expected explicit non-utm config to be rejected")
+	}
+}
+
 func TestUtmVirtualMachineNameIncludesTypeAndArch(t *testing.T) {
 	config := alchemy_build.VirtualMachineConfig{
 		OS:         "ubuntu",
