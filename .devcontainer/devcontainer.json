@@ -7,11 +7,21 @@
 	"containerEnv": {
     	"GOTOOLCHAIN": "auto"
   	},
+	"mounts": [
+		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.codex/skills,target=/home/vscode/.agents/skills,type=bind,consistency=cached"
+	],
 	"features": {
 		"ghcr.io/devcontainers/features/python:1": {},
 		"ghcr.io/devcontainers-extra/features/packer-asdf:2": {}
 	},
-	"postCreateCommand": "go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0"
+	"postCreateCommand": "go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"openai.chatgpt"
+			]
+		}
+	}
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
