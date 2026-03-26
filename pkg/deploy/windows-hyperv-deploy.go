@@ -14,6 +14,7 @@ const (
 	windowsHypervVagrantBoxName = "win11-packer"
 	hypervVagrantBoxNameEnvVar  = "VAGRANT_BOX_NAME"
 	hypervVagrantVMNameEnvVar   = "VAGRANT_VM_NAME"
+	hypervVagrantDotfileEnvVar  = "VAGRANT_DOTFILE_PATH"
 	hypervVagrantCpuEnvVar      = "VAGRANT_VM_CPUS"
 	hypervVagrantMemoryEnvVar   = "VAGRANT_VM_MEMORY_MB"
 )
@@ -190,13 +191,15 @@ func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfi
 	switch config.OS {
 	case "windows11":
 		boxName := windowsHypervVagrantBoxName
+		vmName := boxName
 		return hypervVagrantDeploySettings{
 			BoxName:    boxName,
 			BoxPath:    getHypervWindowsBoxPath(config),
 			VagrantDir: filepath.Join(projectDir, "deployments", "vagrant", "ansible-windows"),
 			VagrantEnv: append([]string{
 				hypervVagrantBoxNameEnvVar + "=" + boxName,
-				hypervVagrantVMNameEnvVar + "=" + boxName,
+				hypervVagrantVMNameEnvVar + "=" + vmName,
+				hypervVagrantDotfileEnvVar + "=" + hypervVagrantDotfilePath(vmName),
 			}, buildHypervVagrantResourceEnv(config)...),
 		}, nil
 	case "ubuntu":
@@ -205,13 +208,15 @@ func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfi
 			ubuntuType = "server"
 		}
 		boxName := fmt.Sprintf("linux-ubuntu-%s-packer", ubuntuType)
+		vmName := boxName
 		return hypervVagrantDeploySettings{
 			BoxName:    boxName,
 			BoxPath:    getHypervUbuntuBoxPath(config),
 			VagrantDir: filepath.Join(projectDir, "deployments", "vagrant", "linux-ubuntu-hyperv"),
 			VagrantEnv: append([]string{
 				hypervVagrantBoxNameEnvVar + "=" + boxName,
-				hypervVagrantVMNameEnvVar + "=" + boxName,
+				hypervVagrantVMNameEnvVar + "=" + vmName,
+				hypervVagrantDotfileEnvVar + "=" + hypervVagrantDotfilePath(vmName),
 			}, buildHypervVagrantResourceEnv(config)...),
 		}, nil
 	default:
@@ -222,6 +227,10 @@ func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfi
 			config.Arch,
 		)
 	}
+}
+
+func hypervVagrantDotfilePath(vmName string) string {
+	return filepath.Join(".vagrant", vmName)
 }
 
 func buildHypervVagrantResourceEnv(config alchemy_build.VirtualMachineConfig) []string {
