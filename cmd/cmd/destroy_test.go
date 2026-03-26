@@ -35,6 +35,7 @@ func TestIsDestroySupported(t *testing.T) {
 			vm: alchemy_build.VirtualMachineConfig{
 				OS:                   "ubuntu",
 				Arch:                 "arm64",
+				UbuntuType:           "server",
 				HostOs:               alchemy_build.HostOsDarwin,
 				VirtualizationEngine: alchemy_build.VirtualizationEngineUtm,
 			},
