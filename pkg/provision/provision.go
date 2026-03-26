@@ -144,6 +144,7 @@ type tartProvisionAvailabilityOptions struct {
 }
 
 var inspectProvisionTarget = alchemy_deploy.InspectStartTarget
+var runProvisionCommandWithCombinedOutputWithEnv = runCommandWithCombinedOutputWithEnv
 
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	if isHypervWindows11Amd64ProvisionTarget(vm) {
@@ -213,9 +214,12 @@ func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bo
 	}
 
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
-	vagrantDir := filepath.Join(projectDir, "deployments", "vagrant", "ansible-windows")
+	vagrantSettings, err := alchemy_deploy.ResolveHypervVagrantExecutionSettings(vm)
+	if err != nil {
+		return fmt.Errorf("failed to resolve Hyper-V Vagrant settings: %w", err)
+	}
 
-	ip, err := discoverWindowsVagrantIPv4(vagrantDir)
+	ip, err := discoverWindowsVagrantIPv4(vagrantSettings.VagrantDir, vagrantSettings.VagrantEnv)
 	if err != nil {
 		return fmt.Errorf("failed to determine vagrant VM IPv4 address: %w", err)
 	}
@@ -290,9 +294,12 @@ func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool)
 	}
 
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
-	vagrantDir := filepath.Join(projectDir, "deployments", "vagrant", "linux-ubuntu-hyperv")
+	vagrantSettings, err := alchemy_deploy.ResolveHypervVagrantExecutionSettings(vm)
+	if err != nil {
+		return fmt.Errorf("failed to resolve Hyper-V Vagrant settings: %w", err)
+	}
 
-	ip, err := discoverLinuxVagrantIPv4(vagrantDir)
+	ip, err := discoverLinuxVagrantIPv4(vagrantSettings.VagrantDir, vagrantSettings.VagrantEnv)
 	if err != nil {
 		return fmt.Errorf("failed to determine vagrant VM IPv4 address: %w", err)
 	}
@@ -495,12 +502,13 @@ func withDefaultTartProvisionAvailabilityOptions(options tartProvisionAvailabili
 	return options
 }
 
-func discoverWindowsVagrantIPv4(vagrantDir string) (string, error) {
-	output, err := runCommandWithCombinedOutput(
+func discoverWindowsVagrantIPv4(vagrantDir string, env []string) (string, error) {
+	output, err := runProvisionCommandWithCombinedOutputWithEnv(
 		vagrantDir,
 		3*time.Minute,
 		"vagrant",
 		[]string{"winrm", "-c", "ipconfig"},
+		env,
 	)
 	if err != nil {
 		return "", fmt.Errorf("vagrant winrm call failed: %w; output: %s", err, strings.TrimSpace(output))
@@ -513,12 +521,13 @@ func discoverWindowsVagrantIPv4(vagrantDir string) (string, error) {
 	return ip, nil
 }
 
-func discoverLinuxVagrantIPv4(vagrantDir string) (string, error) {
-	output, err := runCommandWithCombinedOutput(
+func discoverLinuxVagrantIPv4(vagrantDir string, env []string) (string, error) {
+	output, err := runProvisionCommandWithCombinedOutputWithEnv(
 		vagrantDir,
 		3*time.Minute,
 		"vagrant",
 		[]string{"ssh", "-c", "hostname -I"},
+		env,
 	)
 	if err != nil {
 		return "", fmt.Errorf("vagrant ssh call failed: %w; output: %s", err, strings.TrimSpace(output))

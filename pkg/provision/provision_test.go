@@ -34,6 +34,40 @@ Ethernet adapter Ethernet:
 	}
 }
 
+func TestDiscoverLinuxVagrantIPv4_UsesProvidedVagrantEnv(t *testing.T) {
+	previousRunner := runProvisionCommandWithCombinedOutputWithEnv
+	t.Cleanup(func() {
+		runProvisionCommandWithCombinedOutputWithEnv = previousRunner
+	})
+
+	runProvisionCommandWithCombinedOutputWithEnv = func(workingDir string, timeout time.Duration, executable string, args []string, extraEnv []string) (string, error) {
+		if workingDir != "vagrant-dir" {
+			t.Fatalf("expected working directory to be passed through, got %q", workingDir)
+		}
+		if executable != "vagrant" {
+			t.Fatalf("expected vagrant executable, got %q", executable)
+		}
+		if timeout != 3*time.Minute {
+			t.Fatalf("expected 3 minute timeout, got %s", timeout)
+		}
+		if strings.Join(args, " ") != "ssh -c hostname -I" {
+			t.Fatalf("expected ssh hostname lookup args, got %v", args)
+		}
+		if len(extraEnv) != 1 || extraEnv[0] != "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer" {
+			t.Fatalf("expected Vagrant env to be forwarded, got %v", extraEnv)
+		}
+		return "127.0.0.1 172.25.125.159\n", nil
+	}
+
+	ip, err := discoverLinuxVagrantIPv4("vagrant-dir", []string{"VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer"})
+	if err != nil {
+		t.Fatalf("discoverLinuxVagrantIPv4 returned error: %v", err)
+	}
+	if ip != "172.25.125.159" {
+		t.Fatalf("expected discovered IP 172.25.125.159, got %q", ip)
+	}
+}
+
 func TestBuildWindowsProvisionArgs(t *testing.T) {
 	projectDir := t.TempDir()
 	config := windowsAnsibleConnectionConfig{

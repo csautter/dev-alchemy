@@ -17,6 +17,7 @@ const (
 	hypervVagrantDotfileEnvVar  = "VAGRANT_DOTFILE_PATH"
 	hypervVagrantCpuEnvVar      = "VAGRANT_VM_CPUS"
 	hypervVagrantMemoryEnvVar   = "VAGRANT_VM_MEMORY_MB"
+	hypervVagrantUpTimeout      = 60 * time.Minute
 )
 
 var (
@@ -29,6 +30,11 @@ var (
 type hypervVagrantDeploySettings struct {
 	BoxName    string
 	BoxPath    string
+	VagrantDir string
+	VagrantEnv []string
+}
+
+type HypervVagrantExecutionSettings struct {
 	VagrantDir string
 	VagrantEnv []string
 }
@@ -63,7 +69,7 @@ func RunHypervVagrantDeployOnWindows(config alchemy_build.VirtualMachineConfig) 
 
 	if err := runCommandWithStreamingLogsWithEnv(
 		settings.VagrantDir,
-		45*time.Minute,
+		hypervVagrantUpTimeout,
 		"vagrant",
 		[]string{"up", "--provider", "hyperv"},
 		settings.VagrantEnv,
@@ -146,7 +152,7 @@ func RunHypervVagrantStartOnWindows(config alchemy_build.VirtualMachineConfig) e
 
 	if err := runCommandWithStreamingLogsWithEnv(
 		settings.VagrantDir,
-		45*time.Minute,
+		hypervVagrantUpTimeout,
 		"vagrant",
 		[]string{"up", "--provider", "hyperv"},
 		settings.VagrantEnv,
@@ -298,6 +304,19 @@ func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfi
 			config.Arch,
 		)
 	}
+}
+
+func ResolveHypervVagrantExecutionSettings(config alchemy_build.VirtualMachineConfig) (HypervVagrantExecutionSettings, error) {
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+	settings, err := resolveHypervVagrantDeploySettings(config, projectDir)
+	if err != nil {
+		return HypervVagrantExecutionSettings{}, err
+	}
+
+	return HypervVagrantExecutionSettings{
+		VagrantDir: settings.VagrantDir,
+		VagrantEnv: append([]string(nil), settings.VagrantEnv...),
+	}, nil
 }
 
 func hypervVagrantDotfilePath(vmName string) string {

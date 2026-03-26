@@ -95,12 +95,19 @@ func runCommandWithStreamingLogsWithEnv(workingDir string, timeout time.Duration
 }
 
 func runCommandWithCombinedOutput(workingDir string, timeout time.Duration, executable string, args []string) (string, error) {
+	return runCommandWithCombinedOutputWithEnv(workingDir, timeout, executable, args, nil)
+}
+
+func runCommandWithCombinedOutputWithEnv(workingDir string, timeout time.Duration, executable string, args []string, extraEnv []string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// #nosec G204,G702 -- callers provide explicit executables and argv slices; no shell interpretation occurs.
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Dir = workingDir
+	if len(extraEnv) > 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
