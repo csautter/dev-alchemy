@@ -232,18 +232,12 @@ func buildHypervVagrantResourceEnv(config alchemy_build.VirtualMachineConfig) []
 }
 
 func hypervVagrantMachineExists(vagrantDir string, env []string) (bool, error) {
-	output, err := runCommandWithCombinedOutputWithEnv(
-		vagrantDir,
-		time.Minute,
-		"vagrant",
-		[]string{"status", "--machine-readable"},
-		env,
-	)
+	state, err := hypervVMState(vagrantDir, env)
 	if err != nil {
-		return false, fmt.Errorf("failed to inspect Vagrant machine status in %q: %w; output: %s", vagrantDir, err, strings.TrimSpace(output))
+		return false, err
 	}
 
-	return vagrantMachineExistsInStatusOutput(output), nil
+	return state != "missing", nil
 }
 
 func inspectHypervVagrantStartTarget(config alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
@@ -253,18 +247,75 @@ func inspectHypervVagrantStartTarget(config alchemy_build.VirtualMachineConfig) 
 		return StartTargetState{}, err
 	}
 
-	output, err := runCommandWithCombinedOutputWithEnv(
-		settings.VagrantDir,
-		time.Minute,
-		"vagrant",
-		[]string{"status", "--machine-readable"},
-		settings.VagrantEnv,
-	)
+	state, err := hypervVMState(settings.VagrantDir, settings.VagrantEnv)
 	if err != nil {
-		return StartTargetState{}, fmt.Errorf("failed to inspect Vagrant machine status in %q: %w; output: %s", settings.VagrantDir, err, strings.TrimSpace(output))
+		return StartTargetState{}, err
 	}
 
-	return startTargetStateFromVagrantStatusOutput(output), nil
+	return hypervStartTargetStateFromVMState(state), nil
+}
+
+func hypervVMState(workingDir string, env []string) (string, error) {
+	vmName, err := hypervVagrantVMName(env)
+	if err != nil {
+		return "", err
+	}
+
+	output, err := runCommandWithCombinedOutput(
+		workingDir,
+		time.Minute,
+		"powershell",
+		[]string{
+			"-NoProfile",
+			"-NonInteractive",
+			"-Command",
+			fmt.Sprintf(
+				"$vm = Get-VM -Name %s -ErrorAction SilentlyContinue; if ($null -eq $vm) { Write-Output missing } else { Write-Output $vm.State }",
+				powershellSingleQuote(vmName),
+			),
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect Hyper-V VM %q in %q: %w; output: %s", vmName, workingDir, err, strings.TrimSpace(output))
+	}
+
+	return hypervVMStateFromOutput(output), nil
+}
+
+func hypervVagrantVMName(env []string) (string, error) {
+	const prefix = hypervVagrantVMNameEnvVar + "="
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			vmName := strings.TrimSpace(strings.TrimPrefix(entry, prefix))
+			if vmName == "" {
+				break
+			}
+			return vmName, nil
+		}
+	}
+
+	return "", fmt.Errorf("missing %s in Vagrant environment", hypervVagrantVMNameEnvVar)
+}
+
+func hypervVMStateFromOutput(output string) string {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return "missing"
+	}
+
+	lines := strings.Split(trimmed, "\n")
+	return strings.ToLower(strings.TrimSpace(lines[len(lines)-1]))
+}
+
+func hypervStartTargetStateFromVMState(state string) StartTargetState {
+	switch state {
+	case "", "missing":
+		return StartTargetState{State: "missing"}
+	case "running":
+		return StartTargetState{Exists: true, Running: true, State: state}
+	default:
+		return StartTargetState{Exists: true, State: state}
+	}
 }
 
 func hypervVagrantBoxInstalled(projectDir string, boxName string) (bool, error) {

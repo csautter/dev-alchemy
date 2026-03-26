@@ -64,6 +64,55 @@ func TestStartTargetStateFromVagrantStatusOutput(t *testing.T) {
 	}
 }
 
+func TestHypervVagrantVMName(t *testing.T) {
+	vmName, err := hypervVagrantVMName([]string{
+		"VAGRANT_BOX_NAME=linux-ubuntu-server-packer",
+		"VAGRANT_VM_NAME=linux-ubuntu-desktop-packer",
+	})
+	if err != nil {
+		t.Fatalf("expected vm name to be resolved, got %v", err)
+	}
+	if vmName != "linux-ubuntu-desktop-packer" {
+		t.Fatalf("expected desktop vm name, got %q", vmName)
+	}
+}
+
+func TestHypervVagrantVMNameReturnsErrorWhenMissing(t *testing.T) {
+	_, err := hypervVagrantVMName([]string{"VAGRANT_BOX_NAME=linux-ubuntu-server-packer"})
+	if err == nil {
+		t.Fatal("expected missing vm name to return an error")
+	}
+}
+
+func TestHypervVMStateFromOutput(t *testing.T) {
+	if got := hypervVMStateFromOutput("Running\n"); got != "running" {
+		t.Fatalf("expected running state, got %q", got)
+	}
+	if got := hypervVMStateFromOutput("Off\n"); got != "off" {
+		t.Fatalf("expected off state, got %q", got)
+	}
+	if got := hypervVMStateFromOutput("\n"); got != "missing" {
+		t.Fatalf("expected blank output to be treated as missing, got %q", got)
+	}
+}
+
+func TestHypervStartTargetStateFromVMState(t *testing.T) {
+	state := hypervStartTargetStateFromVMState("running")
+	if !state.Exists || !state.Running || state.State != "running" {
+		t.Fatalf("expected running start target state, got %#v", state)
+	}
+
+	stopped := hypervStartTargetStateFromVMState("off")
+	if !stopped.Exists || stopped.Running || stopped.State != "off" {
+		t.Fatalf("expected stopped start target state, got %#v", stopped)
+	}
+
+	missing := hypervStartTargetStateFromVMState("missing")
+	if missing.Exists || missing.Running || missing.State != "missing" {
+		t.Fatalf("expected missing start target state, got %#v", missing)
+	}
+}
+
 func TestVagrantBoxListIncludesMatchesExactNameAndProvider(t *testing.T) {
 	output := "win11-packer (hyperv, 0)\nlinux-ubuntu-server-packer (hyperv, 0)\n"
 
