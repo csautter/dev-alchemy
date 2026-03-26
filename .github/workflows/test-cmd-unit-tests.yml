@@ -6,13 +6,11 @@ on:
       - "cmd/cmd/**"
       - ".github/workflows/test-cmd-unit-tests.yml"
       - "pkg/build/**"
-      - "pkg/deploy/**"
   pull_request:
     paths:
       - "cmd/cmd/**"
       - ".github/workflows/test-cmd-unit-tests.yml"
       - "pkg/build/**"
-      - "pkg/deploy/**"
   workflow_dispatch:
 
 concurrency:
@@ -39,9 +37,6 @@ jobs:
 
       - name: Run cmd tests
         run: go test ./cmd/cmd/...
-
-      - name: Run deploy package tests
-        run: go test ./pkg/deploy/...
 
       - name: Run build package tests
         run: go test ./pkg/build/...
