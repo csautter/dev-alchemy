@@ -1,7 +1,9 @@
 package deploy
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 )
@@ -110,6 +112,161 @@ func TestHypervStartTargetStateFromVMState(t *testing.T) {
 	missing := hypervStartTargetStateFromVMState("missing")
 	if missing.Exists || missing.Running || missing.State != "missing" {
 		t.Fatalf("expected missing start target state, got %#v", missing)
+	}
+}
+
+func TestRunHypervVagrantStopOnWindows_TreatsGracefulHaltErrorAsSuccessOnceStopped(t *testing.T) {
+	restore := stubHypervStopDependencies(t)
+	defer restore()
+
+	commands := make([][]string, 0, 1)
+	runHypervVagrantCommandWithEnv = func(_ string, _ time.Duration, executable string, args []string, _ []string, _ string) error {
+		if executable != "vagrant" {
+			t.Fatalf("expected vagrant executable, got %q", executable)
+		}
+		commands = append(commands, append([]string(nil), args...))
+		return fmt.Errorf("command failed (vagrant [halt]): exit status 1")
+	}
+
+	inspectCalls := 0
+	inspectHypervVagrantStopTarget = func(alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
+		inspectCalls++
+		switch inspectCalls {
+		case 1:
+			return StartTargetState{Exists: true, Running: true, State: "running"}, nil
+		case 2:
+			return StartTargetState{Exists: true, Running: false, State: "off"}, nil
+		default:
+			t.Fatalf("unexpected inspect call %d", inspectCalls)
+			return StartTargetState{}, nil
+		}
+	}
+
+	config := alchemy_build.VirtualMachineConfig{
+		OS:                   "ubuntu",
+		UbuntuType:           "server",
+		Arch:                 "amd64",
+		HostOs:               alchemy_build.HostOsWindows,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+	}
+
+	if err := RunHypervVagrantStopOnWindows(config); err != nil {
+		t.Fatalf("expected graceful halt error to be ignored once stopped, got %v", err)
+	}
+	if len(commands) != 1 {
+		t.Fatalf("expected one halt attempt, got %d", len(commands))
+	}
+	if got := commands[0]; len(got) != 1 || got[0] != "halt" {
+		t.Fatalf("expected graceful halt command, got %#v", got)
+	}
+}
+
+func TestRunHypervVagrantStopOnWindows_FallsBackToForcedHalt(t *testing.T) {
+	restore := stubHypervStopDependencies(t)
+	defer restore()
+
+	commands := make([][]string, 0, 2)
+	runHypervVagrantCommandWithEnv = func(_ string, _ time.Duration, executable string, args []string, _ []string, _ string) error {
+		if executable != "vagrant" {
+			t.Fatalf("expected vagrant executable, got %q", executable)
+		}
+		commands = append(commands, append([]string(nil), args...))
+		if len(args) == 1 && args[0] == "halt" {
+			return fmt.Errorf("command failed (vagrant [halt]): exit status 1")
+		}
+		return nil
+	}
+
+	inspectCalls := 0
+	inspectHypervVagrantStopTarget = func(alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
+		inspectCalls++
+		switch inspectCalls {
+		case 1:
+			return StartTargetState{Exists: true, Running: true, State: "running"}, nil
+		case 2:
+			return StartTargetState{Exists: true, Running: true, State: "running"}, nil
+		case 3:
+			return StartTargetState{Exists: true, Running: false, State: "off"}, nil
+		default:
+			t.Fatalf("unexpected inspect call %d", inspectCalls)
+			return StartTargetState{}, nil
+		}
+	}
+	hypervVagrantStopSettleTimeout = 0
+
+	config := alchemy_build.VirtualMachineConfig{
+		OS:                   "ubuntu",
+		UbuntuType:           "desktop",
+		Arch:                 "amd64",
+		HostOs:               alchemy_build.HostOsWindows,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+	}
+
+	if err := RunHypervVagrantStopOnWindows(config); err != nil {
+		t.Fatalf("expected forced halt fallback to succeed, got %v", err)
+	}
+	if len(commands) != 2 {
+		t.Fatalf("expected graceful and forced halt attempts, got %d", len(commands))
+	}
+	if got := commands[0]; len(got) != 1 || got[0] != "halt" {
+		t.Fatalf("expected first command to be graceful halt, got %#v", got)
+	}
+	if got := commands[1]; len(got) != 2 || got[0] != "halt" || got[1] != "--force" {
+		t.Fatalf("expected second command to be forced halt, got %#v", got)
+	}
+}
+
+func TestRunHypervVagrantStopOnWindows_ReturnsErrorWhenVMStillRunningAfterForcedHalt(t *testing.T) {
+	restore := stubHypervStopDependencies(t)
+	defer restore()
+
+	runHypervVagrantCommandWithEnv = func(_ string, _ time.Duration, _ string, args []string, _ []string, _ string) error {
+		if len(args) == 1 && args[0] == "halt" {
+			return fmt.Errorf("command failed (vagrant [halt]): exit status 1")
+		}
+		return nil
+	}
+	inspectHypervVagrantStopTarget = func(alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
+		return StartTargetState{Exists: true, Running: true, State: "running"}, nil
+	}
+	hypervVagrantStopSettleTimeout = 0
+
+	config := alchemy_build.VirtualMachineConfig{
+		OS:                   "ubuntu",
+		UbuntuType:           "server",
+		Arch:                 "amd64",
+		HostOs:               alchemy_build.HostOsWindows,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+	}
+
+	err := RunHypervVagrantStopOnWindows(config)
+	if err == nil {
+		t.Fatal("expected stop to fail when VM remains running")
+	}
+	if err.Error() != "failed to stop Vagrant VM for ubuntu:server:amd64: graceful halt failed: command failed (vagrant [halt]): exit status 1; forced halt completed but VM is still running" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func stubHypervStopDependencies(t *testing.T) func() {
+	t.Helper()
+
+	originalRun := runHypervVagrantCommandWithEnv
+	originalInspect := inspectHypervVagrantStopTarget
+	originalTimeout := hypervVagrantStopSettleTimeout
+	originalPoll := hypervVagrantStopPollInterval
+	dirs := alchemy_build.GetDirectoriesInstance()
+	originalProjectDir := dirs.ProjectDir
+	dirs.ProjectDir = t.TempDir()
+	hypervVagrantStopSettleTimeout = time.Millisecond
+	hypervVagrantStopPollInterval = 0
+
+	return func() {
+		runHypervVagrantCommandWithEnv = originalRun
+		inspectHypervVagrantStopTarget = originalInspect
+		hypervVagrantStopSettleTimeout = originalTimeout
+		hypervVagrantStopPollInterval = originalPoll
+		dirs.ProjectDir = originalProjectDir
 	}
 }
 

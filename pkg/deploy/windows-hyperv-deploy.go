@@ -19,6 +19,13 @@ const (
 	hypervVagrantMemoryEnvVar   = "VAGRANT_VM_MEMORY_MB"
 )
 
+var (
+	runHypervVagrantCommandWithEnv = runCommandWithStreamingLogsWithEnv
+	inspectHypervVagrantStopTarget = inspectHypervVagrantStartTarget
+	hypervVagrantStopSettleTimeout = 15 * time.Second
+	hypervVagrantStopPollInterval  = 500 * time.Millisecond
+)
+
 type hypervVagrantDeploySettings struct {
 	BoxName    string
 	BoxPath    string
@@ -156,7 +163,7 @@ func RunHypervVagrantStopOnWindows(config alchemy_build.VirtualMachineConfig) er
 		return fmt.Errorf("hyper-v vagrant stop is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
 	}
 
-	state, err := inspectHypervVagrantStartTarget(config)
+	state, err := inspectHypervVagrantStopTarget(config)
 	if err != nil {
 		return err
 	}
@@ -173,7 +180,7 @@ func RunHypervVagrantStopOnWindows(config alchemy_build.VirtualMachineConfig) er
 		return err
 	}
 
-	if err := runCommandWithStreamingLogsWithEnv(
+	if err := runHypervVagrantCommandWithEnv(
 		settings.VagrantDir,
 		20*time.Minute,
 		"vagrant",
@@ -181,10 +188,74 @@ func RunHypervVagrantStopOnWindows(config alchemy_build.VirtualMachineConfig) er
 		settings.VagrantEnv,
 		fmt.Sprintf("%s:%s:%s:vagrant-halt", config.OS, config.UbuntuType, config.Arch),
 	); err != nil {
-		return fmt.Errorf("failed to stop Vagrant VM for %s:%s:%s: %w", config.OS, config.UbuntuType, config.Arch, err)
+		stopped, waitErr := waitForHypervVagrantStop(config, hypervVagrantStopSettleTimeout)
+		if waitErr == nil && stopped {
+			return nil
+		}
+
+		forceErr := runHypervVagrantCommandWithEnv(
+			settings.VagrantDir,
+			20*time.Minute,
+			"vagrant",
+			[]string{"halt", "--force"},
+			settings.VagrantEnv,
+			fmt.Sprintf("%s:%s:%s:vagrant-halt-force", config.OS, config.UbuntuType, config.Arch),
+		)
+		if forceErr == nil {
+			stopped, waitErr = waitForHypervVagrantStop(config, hypervVagrantStopSettleTimeout)
+			if waitErr == nil && stopped {
+				return nil
+			}
+		}
+
+		if waitErr != nil {
+			return fmt.Errorf(
+				"failed to stop Vagrant VM for %s:%s:%s: graceful halt failed: %v; forced halt failed: %v; failed verifying final state: %w",
+				config.OS,
+				config.UbuntuType,
+				config.Arch,
+				err,
+				forceErr,
+				waitErr,
+			)
+		}
+		if forceErr != nil {
+			return fmt.Errorf(
+				"failed to stop Vagrant VM for %s:%s:%s: graceful halt failed: %v; forced halt failed: %w",
+				config.OS,
+				config.UbuntuType,
+				config.Arch,
+				err,
+				forceErr,
+			)
+		}
+		return fmt.Errorf(
+			"failed to stop Vagrant VM for %s:%s:%s: graceful halt failed: %v; forced halt completed but VM is still running",
+			config.OS,
+			config.UbuntuType,
+			config.Arch,
+			err,
+		)
 	}
 
 	return nil
+}
+
+func waitForHypervVagrantStop(config alchemy_build.VirtualMachineConfig, timeout time.Duration) (bool, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		state, err := inspectHypervVagrantStopTarget(config)
+		if err != nil {
+			return false, err
+		}
+		if !state.Exists || !state.Running {
+			return true, nil
+		}
+		if time.Now().After(deadline) {
+			return false, nil
+		}
+		time.Sleep(hypervVagrantStopPollInterval)
+	}
 }
 
 func resolveHypervVagrantDeploySettings(config alchemy_build.VirtualMachineConfig, projectDir string) (hypervVagrantDeploySettings, error) {
