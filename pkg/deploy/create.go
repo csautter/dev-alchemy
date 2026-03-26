@@ -37,7 +37,7 @@ func CreateTargetExists(config alchemy_build.VirtualMachineConfig) (bool, error)
 			return false, err
 		}
 
-		exists, err := hypervVagrantMachineExists(settings.VagrantDir, settings.VagrantEnv)
+		exists, err := hypervVagrantMachineExistsChecker(settings.VagrantDir, settings.VagrantEnv)
 		if err != nil {
 			return false, err
 		}

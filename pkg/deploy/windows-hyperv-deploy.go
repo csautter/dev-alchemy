@@ -21,10 +21,13 @@ const (
 )
 
 var (
-	runHypervVagrantCommandWithEnv = runCommandWithStreamingLogsWithEnv
-	inspectHypervVagrantStopTarget = inspectHypervVagrantStartTarget
-	hypervVagrantStopSettleTimeout = 15 * time.Second
-	hypervVagrantStopPollInterval  = 500 * time.Millisecond
+	runHypervVagrantCommandWithEnv     = runCommandWithStreamingLogsWithEnv
+	inspectHypervVagrantStartCmdTarget = inspectHypervVagrantStartTarget
+	inspectHypervVagrantStopTarget     = inspectHypervVagrantStartTarget
+	hypervVagrantMachineExistsChecker  = hypervVagrantMachineExists
+	hypervVagrantBoxInstalledChecker   = hypervVagrantBoxInstalled
+	hypervVagrantStopSettleTimeout     = 15 * time.Second
+	hypervVagrantStopPollInterval      = 500 * time.Millisecond
 )
 
 type hypervVagrantDeploySettings struct {
@@ -67,7 +70,7 @@ func RunHypervVagrantDeployOnWindows(config alchemy_build.VirtualMachineConfig) 
 		return fmt.Errorf("failed to add Vagrant box for %s:%s:%s: %w", config.OS, config.UbuntuType, config.Arch, err)
 	}
 
-	if err := runCommandWithStreamingLogsWithEnv(
+	if err := runHypervVagrantCommandWithEnv(
 		settings.VagrantDir,
 		hypervVagrantUpTimeout,
 		"vagrant",
@@ -92,12 +95,12 @@ func RunHypervVagrantDestroyOnWindows(config alchemy_build.VirtualMachineConfig)
 		return err
 	}
 
-	exists, err := hypervVagrantMachineExists(settings.VagrantDir, settings.VagrantEnv)
+	exists, err := hypervVagrantMachineExistsChecker(settings.VagrantDir, settings.VagrantEnv)
 	if err != nil {
 		return err
 	}
 	if exists {
-		if err := runCommandWithStreamingLogsWithEnv(
+		if err := runHypervVagrantCommandWithEnv(
 			settings.VagrantDir,
 			20*time.Minute,
 			"vagrant",
@@ -109,7 +112,7 @@ func RunHypervVagrantDestroyOnWindows(config alchemy_build.VirtualMachineConfig)
 		}
 	}
 
-	boxInstalled, err := hypervVagrantBoxInstalled(projectDir, settings.BoxName)
+	boxInstalled, err := hypervVagrantBoxInstalledChecker(projectDir, settings.BoxName)
 	if err != nil {
 		return err
 	}
@@ -133,7 +136,7 @@ func RunHypervVagrantStartOnWindows(config alchemy_build.VirtualMachineConfig) e
 		return fmt.Errorf("hyper-v vagrant start is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
 	}
 
-	state, err := inspectHypervVagrantStartTarget(config)
+	state, err := inspectHypervVagrantStartCmdTarget(config)
 	if err != nil {
 		return err
 	}
@@ -150,7 +153,7 @@ func RunHypervVagrantStartOnWindows(config alchemy_build.VirtualMachineConfig) e
 		return err
 	}
 
-	if err := runCommandWithStreamingLogsWithEnv(
+	if err := runHypervVagrantCommandWithEnv(
 		settings.VagrantDir,
 		hypervVagrantUpTimeout,
 		"vagrant",

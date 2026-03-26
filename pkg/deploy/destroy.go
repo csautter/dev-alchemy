@@ -70,12 +70,12 @@ func DestroyTargetExists(config alchemy_build.VirtualMachineConfig) (bool, error
 			return false, err
 		}
 
-		machineExists, err := hypervVagrantMachineExists(settings.VagrantDir, settings.VagrantEnv)
+		machineExists, err := hypervVagrantMachineExistsChecker(settings.VagrantDir, settings.VagrantEnv)
 		if err != nil {
 			return false, err
 		}
 
-		boxInstalled, err := hypervVagrantBoxInstalled(projectDir, settings.BoxName)
+		boxInstalled, err := hypervVagrantBoxInstalledChecker(projectDir, settings.BoxName)
 		if err != nil {
 			return false, err
 		}

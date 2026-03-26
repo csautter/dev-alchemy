@@ -120,10 +120,13 @@ func TestRunHypervVagrantStopOnWindows_TreatsGracefulHaltErrorAsSuccessOnceStopp
 	defer restore()
 
 	commands := make([][]string, 0, 1)
-	runHypervVagrantCommandWithEnv = func(_ string, _ time.Duration, executable string, args []string, _ []string, _ string) error {
+	runHypervVagrantCommandWithEnv = func(_ string, _ time.Duration, executable string, args []string, env []string, _ string) error {
 		if executable != "vagrant" {
 			t.Fatalf("expected vagrant executable, got %q", executable)
 		}
+		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-server-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-server-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-server-packer")
 		commands = append(commands, append([]string(nil), args...))
 		return fmt.Errorf("command failed (vagrant [halt]): exit status 1")
 	}
@@ -166,10 +169,13 @@ func TestRunHypervVagrantStopOnWindows_FallsBackToForcedHalt(t *testing.T) {
 	defer restore()
 
 	commands := make([][]string, 0, 2)
-	runHypervVagrantCommandWithEnv = func(_ string, _ time.Duration, executable string, args []string, _ []string, _ string) error {
+	runHypervVagrantCommandWithEnv = func(_ string, _ time.Duration, executable string, args []string, env []string, _ string) error {
 		if executable != "vagrant" {
 			t.Fatalf("expected vagrant executable, got %q", executable)
 		}
+		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
 		commands = append(commands, append([]string(nil), args...))
 		if len(args) == 1 && args[0] == "halt" {
 			return fmt.Errorf("command failed (vagrant [halt]): exit status 1")
@@ -248,11 +254,143 @@ func TestRunHypervVagrantStopOnWindows_ReturnsErrorWhenVMStillRunningAfterForced
 	}
 }
 
+func TestRunHypervVagrantStartOnWindows_UsesTypeSpecificVagrantEnv(t *testing.T) {
+	restore := stubHypervStopDependencies(t)
+	defer restore()
+
+	inspectHypervVagrantStartCmdTarget = func(alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
+		return StartTargetState{Exists: true, State: "off"}, nil
+	}
+
+	runCalls := 0
+	runHypervVagrantCommandWithEnv = func(workingDir string, _ time.Duration, executable string, args []string, env []string, _ string) error {
+		runCalls++
+		if executable != "vagrant" {
+			t.Fatalf("expected vagrant executable, got %q", executable)
+		}
+		if workingDir == "" {
+			t.Fatal("expected Vagrant working directory to be set")
+		}
+		if len(args) != 3 || args[0] != "up" || args[1] != "--provider" || args[2] != "hyperv" {
+			t.Fatalf("unexpected args: %v", args)
+		}
+		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
+		return nil
+	}
+
+	err := RunHypervVagrantStartOnWindows(alchemy_build.VirtualMachineConfig{
+		OS:                   "ubuntu",
+		UbuntuType:           "desktop",
+		Arch:                 "amd64",
+		HostOs:               alchemy_build.HostOsWindows,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+	})
+	if err != nil {
+		t.Fatalf("expected start to succeed, got %v", err)
+	}
+	if runCalls != 1 {
+		t.Fatalf("expected one vagrant up call, got %d", runCalls)
+	}
+}
+
+func TestRunHypervVagrantDestroyOnWindows_UsesTypeSpecificVagrantEnv(t *testing.T) {
+	restore := stubHypervStopDependencies(t)
+	defer restore()
+
+	hypervVagrantMachineExistsChecker = func(workingDir string, env []string) (bool, error) {
+		if workingDir == "" {
+			t.Fatal("expected Vagrant working directory to be set")
+		}
+		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
+		return true, nil
+	}
+	hypervVagrantBoxInstalledChecker = func(projectDir string, boxName string) (bool, error) {
+		if projectDir == "" {
+			t.Fatal("expected project dir to be set")
+		}
+		if boxName != "linux-ubuntu-desktop-packer" {
+			t.Fatalf("expected desktop box name, got %q", boxName)
+		}
+		return false, nil
+	}
+
+	runCalls := 0
+	runHypervVagrantCommandWithEnv = func(workingDir string, _ time.Duration, executable string, args []string, env []string, _ string) error {
+		runCalls++
+		if executable != "vagrant" {
+			t.Fatalf("expected vagrant executable, got %q", executable)
+		}
+		if workingDir == "" {
+			t.Fatal("expected Vagrant working directory to be set")
+		}
+		if len(args) != 2 || args[0] != "destroy" || args[1] != "-f" {
+			t.Fatalf("unexpected args: %v", args)
+		}
+		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
+		return nil
+	}
+
+	err := RunHypervVagrantDestroyOnWindows(alchemy_build.VirtualMachineConfig{
+		OS:                   "ubuntu",
+		UbuntuType:           "desktop",
+		Arch:                 "amd64",
+		HostOs:               alchemy_build.HostOsWindows,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+	})
+	if err != nil {
+		t.Fatalf("expected destroy to succeed, got %v", err)
+	}
+	if runCalls != 1 {
+		t.Fatalf("expected one vagrant destroy call, got %d", runCalls)
+	}
+}
+
+func TestDestroyTargetExists_UsesTypeSpecificVagrantEnv(t *testing.T) {
+	restore := stubHypervStopDependencies(t)
+	defer restore()
+
+	hypervVagrantMachineExistsChecker = func(workingDir string, env []string) (bool, error) {
+		if workingDir == "" {
+			t.Fatal("expected Vagrant working directory to be set")
+		}
+		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
+		return false, nil
+	}
+	hypervVagrantBoxInstalledChecker = func(_ string, boxName string) (bool, error) {
+		return boxName == "linux-ubuntu-desktop-packer", nil
+	}
+
+	exists, err := DestroyTargetExists(alchemy_build.VirtualMachineConfig{
+		OS:                   "ubuntu",
+		UbuntuType:           "desktop",
+		Arch:                 "amd64",
+		HostOs:               alchemy_build.HostOsWindows,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+	})
+	if err != nil {
+		t.Fatalf("expected destroy target inspection to succeed, got %v", err)
+	}
+	if !exists {
+		t.Fatal("expected desktop destroy target to be reported as existing")
+	}
+}
+
 func stubHypervStopDependencies(t *testing.T) func() {
 	t.Helper()
 
 	originalRun := runHypervVagrantCommandWithEnv
+	originalInspectStart := inspectHypervVagrantStartCmdTarget
 	originalInspect := inspectHypervVagrantStopTarget
+	originalMachineExists := hypervVagrantMachineExistsChecker
+	originalBoxInstalled := hypervVagrantBoxInstalledChecker
 	originalTimeout := hypervVagrantStopSettleTimeout
 	originalPoll := hypervVagrantStopPollInterval
 	dirs := alchemy_build.GetDirectoriesInstance()
@@ -263,7 +401,10 @@ func stubHypervStopDependencies(t *testing.T) func() {
 
 	return func() {
 		runHypervVagrantCommandWithEnv = originalRun
+		inspectHypervVagrantStartCmdTarget = originalInspectStart
 		inspectHypervVagrantStopTarget = originalInspect
+		hypervVagrantMachineExistsChecker = originalMachineExists
+		hypervVagrantBoxInstalledChecker = originalBoxInstalled
 		hypervVagrantStopSettleTimeout = originalTimeout
 		hypervVagrantStopPollInterval = originalPoll
 		dirs.ProjectDir = originalProjectDir
@@ -282,4 +423,16 @@ func TestVagrantBoxListIncludesMatchesExactNameAndProvider(t *testing.T) {
 	if vagrantBoxListIncludes(output, "win11-packer", "virtualbox") {
 		t.Fatal("did not expect provider mismatch to match")
 	}
+}
+
+func assertEnvContainsEntry(t *testing.T, env []string, want string) {
+	t.Helper()
+
+	for _, entry := range env {
+		if entry == want {
+			return
+		}
+	}
+
+	t.Fatalf("expected env to contain %q, got %v", want, env)
 }
