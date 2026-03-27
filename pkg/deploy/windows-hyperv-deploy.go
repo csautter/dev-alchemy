@@ -261,7 +261,7 @@ func waitForHypervVagrantStop(config alchemy_build.VirtualMachineConfig, timeout
 		if !state.Exists || !state.Running {
 			return true, nil
 		}
-		if time.Now().After(deadline) {
+		if !time.Now().Before(deadline) {
 			return false, nil
 		}
 		time.Sleep(hypervVagrantStopPollInterval)
