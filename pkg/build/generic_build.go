@@ -48,6 +48,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	// #nosec G204 -- executable and args are constructed by internal build flows; no shell is invoked.
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
+	cmd.Env = append(os.Environ(), GetDirectoriesInstance().ManagedEnv()...)
 
 	readAndPrintStdoutStderr(cmd, config)
 

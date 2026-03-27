@@ -11,6 +11,7 @@ import time
 import argparse
 import os
 import json
+import sys
 
 MICROSOFT_WIN11_ISO_URL = "https://www.microsoft.com/en-US/software-download/windows11"
 MICROSOFT_WIN11_ARM_ISO_URL = (
@@ -33,6 +34,39 @@ USER_AGENTS = [
     # Safari on Mac
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
 ]
+
+
+def resolve_app_data_dir() -> str:
+    override = os.environ.get("DEV_ALCHEMY_APP_DATA_DIR")
+    if override:
+        return os.path.abspath(override)
+
+    if sys.platform == "darwin":
+        return os.path.join(
+            os.path.expanduser("~"),
+            "Library",
+            "Application Support",
+            "dev-alchemy",
+        )
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        if base:
+            return os.path.join(base, "dev-alchemy")
+        return os.path.join(
+            os.path.expanduser("~"), "AppData", "Local", "dev-alchemy"
+        )
+
+    base = os.environ.get("XDG_DATA_HOME")
+    if base:
+        return os.path.join(base, "dev-alchemy")
+    return os.path.join(os.path.expanduser("~"), ".local", "share", "dev-alchemy")
+
+
+def resolve_cache_dir() -> str:
+    override = os.environ.get("DEV_ALCHEMY_CACHE_DIR")
+    if override:
+        return os.path.abspath(override)
+    return os.path.join(resolve_app_data_dir(), "cache")
 
 
 async def random_mouse_movements(page, min_seconds=5, max_seconds=15):
@@ -195,7 +229,7 @@ async def fetch_win11_iso_link(
 
         # Write link to file for use in packer build
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        output_dir = os.path.join(script_dir, "../../cache/windows/")
+        output_dir = os.path.join(resolve_cache_dir(), "windows")
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(
             output_dir, "win11_arm64_iso_url.txt" if arm else "win11_amd64_iso_url.txt"

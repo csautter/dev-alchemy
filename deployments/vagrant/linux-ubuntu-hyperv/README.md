@@ -8,6 +8,14 @@ This guide covers the Windows-host workflow for Ubuntu Hyper-V with the Go wrapp
 
 All commands are intended for PowerShell on a Windows host.
 
+Managed Dev Alchemy paths on Windows default to:
+
+- App data root: `%LOCALAPPDATA%\dev-alchemy`
+- Build cache: `%LOCALAPPDATA%\dev-alchemy\cache`
+- Vagrant state: `%LOCALAPPDATA%\dev-alchemy\.vagrant`
+
+Set `DEV_ALCHEMY_APP_DATA_DIR` if you want to override the default root.
+
 ## Prerequisites
 
 - Run the dependency installer from repository root in an elevated PowerShell session:
@@ -35,8 +43,8 @@ go run cmd/main.go build ubuntu --type desktop --arch amd64
 
 Expected artifacts:
 
-- `cache/ubuntu/hyperv-ubuntu-server-amd64.box`
-- `cache/ubuntu/hyperv-ubuntu-desktop-amd64.box`
+- `%LOCALAPPDATA%\dev-alchemy\cache\ubuntu\hyperv-ubuntu-server-amd64.box`
+- `%LOCALAPPDATA%\dev-alchemy\cache\ubuntu\hyperv-ubuntu-desktop-amd64.box`
 
 ## Create/Start the VM
 
@@ -102,10 +110,14 @@ $env:CYGWIN_TERMINAL_PATH = "C:\tools\cygwin\bin\mintty.exe"
 If you want to run Vagrant directly:
 
 ```powershell
+$AppDataDir = if ($env:DEV_ALCHEMY_APP_DATA_DIR) { $env:DEV_ALCHEMY_APP_DATA_DIR } else { Join-Path $env:LOCALAPPDATA "dev-alchemy" }
+$CacheDir = Join-Path $AppDataDir "cache"
+$VagrantRoot = Join-Path $AppDataDir ".vagrant"
 $type = "server" # or "desktop"
 $env:VAGRANT_BOX_NAME = "linux-ubuntu-$type-packer"
 $env:VAGRANT_VM_NAME = "linux-ubuntu-$type-packer"
-vagrant box add $env:VAGRANT_BOX_NAME ".\cache\ubuntu\hyperv-ubuntu-$type-amd64.box" --provider hyperv --force
+$env:VAGRANT_DOTFILE_PATH = Join-Path $VagrantRoot $env:VAGRANT_VM_NAME
+vagrant box add $env:VAGRANT_BOX_NAME (Join-Path $CacheDir "ubuntu\hyperv-ubuntu-$type-amd64.box") --provider hyperv --force
 cd deployments\vagrant\linux-ubuntu-hyperv
 vagrant up --provider hyperv
 cd ..\..\..
@@ -114,9 +126,13 @@ cd ..\..\..
 ## Destroy and Cleanup
 
 ```powershell
+$AppDataDir = if ($env:DEV_ALCHEMY_APP_DATA_DIR) { $env:DEV_ALCHEMY_APP_DATA_DIR } else { Join-Path $env:LOCALAPPDATA "dev-alchemy" }
+$VagrantRoot = Join-Path $AppDataDir ".vagrant"
+$env:VAGRANT_DOTFILE_PATH = Join-Path $VagrantRoot "linux-ubuntu-server-packer"
 cd deployments\vagrant\linux-ubuntu-hyperv
 vagrant destroy -f
 vagrant box remove linux-ubuntu-server-packer --provider hyperv
+$env:VAGRANT_DOTFILE_PATH = Join-Path $VagrantRoot "linux-ubuntu-desktop-packer"
 vagrant box remove linux-ubuntu-desktop-packer --provider hyperv
 cd ..\..\..
 ```

@@ -92,7 +92,7 @@ func TestGetWindows11DownloadAmd64(t *testing.T) {
 	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
 		t.Skip("skipping integration test; set RUN_INTEGRATION_TESTS=1 to run")
 	}
-	_, err := getWindows11Download("amd64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/windows11/iso/win11_25h2_english_amd64.iso"), false)
+	_, err := getWindows11Download("amd64", GetDirectoriesInstance().CachePath("windows11", "iso", "win11_25h2_english_amd64.iso"), false)
 	if err != nil {
 		t.Fatalf("Failed to get Windows 11 download: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestGetWindows11DownloadArm64(t *testing.T) {
 	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
 		t.Skip("skipping integration test; set RUN_INTEGRATION_TESTS=1 to run")
 	}
-	_, err := getWindows11Download("arm64", filepath.Join(GetDirectoriesInstance().ProjectDir, "./cache/windows11/iso/win11_25h2_english_arm64.iso"), false)
+	_, err := getWindows11Download("arm64", GetDirectoriesInstance().CachePath("windows11", "iso", "win11_25h2_english_arm64.iso"), false)
 	if err != nil {
 		t.Fatalf("Failed to get Windows 11 download: %v", err)
 	}

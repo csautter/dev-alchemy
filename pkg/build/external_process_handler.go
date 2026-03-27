@@ -16,6 +16,7 @@ import (
 type RunProcessConfig struct {
 	ExecutablePath     string
 	Args               []string
+	Env                []string
 	WorkingDir         string
 	Timeout            time.Duration
 	DelayBeforeStart   time.Duration
@@ -61,6 +62,9 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 	// #nosec G204 -- callers pass explicit executables and argv slices; no shell parsing occurs here.
 	cmd := exec.CommandContext(ctx, config.ExecutablePath, config.Args...)
 	cmd.Dir = config.WorkingDir
+	if len(config.Env) > 0 {
+		cmd.Env = append(os.Environ(), config.Env...)
+	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

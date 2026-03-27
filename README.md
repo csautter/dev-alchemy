@@ -94,6 +94,22 @@ To force a VM rebuild even when the cached build artifact already exists, use:
 go run cmd/main.go build windows11 --arch amd64 --no-cache
 ```
 
+#### Managed application data
+
+VM build and deployment state is now stored outside the repository in an OS-appropriate app-data directory:
+
+- macOS: `~/Library/Application Support/dev-alchemy`
+- Windows: `%LOCALAPPDATA%\dev-alchemy`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/dev-alchemy`
+
+Under that root, Dev Alchemy manages:
+
+- `cache/` for downloaded files and build artifacts
+- `.vagrant/` for isolated Vagrant state
+- `packer_cache/` for Packer plugin/download cache
+
+You can override the default location by setting `DEV_ALCHEMY_APP_DATA_DIR`. Dev Alchemy also exports `DEV_ALCHEMY_CACHE_DIR`, `DEV_ALCHEMY_VAGRANT_DIR`, and `DEV_ALCHEMY_PACKER_CACHE_DIR` for helper scripts and manual workflows.
+
 
 
 ##### Enable ansible remote access on Windows
@@ -343,7 +359,7 @@ go run cmd/main.go install
 
 You will need a Windows .iso file to use as the installation media for your virtual machine. You can download a Windows 10 or Windows Server .iso file from the Microsoft website.
 
-Or use script to download a Windows 11 .iso file: [download_win_11.ps1](./scripts/windows/download_win_11.ps1)
+Or use script to download a Windows 11 `.iso` file: [download_win_11.ps1](./scripts/windows/download_win_11.ps1). By default it stores the ISO under the managed cache directory described above.
 
 ##### Build a Windows VM
 

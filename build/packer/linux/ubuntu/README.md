@@ -25,19 +25,25 @@ Both Hyper-V variants use cloud-init apt offline mode (`fallback: offline-instal
 Manual Packer usage:
 
 ```powershell
+$AppDataDir = if ($env:DEV_ALCHEMY_APP_DATA_DIR) { $env:DEV_ALCHEMY_APP_DATA_DIR } else { Join-Path $env:LOCALAPPDATA "dev-alchemy" }
+$CacheDir = Join-Path $AppDataDir "cache"
+$env:DEV_ALCHEMY_CACHE_DIR = $CacheDir
+$env:DEV_ALCHEMY_PACKER_CACHE_DIR = Join-Path $AppDataDir "packer_cache"
+$isoPath = Join-Path $CacheDir "linux\ubuntu-24.04.3-live-server-amd64.iso"
+
 packer init build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
 
 # server
-packer build -var "ubuntu_type=server" -var "iso_url=./cache/linux/ubuntu-24.04.3-live-server-amd64.iso" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
+packer build -var "cache_dir=$CacheDir" -var "ubuntu_type=server" -var "iso_url=$isoPath" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
 
 # desktop
-packer build -var "ubuntu_type=desktop" -var "iso_url=./cache/linux/ubuntu-24.04.3-live-server-amd64.iso" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
+packer build -var "cache_dir=$CacheDir" -var "ubuntu_type=desktop" -var "iso_url=$isoPath" build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl
 ```
 
 Output boxes:
 
-- `cache/ubuntu/hyperv-ubuntu-server-amd64.box`
-- `cache/ubuntu/hyperv-ubuntu-desktop-amd64.box`
+- `%LOCALAPPDATA%\dev-alchemy\cache\ubuntu\hyperv-ubuntu-server-amd64.box`
+- `%LOCALAPPDATA%\dev-alchemy\cache\ubuntu\hyperv-ubuntu-desktop-amd64.box`
 
 ## Build Ubuntu on macOS Hosts (UTM/QEMU)
 
@@ -54,6 +60,7 @@ go run cmd/main.go build ubuntu --type desktop --arch $arch
 Manual script usage:
 
 ```bash
+export DEV_ALCHEMY_APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
 build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch amd64 --ubuntu-type server
 build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
 ```

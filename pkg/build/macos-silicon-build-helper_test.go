@@ -19,9 +19,14 @@ import (
 func TestMacOsDownloadArm64Uefi(t *testing.T) {
 	requireIntegrationTests(t)
 	t.Parallel()
+	appDataDir := t.TempDir()
+	cacheDir := filepath.Join(appDataDir, "cache")
+	t.Setenv(devAlchemyAppDataEnvVar, appDataDir)
+	t.Setenv(devAlchemyCacheEnvVar, cacheDir)
+	t.Setenv(devAlchemyPackerCacheEnvVar, filepath.Join(appDataDir, "packer_cache"))
 
 	// Remove files matching cache/qemu-efi*
-	matches, err := filepath.Glob("../../cache/qemu-efi*")
+	matches, err := filepath.Glob(filepath.Join(cacheDir, "qemu-efi*"))
 	if err != nil {
 		t.Fatalf("Failed to glob ../../cache/qemu-efi*: %v", err)
 	}
@@ -32,7 +37,7 @@ func TestMacOsDownloadArm64Uefi(t *testing.T) {
 	}
 
 	// Remove folders matching cache/qemu-uefi
-	matches, err = filepath.Glob("../../cache/qemu-uefi")
+	matches, err = filepath.Glob(filepath.Join(cacheDir, "qemu-uefi"))
 	if err != nil {
 		t.Fatalf("Failed to glob ../../cache/qemu-uefi: %v", err)
 	}
@@ -54,11 +59,11 @@ func TestMacOsDownloadArm64Uefi(t *testing.T) {
 		t.Fatalf("Failed to run %s: %v", scriptPath, err)
 	}
 
-	if _, err := os.Stat("../../cache/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"); err != nil {
+	if _, err := os.Stat(filepath.Join(cacheDir, "qemu-uefi", "usr", "share", "qemu-efi-aarch64", "QEMU_EFI.fd")); err != nil {
 		if os.IsNotExist(err) {
-			t.Fatalf("Expected file ../../cache/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd to exist, but it does not")
+			t.Fatalf("Expected qemu-uefi firmware file to exist in %s, but it does not", cacheDir)
 		} else {
-			t.Fatalf("Failed to stat ../../cache/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd: %v", err)
+			t.Fatalf("Failed to stat qemu-uefi firmware file in %s: %v", cacheDir, err)
 		}
 	}
 }

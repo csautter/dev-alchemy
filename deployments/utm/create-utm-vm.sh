@@ -50,7 +50,8 @@ project_root=$(
 	pwd
 )
 
-cache_dir="$project_root/cache"
+app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
 
 utm_vm_dir="/Users/$(whoami)/Library/Containers/com.utmapp.UTM/Data/Documents"
 

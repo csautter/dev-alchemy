@@ -1,7 +1,6 @@
 package deploy
 
 import (
-	"path"
 	"path/filepath"
 	"testing"
 
@@ -11,9 +10,16 @@ import (
 func TestResolveHypervVagrantExecutionSettings_UsesUbuntuTypeSpecificMetadata(t *testing.T) {
 	dirs := alchemy_build.GetDirectoriesInstance()
 	originalProjectDir := dirs.ProjectDir
+	originalAppDataDir := dirs.AppDataDir
+	originalVagrantDir := dirs.VagrantDir
+	appDataDir := t.TempDir()
 	dirs.ProjectDir = t.TempDir()
+	dirs.AppDataDir = appDataDir
+	dirs.VagrantDir = filepath.Join(appDataDir, ".vagrant")
 	t.Cleanup(func() {
 		dirs.ProjectDir = originalProjectDir
+		dirs.AppDataDir = originalAppDataDir
+		dirs.VagrantDir = originalVagrantDir
 	})
 
 	settings, err := ResolveHypervVagrantExecutionSettings(alchemy_build.VirtualMachineConfig{
@@ -32,7 +38,7 @@ func TestResolveHypervVagrantExecutionSettings_UsesUbuntuTypeSpecificMetadata(t 
 
 	assertEnvContains(t, settings.VagrantEnv, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
 	assertEnvContains(t, settings.VagrantEnv, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
-	assertEnvContains(t, settings.VagrantEnv, "VAGRANT_DOTFILE_PATH="+path.Join(".vagrant", "linux-ubuntu-desktop-packer"))
+	assertEnvContains(t, settings.VagrantEnv, "VAGRANT_DOTFILE_PATH="+filepath.Join(dirs.VagrantDir, "linux-ubuntu-desktop-packer"))
 }
 
 func assertEnvContains(t *testing.T, env []string, want string) {

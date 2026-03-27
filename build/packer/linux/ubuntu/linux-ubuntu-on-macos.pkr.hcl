@@ -64,10 +64,20 @@ variable "memory" {
   description = "Memory in MB to allocate to the VM"
 }
 
+variable "cache_dir" {
+  type        = string
+  default     = env("DEV_ALCHEMY_CACHE_DIR")
+  description = "Managed cache directory outside the repository."
+  validation {
+    condition     = var.cache_dir != ""
+    error_message = "cache_dir must be set, typically via DEV_ALCHEMY_CACHE_DIR."
+  }
+}
+
 locals {
   iso_url             = var.iso_url
   ubuntu_iso_checksum = var.arch == "amd64" ? "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b" : "none"
-  cache_directory     = "${path.root}/../../../../cache"
+  cache_directory     = var.cache_dir
   boot_command = {
     "amd64" = [
       "e<wait2>",
@@ -100,7 +110,7 @@ locals {
       ["-accel", var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"],
       ["-machine", "virt,highmem=on"],
       ["-cpu", var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"],
-      ["-bios", "${path.root}/../../../../cache/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
+      ["-bios", "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
       ["-device", "ramfb"],
       ["-smp", "cpus=${var.cpus},cores=${var.cpus},sockets=1,threads=1"],
       ["-global", "PIIX4_PM.disable_s3=1"],

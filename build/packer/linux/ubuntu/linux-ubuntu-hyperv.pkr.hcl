@@ -44,6 +44,16 @@ variable "switch_name" {
   default = "Default Switch"
 }
 
+variable "cache_dir" {
+  type        = string
+  default     = env("DEV_ALCHEMY_CACHE_DIR")
+  description = "Managed cache directory outside the repository."
+  validation {
+    condition     = var.cache_dir != ""
+    error_message = "cache_dir must be set, typically via DEV_ALCHEMY_CACHE_DIR."
+  }
+}
+
 locals {
   default_ubuntu_iso_url = "https://releases.ubuntu.com/${var.ubuntu_version}/ubuntu-${var.ubuntu_version}-live-server-amd64.iso"
   effective_iso_url      = var.iso_url != "" ? var.iso_url : local.default_ubuntu_iso_url
@@ -55,8 +65,8 @@ locals {
     "<wait2>",
     "<f10><wait>",
   ]
-  output_directory = "${path.root}/../../../../cache/linux/hyperv-ubuntu-${var.ubuntu_type}-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  box_output       = "${path.root}/../../../../cache/ubuntu/hyperv-ubuntu-${var.ubuntu_type}-amd64.box"
+  output_directory = "${var.cache_dir}/linux/hyperv-ubuntu-${var.ubuntu_type}-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  box_output       = "${var.cache_dir}/ubuntu/hyperv-ubuntu-${var.ubuntu_type}-amd64.box"
 }
 
 source "hyperv-iso" "ubuntu" {

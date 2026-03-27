@@ -1,7 +1,6 @@
 package deploy
 
 import (
-	"path"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -11,6 +10,7 @@ import (
 
 func TestResolveHypervVagrantDeploySettings_UbuntuIncludesConfigResources(t *testing.T) {
 	projectDir := t.TempDir()
+	vagrantDir := setDeploySettingsTestVagrantRoot(t)
 	config := alchemy_build.VirtualMachineConfig{
 		OS:         "ubuntu",
 		UbuntuType: "server",
@@ -40,7 +40,7 @@ func TestResolveHypervVagrantDeploySettings_UbuntuIncludesConfigResources(t *tes
 	if env[hypervVagrantVMNameEnvVar] != "linux-ubuntu-server-packer" {
 		t.Fatalf("expected %s env var to match box name, got %q", hypervVagrantVMNameEnvVar, env[hypervVagrantVMNameEnvVar])
 	}
-	expectedDotfilePath := path.Join(".vagrant", "linux-ubuntu-server-packer")
+	expectedDotfilePath := filepath.Join(vagrantDir, "linux-ubuntu-server-packer")
 	if env[hypervVagrantDotfileEnvVar] != expectedDotfilePath {
 		t.Fatalf("expected %s env var to match isolated state path, got %q", hypervVagrantDotfileEnvVar, env[hypervVagrantDotfileEnvVar])
 	}
@@ -59,6 +59,7 @@ func TestResolveHypervVagrantDeploySettings_UbuntuIncludesConfigResources(t *tes
 
 func TestResolveHypervVagrantDeploySettings_WindowsIncludesConfigResources(t *testing.T) {
 	projectDir := t.TempDir()
+	vagrantDir := setDeploySettingsTestVagrantRoot(t)
 	config := alchemy_build.VirtualMachineConfig{
 		OS:       "windows11",
 		Arch:     "amd64",
@@ -87,7 +88,7 @@ func TestResolveHypervVagrantDeploySettings_WindowsIncludesConfigResources(t *te
 	if env[hypervVagrantVMNameEnvVar] != windowsHypervVagrantBoxName {
 		t.Fatalf("expected %s env var to match windows vm name, got %q", hypervVagrantVMNameEnvVar, env[hypervVagrantVMNameEnvVar])
 	}
-	expectedDotfilePath := path.Join(".vagrant", windowsHypervVagrantBoxName)
+	expectedDotfilePath := filepath.Join(vagrantDir, windowsHypervVagrantBoxName)
 	if env[hypervVagrantDotfileEnvVar] != expectedDotfilePath {
 		t.Fatalf("expected %s env var to match isolated state path, got %q", hypervVagrantDotfileEnvVar, env[hypervVagrantDotfileEnvVar])
 	}
@@ -106,6 +107,7 @@ func TestResolveHypervVagrantDeploySettings_WindowsIncludesConfigResources(t *te
 
 func TestResolveHypervVagrantDeploySettings_UbuntuVariantsUseDistinctDotfilePaths(t *testing.T) {
 	projectDir := t.TempDir()
+	_ = setDeploySettingsTestVagrantRoot(t)
 
 	serverSettings, err := resolveHypervVagrantDeploySettings(alchemy_build.VirtualMachineConfig{
 		OS:         "ubuntu",
@@ -143,4 +145,22 @@ func envListToMap(envList []string) map[string]string {
 		}
 	}
 	return env
+}
+
+func setDeploySettingsTestVagrantRoot(t *testing.T) string {
+	t.Helper()
+
+	dirs := alchemy_build.GetDirectoriesInstance()
+	originalAppDataDir := dirs.AppDataDir
+	originalVagrantDir := dirs.VagrantDir
+	appDataDir := t.TempDir()
+	vagrantDir := filepath.Join(appDataDir, ".vagrant")
+	dirs.AppDataDir = appDataDir
+	dirs.VagrantDir = vagrantDir
+	t.Cleanup(func() {
+		dirs.AppDataDir = originalAppDataDir
+		dirs.VagrantDir = originalVagrantDir
+	})
+
+	return vagrantDir
 }
