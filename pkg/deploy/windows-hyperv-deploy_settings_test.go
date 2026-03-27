@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"path"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -39,7 +40,7 @@ func TestResolveHypervVagrantDeploySettings_UbuntuIncludesConfigResources(t *tes
 	if env[hypervVagrantVMNameEnvVar] != "linux-ubuntu-server-packer" {
 		t.Fatalf("expected %s env var to match box name, got %q", hypervVagrantVMNameEnvVar, env[hypervVagrantVMNameEnvVar])
 	}
-	expectedDotfilePath := filepath.Join(".vagrant", "linux-ubuntu-server-packer")
+	expectedDotfilePath := path.Join(".vagrant", "linux-ubuntu-server-packer")
 	if env[hypervVagrantDotfileEnvVar] != expectedDotfilePath {
 		t.Fatalf("expected %s env var to match isolated state path, got %q", hypervVagrantDotfileEnvVar, env[hypervVagrantDotfileEnvVar])
 	}
@@ -86,7 +87,7 @@ func TestResolveHypervVagrantDeploySettings_WindowsIncludesConfigResources(t *te
 	if env[hypervVagrantVMNameEnvVar] != windowsHypervVagrantBoxName {
 		t.Fatalf("expected %s env var to match windows vm name, got %q", hypervVagrantVMNameEnvVar, env[hypervVagrantVMNameEnvVar])
 	}
-	expectedDotfilePath := filepath.Join(".vagrant", windowsHypervVagrantBoxName)
+	expectedDotfilePath := path.Join(".vagrant", windowsHypervVagrantBoxName)
 	if env[hypervVagrantDotfileEnvVar] != expectedDotfilePath {
 		t.Fatalf("expected %s env var to match isolated state path, got %q", hypervVagrantDotfileEnvVar, env[hypervVagrantDotfileEnvVar])
 	}

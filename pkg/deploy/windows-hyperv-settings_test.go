@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -31,7 +32,7 @@ func TestResolveHypervVagrantExecutionSettings_UsesUbuntuTypeSpecificMetadata(t 
 
 	assertEnvContains(t, settings.VagrantEnv, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
 	assertEnvContains(t, settings.VagrantEnv, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
-	assertEnvContains(t, settings.VagrantEnv, "VAGRANT_DOTFILE_PATH="+filepath.Join(".vagrant", "linux-ubuntu-desktop-packer"))
+	assertEnvContains(t, settings.VagrantEnv, "VAGRANT_DOTFILE_PATH="+path.Join(".vagrant", "linux-ubuntu-desktop-packer"))
 }
 
 func assertEnvContains(t *testing.T, env []string, want string) {

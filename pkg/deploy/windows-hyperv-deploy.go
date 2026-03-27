@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -323,7 +324,7 @@ func ResolveHypervVagrantExecutionSettings(config alchemy_build.VirtualMachineCo
 }
 
 func hypervVagrantDotfilePath(vmName string) string {
-	return filepath.Join(".vagrant", vmName)
+	return path.Join(".vagrant", vmName)
 }
 
 func buildHypervVagrantResourceEnv(config alchemy_build.VirtualMachineConfig) []string {
