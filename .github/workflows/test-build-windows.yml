@@ -167,6 +167,34 @@ jobs:
         run: |
           go test -timeout 60m -v ./pkg/deploy -run "^TestRunHypervVagrantDeployOnWindows_Smoke$"
 
+      - name: Collect HyperV diagnostics
+        if: always()
+        shell: powershell
+        run: |
+          $artifactDir = Join-Path $env:GITHUB_WORKSPACE "artifact\hyperv-diagnostics"
+          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+
+          $paths = @(
+            (Join-Path $env:GITHUB_WORKSPACE ".dev-alchemy\cache\windows\hyperv-diagnostics"),
+            "C:\ProgramData\dev-alchemy\logs\runner-setup.log",
+            "C:\execution.log"
+          )
+
+          foreach ($path in $paths) {
+            if (Test-Path $path) {
+              Copy-Item -Path $path -Destination $artifactDir -Recurse -Force
+            }
+          }
+
+      - name: Upload HyperV diagnostics artifact (always)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: hyperv-diagnostics-TestBuildHypervWindows11Amd64OnWindows
+          path: artifact/hyperv-diagnostics/**
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Azure Login (OIDC)
         uses: azure/login@v3
         with:
