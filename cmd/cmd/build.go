@@ -50,6 +50,82 @@ func availableBuildVirtualMachines() []alchemy_build.VirtualMachineConfig {
 	return supported
 }
 
+func displayBuildEngines(vms []alchemy_build.VirtualMachineConfig) string {
+	engines := alchemy_build.VirtualizationEnginesForVirtualMachineConfigs(vms)
+	engineNames := make([]string, 0, len(engines))
+	for _, engine := range engines {
+		engineNames = append(engineNames, alchemy_build.DisplayVirtualizationEngine(engine))
+	}
+	return strings.Join(engineNames, ", ")
+}
+
+func filterBuildVirtualMachinesByEngine(vms []alchemy_build.VirtualMachineConfig, engine string) ([]alchemy_build.VirtualMachineConfig, error) {
+	if engine == "" {
+		return vms, nil
+	}
+
+	requestedEngine := alchemy_build.VirtualizationEngine(strings.ToLower(engine))
+	var filtered []alchemy_build.VirtualMachineConfig
+	for _, vm := range vms {
+		if vm.VirtualizationEngine == requestedEngine {
+			filtered = append(filtered, vm)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf(
+			"invalid virtualization engine %q for host OS %s; supported engines: %s",
+			engine,
+			alchemy_build.GetCurrentHostOs(),
+			displayBuildEngines(vms),
+		)
+	}
+
+	return filtered, nil
+}
+
+func resolveBuildVirtualMachine(vms []alchemy_build.VirtualMachineConfig, osName string, osType string, arch string, engine string) (alchemy_build.VirtualMachineConfig, error) {
+	var matches []alchemy_build.VirtualMachineConfig
+	for _, vm := range vms {
+		if vm.OS == osName && vm.UbuntuType == osType && vm.Arch == arch {
+			matches = append(matches, vm)
+		}
+	}
+
+	if len(matches) == 0 {
+		return alchemy_build.VirtualMachineConfig{}, fmt.Errorf("invalid combination: OS=%s, Type=%s, Arch=%s", osName, osType, arch)
+	}
+
+	if engine == "" {
+		if len(matches) > 1 {
+			return alchemy_build.VirtualMachineConfig{}, fmt.Errorf(
+				"multiple build targets match OS=%s, Type=%s, Arch=%s; specify --engine (%s)",
+				osName,
+				osType,
+				arch,
+				displayBuildEngines(matches),
+			)
+		}
+		return matches[0], nil
+	}
+
+	requestedEngine := alchemy_build.VirtualizationEngine(strings.ToLower(engine))
+	for _, vm := range matches {
+		if vm.VirtualizationEngine == requestedEngine {
+			return vm, nil
+		}
+	}
+
+	return alchemy_build.VirtualMachineConfig{}, fmt.Errorf(
+		"invalid virtualization engine %q for OS=%s, Type=%s, Arch=%s; available engines: %s",
+		engine,
+		osName,
+		osType,
+		arch,
+		displayBuildEngines(matches),
+	)
+}
+
 // runParallelBuilds launches up to parallelism concurrent builds for the provided VMs.
 // A failing build does NOT stop the remaining ones — all errors are collected and returned.
 // When ctx is cancelled (e.g. on SIGINT) no new goroutines are started; already-running
@@ -69,7 +145,7 @@ func runParallelBuilds(ctx context.Context, vms []alchemy_build.VirtualMachineCo
 			// acquired a slot, proceed
 		case <-ctx.Done():
 			mu.Lock()
-			errs = append(errs, fmt.Errorf("build cancelled before starting %s/%s/%s: %w", vm.OS, vm.UbuntuType, vm.Arch, ctx.Err()))
+			errs = append(errs, fmt.Errorf("build cancelled before starting %s/%s/%s/%s: %w", vm.OS, vm.UbuntuType, vm.Arch, vm.VirtualizationEngine, ctx.Err()))
 			mu.Unlock()
 			continue
 		}
@@ -79,14 +155,14 @@ func runParallelBuilds(ctx context.Context, vms []alchemy_build.VirtualMachineCo
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			fmt.Printf("➡️ Building VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
+			fmt.Printf("➡️ Building VM for OS: %s, Type: %s, Architecture: %s, Engine: %s\n", vm.OS, vm.UbuntuType, vm.Arch, alchemy_build.DisplayVirtualizationEngine(vm.VirtualizationEngine))
 			if err := runner(ctx, vm); err != nil {
 				mu.Lock()
-				errs = append(errs, fmt.Errorf("%s/%s/%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err))
+				errs = append(errs, fmt.Errorf("%s/%s/%s/%s: %w", vm.OS, vm.UbuntuType, vm.Arch, vm.VirtualizationEngine, err))
 				mu.Unlock()
-				fmt.Printf("❌ Build failed for OS: %s, Type: %s, Architecture: %s — %v\n", vm.OS, vm.UbuntuType, vm.Arch, err)
+				fmt.Printf("❌ Build failed for OS: %s, Type: %s, Architecture: %s, Engine: %s — %v\n", vm.OS, vm.UbuntuType, vm.Arch, alchemy_build.DisplayVirtualizationEngine(vm.VirtualizationEngine), err)
 			} else {
-				fmt.Printf("✅ Build succeeded for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
+				fmt.Printf("✅ Build succeeded for OS: %s, Type: %s, Architecture: %s, Engine: %s\n", vm.OS, vm.UbuntuType, vm.Arch, alchemy_build.DisplayVirtualizationEngine(vm.VirtualizationEngine))
 			}
 		}(vm)
 	}
@@ -134,10 +210,11 @@ func runBuild(vm alchemy_build.VirtualMachineConfig) error {
 }
 
 var (
-	arch     string
-	parallel int
-	headless bool
-	noCache  bool
+	arch        string
+	parallel    int
+	headless    bool
+	noCache     bool
+	buildEngine string
 )
 
 func printAvailableBuildCombinations() error {
@@ -158,11 +235,7 @@ func printAvailableBuildCombinations() error {
 	}
 
 	if len(engines) > 1 {
-		engineNames := make([]string, 0, len(engines))
-		for _, engine := range engines {
-			engineNames = append(engineNames, string(engine))
-		}
-		fmt.Printf("\nCurrent host supports multiple virtualization engines: %s\n", strings.Join(engineNames, ", "))
+		fmt.Printf("\nCurrent host supports multiple virtualization engines: %s\n", displayBuildEngines(vms))
 	}
 
 	return nil
@@ -179,6 +252,8 @@ Use "all" to build all available VM configurations.
 Example:
   alchemy build ubuntu --type server --arch amd64
   alchemy build windows11 --arch arm64
+  alchemy build windows11 --arch amd64 --engine hyperv
+  alchemy build windows11 --arch amd64 --engine virtualbox
   alchemy build all
   alchemy build all --parallel 4
 `,
@@ -191,8 +266,12 @@ Example:
 		}
 
 		if osName == "all" {
+			available_virtual_machines, err := filterBuildVirtualMachinesByEngine(availableBuildVirtualMachines(), buildEngine)
+			if err != nil {
+				fmt.Printf("❌ %v\n", err)
+				return
+			}
 			fmt.Printf("🔧 Building all available VM configurations with %d parallel builds\n", parallel)
-			available_virtual_machines := availableBuildVirtualMachines()
 			for i := range available_virtual_machines {
 				available_virtual_machines[i].NoCache = noCache
 			}
@@ -233,21 +312,13 @@ Example:
 			return
 		}
 
-		fmt.Printf("🔧 Building VM for OS: %s, Type: %s, Architecture: %s\n", osName, osType, arch)
 		available_virtual_machines := availableBuildVirtualMachines()
-		var VirtualMachineConfig alchemy_build.VirtualMachineConfig
-		valid := false
-		for _, vm := range available_virtual_machines {
-			if vm.OS == osName && vm.UbuntuType == osType && vm.Arch == arch {
-				valid = true
-				VirtualMachineConfig = vm
-				break
-			}
-		}
-		if !valid {
-			fmt.Printf("❌ Invalid combination: OS=%s, Type=%s, Arch=%s\n", osName, osType, arch)
+		VirtualMachineConfig, err := resolveBuildVirtualMachine(available_virtual_machines, osName, osType, arch, buildEngine)
+		if err != nil {
+			fmt.Printf("❌ %v\n", err)
 			return
 		}
+		fmt.Printf("🔧 Building VM for OS: %s, Type: %s, Architecture: %s, Engine: %s\n", osName, osType, arch, alchemy_build.DisplayVirtualizationEngine(VirtualMachineConfig.VirtualizationEngine))
 
 		// #nosec G404 -- this random value only spreads local VNC port selection and is not security-sensitive.
 		port := 5900 + (rand.Intn(100) + 1)
@@ -277,6 +348,7 @@ func init() {
 
 	buildCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	buildCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
+	buildCmd.Flags().StringVar(&buildEngine, "engine", "", "Virtualization engine to use when multiple build targets share the same OS/type/arch (e.g., hyperv, virtualbox)")
 	buildCmd.Flags().IntVarP(&parallel, "parallel", "p", 1, "Number of parallel builds to run when building all VMs")
 	buildCmd.Flags().BoolVar(&headless, "headless", false, "Run QEMU in headless mode (no GUI, VNC only)")
 	buildCmd.Flags().BoolVar(&noCache, "no-cache", false, "Force a rebuild even when the build artifact already exists")

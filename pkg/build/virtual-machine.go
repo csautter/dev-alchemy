@@ -173,6 +173,8 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsWindows,
 			VirtualizationEngine: VirtualizationEngineVirtualBox,
+			Cpus:                 4,
+			MemoryMB:             8192,
 		},
 	}
 }
@@ -234,6 +236,22 @@ func VirtualizationEnginesForVirtualMachineConfigs(configs []VirtualMachineConfi
 		return engines[i] < engines[j]
 	})
 	return engines
+}
+
+func IsVirtualizationEngineUnstable(engine VirtualizationEngine) bool {
+	switch engine {
+	case VirtualizationEngineVirtualBox:
+		return true
+	default:
+		return false
+	}
+}
+
+func DisplayVirtualizationEngine(engine VirtualizationEngine) string {
+	if IsVirtualizationEngineUnstable(engine) {
+		return string(engine) + " (unstable)"
+	}
+	return string(engine)
 }
 
 func GenerateVirtualMachineSlug(config *VirtualMachineConfig) string {

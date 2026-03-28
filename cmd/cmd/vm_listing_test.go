@@ -50,7 +50,7 @@ func TestPrintVirtualMachineCombinationTableGroupsBySortedEngine(t *testing.T) {
 	}
 
 	hypervIndex := strings.Index(output, "Virtualization engine: hyperv")
-	virtualboxIndex := strings.Index(output, "Virtualization engine: virtualbox")
+	virtualboxIndex := strings.Index(output, "Virtualization engine: virtualbox (unstable)")
 	if hypervIndex == -1 || virtualboxIndex == -1 {
 		t.Fatalf("expected both virtualization engines in output, got %q", output)
 	}
