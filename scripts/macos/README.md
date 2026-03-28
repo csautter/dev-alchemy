@@ -42,8 +42,12 @@ Additionally, the script saves the download link to the managed cache directory:
 
 - macOS default: `~/Library/Application Support/dev-alchemy/cache/windows/win11_amd64_iso_url.txt`
 - macOS default: `~/Library/Application Support/dev-alchemy/cache/windows/win11_arm64_iso_url.txt`
+- Session cookies: `~/Library/Application Support/dev-alchemy/cache/windows/playwright/cookies.json`
+- Failure diagnostics: `~/Library/Application Support/dev-alchemy/cache/windows/playwright-diagnostics/`
 
 Set `DEV_ALCHEMY_APP_DATA_DIR` to move the managed cache elsewhere.
+
+If Microsoft serves a slow, blocked, or challenge page, the script now retries the initial navigation and writes a screenshot, HTML snapshot, and JSON metadata bundle under `playwright-diagnostics/` before failing.
 
 ### Download the ISO
 You can use `curl` or `wget` to download the ISO using the link saved in the file:

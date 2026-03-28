@@ -148,6 +148,15 @@ jobs:
             find ./.dev-alchemy/cache -name '*.vnc.mp4' -exec cp {} artifact/ \;
           fi
 
+      - name: Upload Playwright diagnostics artifact (always)
+        if: always() && contains(matrix.runs_on, 'macos')
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-diagnostics-${{ matrix.vm_os }}-${{ matrix.go_test_name }}
+          path: ./.dev-alchemy/cache/windows/playwright-diagnostics/**
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload packer-qemu-${{ matrix.vm_os }}-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
         if: contains(matrix.runs_on, 'macos')
         uses: actions/upload-artifact@v7

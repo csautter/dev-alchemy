@@ -2,16 +2,19 @@
 Fetches the latest Windows 11 ISO download link from Microsoft's official download page using Playwright.
 """
 
-import asyncio
-from playwright.async_api import async_playwright
-
-from playwright_stealth import Stealth
-import random
-import time
 import argparse
-import os
+import asyncio
 import json
+import os
+import random
 import sys
+import time
+from datetime import datetime, timezone
+
+from playwright.async_api import Error as PlaywrightError
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import async_playwright
+from playwright_stealth import Stealth
 
 MICROSOFT_WIN11_ISO_URL = "https://www.microsoft.com/en-US/software-download/windows11"
 MICROSOFT_WIN11_ARM_ISO_URL = (
@@ -34,6 +37,21 @@ USER_AGENTS = [
     # Safari on Mac
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
 ]
+
+DEFAULT_NAVIGATION_TIMEOUT_MS = 90000
+DEFAULT_PAGE_READY_TIMEOUT_MS = 60000
+DEFAULT_NAVIGATION_RETRIES = 3
+EXPECTED_PAGE_SELECTOR = "#product-edition"
+CHALLENGE_MARKERS = (
+    "verify you are human",
+    "unusual traffic",
+    "access denied",
+    "temporarily unavailable",
+    "captcha",
+    "blocked",
+    "bot",
+    "challenge",
+)
 
 
 def resolve_app_data_dir() -> str:
@@ -67,6 +85,100 @@ def resolve_cache_dir() -> str:
     if override:
         return os.path.abspath(override)
     return os.path.join(resolve_app_data_dir(), "cache")
+
+
+def resolve_windows_cache_dir(*parts: str) -> str:
+    return os.path.join(resolve_cache_dir(), "windows", *parts)
+
+
+def resolve_cookie_path() -> str:
+    return resolve_windows_cache_dir("playwright", "cookies.json")
+
+
+def resolve_diagnostics_root() -> str:
+    return resolve_windows_cache_dir("playwright-diagnostics")
+
+
+def utc_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def ensure_parent_dir(path: str) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+
+def detect_challenge_markers(text: str) -> list[str]:
+    lowered = text.lower()
+    return [marker for marker in CHALLENGE_MARKERS if marker in lowered]
+
+
+async def gather_page_state(page) -> dict:
+    metadata = {
+        "current_url": "",
+        "title": "",
+        "ready_state": "",
+        "challenge_markers": [],
+    }
+    body_text = ""
+
+    try:
+        metadata["current_url"] = page.url
+    except Exception:
+        pass
+
+    try:
+        metadata["title"] = await page.title()
+    except Exception:
+        pass
+
+    try:
+        metadata["ready_state"] = await page.evaluate("() => document.readyState")
+    except Exception:
+        pass
+
+    try:
+        body_text = await page.locator("body").inner_text(timeout=5000)
+    except Exception:
+        pass
+
+    combined_text = "\n".join(
+        value
+        for value in (metadata["title"], metadata["current_url"], body_text)
+        if value
+    )
+    metadata["challenge_markers"] = detect_challenge_markers(combined_text)
+    return metadata
+
+
+async def write_failure_artifacts(page, diagnostics_dir: str, label: str) -> dict:
+    os.makedirs(diagnostics_dir, exist_ok=True)
+
+    metadata = await gather_page_state(page)
+    metadata_path = os.path.join(diagnostics_dir, f"{label}.json")
+    html_path = os.path.join(diagnostics_dir, f"{label}.html")
+    screenshot_path = os.path.join(diagnostics_dir, f"{label}.png")
+
+    try:
+        ensure_parent_dir(metadata_path)
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2, sort_keys=True)
+    except Exception as exc:
+        print(f"[WARN] Failed to write metadata artifact {metadata_path}: {exc}")
+
+    try:
+        html = await page.content()
+        ensure_parent_dir(html_path)
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html)
+    except Exception as exc:
+        print(f"[WARN] Failed to write HTML artifact {html_path}: {exc}")
+
+    try:
+        await page.screenshot(path=screenshot_path, full_page=True)
+    except Exception as exc:
+        print(f"[WARN] Failed to write screenshot artifact {screenshot_path}: {exc}")
+
+    return metadata
 
 
 async def random_mouse_movements(page, min_seconds=5, max_seconds=15):
@@ -104,7 +216,8 @@ async def dismiss_modal_if_present(page):
 
 
 async def click_button_with_retry(page, selector, selector_condition, retries=10):
-    for _ in range(retries):
+    last_error = None
+    for attempt in range(1, retries + 1):
         try:
             await page.wait_for_selector(selector, timeout=60000)
             button = page.locator(selector)
@@ -113,13 +226,16 @@ async def click_button_with_retry(page, selector, selector_condition, retries=10
 
             else:
                 print(f"{selector} button is not visible.")
-        except Exception:
-            pass
+        except Exception as exc:
+            last_error = exc
+            print(
+                f"[WARN] Attempt {attempt}/{retries} failed while clicking {selector}: {exc}"
+            )
 
         try:
-            await page.wait_for_selector(selector_condition)
-        except Exception:
-            pass
+            await page.wait_for_selector(selector_condition, timeout=30000)
+        except Exception as exc:
+            last_error = exc
 
         expected = page.locator(selector_condition)
         if expected and await expected.is_visible(timeout=30000):
@@ -127,7 +243,9 @@ async def click_button_with_retry(page, selector, selector_condition, retries=10
         else:
             await dismiss_modal_if_present(page)
 
-    return False
+    raise RuntimeError(
+        f"Failed to advance from {selector} to {selector_condition} after {retries} attempts."
+    ) from last_error
 
 
 async def select_option_by_text(page, selector, text_match):
@@ -141,6 +259,67 @@ async def select_option_by_text(page, selector, text_match):
     return None
 
 
+async def navigate_to_download_page(
+    page,
+    url: str,
+    diagnostics_dir: str,
+    navigation_timeout_ms: int,
+    page_ready_timeout_ms: int,
+    retries: int,
+):
+    last_error = None
+    last_metadata = None
+
+    for attempt in range(1, retries + 1):
+        print(
+            f"[INFO] Navigating to {url} (attempt {attempt}/{retries}, timeout={navigation_timeout_ms}ms)"
+        )
+        try:
+            response = await page.goto(
+                url,
+                timeout=navigation_timeout_ms,
+                wait_until="domcontentloaded",
+            )
+            if response is not None:
+                print(
+                    f"[INFO] Navigation response: status={response.status} url={response.url}"
+                )
+
+            await page.wait_for_selector(
+                EXPECTED_PAGE_SELECTOR, timeout=page_ready_timeout_ms
+            )
+            return
+        except (PlaywrightTimeoutError, PlaywrightError) as exc:
+            last_error = exc
+            print(f"[WARN] Navigation attempt {attempt}/{retries} failed: {exc}")
+            last_metadata = await write_failure_artifacts(
+                page, diagnostics_dir, f"initial-navigation-attempt-{attempt}"
+            )
+            if last_metadata.get("challenge_markers"):
+                print(
+                    "[WARN] Page looks like a challenge/blocked response. "
+                    f"Detected markers: {', '.join(last_metadata['challenge_markers'])}"
+                )
+
+            if attempt < retries:
+                sleep_seconds = min(20.0, (2**attempt) + random.uniform(0.5, 1.5))
+                print(f"[INFO] Retrying navigation after {sleep_seconds:.1f}s")
+                await asyncio.sleep(sleep_seconds)
+
+    challenge_hint = ""
+    if last_metadata and last_metadata.get("challenge_markers"):
+        challenge_hint = (
+            " Possible anti-bot or blocked-page markers were detected: "
+            + ", ".join(last_metadata["challenge_markers"])
+            + "."
+        )
+
+    raise RuntimeError(
+        "Could not load the Microsoft Windows 11 download page after "
+        f"{retries} attempts. Diagnostics were written to {diagnostics_dir}.{challenge_hint}"
+    ) from last_error
+
+
 async def fetch_win11_iso_link(
     arm: bool = False,
     headless: bool = False,
@@ -148,7 +327,10 @@ async def fetch_win11_iso_link(
     save_path: str = "",
 ):
     async with Stealth().use_async(async_playwright()) as p:
-        browser = await p.chromium.launch(headless=headless)
+        browser = await p.chromium.launch(
+            headless=headless,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
 
         # Randomly select viewport size
         width = random.randint(800, 1920)
@@ -159,13 +341,16 @@ async def fetch_win11_iso_link(
 
         context = await browser.new_context(
             locale="en-US",
-            timezone_id="EST",
+            timezone_id="America/New_York",
             user_agent=user_agent,
             viewport={"width": width, "height": height},
         )
+        context.set_default_timeout(DEFAULT_PAGE_READY_TIMEOUT_MS)
+        context.set_default_navigation_timeout(DEFAULT_NAVIGATION_TIMEOUT_MS)
         # Load cookies from a previous session
+        cookie_path = resolve_cookie_path()
         try:
-            with open("cookies.json", "r") as f:
+            with open(cookie_path, "r", encoding="utf-8") as f:
                 saved_cookies = json.load(f)
             await context.add_cookies(saved_cookies)
         except (FileNotFoundError, json.JSONDecodeError):
@@ -182,75 +367,100 @@ async def fetch_win11_iso_link(
         page = await context.new_page()
 
         url = MICROSOFT_WIN11_ARM_ISO_URL if arm else MICROSOFT_WIN11_ISO_URL
-        await page.goto(url)
+        diagnostics_dir = os.path.join(
+            resolve_diagnostics_root(),
+            f"{'arm64' if arm else 'amd64'}-{utc_timestamp()}",
+        )
 
-        await random_mouse_movements(page)
-
-        # Accept cookies if prompted
         try:
-            await page.click('button:has-text("Accept")', timeout=3000)
+            await navigate_to_download_page(
+                page=page,
+                url=url,
+                diagnostics_dir=diagnostics_dir,
+                navigation_timeout_ms=DEFAULT_NAVIGATION_TIMEOUT_MS,
+                page_ready_timeout_ms=DEFAULT_PAGE_READY_TIMEOUT_MS,
+                retries=DEFAULT_NAVIGATION_RETRIES,
+            )
+
+            await random_mouse_movements(page)
+
+            # Accept cookies if prompted
+            try:
+                await page.click('button:has-text("Accept")', timeout=3000)
+            except Exception:
+                pass
+
+            await random_mouse_movements(page)
+
+            # Select 'Windows 11 (multi-edition ISO)' from the dropdown
+            selected_product = await select_option_by_text(
+                page, "#product-edition", "Windows 11"
+            )
+            if selected_product is None:
+                raise RuntimeError(
+                    "Could not find a Windows 11 product option on the Microsoft download page."
+                )
+
+            expect_creation_of_selector = "#product-languages"
+            await click_button_with_retry(
+                page, "#submit-product-edition", expect_creation_of_selector
+            )
+
+            await random_mouse_movements(page)
+
+            # Select English (United States)
+            lang_value = await select_option_by_text(
+                page, "#product-languages", "English (United States)"
+            )
+            if lang_value is None:
+                raise RuntimeError(
+                    "Could not find 'English (United States)' language option."
+                )
+
+            await random_mouse_movements(page)
+
+            # expected selector
+            download_selector = "#download-links > div > div > a:first-child"
+            await click_button_with_retry(page, "#submit-sku", download_selector)
+
+            await random_mouse_movements(page)
+
+            await page.wait_for_selector(download_selector, timeout=60000)
+            download_button = page.locator(download_selector)
+            link = await download_button.get_attribute("href")
+            if not link:
+                raise RuntimeError("Could not retrieve the download link.")
+
+            print(f"Windows 11 ISO download link: {link}")
+
+            # Write link to file for use in packer build
+            output_dir = resolve_windows_cache_dir()
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(
+                output_dir,
+                "win11_arm64_iso_url.txt" if arm else "win11_amd64_iso_url.txt",
+            )
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(link)
+
+            if download:
+                print("Starting ISO download...")
+                async with page.expect_download() as download_info:
+                    await page.goto(link, wait_until="commit")
+                download_obj = await download_info.value
+                await download_obj.save_as(save_path)
+                print(f"ISO saved to {save_path}")
+
+            # Save current session cookies for future use
+            current_cookies = await context.cookies()
+            ensure_parent_dir(cookie_path)
+            with open(cookie_path, "w", encoding="utf-8") as f:
+                json.dump(current_cookies, f)
         except Exception:
-            pass
-
-        await random_mouse_movements(page)
-
-        # Select 'Windows 11 (multi-edition ISO)' from the dropdown
-        await select_option_by_text(page, "#product-edition", "Windows 11")
-
-        expect_creation_of_selector = "#product-languages"
-        await click_button_with_retry(
-            page, "#submit-product-edition", expect_creation_of_selector
-        )
-
-        await random_mouse_movements(page)
-
-        # Select English (United States)
-        lang_value = await select_option_by_text(
-            page, "#product-languages", "English (United States)"
-        )
-        if lang_value is None:
-            raise Exception("Could not find 'English (United States)' language option.")
-
-        await random_mouse_movements(page)
-
-        # expected selector
-        download_selector = "#download-links > div > div > a:first-child"
-        await click_button_with_retry(page, "#submit-sku", download_selector)
-
-        await random_mouse_movements(page)
-
-        await page.wait_for_selector(download_selector, timeout=60000)
-        download_button = page.locator(download_selector)
-        link = await download_button.get_attribute("href")
-        if not link:
-            raise Exception("Could not retrieve the download link.")
-
-        print(f"Windows 11 ISO download link: {link}")
-
-        # Write link to file for use in packer build
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        output_dir = os.path.join(resolve_cache_dir(), "windows")
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(
-            output_dir, "win11_arm64_iso_url.txt" if arm else "win11_amd64_iso_url.txt"
-        )
-        with open(output_path, "w") as f:
-            f.write(link)
-
-        if download:
-            print("Starting ISO download...")
-            async with page.expect_download() as download_info:
-                await page.goto(link)
-            download_obj = await download_info.value
-            await download_obj.save_as(save_path)
-            print(f"ISO saved to {save_path}")
-
-        # Save current session cookies for future use
-        current_cookies = await context.cookies()
-        with open("cookies.json", "w") as f:
-            json.dump(current_cookies, f)
-
-        await browser.close()
+            await write_failure_artifacts(page, diagnostics_dir, "fatal-error")
+            raise
+        finally:
+            await browser.close()
 
 
 if __name__ == "__main__":
