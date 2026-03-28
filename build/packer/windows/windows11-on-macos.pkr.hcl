@@ -55,6 +55,12 @@ variable "cache_dir" {
   }
 }
 
+variable "build_output_dir" {
+  type        = string
+  default     = ""
+  description = "Optional short-lived Packer output directory to avoid long UNIX socket paths on macOS."
+}
+
 variable "is_ci" {
   type    = bool
   default = env("CI") == "true"
@@ -116,7 +122,7 @@ source "qemu" "win11" {
   headless         = var.headless
   iso_url          = local.win11_iso
   iso_checksum     = "none"
-  output_directory = "${local.cache_directory}/windows11/qemu-out-windows11-${var.arch}"
+  output_directory = var.build_output_dir != "" ? var.build_output_dir : "${local.cache_directory}/windows11/qemu-out-windows11-${var.arch}"
   display          = var.headless ? "none" : "cocoa"
   memory           = var.memory
   cores            = var.cpus

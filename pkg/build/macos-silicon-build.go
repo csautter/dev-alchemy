@@ -127,6 +127,18 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 	if len(inputPattern) > 4 && inputPattern[len(inputPattern)-4:] == ".jpg" {
 		inputPattern = inputPattern[:len(inputPattern)-4] + "%05d.jpg"
 	}
+	framePattern := recording_config.OutputFile
+	if len(framePattern) > 4 && framePattern[len(framePattern)-4:] == ".jpg" {
+		framePattern = framePattern[:len(framePattern)-4] + "*.jpg"
+	}
+	frames, err := filepath.Glob(framePattern)
+	if err != nil {
+		log.Fatalf("Failed to glob VNC snapshot frames: %v", err)
+	}
+	if len(frames) == 0 {
+		log.Printf("Skipping ffmpeg video generation because no VNC snapshot frames were captured.")
+		return ctx
+	}
 
 	config := RunProcessConfig{
 		ExecutablePath: "ffmpeg",
@@ -177,10 +189,7 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 	}
 
 	// remove the snapshot images after video generation
-	removePattern := recording_config.OutputFile
-	if len(removePattern) > 4 && removePattern[len(removePattern)-4:] == ".jpg" {
-		removePattern = removePattern[:len(removePattern)-4] + "*.jpg"
-	}
+	removePattern := framePattern
 
 	log.Printf("Removing vncsnapshot images with pattern: %s", removePattern)
 
@@ -200,7 +209,16 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 
 func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) error {
 	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh")
-	args := []string{scriptPath, "--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--ubuntu-type", config.UbuntuType, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--cpus", getVmCpuCountString(config), "--memory", fmt.Sprintf("%d", getVmMemoryMB(config))}
+	args := []string{
+		scriptPath,
+		"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir,
+		"--build-output-dir", getDarwinQemuBuildOutputDir(config),
+		"--arch", config.Arch,
+		"--ubuntu-type", config.UbuntuType,
+		"--vnc-port", fmt.Sprintf("%d", config.VncPort),
+		"--cpus", getVmCpuCountString(config),
+		"--memory", fmt.Sprintf("%d", getVmMemoryMB(config)),
+	}
 	if config.Headless {
 		args = append(args, "--headless")
 	}
@@ -209,7 +227,15 @@ func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) error {
 
 func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) error {
 	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/windows/windows11-on-macos.sh")
-	args := []string{scriptPath, "--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir, "--arch", config.Arch, "--vnc-port", fmt.Sprintf("%d", config.VncPort), "--cpus", getVmCpuCountString(config), "--memory", fmt.Sprintf("%d", getVmMemoryMB(config))}
+	args := []string{
+		scriptPath,
+		"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir,
+		"--build-output-dir", getDarwinQemuBuildOutputDir(config),
+		"--arch", config.Arch,
+		"--vnc-port", fmt.Sprintf("%d", config.VncPort),
+		"--cpus", getVmCpuCountString(config),
+		"--memory", fmt.Sprintf("%d", getVmMemoryMB(config)),
+	}
 	if config.Headless {
 		args = append(args, "--headless")
 	}

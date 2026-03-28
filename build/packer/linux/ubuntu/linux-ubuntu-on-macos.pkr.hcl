@@ -74,6 +74,12 @@ variable "cache_dir" {
   }
 }
 
+variable "build_output_dir" {
+  type        = string
+  default     = ""
+  description = "Optional short-lived Packer output directory to avoid long UNIX socket paths on macOS."
+}
+
 locals {
   iso_url             = var.iso_url
   ubuntu_iso_checksum = var.arch == "amd64" ? "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b" : "none"
@@ -132,7 +138,7 @@ locals {
     ]
   }
   left_list        = join("", [for i in range(0, 16) : "<left>"])
-  output_directory = "${local.cache_directory}/ubuntu/qemu-out-ubuntu-${var.ubuntu_type}-${var.arch}"
+  output_directory = var.build_output_dir != "" ? var.build_output_dir : "${local.cache_directory}/ubuntu/qemu-out-ubuntu-${var.ubuntu_type}-${var.arch}"
 }
 
 source "qemu" "ubuntu" {

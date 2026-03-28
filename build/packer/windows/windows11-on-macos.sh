@@ -9,6 +9,7 @@ vnc_port="5901"
 cpus="4"
 memory="4096"
 verbose="false"
+build_output_dir=""
 
 script_dir=$(
 	# shellcheck disable=SC2164
@@ -41,6 +42,15 @@ while [[ $# -gt 0 ]]; do
 			shift 2
 		else
 			echo "Invalid value for --vnc-port: $2. It must be a number." >&2
+			exit 1
+		fi
+		;;
+	--build-output-dir)
+		if [[ -n "$2" ]]; then
+			build_output_dir="$2"
+			shift 2
+		else
+			echo "Invalid value for --build-output-dir: $2." >&2
 			exit 1
 		fi
 		;;
@@ -86,6 +96,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	esac
 done
+
+if [[ -z "$build_output_dir" ]]; then
+	build_output_dir="/tmp/dev-alchemy/qemu-out-windows11-${arch}"
+fi
 
 echo "Using architecture: $arch"
 echo "Headless mode: $headless"
@@ -166,16 +180,17 @@ elif [ "$arch" = "arm64" ]; then
 fi
 
 # remove packer output directory if it exists
-output_dir="${cache_dir}/windows11/qemu-out-windows11-${arch}"
+output_dir="${build_output_dir}"
 if [ -d "$output_dir" ]; then
 	echo "Removing existing Packer output directory..."
 	rm -rf "$output_dir"
 fi
+mkdir -p "$(dirname "$output_dir")"
 
 if [ "$verbose" = "true" ]; then
 	export PACKER_LOG=1
 fi
-packer build -var "cache_dir=${cache_dir}" -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" -var "cpus=$cpus" -var "memory=$memory" "build/packer/windows/windows11-on-macos.pkr.hcl"
+packer build -var "cache_dir=${cache_dir}" -var "build_output_dir=${build_output_dir}" -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" -var "cpus=$cpus" -var "memory=$memory" "build/packer/windows/windows11-on-macos.pkr.hcl"
 packer_exit_code=$?
 
 exit $packer_exit_code

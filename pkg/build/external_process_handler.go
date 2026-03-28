@@ -146,6 +146,9 @@ func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
 			case sig := <-sigs:
 				log.Printf("Retry loop for process %s interrupted by signal: %v", config.ExecutablePath, sig)
 				return cancelledContext()
+			case <-config.InterruptRetryChan:
+				log.Printf("Received interrupt signal while waiting to retry process %s", config.ExecutablePath)
+				return cancelledContext()
 			case <-time.After(config.RetryInterval):
 			}
 		}
@@ -156,6 +159,14 @@ func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
 			log.Printf("Retry loop for process %s interrupted by signal before attempt %d: %v", config.ExecutablePath, attempt, sig)
 			return cancelledContext()
 		default:
+		}
+		if config.InterruptRetryChan != nil {
+			select {
+			case <-config.InterruptRetryChan:
+				log.Printf("Received interrupt signal before starting process %s attempt %d", config.ExecutablePath, attempt)
+				return cancelledContext()
+			default:
+			}
 		}
 
 		ctx, err := RunExternalProcess(config)
