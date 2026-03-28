@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -131,6 +132,9 @@ func TestEnsureDirectoriesExist_CreatesPrivateDirectories(t *testing.T) {
 	}
 	if !info.IsDir() {
 		t.Fatalf("expected %q to be a directory", target)
+	}
+	if runtime.GOOS == "windows" {
+		return
 	}
 	if got := info.Mode().Perm(); got != managedDirPermission {
 		t.Fatalf("expected permissions %o, got %o", managedDirPermission, got)
