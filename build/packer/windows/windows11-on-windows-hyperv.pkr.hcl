@@ -40,7 +40,7 @@ variable "cache_dir" {
   description = "Managed cache directory outside the repository."
   validation {
     condition     = var.cache_dir != ""
-    error_message = "cache_dir must be set, typically via DEV_ALCHEMY_CACHE_DIR."
+    error_message = "The cache_dir variable must be set, typically via DEV_ALCHEMY_CACHE_DIR."
   }
 }
 
