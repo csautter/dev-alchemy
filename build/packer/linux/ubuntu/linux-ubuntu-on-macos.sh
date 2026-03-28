@@ -11,6 +11,7 @@ vnc_port="5901"
 cpus="4"
 memory="4096"
 verbose="false"
+build_output_dir=""
 
 script_dir=$(
 	# shellcheck disable=SC2164
@@ -22,6 +23,9 @@ project_root=$(
 	cd "${script_dir}/../../../.."
 	pwd -P
 )
+app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
+packer_cache_dir="${DEV_ALCHEMY_PACKER_CACHE_DIR:-$app_data_dir/packer_cache}"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -83,6 +87,15 @@ while [[ $# -gt 0 ]]; do
 			exit 1
 		fi
 		;;
+	--build-output-dir)
+		if [[ -n "$2" ]]; then
+			build_output_dir="$2"
+			shift 2
+		else
+			echo "Invalid value for --build-output-dir: $2." >&2
+			exit 1
+		fi
+		;;
 	--verbose)
 		set -x
 		verbose="true"
@@ -95,7 +108,15 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-cache_dir="$project_root/cache"
+if [[ -z "$build_output_dir" ]]; then
+	build_output_dir="/tmp/dev-alchemy/qemu-out-ubuntu-${ubuntu_type}-${arch}"
+fi
+
+mkdir -p "$cache_dir" "$packer_cache_dir"
+export DEV_ALCHEMY_APP_DATA_DIR="$app_data_dir"
+export DEV_ALCHEMY_CACHE_DIR="$cache_dir"
+export DEV_ALCHEMY_PACKER_CACHE_DIR="$packer_cache_dir"
+export PACKER_CACHE_DIR="$packer_cache_dir"
 
 # Download uefi-firmware if it doesn't exist
 if [ "$arch" = "arm64" ]; then
@@ -103,9 +124,9 @@ if [ "$arch" = "arm64" ]; then
 fi
 
 # Download the Ubuntu ISO if it doesn't exist
-iso_path="$project_root/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"
+iso_path="$cache_dir/linux/ubuntu-24.04.3-live-server-amd64.iso"
 if [ "$arch" = "arm64" ]; then
-	iso_path="$project_root/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"
+	iso_path="$cache_dir/linux/ubuntu-24.04.3-live-server-arm64.iso"
 	iso_url="https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso"
 	iso_checksum="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
 	mkdir -p "$(dirname "$iso_path")"
@@ -148,15 +169,16 @@ if [ "$arch" = "arm64" ]; then
 fi
 
 # remove packer output directory if it exists
-output_dir="$cache_dir/ubuntu/qemu-out-ubuntu-${ubuntu_type}-${arch}"
+output_dir="$build_output_dir"
 if [ -d "$output_dir" ]; then
 	echo "Removing existing Packer output directory..."
 	rm -rf "$output_dir"
 fi
+mkdir -p "$(dirname "$output_dir")"
 
 packer init "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
 
 if [ "$verbose" = "true" ]; then
 	export PACKER_LOG=1
 fi
-packer build -var "iso_url=$iso_path" -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" -var "cpus=$cpus" -var "memory=$memory" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
+packer build -var "cache_dir=$cache_dir" -var "build_output_dir=$build_output_dir" -var "iso_url=$iso_path" -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" -var "cpus=$cpus" -var "memory=$memory" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"

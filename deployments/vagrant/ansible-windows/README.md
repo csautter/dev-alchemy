@@ -3,6 +3,14 @@
 This guide will help you set up and run Ansible playbooks on a Windows VM using Vagrant with Hyper-V as the provider.
 All commands are meant to be run in a powershell terminal on a Windows host machine.
 
+Managed Dev Alchemy paths on Windows default to:
+
+- App data root: `%LOCALAPPDATA%\dev-alchemy`
+- Build cache: `%LOCALAPPDATA%\dev-alchemy\cache`
+- Vagrant state: `%LOCALAPPDATA%\dev-alchemy\.vagrant`
+
+Set `DEV_ALCHEMY_APP_DATA_DIR` if you want to override the default root.
+
 ## Prerequisites
 
 Run the dependency installer from repository root in an elevated PowerShell session:
@@ -22,7 +30,7 @@ Ensure you have the following installed:
 ## Adding the Vagrant Box
 
 Load the Vagrant box and start the VM using Hyper-V as the provider.
-The box artifact is expected at `.\cache\windows11\hyperv-windows11-amd64.box`.
+The box artifact is expected at `%LOCALAPPDATA%\dev-alchemy\cache\windows11\hyperv-windows11-amd64.box`.
 
 Set `VAGRANT_HYPERV_SWITCH` to avoid Hyper-V bridge selection prompts during `vagrant up`:
 
@@ -32,8 +40,12 @@ $env:VAGRANT_HYPERV_SWITCH = "Default Switch"
 
 Then add the box and boot the VM:
 
-```bash
-vagrant box add win11-packer .\cache\windows11\hyperv-windows11-amd64.box --provider hyperv
+```powershell
+$AppDataDir = if ($env:DEV_ALCHEMY_APP_DATA_DIR) { $env:DEV_ALCHEMY_APP_DATA_DIR } else { Join-Path $env:LOCALAPPDATA "dev-alchemy" }
+$CacheDir = Join-Path $AppDataDir "cache"
+$VagrantRoot = Join-Path $AppDataDir ".vagrant"
+$env:VAGRANT_DOTFILE_PATH = Join-Path $VagrantRoot "win11-packer"
+vagrant box add win11-packer (Join-Path $CacheDir "windows11\hyperv-windows11-amd64.box") --provider hyperv
 vagrant up --provider hyperv
 ```
 
@@ -46,7 +58,7 @@ After the VM is up, you can connect to it using Hyper-V Manager or via RDP. The 
 
 The provisioning wrapper discovers the VM IP automatically, but you can inspect it manually:
 
-```bash
+```powershell
 vagrant winrm -c "ipconfig"
 ```
 
@@ -93,7 +105,7 @@ If `CYGWIN_TERMINAL_PATH` points to `mintty.exe`, provisioning resolves it to th
 
 After installing host dependencies, run provisioning from the repository root. The wrapper resolves IP address via `vagrant winrm -c ipconfig` and runs `ansible-playbook` through Cygwin.
 
-```bash
+```powershell
 go run cmd/main.go provision windows11 --arch amd64 --check
 go run cmd/main.go provision windows11 --arch amd64
 ```
@@ -102,7 +114,7 @@ go run cmd/main.go provision windows11 --arch amd64
 
 When you are done, you can destroy the Vagrant box and remove the box from your system:
 
-```bash
+```powershell
 vagrant destroy
 vagrant box remove win11-packer --provider hyperv
 ```

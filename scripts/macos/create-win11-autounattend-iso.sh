@@ -7,8 +7,13 @@ SCRIPT_DIR=$(
 	pwd
 )
 
-vendor_dir="$SCRIPT_DIR/../../cache/windows"
-iso_dir="$SCRIPT_DIR/../../cache/windows11/iso"
+app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
+export DEV_ALCHEMY_APP_DATA_DIR="$app_data_dir"
+export DEV_ALCHEMY_CACHE_DIR="$cache_dir"
+
+vendor_dir="$cache_dir/windows"
+iso_dir="$cache_dir/windows11/iso"
 autounattend_xml_path="$SCRIPT_DIR/../../build/packer/windows/qemu-arm64/autounattend.xml"
 windows_source_iso_path="$iso_dir/win11_25h2_english_arm64.iso"
 windows_target_iso_path="$iso_dir/Win11_ARM64_Unattended.iso"

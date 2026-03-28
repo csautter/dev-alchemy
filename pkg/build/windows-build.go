@@ -8,7 +8,6 @@ import (
 
 const (
 	packerExecutable     = "packer"
-	windows11ISOPath     = "./cache/windows11/iso/win11_25h2_english_amd64.iso"
 	hypervPackerFile     = "build/packer/windows/windows11-on-windows-hyperv.pkr.hcl"
 	virtualBoxPackerFile = "build/packer/windows/windows11-on-windows-virtualbox.pkr.hcl"
 )
@@ -90,7 +89,8 @@ func buildPackerArgs(config VirtualMachineConfig, packerFile string) []string {
 
 	// Add ISO URL, CPU count, memory, and Packer file
 	args = append(args,
-		"-var", fmt.Sprintf("iso_url=%s", windows11ISOPath),
+		"-var", fmt.Sprintf("iso_url=%s", GetDirectoriesInstance().CachePath("windows11", "iso", "win11_25h2_english_amd64.iso")),
+		"-var", fmt.Sprintf("cache_dir=%s", GetDirectoriesInstance().CacheDir),
 		"-var", fmt.Sprintf("cpus=%s", getVmCpuCountString(config)),
 		"-var", fmt.Sprintf("memory=%d", getVmMemoryMB(config)),
 		packerFile,

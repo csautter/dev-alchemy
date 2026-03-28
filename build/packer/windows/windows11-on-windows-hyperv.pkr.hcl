@@ -14,7 +14,7 @@ packer {
 
 variable "iso_url" {
   type    = string
-  default = "../../../cache/windows11/iso/Win11_25H2_English_x64.iso"
+  default = ""
 }
 
 variable "cpus" {
@@ -34,13 +34,23 @@ variable "temp_disk_path" {
   description = "Path to use for temporary files and VM storage (e.g., D:\\ for Azure local temp disk)"
 }
 
+variable "cache_dir" {
+  type        = string
+  default     = env("DEV_ALCHEMY_CACHE_DIR")
+  description = "Managed cache directory outside the repository."
+  validation {
+    condition     = var.cache_dir != ""
+    error_message = "The cache_dir variable must be set, typically via DEV_ALCHEMY_CACHE_DIR."
+  }
+}
+
 locals {
-  temp_dir = var.temp_disk_path != "" ? var.temp_disk_path : "${path.root}/../../../cache/windows11/hyperv-temp"
+  temp_dir = var.temp_disk_path != "" ? var.temp_disk_path : "${var.cache_dir}/windows11/hyperv-temp"
 }
 
 source "hyperv-iso" "win11" {
   vm_name          = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory = "${path.root}/../../../cache/windows11/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  output_directory = "${var.cache_dir}/windows11/hyperv-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   temp_path        = local.temp_dir
 
   iso_url      = var.iso_url
@@ -86,7 +96,7 @@ build {
   sources = ["source.hyperv-iso.win11"]
 
   post-processor "vagrant" {
-    output              = "${path.root}/../../../cache/windows11/hyperv-windows11-amd64.box"
+    output              = "${var.cache_dir}/windows11/hyperv-windows11-amd64.box"
     keep_input_artifact = false
     provider_override   = "hyperv"
     compression_level   = 1

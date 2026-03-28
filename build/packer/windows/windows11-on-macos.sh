@@ -9,6 +9,7 @@ vnc_port="5901"
 cpus="4"
 memory="4096"
 verbose="false"
+build_output_dir=""
 
 script_dir=$(
 	# shellcheck disable=SC2164
@@ -20,6 +21,9 @@ project_root=$(
 	cd "${script_dir}/../../.."
 	pwd -P
 )
+app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
+packer_cache_dir="${DEV_ALCHEMY_PACKER_CACHE_DIR:-$app_data_dir/packer_cache}"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -38,6 +42,15 @@ while [[ $# -gt 0 ]]; do
 			shift 2
 		else
 			echo "Invalid value for --vnc-port: $2. It must be a number." >&2
+			exit 1
+		fi
+		;;
+	--build-output-dir)
+		if [[ -n "$2" ]]; then
+			build_output_dir="$2"
+			shift 2
+		else
+			echo "Invalid value for --build-output-dir: $2." >&2
 			exit 1
 		fi
 		;;
@@ -84,16 +97,25 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+if [[ -z "$build_output_dir" ]]; then
+	build_output_dir="/tmp/dev-alchemy/qemu-out-windows11-${arch}"
+fi
+
 echo "Using architecture: $arch"
 echo "Headless mode: $headless"
 
 cd "${project_root}" || exit 1
+mkdir -p "$cache_dir" "$packer_cache_dir"
+export DEV_ALCHEMY_APP_DATA_DIR="$app_data_dir"
+export DEV_ALCHEMY_CACHE_DIR="$cache_dir"
+export DEV_ALCHEMY_PACKER_CACHE_DIR="$packer_cache_dir"
+export PACKER_CACHE_DIR="$packer_cache_dir"
 
 # download the Windows 11 ISO if not already present
-if [ ! -d ./cache/windows11/iso ]; then
-	mkdir -p ./cache/windows11/iso
+if [ ! -d "$cache_dir/windows11/iso" ]; then
+	mkdir -p "$cache_dir/windows11/iso"
 fi
-if [ ! -f "./cache/windows11/iso/win11_25H2_english_$arch.iso" ]; then
+if [ ! -f "$cache_dir/windows11/iso/win11_25h2_english_$arch.iso" ]; then
 	echo "Downloading Windows 11 $arch ISO"
 	cd "${project_root}/scripts/macos/" || exit 1
 	if [ ! -d .venv ]; then
@@ -112,15 +134,15 @@ if [ ! -f "./cache/windows11/iso/win11_25H2_english_$arch.iso" ]; then
 	elif [ "$arch" = "arm64" ]; then
 		python playwright_win11_iso.py --arm
 	fi
-	mkdir -p "${project_root}/cache/windows11/iso"
-	cd "${project_root}/cache/windows/" || exit 1
+	mkdir -p "${cache_dir}/windows11/iso"
+	cd "${cache_dir}/windows/" || exit 1
 
 	if [ "$headless" = "true" ]; then
 		echo "Running in headless mode, skipping ISO download progress bar"
-		curl -o "${project_root}/cache/windows11/iso/win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
+		curl -o "${cache_dir}/windows11/iso/win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
 	else
 		echo "Running in interactive mode, showing ISO download progress bar"
-		curl --progress-bar -o "${project_root}/cache/windows11/iso/win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
+		curl --progress-bar -o "${cache_dir}/windows11/iso/win11_25h2_english_$arch.iso" "$(cat "./win11_${arch}_iso_url.txt")"
 	fi
 
 	cd "${project_root}" || exit 1
@@ -151,23 +173,24 @@ packer init "${project_root}/build/packer/windows/windows11-on-macos.pkr.hcl"
 
 # determine the Windows 11 ISO path to use
 if [ "$arch" = "amd64" ]; then
-	win11_iso_path="${project_root}/cache/windows11/iso/win11_25h2_english_$arch.iso"
+	win11_iso_path="${cache_dir}/windows11/iso/win11_25h2_english_$arch.iso"
 elif [ "$arch" = "arm64" ]; then
 	# use the unattended ISO we created earlier
-	win11_iso_path="${project_root}/cache/windows11/iso/Win11_ARM64_Unattended.iso"
+	win11_iso_path="${cache_dir}/windows11/iso/Win11_ARM64_Unattended.iso"
 fi
 
 # remove packer output directory if it exists
-output_dir="${project_root}/cache/windows11/qemu-out-windows11-${arch}"
+output_dir="${build_output_dir}"
 if [ -d "$output_dir" ]; then
 	echo "Removing existing Packer output directory..."
 	rm -rf "$output_dir"
 fi
+mkdir -p "$(dirname "$output_dir")"
 
 if [ "$verbose" = "true" ]; then
 	export PACKER_LOG=1
 fi
-packer build -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" -var "cpus=$cpus" -var "memory=$memory" "build/packer/windows/windows11-on-macos.pkr.hcl"
+packer build -var "cache_dir=${cache_dir}" -var "build_output_dir=${build_output_dir}" -var "iso_url=${win11_iso_path}" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" -var "cpus=$cpus" -var "memory=$memory" "build/packer/windows/windows11-on-macos.pkr.hcl"
 packer_exit_code=$?
 
 exit $packer_exit_code

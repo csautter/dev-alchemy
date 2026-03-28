@@ -2,6 +2,8 @@ name: Test Go Unit Tests
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "cmd/cmd/**"
       - ".github/workflows/test-cmd-unit-tests.yml"

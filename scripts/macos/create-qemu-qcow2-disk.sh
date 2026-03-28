@@ -28,7 +28,10 @@ script_dir=$(
 	pwd
 )
 
-cache_dir="$script_dir/../../cache"
+app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
+export DEV_ALCHEMY_APP_DATA_DIR="$app_data_dir"
+export DEV_ALCHEMY_CACHE_DIR="$cache_dir"
 
 mkdir -p "$cache_dir/windows11/"
 rm -f "$cache_dir/windows11/qemu-windows11-$arch.qcow2"

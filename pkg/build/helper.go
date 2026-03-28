@@ -93,3 +93,7 @@ func createHypervTempDir(dirs *Directories) error {
 	// #nosec G301 -- this cache directory must remain traversable for non-root CI steps after sudo-created builds.
 	return os.MkdirAll(tempPath, 0755)
 }
+
+func getDarwinQemuBuildOutputDir(config VirtualMachineConfig) string {
+	return filepath.Join("/tmp", "dev-alchemy", "qemu-out-"+GenerateVirtualMachineSlug(&config))
+}

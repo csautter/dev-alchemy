@@ -22,7 +22,7 @@ Destroy implementations must be:
 
 - Deterministic: derive the resource identity directly from `VirtualMachineConfig` and documented environment overrides.
 - Idempotent: return success when the VM is already absent.
-- Host-local: remove only the resources created by `alchemy create`; do not delete build artifacts from `cache/`.
+- Host-local: remove only the resources created by `alchemy create`; do not delete build artifacts from the managed app-data cache.
 - Routed through the shared dispatcher in [pkg/deploy/destroy.go](/workspaces/dev-alchemy/pkg/deploy/destroy.go).
 
 ## Required Changes When Adding A VM Config

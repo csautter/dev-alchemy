@@ -22,9 +22,19 @@ variable "iso_checksum" {
   default = "sha256:759c9b5a2ad26eb9844b24f7da1696c705ff5fe07924a749f385f435176c2306"
 }
 
+variable "cache_dir" {
+  type        = string
+  default     = env("DEV_ALCHEMY_CACHE_DIR")
+  description = "Managed cache directory outside the repository."
+  validation {
+    condition     = var.cache_dir != ""
+    error_message = "The cache_dir variable must be set, typically via DEV_ALCHEMY_CACHE_DIR."
+  }
+}
+
 source "hyperv-iso" "linuxmint" {
   vm_name          = "linux-mint-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory = "${path.root}/../../../../cache/linux/hyperv-mint-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  output_directory = "${var.cache_dir}/linux/hyperv-mint-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
 
   iso_url          = var.iso_url
   iso_checksum     = var.iso_checksum
@@ -64,7 +74,7 @@ build {
   }
 
   post-processor "vagrant" {
-    output              = "${path.root}/../../../../cache/windows/linux-mint-hyperv.box"
+    output              = "${var.cache_dir}/windows/linux-mint-hyperv.box"
     keep_input_artifact = false
     provider_override   = "hyperv"
     compression_level   = 1

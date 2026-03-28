@@ -5,7 +5,20 @@ param(
 # Define variables
 $FidoVersion = "1.67"
 $FidoExe = "Fido.ps1"
-$CacheDir = "$PSScriptRoot\..\..\cache"
+$AppDataDir = if ($env:DEV_ALCHEMY_APP_DATA_DIR) {
+    $env:DEV_ALCHEMY_APP_DATA_DIR
+} elseif ($env:LOCALAPPDATA) {
+    Join-Path $env:LOCALAPPDATA "dev-alchemy"
+} elseif ($env:APPDATA) {
+    Join-Path $env:APPDATA "dev-alchemy"
+} else {
+    Join-Path $HOME "AppData\Local\dev-alchemy"
+}
+$CacheDir = if ($env:DEV_ALCHEMY_CACHE_DIR) {
+    $env:DEV_ALCHEMY_CACHE_DIR
+} else {
+    Join-Path $AppDataDir "cache"
+}
 $FidoPath = "$CacheDir\$FidoExe"
 # LZMA and signature file paths
 $FidoLzma = "$CacheDir\Fido.ps1.lzma"

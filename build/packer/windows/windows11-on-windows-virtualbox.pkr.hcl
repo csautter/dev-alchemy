@@ -14,7 +14,7 @@ packer {
 
 variable "iso_url" {
   type    = string
-  default = "../../../cache/windows11/iso/Win11_25H2_English_x64.iso"
+  default = ""
 }
 
 variable "nested_virt" {
@@ -40,9 +40,19 @@ variable "temp_disk_path" {
   description = "Path to use for temporary files and VM storage (e.g., D:\\ for Azure local temp disk)"
 }
 
+variable "cache_dir" {
+  type        = string
+  default     = env("DEV_ALCHEMY_CACHE_DIR")
+  description = "Managed cache directory outside the repository."
+  validation {
+    condition     = var.cache_dir != ""
+    error_message = "The cache_dir variable must be set, typically via DEV_ALCHEMY_CACHE_DIR."
+  }
+}
+
 source "virtualbox-iso" "win11" {
   vm_name          = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  output_directory = var.temp_disk_path != "" ? var.temp_disk_path : "${path.root}/../../../cache/windows11/virtualbox-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
+  output_directory = var.temp_disk_path != "" ? var.temp_disk_path : "${var.cache_dir}/windows11/virtualbox-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   iso_url          = var.iso_url
   iso_checksum     = "none"
 
@@ -98,7 +108,7 @@ build {
   sources = ["source.virtualbox-iso.win11"]
 
   post-processor "vagrant" {
-    output              = "${path.root}/../../../cache/windows11/virtualbox-windows11-amd64.box"
+    output              = "${var.cache_dir}/windows11/virtualbox-windows11-amd64.box"
     keep_input_artifact = false
     provider_override   = "virtualbox"
     compression_level   = 1

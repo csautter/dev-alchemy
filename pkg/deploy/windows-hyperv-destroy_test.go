@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -118,6 +119,7 @@ func TestHypervStartTargetStateFromVMState(t *testing.T) {
 func TestRunHypervVagrantStopOnWindows_TreatsGracefulHaltErrorAsSuccessOnceStopped(t *testing.T) {
 	restore := stubHypervStopDependencies(t)
 	defer restore()
+	vagrantRoot := setHypervTestVagrantRoot(t)
 
 	commands := make([][]string, 0, 1)
 	runHypervVagrantCommandWithEnv = func(_ string, _ time.Duration, executable string, args []string, env []string, _ string) error {
@@ -126,7 +128,7 @@ func TestRunHypervVagrantStopOnWindows_TreatsGracefulHaltErrorAsSuccessOnceStopp
 		}
 		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-server-packer")
 		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-server-packer")
-		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-server-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH="+filepath.Join(vagrantRoot, "linux-ubuntu-server-packer"))
 		commands = append(commands, append([]string(nil), args...))
 		return fmt.Errorf("command failed (vagrant [halt]): exit status 1")
 	}
@@ -167,6 +169,7 @@ func TestRunHypervVagrantStopOnWindows_TreatsGracefulHaltErrorAsSuccessOnceStopp
 func TestRunHypervVagrantStopOnWindows_FallsBackToForcedHalt(t *testing.T) {
 	restore := stubHypervStopDependencies(t)
 	defer restore()
+	vagrantRoot := setHypervTestVagrantRoot(t)
 
 	commands := make([][]string, 0, 2)
 	runHypervVagrantCommandWithEnv = func(_ string, _ time.Duration, executable string, args []string, env []string, _ string) error {
@@ -175,7 +178,7 @@ func TestRunHypervVagrantStopOnWindows_FallsBackToForcedHalt(t *testing.T) {
 		}
 		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
 		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
-		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH="+filepath.Join(vagrantRoot, "linux-ubuntu-desktop-packer"))
 		commands = append(commands, append([]string(nil), args...))
 		if len(args) == 1 && args[0] == "halt" {
 			return fmt.Errorf("command failed (vagrant [halt]): exit status 1")
@@ -257,6 +260,7 @@ func TestRunHypervVagrantStopOnWindows_ReturnsErrorWhenVMStillRunningAfterForced
 func TestRunHypervVagrantStartOnWindows_UsesTypeSpecificVagrantEnv(t *testing.T) {
 	restore := stubHypervStopDependencies(t)
 	defer restore()
+	vagrantRoot := setHypervTestVagrantRoot(t)
 
 	inspectHypervVagrantStartCmdTarget = func(alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
 		return StartTargetState{Exists: true, State: "off"}, nil
@@ -276,7 +280,7 @@ func TestRunHypervVagrantStartOnWindows_UsesTypeSpecificVagrantEnv(t *testing.T)
 		}
 		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
 		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
-		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH="+filepath.Join(vagrantRoot, "linux-ubuntu-desktop-packer"))
 		return nil
 	}
 
@@ -298,6 +302,7 @@ func TestRunHypervVagrantStartOnWindows_UsesTypeSpecificVagrantEnv(t *testing.T)
 func TestRunHypervVagrantDestroyOnWindows_UsesTypeSpecificVagrantEnv(t *testing.T) {
 	restore := stubHypervStopDependencies(t)
 	defer restore()
+	vagrantRoot := setHypervTestVagrantRoot(t)
 
 	hypervVagrantMachineExistsChecker = func(workingDir string, env []string) (bool, error) {
 		if workingDir == "" {
@@ -305,7 +310,7 @@ func TestRunHypervVagrantDestroyOnWindows_UsesTypeSpecificVagrantEnv(t *testing.
 		}
 		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
 		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
-		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH="+filepath.Join(vagrantRoot, "linux-ubuntu-desktop-packer"))
 		return true, nil
 	}
 	hypervVagrantBoxInstalledChecker = func(projectDir string, boxName string) (bool, error) {
@@ -332,7 +337,7 @@ func TestRunHypervVagrantDestroyOnWindows_UsesTypeSpecificVagrantEnv(t *testing.
 		}
 		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
 		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
-		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH="+filepath.Join(vagrantRoot, "linux-ubuntu-desktop-packer"))
 		return nil
 	}
 
@@ -354,6 +359,7 @@ func TestRunHypervVagrantDestroyOnWindows_UsesTypeSpecificVagrantEnv(t *testing.
 func TestDestroyTargetExists_UsesTypeSpecificVagrantEnv(t *testing.T) {
 	restore := stubHypervStopDependencies(t)
 	defer restore()
+	vagrantRoot := setHypervTestVagrantRoot(t)
 
 	hypervVagrantMachineExistsChecker = func(workingDir string, env []string) (bool, error) {
 		if workingDir == "" {
@@ -361,7 +367,7 @@ func TestDestroyTargetExists_UsesTypeSpecificVagrantEnv(t *testing.T) {
 		}
 		assertEnvContainsEntry(t, env, "VAGRANT_BOX_NAME=linux-ubuntu-desktop-packer")
 		assertEnvContainsEntry(t, env, "VAGRANT_VM_NAME=linux-ubuntu-desktop-packer")
-		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer")
+		assertEnvContainsEntry(t, env, "VAGRANT_DOTFILE_PATH="+filepath.Join(vagrantRoot, "linux-ubuntu-desktop-packer"))
 		return false, nil
 	}
 	hypervVagrantBoxInstalledChecker = func(_ string, boxName string) (bool, error) {
@@ -409,6 +415,24 @@ func stubHypervStopDependencies(t *testing.T) func() {
 		hypervVagrantStopPollInterval = originalPoll
 		dirs.ProjectDir = originalProjectDir
 	}
+}
+
+func setHypervTestVagrantRoot(t *testing.T) string {
+	t.Helper()
+
+	dirs := alchemy_build.GetDirectoriesInstance()
+	originalAppDataDir := dirs.AppDataDir
+	originalVagrantDir := dirs.VagrantDir
+	appDataDir := t.TempDir()
+	vagrantDir := filepath.Join(appDataDir, ".vagrant")
+	dirs.AppDataDir = appDataDir
+	dirs.VagrantDir = vagrantDir
+	t.Cleanup(func() {
+		dirs.AppDataDir = originalAppDataDir
+		dirs.VagrantDir = originalVagrantDir
+	})
+
+	return vagrantDir
 }
 
 func TestVagrantBoxListIncludesMatchesExactNameAndProvider(t *testing.T) {

@@ -64,10 +64,26 @@ variable "memory" {
   description = "Memory in MB to allocate to the VM"
 }
 
+variable "cache_dir" {
+  type        = string
+  default     = env("DEV_ALCHEMY_CACHE_DIR")
+  description = "Managed cache directory outside the repository."
+  validation {
+    condition     = var.cache_dir != ""
+    error_message = "The cache_dir variable must be set, typically via DEV_ALCHEMY_CACHE_DIR."
+  }
+}
+
+variable "build_output_dir" {
+  type        = string
+  default     = ""
+  description = "Optional short-lived Packer output directory to avoid long UNIX socket paths on macOS."
+}
+
 locals {
   iso_url             = var.iso_url
   ubuntu_iso_checksum = var.arch == "amd64" ? "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b" : "none"
-  cache_directory     = "${path.root}/../../../../cache"
+  cache_directory     = var.cache_dir
   boot_command = {
     "amd64" = [
       "e<wait2>",
@@ -100,7 +116,7 @@ locals {
       ["-accel", var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"],
       ["-machine", "virt,highmem=on"],
       ["-cpu", var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"],
-      ["-bios", "${path.root}/../../../../cache/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
+      ["-bios", "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
       ["-device", "ramfb"],
       ["-smp", "cpus=${var.cpus},cores=${var.cpus},sockets=1,threads=1"],
       ["-global", "PIIX4_PM.disable_s3=1"],
@@ -122,7 +138,7 @@ locals {
     ]
   }
   left_list        = join("", [for i in range(0, 16) : "<left>"])
-  output_directory = "${local.cache_directory}/ubuntu/qemu-out-ubuntu-${var.ubuntu_type}-${var.arch}"
+  output_directory = var.build_output_dir != "" ? var.build_output_dir : "${local.cache_directory}/ubuntu/qemu-out-ubuntu-${var.ubuntu_type}-${var.arch}"
 }
 
 source "qemu" "ubuntu" {

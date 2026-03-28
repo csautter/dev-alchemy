@@ -16,6 +16,7 @@ import (
 type RunProcessConfig struct {
 	ExecutablePath     string
 	Args               []string
+	Env                []string
 	WorkingDir         string
 	Timeout            time.Duration
 	DelayBeforeStart   time.Duration
@@ -61,6 +62,9 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 	// #nosec G204 -- callers pass explicit executables and argv slices; no shell parsing occurs here.
 	cmd := exec.CommandContext(ctx, config.ExecutablePath, config.Args...)
 	cmd.Dir = config.WorkingDir
+	if len(config.Env) > 0 {
+		cmd.Env = append(os.Environ(), config.Env...)
+	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -142,6 +146,9 @@ func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
 			case sig := <-sigs:
 				log.Printf("Retry loop for process %s interrupted by signal: %v", config.ExecutablePath, sig)
 				return cancelledContext()
+			case <-config.InterruptRetryChan:
+				log.Printf("Received interrupt signal while waiting to retry process %s", config.ExecutablePath)
+				return cancelledContext()
 			case <-time.After(config.RetryInterval):
 			}
 		}
@@ -152,6 +159,14 @@ func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
 			log.Printf("Retry loop for process %s interrupted by signal before attempt %d: %v", config.ExecutablePath, attempt, sig)
 			return cancelledContext()
 		default:
+		}
+		if config.InterruptRetryChan != nil {
+			select {
+			case <-config.InterruptRetryChan:
+				log.Printf("Received interrupt signal before starting process %s attempt %d", config.ExecutablePath, attempt)
+				return cancelledContext()
+			default:
+			}
 		}
 
 		ctx, err := RunExternalProcess(config)

@@ -6,7 +6,6 @@ import (
 
 const (
 	ubuntuHypervPackerFile = "build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl"
-	ubuntuServerISOPath    = "./cache/linux/ubuntu-24.04.3-live-server-amd64.iso"
 )
 
 // RunHypervUbuntuBuildOnWindows builds an Ubuntu VM using Hyper-V on Windows.
@@ -17,7 +16,8 @@ func RunHypervUbuntuBuildOnWindows(config VirtualMachineConfig) error {
 
 	args := []string{
 		"build",
-		"-var", fmt.Sprintf("iso_url=%s", ubuntuServerISOPath),
+		"-var", fmt.Sprintf("iso_url=%s", GetDirectoriesInstance().CachePath("linux", "ubuntu-24.04.3-live-server-amd64.iso")),
+		"-var", fmt.Sprintf("cache_dir=%s", GetDirectoriesInstance().CacheDir),
 		"-var", fmt.Sprintf("ubuntu_type=%s", defaultUbuntuType(config.UbuntuType)),
 		"-var", fmt.Sprintf("cpus=%s", getVmCpuCountString(config)),
 		"-var", fmt.Sprintf("memory=%d", getVmMemoryMB(config)),

@@ -38,16 +38,29 @@ Or run the script with the `--headless false` flag to see the browser in action:
 python playwright_win11_iso.py --headless false
 ```
 This will output the latest Windows 11 ISO download link in the terminal.
-Additionally , the script saves the download link to a file named `./cache/windows/win11_amd64_iso_url.txt` or `./cache/windows/win11_arm64_iso_url.txt`.
+Additionally, the script saves the download link to the managed cache directory:
+
+- macOS default: `~/Library/Application Support/dev-alchemy/cache/windows/win11_amd64_iso_url.txt`
+- macOS default: `~/Library/Application Support/dev-alchemy/cache/windows/win11_arm64_iso_url.txt`
+- Session cookies: `~/Library/Application Support/dev-alchemy/cache/windows/playwright/cookies.json`
+- Failure diagnostics: `~/Library/Application Support/dev-alchemy/cache/windows/playwright-diagnostics/`
+
+Set `DEV_ALCHEMY_APP_DATA_DIR` to move the managed cache elsewhere.
+
+If Microsoft serves a slow, blocked, or challenge page, the script now retries the initial navigation and writes a screenshot, HTML snapshot, and JSON metadata bundle under `playwright-diagnostics/` before failing.
 
 ### Download the ISO
 You can use `curl` or `wget` to download the ISO using the link saved in the file:
 ```bash
-cd ./cache/windows/
-curl --progress-bar -o win11_25h2_english_x64.iso $(cat ./win11_iso_url.txt)
+APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+CACHE_DIR="${DEV_ALCHEMY_CACHE_DIR:-$APP_DATA_DIR/cache}"
+cd "$CACHE_DIR/windows/"
+curl --progress-bar -o ../windows11/iso/win11_25h2_english_amd64.iso "$(cat ./win11_amd64_iso_url.txt)"
 ```
 or for arm:
 ```bash
-cd ./cache/windows/
-curl --progress-bar -o win11_25h2_english_arm64.iso $(cat ./win11_arm_iso_url.txt)
+APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+CACHE_DIR="${DEV_ALCHEMY_CACHE_DIR:-$APP_DATA_DIR/cache}"
+cd "$CACHE_DIR/windows/"
+curl --progress-bar -o ../windows11/iso/win11_25h2_english_arm64.iso "$(cat ./win11_arm64_iso_url.txt)"
 ```
