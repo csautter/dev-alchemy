@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0](https://github.com/csautter/dev-alchemy/compare/v0.6.0...v0.7.0) (2026-03-28)
+
+
+### Added
+
+* **cli:** add destroy command for managed VMs ([490901b](https://github.com/csautter/dev-alchemy/commit/490901bea7816f307a477889b29ff8017ac2ae53))
+* **create:** detect existing VM targets before deploy ([5ab8087](https://github.com/csautter/dev-alchemy/commit/5ab808707132864dd736b0f6722c25371d7ec334))
+* **destroy:** add VM destroy readiness listing and tart state fixes ([05e3175](https://github.com/csautter/dev-alchemy/commit/05e31751954c7905c98045fd6971eda461eb9686))
+* **vm:** add lifecycle commands for starting, stopping, and destroying managed VMs ([529adfa](https://github.com/csautter/dev-alchemy/commit/529adfa3ca28c7a45377cefc18217bfa5f1fa6fd))
+* **vm:** add start command and fail-fast provision preflight ([1cb7a7a](https://github.com/csautter/dev-alchemy/commit/1cb7a7a593827bfe9b1deba4bab43b2a12bc2223))
+* **vm:** add stop command with graceful UTM shutdown ([79b5689](https://github.com/csautter/dev-alchemy/commit/79b568916c4a5a0924d1519425fe2dfda2313bed))
+
+
+### Fixed
+
+* **deploy:** harden Hyper-V Vagrant stop with forced halt fallback ([fb75cdb](https://github.com/csautter/dev-alchemy/commit/fb75cdbffacf72353ec50cf56d5c94764ba2bfdb))
+* **deploy:** infer canonical UTM targets for macOS deploy configs ([893d616](https://github.com/csautter/dev-alchemy/commit/893d616cace68f17fcdff80145f5c30dad94f11a))
+* **deploy:** inspect Hyper-V VM state via PowerShell ([21bd7da](https://github.com/csautter/dev-alchemy/commit/21bd7da2d964006ce4b6c2af87befcc969393f7e))
+* **deploy:** make Hyper-V stop timeout boundary deterministic ([36f9499](https://github.com/csautter/dev-alchemy/commit/36f9499547f7e20eefc0dad6cbea616a33f21ffb))
+* **deploy:** normalize Hyper-V Vagrant dotfile env paths on Windows ([0aec0d9](https://github.com/csautter/dev-alchemy/commit/0aec0d9f69dc696c0475e110f83223f511b6d5ea))
+* **hyperv:** isolate vagrant state per vm and prevent false create detection ([eabb917](https://github.com/csautter/dev-alchemy/commit/eabb9172a7f78034b64b8b886c7e8890c079c6ca))
+* **provision:** use VM-specific Hyper-V Vagrant settings ([5c78d8d](https://github.com/csautter/dev-alchemy/commit/5c78d8dd7a425459dd70c863ae82151d4a6ecb40))
+
+
+### Changed
+
+* **provision:** move VM provisioning logic out of pkg/deploy ([f6cc593](https://github.com/csautter/dev-alchemy/commit/f6cc5937910ba70932123f90a4b88a30989bb37e))
+
+
+### CI
+
+* add PR coverage for deploy and provision tests ([33dd2a3](https://github.com/csautter/dev-alchemy/commit/33dd2a316600ad176c3501ff605e382fc638549d))
+
 ## [0.6.0](https://github.com/csautter/dev-alchemy/compare/v0.5.0...v0.6.0) (2026-03-24)
 
 
