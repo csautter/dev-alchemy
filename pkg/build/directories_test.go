@@ -2,6 +2,7 @@ package build
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -113,5 +114,25 @@ func TestResolveDefaultAppDataDirForOS_ReturnsErrorWhenHomeUnavailable(t *testin
 	)
 	if err == nil {
 		t.Fatal("expected error when home directory lookup fails")
+	}
+}
+
+func TestEnsureDirectoriesExist_CreatesPrivateDirectories(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "app", "cache")
+
+	if err := ensureDirectoriesExist("", target); err != nil {
+		t.Fatalf("ensureDirectoriesExist returned error: %v", err)
+	}
+
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("expected directory to exist: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected %q to be a directory", target)
+	}
+	if got := info.Mode().Perm(); got != managedDirPermission {
+		t.Fatalf("expected permissions %o, got %o", managedDirPermission, got)
 	}
 }

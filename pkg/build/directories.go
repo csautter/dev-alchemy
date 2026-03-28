@@ -14,6 +14,7 @@ const (
 	devAlchemyCacheEnvVar       = "DEV_ALCHEMY_CACHE_DIR"
 	devAlchemyVagrantEnvVar     = "DEV_ALCHEMY_VAGRANT_DIR"
 	devAlchemyPackerCacheEnvVar = "DEV_ALCHEMY_PACKER_CACHE_DIR"
+	managedDirPermission        = 0o700
 )
 
 type Directories struct {
@@ -182,7 +183,7 @@ func ensureDirectoriesExist(paths ...string) error {
 		if currentPath == "" {
 			continue
 		}
-		if err := os.MkdirAll(currentPath, 0755); err != nil {
+		if err := os.MkdirAll(currentPath, managedDirPermission); err != nil {
 			return err
 		}
 	}
