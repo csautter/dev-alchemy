@@ -1,4 +1,4 @@
-package deploy
+package provision
 
 import (
 	"encoding/json"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
+	alchemy_deploy "github.com/csautter/dev-alchemy/pkg/deploy"
 )
 
 func TestExtractWindowsIPv4FromIPConfig(t *testing.T) {
@@ -30,6 +31,40 @@ Ethernet adapter Ethernet:
 	}
 	if ip != "172.25.125.159" {
 		t.Fatalf("expected 172.25.125.159, got %s", ip)
+	}
+}
+
+func TestDiscoverLinuxVagrantIPv4_UsesProvidedVagrantEnv(t *testing.T) {
+	previousRunner := runProvisionCommandWithCombinedOutputWithEnv
+	t.Cleanup(func() {
+		runProvisionCommandWithCombinedOutputWithEnv = previousRunner
+	})
+
+	runProvisionCommandWithCombinedOutputWithEnv = func(workingDir string, timeout time.Duration, executable string, args []string, extraEnv []string) (string, error) {
+		if workingDir != "vagrant-dir" {
+			t.Fatalf("expected working directory to be passed through, got %q", workingDir)
+		}
+		if executable != "vagrant" {
+			t.Fatalf("expected vagrant executable, got %q", executable)
+		}
+		if timeout != 3*time.Minute {
+			t.Fatalf("expected 3 minute timeout, got %s", timeout)
+		}
+		if strings.Join(args, " ") != "ssh -c hostname -I" {
+			t.Fatalf("expected ssh hostname lookup args, got %v", args)
+		}
+		if len(extraEnv) != 1 || extraEnv[0] != "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer" {
+			t.Fatalf("expected Vagrant env to be forwarded, got %v", extraEnv)
+		}
+		return "127.0.0.1 172.25.125.159\n", nil
+	}
+
+	ip, err := discoverLinuxVagrantIPv4("vagrant-dir", []string{"VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer"})
+	if err != nil {
+		t.Fatalf("discoverLinuxVagrantIPv4 returned error: %v", err)
+	}
+	if ip != "172.25.125.159" {
+		t.Fatalf("expected discovered IP 172.25.125.159, got %q", ip)
 	}
 }
 
@@ -978,7 +1013,56 @@ func TestEnsureTartVMReadyForProvision_ReturnsHelpfulErrorWhenVMIsNotRunning(t *
 	if !strings.Contains(err.Error(), "is not running") {
 		t.Fatalf("expected not-running error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "alchemy create macos --arch arm64") {
-		t.Fatalf("expected create hint in error, got %v", err)
+	if !strings.Contains(err.Error(), "alchemy start macos --arch arm64") {
+		t.Fatalf("expected start hint in error, got %v", err)
+	}
+}
+
+func TestEnsureProvisionTargetRunning_ReturnsCreateHintWhenMissing(t *testing.T) {
+	previousInspector := inspectProvisionTarget
+	t.Cleanup(func() {
+		inspectProvisionTarget = previousInspector
+	})
+
+	inspectProvisionTarget = func(vm alchemy_build.VirtualMachineConfig) (alchemy_deploy.StartTargetState, error) {
+		return alchemy_deploy.StartTargetState{State: "missing"}, nil
+	}
+
+	err := ensureProvisionTargetRunning(alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "arm64",
+	})
+	if err == nil {
+		t.Fatal("expected missing provision target to return an error")
+	}
+	if !strings.Contains(err.Error(), "alchemy create ubuntu --type server --arch arm64") {
+		t.Fatalf("expected create hint, got %v", err)
+	}
+}
+
+func TestEnsureProvisionTargetRunning_ReturnsStartHintWhenStopped(t *testing.T) {
+	previousInspector := inspectProvisionTarget
+	t.Cleanup(func() {
+		inspectProvisionTarget = previousInspector
+	})
+
+	inspectProvisionTarget = func(vm alchemy_build.VirtualMachineConfig) (alchemy_deploy.StartTargetState, error) {
+		return alchemy_deploy.StartTargetState{Exists: true, State: "stopped"}, nil
+	}
+
+	err := ensureProvisionTargetRunning(alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "arm64",
+	})
+	if err == nil {
+		t.Fatal("expected stopped provision target to return an error")
+	}
+	if !strings.Contains(err.Error(), "state=stopped") {
+		t.Fatalf("expected state in error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "alchemy start ubuntu --type server --arch arm64") {
+		t.Fatalf("expected start hint, got %v", err)
 	}
 }

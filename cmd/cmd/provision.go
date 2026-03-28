@@ -5,7 +5,7 @@ import (
 	"os"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
-	alchemy_deploy "github.com/csautter/dev-alchemy/pkg/deploy"
+	alchemy_provision "github.com/csautter/dev-alchemy/pkg/provision"
 	"github.com/spf13/cobra"
 )
 
@@ -110,7 +110,7 @@ var provisionListCmd = &cobra.Command{
 }
 
 func runProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
-	return alchemy_deploy.RunProvision(vm, check)
+	return alchemy_provision.RunProvision(vm, check)
 }
 
 func init() {

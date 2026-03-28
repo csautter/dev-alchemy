@@ -18,8 +18,11 @@ Usage:
 Available Commands:
   build       Build the project for the given OS
   create      Create a new VM on your system with the defined OS
+  destroy     Destroy a VM previously created on your system
   install     Install host dependencies for the current OS
   provision   Provision a VM with Ansible
+  start       Start an existing VM on your system
+  stop        Stop an existing VM on your system
   help        Help about any command
 `,
 	// Uncomment the following line if your bare application

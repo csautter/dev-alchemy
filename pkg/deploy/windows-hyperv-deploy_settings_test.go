@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"path"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -38,6 +39,10 @@ func TestResolveHypervVagrantDeploySettings_UbuntuIncludesConfigResources(t *tes
 	}
 	if env[hypervVagrantVMNameEnvVar] != "linux-ubuntu-server-packer" {
 		t.Fatalf("expected %s env var to match box name, got %q", hypervVagrantVMNameEnvVar, env[hypervVagrantVMNameEnvVar])
+	}
+	expectedDotfilePath := path.Join(".vagrant", "linux-ubuntu-server-packer")
+	if env[hypervVagrantDotfileEnvVar] != expectedDotfilePath {
+		t.Fatalf("expected %s env var to match isolated state path, got %q", hypervVagrantDotfileEnvVar, env[hypervVagrantDotfileEnvVar])
 	}
 	expectedCPU := strconv.Itoa(alchemy_build.GetVmCpuCount(config))
 	if env[hypervVagrantCpuEnvVar] != expectedCPU {
@@ -82,6 +87,10 @@ func TestResolveHypervVagrantDeploySettings_WindowsIncludesConfigResources(t *te
 	if env[hypervVagrantVMNameEnvVar] != windowsHypervVagrantBoxName {
 		t.Fatalf("expected %s env var to match windows vm name, got %q", hypervVagrantVMNameEnvVar, env[hypervVagrantVMNameEnvVar])
 	}
+	expectedDotfilePath := path.Join(".vagrant", windowsHypervVagrantBoxName)
+	if env[hypervVagrantDotfileEnvVar] != expectedDotfilePath {
+		t.Fatalf("expected %s env var to match isolated state path, got %q", hypervVagrantDotfileEnvVar, env[hypervVagrantDotfileEnvVar])
+	}
 	expectedCPU := strconv.Itoa(alchemy_build.GetVmCpuCount(config))
 	if env[hypervVagrantCpuEnvVar] != expectedCPU {
 		t.Fatalf(
@@ -92,6 +101,34 @@ func TestResolveHypervVagrantDeploySettings_WindowsIncludesConfigResources(t *te
 	}
 	if env[hypervVagrantMemoryEnvVar] != "4096" {
 		t.Fatalf("expected memory env var to match config value, got %q", env[hypervVagrantMemoryEnvVar])
+	}
+}
+
+func TestResolveHypervVagrantDeploySettings_UbuntuVariantsUseDistinctDotfilePaths(t *testing.T) {
+	projectDir := t.TempDir()
+
+	serverSettings, err := resolveHypervVagrantDeploySettings(alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "amd64",
+	}, projectDir)
+	if err != nil {
+		t.Fatalf("resolveHypervVagrantDeploySettings(server) returned error: %v", err)
+	}
+
+	desktopSettings, err := resolveHypervVagrantDeploySettings(alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "desktop",
+		Arch:       "amd64",
+	}, projectDir)
+	if err != nil {
+		t.Fatalf("resolveHypervVagrantDeploySettings(desktop) returned error: %v", err)
+	}
+
+	serverEnv := envListToMap(serverSettings.VagrantEnv)
+	desktopEnv := envListToMap(desktopSettings.VagrantEnv)
+	if serverEnv[hypervVagrantDotfileEnvVar] == desktopEnv[hypervVagrantDotfileEnvVar] {
+		t.Fatalf("expected ubuntu variants to use different %s values, both were %q", hypervVagrantDotfileEnvVar, serverEnv[hypervVagrantDotfileEnvVar])
 	}
 }
 

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 	alchemy_deploy "github.com/csautter/dev-alchemy/pkg/deploy"
@@ -12,6 +13,9 @@ import (
 var (
 	osType string
 )
+
+var inspectCreateTargetExists = alchemy_deploy.CreateTargetExists
+var inspectCreateArtifactExists = alchemy_build.BuildArtifactsExistQuiet
 
 func isCreateSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	switch vm.VirtualizationEngine {
@@ -41,20 +45,34 @@ func printAvailableCreateCombinations() error {
 		vms,
 		[]string{"OS", "Type", "Arch", "Artifact", "Create"},
 		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
-			if vm.VirtualizationEngine == alchemy_build.VirtualizationEngineTart {
-				return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, "public image", "ready to create"}, nil
+			targetExists, err := inspectCreateTargetExists(vm)
+			if err != nil {
+				return nil, fmt.Errorf("failed to inspect create target for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
 			}
 
-			artifactsExist, err := alchemy_build.BuildArtifactsExistQuiet(vm)
+			if vm.VirtualizationEngine == alchemy_build.VirtualizationEngineTart {
+				createState := "ready to create"
+				if targetExists {
+					createState = "already created"
+				}
+				return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, "public image", createState}, nil
+			}
+
+			artifactsExist, err := inspectCreateArtifactExists(vm)
 			if err != nil {
 				return nil, fmt.Errorf("failed to check build artifacts for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
 			}
 
 			artifactState := "missing"
 			createState := "build required"
+			if targetExists {
+				createState = "already created"
+			}
 			if artifactsExist {
 				artifactState = "exists"
-				createState = "ready to create"
+				if !targetExists {
+					createState = "ready to create"
+				}
 			}
 
 			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, artifactState, createState}, nil
@@ -118,7 +136,7 @@ Example:
 
 var createListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List available create combinations and artifact readiness",
+	Short: "List available create combinations and create readiness",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return printAvailableCreateCombinations()
@@ -126,6 +144,19 @@ var createListCmd = &cobra.Command{
 }
 
 func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
+	targetExists, err := inspectCreateTargetExists(vm)
+	if err != nil {
+		return fmt.Errorf("failed to inspect create target for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+	}
+	if targetExists {
+		return fmt.Errorf(
+			"VM for %s already exists. Use `alchemy start %s` to reuse it or `alchemy destroy %s` first",
+			createCommandArguments(vm),
+			createCommandArguments(vm),
+			createCommandArguments(vm),
+		)
+	}
+
 	switch vm.VirtualizationEngine {
 	case alchemy_build.VirtualizationEngineUtm:
 		return alchemy_deploy.RunUtmDeployOnMacOS(vm)
@@ -136,6 +167,17 @@ func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
 	default:
 		return fmt.Errorf("❌ deploy is not implemented for virtualization engine: %s", vm.VirtualizationEngine)
 	}
+}
+
+func createCommandArguments(vm alchemy_build.VirtualMachineConfig) string {
+	args := []string{vm.OS}
+	if vm.UbuntuType != "" {
+		args = append(args, "--type", vm.UbuntuType)
+	}
+	if vm.Arch != "" {
+		args = append(args, "--arch", vm.Arch)
+	}
+	return strings.Join(args, " ")
 }
 
 func init() {

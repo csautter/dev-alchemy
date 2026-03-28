@@ -91,7 +91,7 @@ This runs [scripts/windows/dev-alchemy-self-setup.ps1](./scripts/windows/dev-alc
 To force a VM rebuild even when the cached build artifact already exists, use:
 
 ```bash
-go run cmd/main.go build windows11 --arch arm64 --no-cache
+go run cmd/main.go build windows11 --arch amd64 --no-cache
 ```
 
 
@@ -443,8 +443,8 @@ You can run the following commands to build and create the Windows 11 VM in UTM:
 arch=arm64 # or amd64
 # sudo go run cmd/main.go build windows11 --arch $arch --headless
 go run cmd/main.go build windows11 --arch $arch --headless
-# sudo go run cmd/main.go create windows11 --arch $arch --headless
-go run cmd/main.go create windows11 --arch $arch --headless
+# `--headless` applies to `build`, not `create`.
+go run cmd/main.go create windows11 --arch $arch
 ```
 
 Open UTM and start the created Windows VM.
