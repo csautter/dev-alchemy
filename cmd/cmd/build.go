@@ -40,10 +40,24 @@ func isBuildSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	}
 }
 
+func isBuildIncludedByDefault(vm alchemy_build.VirtualMachineConfig) bool {
+	return isBuildSupported(vm) && !alchemy_build.IsVirtualizationEngineUnstable(vm.VirtualizationEngine)
+}
+
 func availableBuildVirtualMachines() []alchemy_build.VirtualMachineConfig {
 	var supported []alchemy_build.VirtualMachineConfig
 	for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
 		if isBuildSupported(vm) {
+			supported = append(supported, vm)
+		}
+	}
+	return supported
+}
+
+func defaultBuildVirtualMachines() []alchemy_build.VirtualMachineConfig {
+	var supported []alchemy_build.VirtualMachineConfig
+	for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
+		if isBuildIncludedByDefault(vm) {
 			supported = append(supported, vm)
 		}
 	}
@@ -247,7 +261,7 @@ var buildCmd = &cobra.Command{
 	Short: "Build the VM for the given operating system",
 	Long: `Builds the VM for a specified operating system.
 You can specify the OS name, type, and architecture.
-Use "all" to build all available VM configurations.
+Use "all" to build all stable VM configurations for the current host OS.
 
 Example:
   alchemy build ubuntu --type server --arch amd64
@@ -266,12 +280,17 @@ Example:
 		}
 
 		if osName == "all" {
-			available_virtual_machines, err := filterBuildVirtualMachinesByEngine(availableBuildVirtualMachines(), buildEngine)
+			buildableVirtualMachines := availableBuildVirtualMachines()
+			if buildEngine == "" {
+				buildableVirtualMachines = defaultBuildVirtualMachines()
+			}
+
+			available_virtual_machines, err := filterBuildVirtualMachinesByEngine(buildableVirtualMachines, buildEngine)
 			if err != nil {
 				fmt.Printf("❌ %v\n", err)
 				return
 			}
-			fmt.Printf("🔧 Building all available VM configurations with %d parallel builds\n", parallel)
+			fmt.Printf("🔧 Building all available stable VM configurations with %d parallel builds\n", parallel)
 			for i := range available_virtual_machines {
 				available_virtual_machines[i].NoCache = noCache
 			}
