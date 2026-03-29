@@ -172,6 +172,7 @@ jobs:
         shell: powershell
         run: |
           $artifactDir = Join-Path $env:GITHUB_WORKSPACE "artifact\hyperv-diagnostics"
+          $diagnosticsZip = Join-Path $env:GITHUB_WORKSPACE "artifact\hyperv-diagnostics-TestBuildHypervWindows11Amd64OnWindows.zip"
           New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
 
           $paths = @(
@@ -185,15 +186,13 @@ jobs:
               Copy-Item -Path $path -Destination $artifactDir -Recurse -Force
             }
           }
-
-      - name: Upload HyperV diagnostics artifact (always)
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: hyperv-diagnostics-TestBuildHypervWindows11Amd64OnWindows
-          path: artifact/hyperv-diagnostics/**
-          if-no-files-found: ignore
-          retention-days: 7
+          
+          if (Get-ChildItem -Path $artifactDir -Force -ErrorAction SilentlyContinue) {
+            if (Test-Path $diagnosticsZip) {
+              Remove-Item -Path $diagnosticsZip -Force
+            }
+            Compress-Archive -Path (Join-Path $artifactDir '*') -DestinationPath $diagnosticsZip -Force
+          }
 
       - name: Azure Login (OIDC)
         uses: azure/login@v3
@@ -205,7 +204,7 @@ jobs:
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
-          files: '[{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
+          files: '[{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},{"local-path":"./artifact/hyperv-diagnostics-TestBuildHypervWindows11Amd64OnWindows.zip","blob-name":"hyperv-diagnostics-TestBuildHypervWindows11Amd64OnWindows.zip","container":"build-cache","overwrite":true}]'
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Fail if build or deploy smoke test failed

@@ -63,3 +63,4 @@ env_local.hcl
 REVIEW.md
 gosec-results.sarif
 *.log
+dist/

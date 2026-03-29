@@ -11,6 +11,7 @@ inputs:
         - local-path  (required) path to the file in the workspace
         - blob-name   (optional) blob key in Azure Storage; defaults to basename of local-path
         - container   (optional) Azure Blob container name; defaults to "build-cache"
+        - overwrite   (optional) whether to replace an existing cached file/blob; defaults to false
       Pass '[]' to skip all cache operations (e.g. for builds with no cached files).
     required: true
   subscription-id:

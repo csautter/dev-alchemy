@@ -44,17 +44,19 @@ func (u *Directories) GetDirectories() Directories {
 			log.Fatalf("Working dir could not be determined.")
 		}
 	}
-	if u.ProjectDir == "" {
-		if u.determineTopLevelDirWithGit() == "" {
-			log.Fatalf("Project dir could not be determined.")
-		}
-	}
 	if u.AppDataDir == "" {
 		appDataDir, err := resolveDefaultAppDataDir()
 		if err != nil {
 			log.Fatalf("App data dir could not be determined: %v", err)
 		}
 		u.AppDataDir = appDataDir
+	}
+	if u.ProjectDir == "" {
+		projectDir, err := ensureProjectDir(u.WorkingDir, u.AppDataDir)
+		if err != nil {
+			log.Fatalf("Project dir could not be determined: %v", err)
+		}
+		u.ProjectDir = projectDir
 	}
 	if u.CacheDir == "" {
 		u.CacheDir = filepath.Join(u.AppDataDir, "cache")
@@ -69,30 +71,6 @@ func (u *Directories) GetDirectories() Directories {
 		log.Fatalf("Managed application directories could not be created: %v", err)
 	}
 	return *u
-}
-
-func (u *Directories) determineTopLevelDirWithGit() string {
-	dir := u.WorkingDir
-	if dir == "" {
-		var err error
-		dir, err = os.Getwd()
-		if err != nil {
-			return ""
-		}
-	}
-	for {
-		gitPath := filepath.Join(dir, ".git")
-		if _, err := os.Stat(gitPath); err == nil {
-			u.ProjectDir = dir
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return ""
 }
 
 func (u *Directories) getWorkingDir() string {

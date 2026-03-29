@@ -1,7 +1,64 @@
 GOSEC ?= $(shell command -v gosec 2>/dev/null || echo "$$(go env GOPATH)/bin/gosec")
+BINARY_NAME ?= alchemy
+DIST_DIR ?= dist
+MAIN_PACKAGE ?= ./cmd/main.go
+VERSION ?= dev
+GO_LDFLAGS ?= -s -w
+RELEASE_GOOS ?= darwin linux windows
+RELEASE_GOARCH ?= amd64 arm64
+
+PACKAGE_VERSION = $(patsubst v%,%,$(VERSION))
+TARGET_BINARY_NAME = $(BINARY_NAME)$(if $(filter windows,$(GOOS)),.exe,)
+TARGET_DIST_DIR = $(DIST_DIR)/$(GOOS)-$(GOARCH)
+RELEASE_ASSET_BASENAME = dev-alchemy_$(PACKAGE_VERSION)_$(GOOS)_$(GOARCH)
+
+.PHONY: build build-cli-local build-cli-target build-cli-release package-cli-target package-cli-release clean-dist \
+	test-build-runner test-build test-deploy test-provision test-deploy-windows-hyperv test-clean-testcache \
+	test-build-integration test-build-specific test-gh-runner-func-request test-gh-runner-func-delete \
+	deploy-plan-terraform-azure-gh-runner deploy-apply-terraform-azure-gh-runner deploy-az-func-app gosec
 
 build:
 	go build ./...
+
+build-cli-local:
+	$(MAKE) build-cli-target GOOS=$(shell go env GOOS) GOARCH=$(shell go env GOARCH)
+
+build-cli-target:
+	@test -n "$(GOOS)" || (echo "GOOS is required" && exit 1)
+	@test -n "$(GOARCH)" || (echo "GOARCH is required" && exit 1)
+	mkdir -p "$(TARGET_DIST_DIR)"
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) \
+		go build -trimpath -ldflags '$(GO_LDFLAGS)' -o "$(TARGET_DIST_DIR)/$(TARGET_BINARY_NAME)" $(MAIN_PACKAGE)
+
+build-cli-release: clean-dist
+	@set -e; \
+	for goos in $(RELEASE_GOOS); do \
+		for goarch in $(RELEASE_GOARCH); do \
+			$(MAKE) build-cli-target GOOS=$$goos GOARCH=$$goarch VERSION=$(VERSION); \
+		done; \
+	done
+
+package-cli-target: build-cli-target
+	@test -n "$(GOOS)" || (echo "GOOS is required" && exit 1)
+	@test -n "$(GOARCH)" || (echo "GOARCH is required" && exit 1)
+	@test -n "$(VERSION)" || (echo "VERSION is required" && exit 1)
+	rm -f "$(DIST_DIR)/$(RELEASE_ASSET_BASENAME).tar.gz" "$(DIST_DIR)/$(RELEASE_ASSET_BASENAME).zip"
+	if [ "$(GOOS)" = "windows" ]; then \
+		cd "$(TARGET_DIST_DIR)" && zip -q -j "../$(RELEASE_ASSET_BASENAME).zip" "$(TARGET_BINARY_NAME)"; \
+	else \
+		tar -C "$(TARGET_DIST_DIR)" -czf "$(DIST_DIR)/$(RELEASE_ASSET_BASENAME).tar.gz" "$(TARGET_BINARY_NAME)"; \
+	fi
+
+package-cli-release: clean-dist
+	@set -e; \
+	for goos in $(RELEASE_GOOS); do \
+		for goarch in $(RELEASE_GOARCH); do \
+			$(MAKE) package-cli-target GOOS=$$goos GOARCH=$$goarch VERSION=$(VERSION); \
+		done; \
+	done
+
+clean-dist:
+	rm -rf "$(DIST_DIR)"
 
 test-build-runner:
 	go test ./cmd/cmd/... -run "TestParallelBuilds|TestSequentialBuilds" -v -timeout 60s

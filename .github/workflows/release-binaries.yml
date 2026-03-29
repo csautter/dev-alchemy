@@ -1,0 +1,97 @@
+name: Release Binaries
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version tag to publish, for example v1.2.3
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.version || github.event.pull_request.head.sha || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+    env:
+      VERSION: ${{ inputs.version || format('pr-{0}', github.event.pull_request.number) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Package release artifact
+        run: make package-cli-target GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} VERSION=${VERSION}
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/dev-alchemy_*_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz
+            dist/dev-alchemy_*_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish release assets
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' }}
+    needs:
+      - build
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          checksum_file="dist/dev-alchemy_${VERSION#v}_checksums.txt"
+          sha256sum dist/* > "${checksum_file}"
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${VERSION}" dist/* --clobber
