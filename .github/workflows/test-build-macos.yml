@@ -108,7 +108,7 @@ jobs:
       - name: Install dependencies macos
         if: contains(matrix.runs_on, 'macos')
         run: |
-          bash scripts/macos/dev-alchemy-install-dependencies.sh
+          go run cmd/main.go install
 
       - name: Run build for VM OS=${{ matrix.vm_os }} TEST_NAME=${{ matrix.go_test_name }} on runner OS=${{ matrix.runs_on }}
         id: packer_build

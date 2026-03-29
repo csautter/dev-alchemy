@@ -135,14 +135,9 @@ jobs:
       - name: Install dependencies windows
         shell: powershell
         run: |
-          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $oscdimgPath) {
-            echo "oscdimg.exe not found. Installing..."
-            powershell -File scripts/windows/install_oscdimg.ps1
-          }
-          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          echo "$oscdimgPath"
-          echo "$($oscdimgPath | Split-Path)" | Out-File -Append $env:GITHUB_PATH
+          powershell -ExecutionPolicy Bypass -File scripts/windows/install_oscdimg.ps1
+          go mod vendor
+          go run cmd/main.go install
 
       - name: Run HyperV build
         id: packer_build
@@ -153,7 +148,6 @@ jobs:
           PACKER_LOG: 1
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          go mod vendor
           make test-build-specific TEST_NAME=TestBuildHypervWindows11Amd64OnWindows
 
       - name: Run HyperV deploy smoke test
@@ -388,14 +382,7 @@ jobs:
       - name: Install dependencies windows
         shell: powershell
         run: |
-          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $oscdimgPath) {
-            echo "oscdimg.exe not found. Installing..."
-            powershell -File scripts/windows/install_oscdimg.ps1
-          }
-          $oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          echo "$oscdimgPath"
-          echo "$($oscdimgPath | Split-Path)" | Out-File -Append $env:GITHUB_PATH
+          powershell -ExecutionPolicy Bypass -File scripts/windows/install_oscdimg.ps1
 
       - name: Run VirtualBox build
         id: packer_build
