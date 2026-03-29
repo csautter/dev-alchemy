@@ -48,6 +48,9 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 			// Reset DelayBeforeStart to 0 after the delay
 			config.DelayBeforeStart = 0
 			// continue
+		case <-config.InterruptRetryChan:
+			log.Printf("Process %s start interrupted by retry interrupt channel", config.ExecutablePath)
+			return cancelledContext(), fmt.Errorf("process %q start interrupted", config.ExecutablePath)
 		case sig := <-sigs:
 			log.Printf("Process %s start interrupted by signal: %v", config.ExecutablePath, sig)
 			return ctx, fmt.Errorf("process %q start interrupted by signal: %v", config.ExecutablePath, sig)
@@ -109,6 +112,10 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 			return ctx, fmt.Errorf("process %q exited with error: %w", config.ExecutablePath, err)
 		}
 		log.Printf("Process %s finished successfully.", config.ExecutablePath)
+	case <-config.InterruptRetryChan:
+		_ = cmd.Process.Kill()
+		log.Printf("Process %s terminated due to retry interrupt channel", config.ExecutablePath)
+		return cancelledContext(), fmt.Errorf("process %q interrupted", config.ExecutablePath)
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
 		_ = cmd.Process.Kill()
@@ -171,6 +178,9 @@ func RunExternalProcessWithRetries(config RunProcessConfig) context.Context {
 
 		ctx, err := RunExternalProcess(config)
 		if err == nil {
+			return ctx
+		}
+		if ctx != nil && ctx.Err() == context.Canceled {
 			return ctx
 		}
 		lastErr = err
