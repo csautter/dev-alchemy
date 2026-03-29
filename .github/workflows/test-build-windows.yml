@@ -225,28 +225,20 @@ jobs:
       id-token: write
 
     steps:
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Wait for HyperV build job to leave queue
+        id: watch_queue
         env:
-          DELETE_RETRY_ATTEMPTS: "5"
-          DELETE_RETRY_DELAY_SECONDS: "15"
           GH_TOKEN: ${{ github.token }}
           POLL_INTERVAL_SECONDS: "30"
           REPO: ${{ github.repository }}
           RESOURCE_GROUP: ${{ needs.provision-hyperv-runner.outputs.resource-group }}
           RUN_ID: ${{ github.run_id }}
-          RUNNER_NAME: ${{ needs.provision-hyperv-runner.outputs.runner-name }}
           TARGET_JOB_NAME: "build TestBuildHypervWindows11Amd64OnWindows"
           WAIT_TIMEOUT_SECONDS: "900"
         run: |
           deadline=$(( $(date +%s) + WAIT_TIMEOUT_SECONDS ))
           github_api_version="2022-11-28"
+          cleanup_required=false
 
           while true; do
             now=$(date +%s)
@@ -274,54 +266,87 @@ jobs:
             fi
 
             if (( now >= deadline )); then
-              echo "${TARGET_JOB_NAME} stayed queued too long. Deleting ${RESOURCE_GROUP} before canceling workflow run ${RUN_ID}."
-
-              delete_succeeded=false
-              for attempt in $(seq 1 "${DELETE_RETRY_ATTEMPTS}"); do
-                echo "Delete attempt ${attempt}/${DELETE_RETRY_ATTEMPTS} for ${RESOURCE_GROUP}"
-                if az rest \
-                  --method post \
-                  --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
-                  --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
-                  --body "{
-                    \"resource-group\": \"${RESOURCE_GROUP}\",
-                    \"runner-name\": \"${RUNNER_NAME}\"
-                  }"; then
-                  delete_succeeded=true
-                  break
-                fi
-
-                if (( attempt < DELETE_RETRY_ATTEMPTS )); then
-                  echo "Delete failed. Retrying in ${DELETE_RETRY_DELAY_SECONDS}s..."
-                  sleep "${DELETE_RETRY_DELAY_SECONDS}"
-                fi
-              done
-
-              if [[ "${delete_succeeded}" != "true" ]]; then
-                echo "Failed to delete ${RESOURCE_GROUP} after ${DELETE_RETRY_ATTEMPTS} attempts. Leaving workflow active so cleanup-hyperv can retry."
-                exit 1
-              fi
-
-              echo "Confirmed cleanup for ${RESOURCE_GROUP}. Canceling workflow run ${RUN_ID}."
-
-              curl -fsSL \
-                -X POST \
-                -H "Accept: application/vnd.github+json" \
-                -H "Authorization: Bearer ${GH_TOKEN}" \
-                -H "X-GitHub-Api-Version: ${github_api_version}" \
-                "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/force-cancel" >/dev/null || \
-              curl -fsSL \
-                -X POST \
-                -H "Accept: application/vnd.github+json" \
-                -H "Authorization: Bearer ${GH_TOKEN}" \
-                -H "X-GitHub-Api-Version: ${github_api_version}" \
-                "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/cancel" >/dev/null || true
-
-              exit 1
+              echo "${TARGET_JOB_NAME} stayed queued too long. Preparing cleanup for ${RESOURCE_GROUP}."
+              cleanup_required=true
+              break
             fi
 
             sleep "${POLL_INTERVAL_SECONDS}"
           done
+
+          echo "cleanup_required=${cleanup_required}" >> "${GITHUB_OUTPUT}"
+
+      - name: Azure Login (OIDC)
+        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete timed out HyperV resource group and cancel workflow run
+        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        env:
+          DELETE_MAX_DELAY_SECONDS: "60"
+          DELETE_RETRY_ATTEMPTS: "8"
+          DELETE_RETRY_DELAY_SECONDS: "15"
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RESOURCE_GROUP: ${{ needs.provision-hyperv-runner.outputs.resource-group }}
+          RUN_ID: ${{ github.run_id }}
+          RUNNER_NAME: ${{ needs.provision-hyperv-runner.outputs.runner-name }}
+        run: |
+          github_api_version="2022-11-28"
+          function_app_resource="api://${{ secrets.AZURE_CLIENT_ID }}"
+          function_app_url="https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group"
+
+          delete_succeeded=false
+          for attempt in $(seq 1 "${DELETE_RETRY_ATTEMPTS}"); do
+            echo "Delete attempt ${attempt}/${DELETE_RETRY_ATTEMPTS} for ${RESOURCE_GROUP}"
+            if az account get-access-token --resource "${function_app_resource}" >/dev/null 2>&1 && \
+              az rest \
+                --method post \
+                --uri "${function_app_url}" \
+                --resource "${function_app_resource}" \
+                --body "{
+                  \"resource-group\": \"${RESOURCE_GROUP}\",
+                  \"runner-name\": \"${RUNNER_NAME}\"
+                }"; then
+              delete_succeeded=true
+              break
+            fi
+
+            if (( attempt < DELETE_RETRY_ATTEMPTS )); then
+              delay=$(( DELETE_RETRY_DELAY_SECONDS * attempt ))
+              if (( delay > DELETE_MAX_DELAY_SECONDS )); then
+                delay=${DELETE_MAX_DELAY_SECONDS}
+              fi
+              echo "Delete failed. Retrying in ${delay}s..."
+              sleep "${delay}"
+            fi
+          done
+
+          if [[ "${delete_succeeded}" != "true" ]]; then
+            echo "Failed to delete ${RESOURCE_GROUP} after ${DELETE_RETRY_ATTEMPTS} attempts. Leaving workflow active so cleanup-hyperv can retry."
+            exit 1
+          fi
+
+          echo "Confirmed cleanup for ${RESOURCE_GROUP}. Canceling workflow run ${RUN_ID}."
+
+          curl -fsSL \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: ${github_api_version}" \
+            "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/force-cancel" >/dev/null || \
+          curl -fsSL \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: ${github_api_version}" \
+            "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/cancel" >/dev/null || true
+
+          exit 1
 
   test-virtualbox-build:
     # if: ${{ github.event_name == 'pull_request' || inputs.enable_az_virtualbox }}
@@ -419,31 +444,42 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Delete HyperV resource group
+        env:
+          DELETE_MAX_DELAY_SECONDS: "60"
+          DELETE_RETRY_ATTEMPTS: "8"
+          DELETE_RETRY_DELAY_SECONDS: "15"
         run: |
           echo "Deleting resource group ${{ needs.provision-hyperv-runner.outputs.resource-group }}"
           delete_succeeded=false
-          for attempt in $(seq 1 5); do
-            echo "Delete attempt ${attempt}/5 for ${{ needs.provision-hyperv-runner.outputs.resource-group }}"
-            if az rest \
-              --method post \
-              --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group" \
-              --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
-              --body "{
-                \"resource-group\": \"${{ needs.provision-hyperv-runner.outputs.resource-group }}\",
-                \"runner-name\": \"${{ needs.provision-hyperv-runner.outputs.runner-name }}\"
-              }"; then
+          function_app_resource="api://${{ secrets.AZURE_CLIENT_ID }}"
+          function_app_url="https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/delete_resource_group"
+          for attempt in $(seq 1 "${DELETE_RETRY_ATTEMPTS}"); do
+            echo "Delete attempt ${attempt}/${DELETE_RETRY_ATTEMPTS} for ${{ needs.provision-hyperv-runner.outputs.resource-group }}"
+            if az account get-access-token --resource "${function_app_resource}" >/dev/null 2>&1 && \
+              az rest \
+                --method post \
+                --uri "${function_app_url}" \
+                --resource "${function_app_resource}" \
+                --body "{
+                  \"resource-group\": \"${{ needs.provision-hyperv-runner.outputs.resource-group }}\",
+                  \"runner-name\": \"${{ needs.provision-hyperv-runner.outputs.runner-name }}\"
+                }"; then
               delete_succeeded=true
               break
             fi
 
-            if (( attempt < 5 )); then
-              echo "Delete failed. Retrying in 15s..."
-              sleep 15
+            if (( attempt < DELETE_RETRY_ATTEMPTS )); then
+              delay=$(( DELETE_RETRY_DELAY_SECONDS * attempt ))
+              if (( delay > DELETE_MAX_DELAY_SECONDS )); then
+                delay=${DELETE_MAX_DELAY_SECONDS}
+              fi
+              echo "Delete failed. Retrying in ${delay}s..."
+              sleep "${delay}"
             fi
           done
 
           if [[ "${delete_succeeded}" != "true" ]]; then
-            echo "Failed to delete resource group after 5 attempts, continuing..."
+            echo "Failed to delete resource group after ${DELETE_RETRY_ATTEMPTS} attempts, continuing..."
           fi
 
   cleanup-virtualbox:
