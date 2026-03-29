@@ -16,7 +16,7 @@ Set `DEV_ALCHEMY_APP_DATA_DIR` if you want to override the default root.
 Run the dependency installer from repository root in an elevated PowerShell session:
 
 ```powershell
-go run cmd/main.go install
+alchemy.exe install
 ```
 
 Ensure you have the following installed:
@@ -106,8 +106,8 @@ If `CYGWIN_TERMINAL_PATH` points to `mintty.exe`, provisioning resolves it to th
 After installing host dependencies, run provisioning from the repository root. The wrapper resolves IP address via `vagrant winrm -c ipconfig` and runs `ansible-playbook` through Cygwin.
 
 ```powershell
-go run cmd/main.go provision windows11 --arch amd64 --check
-go run cmd/main.go provision windows11 --arch amd64
+alchemy.exe provision windows11 --arch amd64 --check
+alchemy.exe provision windows11 --arch amd64
 ```
 
 ## Destroying the Vagrant Box

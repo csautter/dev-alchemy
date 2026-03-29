@@ -92,10 +92,10 @@ cd dev-alchemy
 
 ### 3. Install Host Dependencies
 
-Use the unified CLI command for your chosen workflow:
+Use the unified CLI binary for your chosen workflow:
 
-- Release binary: `alchemy` or `alchemy.exe`
-- Repository checkout: `go run cmd/main.go`
+- macOS / Linux: `alchemy`
+- Windows: `alchemy.exe`
 
 #### macOS
 
@@ -332,37 +332,37 @@ docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 
 #### Local tests for Ubuntu on Windows with Hyper-v
 
-To test changes locally on Ubuntu with a Windows host system using Hyper-V, use the Go wrapper workflow from repository root.
+To test changes locally on Ubuntu with a Windows host system using Hyper-V, use the unified CLI workflow from repository root.
 
 Install host dependencies first:
 
 ```powershell
-go run cmd/main.go install
+alchemy.exe install
 ```
 
 ##### Build the Ubuntu box
 
 ```powershell
 # server
-go run cmd/main.go build ubuntu --type server --arch amd64
+alchemy.exe build ubuntu --type server --arch amd64
 # desktop
-go run cmd/main.go build ubuntu --type desktop --arch amd64
+alchemy.exe build ubuntu --type desktop --arch amd64
 ```
 
 ##### Create/start the Ubuntu VM
 
 ```powershell
 $env:VAGRANT_HYPERV_SWITCH = "Default Switch"
-go run cmd/main.go create ubuntu --type server --arch amd64
+alchemy.exe create ubuntu --type server --arch amd64
 # or desktop
-go run cmd/main.go create ubuntu --type desktop --arch amd64
+alchemy.exe create ubuntu --type desktop --arch amd64
 ```
 
 ##### Provision the Ubuntu VM
 
 ```powershell
-go run cmd/main.go provision ubuntu --type server --arch amd64 --check
-go run cmd/main.go provision ubuntu --type server --arch amd64
+alchemy.exe provision ubuntu --type server --arch amd64 --check
+alchemy.exe provision ubuntu --type server --arch amd64
 ```
 
 The command discovers the VM IP automatically and runs Ansible through the Windows/Cygwin wrapper.
@@ -402,7 +402,7 @@ To test changes locally on Windows using Hyper-V, you can create a new virtual m
 Install host dependencies first:
 
 ```powershell
-go run cmd/main.go install
+alchemy.exe install
 ```
 
 ##### Download a Windows .iso file
@@ -419,13 +419,13 @@ Check [README.md](./build/packer/windows/README.md) for a guide to build a Windo
 
 Check [README.md](./deployments/vagrant/ansible-windows/README.md) for a guide to run the built Windows VM with Vagrant and Hyper-V.
 
-##### Provision the Windows VM (via Go wrapper)
+##### Provision the Windows VM (via unified CLI)
 
 After the VM is running, provision it from the repository root using the unified command:
 
 ```bash
-go run cmd/main.go provision windows11 --arch amd64 --check
-go run cmd/main.go provision windows11 --arch amd64
+alchemy.exe provision windows11 --arch amd64 --check
+alchemy.exe provision windows11 --arch amd64
 ```
 
 The command discovers the VM IP automatically and runs Ansible through the Windows/Cygwin wrapper.
@@ -498,7 +498,7 @@ Check [README.md](./build/packer/windows/README.md) for a guide to build a Windo
 Install host dependencies first:
 
 ```bash
-go run cmd/main.go install
+alchemy install
 ```
 
 You can run the following commands to build and create the Windows 11 VM in UTM:
@@ -507,10 +507,10 @@ You can run the following commands to build and create the Windows 11 VM in UTM:
 # arm64 requires sudo to create a custom .iso file for automated installation.
 # sudo rights are evaluated at runtime, so you can run the build command without sudo and it will ask for sudo rights only if needed.
 arch=arm64 # or amd64
-# sudo go run cmd/main.go build windows11 --arch $arch --headless
-go run cmd/main.go build windows11 --arch $arch --headless
+# sudo alchemy build windows11 --arch $arch --headless
+alchemy build windows11 --arch $arch --headless
 # `--headless` applies to `build`, not `create`.
-go run cmd/main.go create windows11 --arch $arch
+alchemy create windows11 --arch $arch
 ```
 
 Open UTM and start the created Windows VM.
@@ -529,8 +529,8 @@ UTM_WINDOWS_ANSIBLE_PORT=5985
 Now provision the running UTM VM from the repository root:
 
 ```bash
-go run cmd/main.go provision windows11 --arch $arch --check
-go run cmd/main.go provision windows11 --arch $arch
+alchemy provision windows11 --arch $arch --check
+alchemy provision windows11 --arch $arch
 ```
 
 The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target. On macOS it also sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for the ansible process automatically.
@@ -552,7 +552,7 @@ On macOS you can use UTM to run a Ubuntu VM for testing ansible changes on Ubunt
 Install host dependencies first:
 
 ```bash
-go run cmd/main.go install
+alchemy install
 ```
 
 You can run the following commands to build and create the Ubuntu VM in UTM:
@@ -560,8 +560,8 @@ You can run the following commands to build and create the Ubuntu VM in UTM:
 ```bash
 arch=arm64 # or amd64
 type=desktop # or server
-go run cmd/main.go build ubuntu --arch $arch --type $type
-go run cmd/main.go create ubuntu --arch $arch --type $type
+alchemy build ubuntu --arch $arch --type $type
+alchemy create ubuntu --arch $arch --type $type
 ```
 
 Open UTM and start the created Ubuntu VM.
@@ -582,8 +582,8 @@ UTM_UBUNTU_ANSIBLE_SSH_RETRIES=3
 Now provision the running UTM VM from the repository root:
 
 ```bash
-go run cmd/main.go provision ubuntu --type $type --arch $arch --check
-go run cmd/main.go provision ubuntu --type $type --arch $arch
+alchemy provision ubuntu --type $type --arch $arch --check
+alchemy provision ubuntu --type $type --arch $arch
 ```
 
 The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target. On macOS it also sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for the ansible process automatically.

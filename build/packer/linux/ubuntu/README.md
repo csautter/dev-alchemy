@@ -1,18 +1,18 @@
 # Ubuntu Packer Templates
 
-This directory contains Packer templates used by the Go wrapper to build Ubuntu images.
+This directory contains Packer templates used by the Dev Alchemy CLI to build Ubuntu images.
 
 ## Build Ubuntu on Windows Hosts (Hyper-V)
 
-Use the wrapper from repository root:
+Use the CLI from repository root:
 
 ```powershell
-go run cmd/main.go install
+alchemy.exe install
 
 # build ubuntu server (Hyper-V)
-go run cmd/main.go build ubuntu --type server --arch amd64
+alchemy.exe build ubuntu --type server --arch amd64
 # build ubuntu desktop (Hyper-V)
-go run cmd/main.go build ubuntu --type desktop --arch amd64
+alchemy.exe build ubuntu --type desktop --arch amd64
 ```
 
 The Hyper-V template is [linux-ubuntu-hyperv.pkr.hcl](linux-ubuntu-hyperv.pkr.hcl).
@@ -47,14 +47,14 @@ Output boxes:
 
 ## Build Ubuntu on macOS Hosts (UTM/QEMU)
 
-Use the wrapper from repository root:
+Use the CLI from repository root:
 
 ```bash
 # amd64 or arm64
 arch=amd64
-go run cmd/main.go install
-go run cmd/main.go build ubuntu --type server --arch $arch
-go run cmd/main.go build ubuntu --type desktop --arch $arch
+alchemy install
+alchemy build ubuntu --type server --arch $arch
+alchemy build ubuntu --type desktop --arch $arch
 ```
 
 Manual script usage:
