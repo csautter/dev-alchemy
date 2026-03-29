@@ -94,3 +94,22 @@ func TestEnsureEmbeddedProjectDir_MarksShellScriptsExecutableOnUnix(t *testing.T
 		t.Fatalf("expected extracted shell script to be executable, got mode %o", info.Mode().Perm())
 	}
 }
+
+func TestEnsureEmbeddedProjectDir_UsesManagedPermissionsForDirectories(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX directory permissions are not portable on Windows")
+	}
+
+	projectDir, err := ensureEmbeddedProjectDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("ensureEmbeddedProjectDir returned error: %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(projectDir, "scripts", "macos"))
+	if err != nil {
+		t.Fatalf("failed to stat extracted directory: %v", err)
+	}
+	if got := info.Mode().Perm(); got != managedDirPermission {
+		t.Fatalf("expected extracted directory permissions %o, got %o", managedDirPermission, got)
+	}
+}

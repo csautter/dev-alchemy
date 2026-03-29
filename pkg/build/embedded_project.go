@@ -55,18 +55,23 @@ func ensureEmbeddedProjectDir(appDataDir string) (string, error) {
 		return "", fmt.Errorf("create embedded project directory: %w", err)
 	}
 
+	projectRoot, err := os.OpenRoot(projectDir)
+	if err != nil {
+		return "", fmt.Errorf("open embedded project directory: %w", err)
+	}
+	defer projectRoot.Close()
+
 	manifestHash, err := runtimeassets.ManifestHash()
 	if err != nil {
 		return "", fmt.Errorf("build embedded asset manifest: %w", err)
 	}
 
-	manifestPath := filepath.Join(projectDir, embeddedProjectManifestFile)
-	if err := syncEmbeddedProject(runtimeassets.FS(), projectDir); err != nil {
+	if err := syncEmbeddedProject(runtimeassets.FS(), projectRoot); err != nil {
 		return "", fmt.Errorf("extract embedded project assets: %w", err)
 	}
 
-	if !manifestMatches(manifestPath, manifestHash) {
-		if err := os.WriteFile(manifestPath, []byte(manifestHash+"\n"), 0o600); err != nil {
+	if !manifestMatches(projectRoot, embeddedProjectManifestFile, manifestHash) {
+		if err := projectRoot.WriteFile(embeddedProjectManifestFile, []byte(manifestHash+"\n"), 0o600); err != nil {
 			return "", fmt.Errorf("write embedded asset manifest: %w", err)
 		}
 	}
@@ -74,8 +79,8 @@ func ensureEmbeddedProjectDir(appDataDir string) (string, error) {
 	return projectDir, nil
 }
 
-func manifestMatches(path string, want string) bool {
-	content, err := os.ReadFile(path)
+func manifestMatches(root *os.Root, path string, want string) bool {
+	content, err := root.ReadFile(path)
 	if err != nil {
 		return false
 	}
@@ -83,7 +88,7 @@ func manifestMatches(path string, want string) bool {
 	return strings.TrimSpace(string(content)) == want
 }
 
-func syncEmbeddedProject(source fs.FS, destination string) error {
+func syncEmbeddedProject(source fs.FS, destination *os.Root) error {
 	return fs.WalkDir(source, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -92,9 +97,9 @@ func syncEmbeddedProject(source fs.FS, destination string) error {
 			return nil
 		}
 
-		targetPath := filepath.Join(destination, filepath.FromSlash(path))
+		targetPath := filepath.FromSlash(path)
 		if d.IsDir() {
-			return os.MkdirAll(targetPath, 0o755)
+			return destination.MkdirAll(targetPath, managedDirPermission)
 		}
 
 		content, err := fs.ReadFile(source, path)
@@ -108,15 +113,18 @@ func syncEmbeddedProject(source fs.FS, destination string) error {
 		}
 		mode := embeddedFileMode(path, info.Mode())
 
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return err
+		parentDir := filepath.Dir(targetPath)
+		if parentDir != "." {
+			if err := destination.MkdirAll(parentDir, managedDirPermission); err != nil {
+				return err
+			}
 		}
 
-		if existing, err := os.ReadFile(targetPath); err == nil && bytes.Equal(existing, content) {
-			return os.Chmod(targetPath, mode)
+		if existing, err := destination.ReadFile(targetPath); err == nil && bytes.Equal(existing, content) {
+			return destination.Chmod(targetPath, mode)
 		}
 
-		return os.WriteFile(targetPath, content, mode)
+		return destination.WriteFile(targetPath, content, mode)
 	})
 }
 
