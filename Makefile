@@ -44,7 +44,7 @@ package-cli-target: build-cli-target
 	@test -n "$(VERSION)" || (echo "VERSION is required" && exit 1)
 	rm -f "$(DIST_DIR)/$(RELEASE_ASSET_BASENAME).tar.gz" "$(DIST_DIR)/$(RELEASE_ASSET_BASENAME).zip"
 	if [ "$(GOOS)" = "windows" ]; then \
-		cd "$(TARGET_DIST_DIR)" && zip -q -j "../../$(RELEASE_ASSET_BASENAME).zip" "$(TARGET_BINARY_NAME)"; \
+		cd "$(TARGET_DIST_DIR)" && zip -q -j "../$(RELEASE_ASSET_BASENAME).zip" "$(TARGET_BINARY_NAME)"; \
 	else \
 		tar -C "$(TARGET_DIST_DIR)" -czf "$(DIST_DIR)/$(RELEASE_ASSET_BASENAME).tar.gz" "$(TARGET_BINARY_NAME)"; \
 	fi
