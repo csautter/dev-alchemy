@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0](https://github.com/csautter/dev-alchemy/compare/v0.7.0...v0.8.0) (2026-03-29)
+
+
+### Added
+
+* enhaned debugging for hyperv runner ([90ce346](https://github.com/csautter/dev-alchemy/commit/90ce3464f342f01a66b988f0f54c856aac991ef2))
+
+
+### Fixed
+
+* **build:** add engine selection and mark virtualbox unstable ([8434021](https://github.com/csautter/dev-alchemy/commit/8434021c904b737eb38826c98b84dfbdea48a12a))
+* **build:** exclude unstable virtualbox target from build all by default ([0876478](https://github.com/csautter/dev-alchemy/commit/087647888cd14ce7d18115c6577bce492ce7185f))
+* **build:** restrict managed app directory permissions to 0700 ([2bc4f7d](https://github.com/csautter/dev-alchemy/commit/2bc4f7de660dd7112ce6bf85a5ed759c916a8c65))
+* **build:** shorten macos qemu output paths and stop noisy vnc retries ([20354ec](https://github.com/csautter/dev-alchemy/commit/20354ec011cd5d5d394e091e622061f1814971d8))
+* **ci:** align macOS workflow cache paths with managed app data ([0e08270](https://github.com/csautter/dev-alchemy/commit/0e082708048154c32f3b4e0e91de756805f04aba))
+* **ci:** align Windows workflow cache paths with managed app data ([c0e419a](https://github.com/csautter/dev-alchemy/commit/c0e419a43d7d0de214d07fc36733ac415a89d8a0))
+* **ci:** capture sanitized Hyper-V diagnostics for Windows build failures ([bfb7246](https://github.com/csautter/dev-alchemy/commit/bfb72463ccb442f26980fb00b1c3996d45395571))
+* **ci:** harden Playwright Windows ISO fetch and upload diagnostics ([99b0cf3](https://github.com/csautter/dev-alchemy/commit/99b0cf390348d4d4c09ee48165273a0e0c1ba099))
+* **packer:** use valid validation messages for cache_dir ([aa924f4](https://github.com/csautter/dev-alchemy/commit/aa924f426b3f23c29ec46ef31797c53e9a062dde))
+
+
+### Changed
+
+* move VM state into managed app data ([9697909](https://github.com/csautter/dev-alchemy/commit/9697909783a3b774a782a3706e17dfb52261b437))
+* move VM state into managed app data ([1077820](https://github.com/csautter/dev-alchemy/commit/1077820edb0fcdb1e7e72f5a57134c13420bf4b9))
+
+
+### CI
+
+* refresh Azure auth before HyperV queue cleanup ([9189f40](https://github.com/csautter/dev-alchemy/commit/9189f400c91c24a464e8c0c8ef6cd76823f8c00a))
+* run deploy and provision unit tests on main pushes ([23dc24f](https://github.com/csautter/dev-alchemy/commit/23dc24ffff8f76e7da0ccde7d6dad99d063181c9))
+* run gitleaks and cmd unit tests on main pushes ([4db3625](https://github.com/csautter/dev-alchemy/commit/4db3625756827014e0a124f8b4594b6c8c1d1f6c))
+
 ## [0.7.0](https://github.com/csautter/dev-alchemy/compare/v0.6.0...v0.7.0) (2026-03-28)
 
 
