@@ -14,7 +14,7 @@
 		"ghcr.io/devcontainers/features/python:1": {},
 		"ghcr.io/devcontainers-extra/features/packer-asdf:2": {}
 	},
-	"postCreateCommand": "go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0",
+	"postCreateCommand": "sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ruby-full yq && go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0",
 	"customizations": {
 		"vscode": {
 			"extensions": [
