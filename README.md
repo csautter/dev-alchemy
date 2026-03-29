@@ -41,21 +41,66 @@ Despite the common use of Ansible in server environments where changes are **pus
 
 ## 🚀 Getting Started
 
-### 1. Clone the repo
+### 1. Download a Release Binary
+
+Release assets are published on the
+[GitHub Releases page](https://github.com/csautter/dev-alchemy/releases) with these names:
+
+- `dev-alchemy_<version>_darwin_amd64.tar.gz`
+- `dev-alchemy_<version>_darwin_arm64.tar.gz`
+- `dev-alchemy_<version>_linux_amd64.tar.gz`
+- `dev-alchemy_<version>_linux_arm64.tar.gz`
+- `dev-alchemy_<version>_windows_amd64.zip`
+- `dev-alchemy_<version>_windows_arm64.zip`
+
+After extraction, the executable is named `alchemy` on macOS/Linux and `alchemy.exe` on Windows.
+
+The examples below resolve the latest published release tag automatically before downloading
+the matching archive for the selected platform.
+
+#### macOS / Linux example
+
+```bash
+TAG="$(curl -fsSL https://api.github.com/repos/csautter/dev-alchemy/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
+VERSION="${TAG#v}"
+curl -fLO "https://github.com/csautter/dev-alchemy/releases/download/${TAG}/dev-alchemy_${VERSION}_linux_amd64.tar.gz"
+tar -xzf "dev-alchemy_${VERSION}_linux_amd64.tar.gz"
+chmod +x ./alchemy
+./alchemy build list
+```
+
+#### Windows example
+
+```powershell
+$Release = Invoke-RestMethod "https://api.github.com/repos/csautter/dev-alchemy/releases/latest"
+$Tag = $Release.tag_name
+$Version = $Tag.TrimStart("v")
+Invoke-WebRequest -OutFile "dev-alchemy_${Version}_windows_amd64.zip" "https://github.com/csautter/dev-alchemy/releases/download/$Tag/dev-alchemy_${Version}_windows_amd64.zip"
+Expand-Archive "dev-alchemy_${Version}_windows_amd64.zip" -DestinationPath .
+.\alchemy.exe build list
+```
+
+When you run a release binary outside a Git checkout, Dev Alchemy extracts its embedded
+runtime assets into the managed app-data directory and executes from there.
+
+### 2. Clone the repo
 
 ```bash
 git clone https://github.com/csautter/dev-alchemy.git
 cd dev-alchemy
 ```
 
-### 2. Install Host Dependencies
+### 3. Install Host Dependencies
 
-Use the unified CLI command from the repository root.
+Use the unified CLI command for your chosen workflow:
+
+- Release binary: `alchemy` or `alchemy.exe`
+- Repository checkout: `go run cmd/main.go`
 
 #### macOS
 
 ```bash
-go run cmd/main.go install
+alchemy install
 ```
 
 This runs [scripts/macos/dev-alchemy-install-dependencies.sh](./scripts/macos/dev-alchemy-install-dependencies.sh).
@@ -73,9 +118,9 @@ sudo apt update && sudo apt install ansible
 Use the `list` subcommands to see what the current host can build, create, or provision before running a longer workflow:
 
 ```bash
-go run cmd/main.go build list
-go run cmd/main.go create list
-go run cmd/main.go provision list
+alchemy build list
+alchemy create list
+alchemy provision list
 ```
 
 #### Windows
@@ -83,15 +128,15 @@ go run cmd/main.go provision list
 Run the command in an elevated PowerShell session (Run as Administrator):
 
 ```powershell
-go run cmd/main.go install
+alchemy.exe install
 ```
 
 This runs [scripts/windows/dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1).
 
 To force a VM rebuild even when the cached build artifact already exists, use:
 
-```bash
-go run cmd/main.go build windows11 --arch amd64 --no-cache
+```powershell
+alchemy.exe build windows11 --arch amd64 --no-cache
 ```
 
 #### Managed application data
@@ -107,8 +152,13 @@ Under that root, Dev Alchemy manages:
 - `cache/` for downloaded files and build artifacts
 - `.vagrant/` for isolated Vagrant state
 - `packer_cache/` for Packer plugin/download cache
+- `project/` for the embedded runtime project used by standalone binaries outside a Git checkout
 
 You can override the default location by setting `DEV_ALCHEMY_APP_DATA_DIR`. Dev Alchemy also exports `DEV_ALCHEMY_CACHE_DIR`, `DEV_ALCHEMY_VAGRANT_DIR`, and `DEV_ALCHEMY_PACKER_CACHE_DIR` for helper scripts and manual workflows.
+
+On the first standalone run, Dev Alchemy extracts bundled scripts, playbooks, and other
+runtime assets into `DEV_ALCHEMY_APP_DATA_DIR/project`. Later runs keep that managed
+tree in sync so the standalone `alchemy` binary can operate without a repository checkout.
 
 
 
