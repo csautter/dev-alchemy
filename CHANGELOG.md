@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0](https://github.com/csautter/dev-alchemy/compare/v0.8.0...v0.9.0) (2026-03-29)
+
+
+### Added
+
+* embed runtime assets for standalone CLI builds and release binaries ([b8d7506](https://github.com/csautter/dev-alchemy/commit/b8d7506db767d1f1ce00cc01cf0981329869b43c))
+* embed runtime assets for standalone CLI builds and release binaries ([af5d159](https://github.com/csautter/dev-alchemy/commit/af5d159650060283e88d6d6ae908d359b2e1421c))
+
+
+### Fixed
+
+* **build:** harden embedded project extraction against gosec findings ([b850868](https://github.com/csautter/dev-alchemy/commit/b8508683e7233e3e2d5e246a6aa3048c43cf179f))
+* **build:** stop external process retries immediately on interrupt ([24bf8da](https://github.com/csautter/dev-alchemy/commit/24bf8da8c02cfaa26d1c9b0cbbe54792d9c92296))
+* **build:** write Windows release zip to dist for artifact upload ([ca05356](https://github.com/csautter/dev-alchemy/commit/ca0535682c2dc7dc0c8feebe881a0773c8f58b96))
+* **deps:** upgrade google.golang.org/grpc to v1.79.3 for GO-2026-4762 ([9942bd7](https://github.com/csautter/dev-alchemy/commit/9942bd7327db700b97c6da12b078f08bd8a3e02f))
+
+
+### CI
+
+* run release binary build dry-runs in pull requests ([4a0a132](https://github.com/csautter/dev-alchemy/commit/4a0a1320dd3291a3ab5e9da8af0abdb4f6be9884))
+* store Hyper-V diagnostics in private Azure cach ([9e4d904](https://github.com/csautter/dev-alchemy/commit/9e4d9045c1fab0d301f12b8e1598e01d47d42206))
+
 ## [0.8.0](https://github.com/csautter/dev-alchemy/compare/v0.7.0...v0.8.0) (2026-03-29)
 
 
