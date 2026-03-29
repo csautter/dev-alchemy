@@ -27,7 +27,7 @@ func printVirtualMachineCombinationTable(
 
 	grouped := alchemy_build.GroupVirtualMachineConfigsByVirtualizationEngine(vms)
 	for _, engine := range alchemy_build.VirtualizationEnginesForVirtualMachineConfigs(vms) {
-		fmt.Fprintf(writer, "\nVirtualization engine: %s\n", engine)
+		fmt.Fprintf(writer, "\nVirtualization engine: %s\n", alchemy_build.DisplayVirtualizationEngine(engine))
 		if err := writeVirtualMachineTable(writer, headers, grouped[engine], rowBuilder); err != nil {
 			return err
 		}

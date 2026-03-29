@@ -31,11 +31,16 @@ func RunHypervWindowsBuildOnWindows(config VirtualMachineConfig) error {
 
 	var lastErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+		captureHypervDiagnostics(config, fmt.Sprintf("attempt-%d-preflight", attempt), nil)
+
 		start := time.Now()
 		lastErr = runWindowsBuild(config, hypervPackerFile)
 		if lastErr == nil {
 			return nil
 		}
+
+		captureHypervDiagnostics(config, fmt.Sprintf("attempt-%d-failure", attempt), lastErr)
+
 		elapsed := time.Since(start)
 		if elapsed >= earlyFailureThreshold {
 			// Long-running failure — not the IP race condition, don't retry.

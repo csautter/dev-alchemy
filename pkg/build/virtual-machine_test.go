@@ -107,3 +107,45 @@ func TestVirtualizationEnginesForVirtualMachineConfigs(t *testing.T) {
 		}
 	}
 }
+
+func TestDisplayVirtualizationEngineMarksUnstableEngines(t *testing.T) {
+	if got := DisplayVirtualizationEngine(VirtualizationEngineHyperv); got != "hyperv" {
+		t.Fatalf("expected stable engine display name, got %q", got)
+	}
+	if got := DisplayVirtualizationEngine(VirtualizationEngineVirtualBox); got != "virtualbox (unstable)" {
+		t.Fatalf("expected unstable engine display name, got %q", got)
+	}
+}
+
+func TestWindowsVirtualBoxBuildConfigUsesFixedMemoryProfile(t *testing.T) {
+	configs := AvailableVirtualMachineConfigsForHostOS(HostOsWindows)
+
+	var hypervConfig VirtualMachineConfig
+	var virtualboxConfig VirtualMachineConfig
+	var foundHyperv bool
+	var foundVirtualBox bool
+
+	for _, config := range configs {
+		if config.OS != "windows11" || config.Arch != "amd64" {
+			continue
+		}
+		switch config.VirtualizationEngine {
+		case VirtualizationEngineHyperv:
+			hypervConfig = config
+			foundHyperv = true
+		case VirtualizationEngineVirtualBox:
+			virtualboxConfig = config
+			foundVirtualBox = true
+		}
+	}
+
+	if !foundHyperv {
+		t.Fatal("expected windows11 hyperv config")
+	}
+	if !foundVirtualBox {
+		t.Fatal("expected windows11 virtualbox config")
+	}
+	if virtualboxConfig.MemoryMB != hypervConfig.MemoryMB {
+		t.Fatalf("expected virtualbox memory %d to match hyperv memory %d", virtualboxConfig.MemoryMB, hypervConfig.MemoryMB)
+	}
+}

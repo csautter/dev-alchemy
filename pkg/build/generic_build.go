@@ -44,7 +44,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 
 	printCurrentWorkingDirectory()
 
-	fmt.Printf("Running Build with executable %s and args %v\n", executable, args)
+	fmt.Printf("Running Build with executable %s and args %v\n", executable, sanitizeCommandArgs(args))
 	// #nosec G204 -- executable and args are constructed by internal build flows; no shell is invoked.
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
@@ -205,14 +205,14 @@ func readAndPrintStdoutStderr(cmd *exec.Cmd, config VirtualMachineConfig) {
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			log.Printf("%s:%s:%s stdout:  %s", config.OS, config.UbuntuType, config.Arch, scanner.Text())
+			log.Printf("%s:%s:%s stdout:  %s", config.OS, config.UbuntuType, config.Arch, sanitizeSensitiveText(scanner.Text()))
 		}
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log.Printf("%s:%s:%s stderr:  %s", config.OS, config.UbuntuType, config.Arch, scanner.Text())
+			log.Printf("%s:%s:%s stderr:  %s", config.OS, config.UbuntuType, config.Arch, sanitizeSensitiveText(scanner.Text()))
 		}
 	}()
 }

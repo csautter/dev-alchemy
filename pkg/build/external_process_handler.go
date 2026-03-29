@@ -219,11 +219,11 @@ func RunCliCommand(workdir string, command string, args []string) ([]byte, error
 	// #nosec G204 -- this helper executes known CLI tools with explicit argv slices, not shell strings.
 	cmd := exec.Command(command, args...)
 	cmd.Dir = workdir
-	log.Printf("Running command: %s %s", command, strings.Join(args, " "))
+	log.Printf("Running command: %s %s", command, strings.Join(sanitizeCommandArgs(args), " "))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Failed to run command %s: %v", command, err)
 	}
-	log.Printf("Command output: %s", string(output))
+	log.Printf("Command output: %s", sanitizeSensitiveText(string(output)))
 	return output, err
 }
