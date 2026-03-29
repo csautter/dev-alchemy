@@ -8,11 +8,13 @@ on:
       - "cmd/cmd/**"
       - ".github/workflows/test-cmd-unit-tests.yml"
       - "pkg/build/**"
+      - "runtimeassets.go"
   pull_request:
     paths:
       - "cmd/cmd/**"
       - ".github/workflows/test-cmd-unit-tests.yml"
       - "pkg/build/**"
+      - "runtimeassets.go"
   workflow_dispatch:
 
 concurrency:

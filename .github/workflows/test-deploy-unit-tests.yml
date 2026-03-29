@@ -10,6 +10,7 @@ on:
       - "cmd/cmd/provision.go"
       - "cmd/cmd/provision_test.go"
       - "Makefile"
+      - "runtimeassets.go"
       - ".github/workflows/test-cmd-unit-tests.yml"
       - ".github/workflows/test-deploy-unit-tests.yml"
   pull_request:
@@ -19,6 +20,7 @@ on:
       - "cmd/cmd/provision.go"
       - "cmd/cmd/provision_test.go"
       - "Makefile"
+      - "runtimeassets.go"
       - ".github/workflows/test-cmd-unit-tests.yml"
       - ".github/workflows/test-deploy-unit-tests.yml"
   workflow_dispatch:
