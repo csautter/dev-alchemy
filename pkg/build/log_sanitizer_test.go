@@ -24,7 +24,7 @@ func TestSanitizeSensitiveTextMasksKnownPasswordPatterns(t *testing.T) {
 		},
 		{
 			name:  "generated password log line",
-			input: `Generated password: AbCdEf123456`,
+			input: `Generated password: example-password`,
 		},
 		{
 			name:  "ansible password yaml",
@@ -38,7 +38,7 @@ func TestSanitizeSensitiveTextMasksKnownPasswordPatterns(t *testing.T) {
 			if strings.Contains(got, "P@ssw0rd!") ||
 				strings.Contains(got, "abc12345") ||
 				strings.Contains(got, "ghs_verysecretvalue") ||
-				strings.Contains(got, "AbCdEf123456") {
+				strings.Contains(got, "example-password") {
 				t.Fatalf("expected sensitive value to be redacted, got %q", got)
 			}
 			if !strings.Contains(got, "[REDACTED]") {
