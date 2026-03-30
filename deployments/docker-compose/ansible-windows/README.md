@@ -1,5 +1,8 @@
 # Docker Compose Ansible Windows
 
+If you are targeting an existing Windows machine and still need to enable
+WinRM or SSH first, see [Windows Ansible Access](../../../docs/windows-ansible-access.md).
+
 ## Switch to Windows containers
 
 Make sure you are running Windows containers in Docker Desktop.

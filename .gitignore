@@ -64,3 +64,4 @@ REVIEW.md
 gosec-results.sarif
 *.log
 dist/
+TODO.md

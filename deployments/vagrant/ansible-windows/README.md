@@ -3,6 +3,9 @@
 This guide will help you set up and run Ansible playbooks on a Windows VM using Vagrant with Hyper-V as the provider.
 All commands are meant to be run in a powershell terminal on a Windows host machine.
 
+For manually prepared Windows targets outside this managed VM flow, see
+[Windows Ansible Access](../../../docs/windows-ansible-access.md).
+
 Managed Dev Alchemy paths on Windows default to:
 
 - App data root: `%LOCALAPPDATA%\dev-alchemy`
