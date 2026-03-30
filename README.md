@@ -1,7 +1,23 @@
 # 🧪 devalchemy
 
-**devalchemy** is a cross-platform development environment automation toolkit powered
-by [Ansible](https://www.ansible.com/). It turns fresh and also existing machines into fully-configured dev setups — whether you're on **macOS**, **Linux**, or **Windows**.
+**devalchemy** is an opinionated, cross-platform orchestration toolkit for
+development and non-development environments. It combines
+[Ansible](https://www.ansible.com/) with OS-specific system tools to provide a
+unified way to test, provision, and manage machines across **macOS**,
+**Linux**, and **Windows**.
+
+Built for small teams working with heterogeneous device fleets,
+**devalchemy** helps turn both fresh and existing machines into consistent,
+replicable setups. It is not intended to replace classic centralized
+MDM solutions. Instead, it starts where those tools usually stop by managing
+developer tooling, workflows, and team-specific environment standards.
+
+With its infrastructure-as-code approach, **devalchemy** reduces onboarding
+time, gives teams more independence in evolving their setups, and enables
+administrators to define guardrails using familiar software delivery practices
+such as version control and CI/CD. It can also be integrated into existing
+environments, including more complex scenarios such as consultants working
+within client-managed setups.
 
 > _"Transform your system into a dev powerhouse — with a touch of automation magic."_
 
