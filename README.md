@@ -176,40 +176,14 @@ tree in sync so the standalone `alchemy` binary can operate without a repository
 
 
 
-##### Enable ansible remote access on Windows
+##### Windows remote access
 
-On Windows you need to enable remote access for ansible to work. Also for local runs ansible needs to connect to the local host via SSH or WinRM. Don't activate the options if you don't need them.
+Windows hosts usually need either `WinRM` or `SSH` enabled before Ansible can
+manage them, including some localhost-style runs on the same machine.
 
-> ⚠️ **Security note:** Enabling unencrypted WinRM and basic auth can expose your system to security risks. Use these settings only in trusted environments or for testing purposes. For production environments, consider using encrypted connections and more secure authentication methods. Keep your firewall settings in mind and only allow connections from trusted networks.
+The setup commands, security notes, and manual Windows playbook examples live in the dedicated guide:
 
-> ℹ️ For Windows there are two options to connect to the target host: via SSH or via WinRM.
-
-The WinRM option is more native to Windows, but requires some additional setup on the target host. It might also be blocked by company policies.
-
-```powershell
-# Enable WinRM
-Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true; \
-Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true; \
-Enable-PSRemoting -Force
-```
-
-The SSH option requires an SSH server to be installed on the target host, but is easier to set up.
-
-```powershell
-# Enable SSH Server
-Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; \
-Start-Service sshd; Set-Service -Name sshd -StartupType 'Automatic';
-```
-
-In both cases you might need to adjust the firewall settings to allow incoming connections. Also make sure to use a user with admin privileges. Create a new user if needed.
-
-```powershell
-# ⚠️ OPTIONAL - use your existing user if possible
-# Create new user
-# And of course set a secure password!
-net user ansible 'Secret123!@#' /add; \
-net localgroup Administrators ansible /add
-```
+- [Windows Ansible Access](./docs/windows-ansible-access.md)
 
 ---
 
@@ -252,6 +226,9 @@ ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pa
 You can customize the inventory or pass variables via CLI.
 
 #### Run the Playbook on Windows
+
+If the Windows target does not already have remote access configured, start with
+[Windows Ansible Access](./docs/windows-ansible-access.md).
 
 Apply the playbook via WinRM:
 
