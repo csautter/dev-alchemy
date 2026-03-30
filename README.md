@@ -100,7 +100,9 @@ Expand-Archive "dev-alchemy_${Version}_windows_amd64.zip" -DestinationPath .
 ```
 
 When you run a release binary outside a Git checkout, Dev Alchemy extracts its embedded
-runtime assets into the managed app-data directory and executes from there.
+runtime assets into the managed app-data directory and executes from there. See
+[Managed Application Data](./docs/managed-application-data.md) for the directory
+layout and override options.
 
 ### 2. Clone the repo for development or to run playbooks directly from the repository:
 
@@ -145,26 +147,13 @@ alchemy.exe build windows11 --arch amd64 --no-cache
 
 #### Managed application data
 
-VM build and deployment state is now stored outside the repository in an OS-appropriate app-data directory:
+Dev Alchemy stores VM build and deployment state outside the repository in an
+OS-appropriate app-data directory. You can override the base location with
+`DEV_ALCHEMY_APP_DATA_DIR`.
 
-- macOS: `~/Library/Application Support/dev-alchemy`
-- Windows: `%LOCALAPPDATA%\dev-alchemy`
-- Linux: `${XDG_DATA_HOME:-~/.local/share}/dev-alchemy`
-
-Under that root, Dev Alchemy manages:
-
-- `cache/` for downloaded files and build artifacts
-- `.vagrant/` for isolated Vagrant state
-- `packer_cache/` for Packer plugin/download cache
-- `project/` for the embedded runtime project used by standalone binaries outside a Git checkout
-
-You can override the default location by setting `DEV_ALCHEMY_APP_DATA_DIR`. Dev Alchemy also exports `DEV_ALCHEMY_CACHE_DIR`, `DEV_ALCHEMY_VAGRANT_DIR`, and `DEV_ALCHEMY_PACKER_CACHE_DIR` for helper scripts and manual workflows.
-
-On the first standalone run, Dev Alchemy extracts bundled scripts, playbooks, and other
-runtime assets into `DEV_ALCHEMY_APP_DATA_DIR/project`. Later runs keep that managed
-tree in sync so the standalone `alchemy` binary can operate without a repository checkout.
-
-
+For platform defaults, managed subdirectories, exported environment variables,
+and standalone runtime behavior, see
+[Managed Application Data](./docs/managed-application-data.md).
 
 ##### Windows remote access
 
