@@ -210,41 +210,6 @@ VMs, and Windows live in the dedicated guide:
 If the Windows target does not already have remote access configured, start
 with [Windows Ansible Access](./docs/windows-ansible-access.md).
 
-## 🧩 Structure
-
-```
-devalchemy/
-├── roles/
-│   ├── role/
-│   ├── role2/
-│   └── role3/
-├── inventory/
-│   └── localhost.yaml
-├── playbooks/
-│   └── setup.yml
-└── README.md
-```
-
----
-
-## 🛠️ Customization
-
-- Add or tweak roles in `roles/`
-
-- Use tags to run specific parts:
-
-  ```bash
-  ansible-playbook playbooks/setup.yml --tags "dotfiles,python"
-  ```
-
-- Pass variables:
-
-  ```bash
-  ansible-playbook playbooks/setup.yml -e "install_docker=true"
-  ```
-
----
-
 ## Testing
 
 ### 🧪 Cross-Platform Testing Matrix
@@ -310,8 +275,8 @@ variables, Docker-based flows, and troubleshooting commands, see:
 
 ## 📦 Example Roles
 
-The repository includes a growing set of example Ansible roles. The current
-catalog lives in:
+The repository includes a growing set of example Ansible roles. The catalog,
+repository layout overview, and quick customization examples live in:
 
 - [Example Ansible Roles](./docs/example-roles.md)
 
