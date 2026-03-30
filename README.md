@@ -68,14 +68,9 @@ Despite the common use of Ansible in server environments where changes are **pus
 ### 1. Download a Release Binary
 
 Release assets are published on the
-[GitHub Releases page](https://github.com/csautter/dev-alchemy/releases) with these names:
-
-- `dev-alchemy_<version>_darwin_amd64.tar.gz`
-- `dev-alchemy_<version>_darwin_arm64.tar.gz`
-- `dev-alchemy_<version>_linux_amd64.tar.gz`
-- `dev-alchemy_<version>_linux_arm64.tar.gz`
-- `dev-alchemy_<version>_windows_amd64.zip`
-- `dev-alchemy_<version>_windows_arm64.zip`
+[GitHub Releases page](https://github.com/csautter/dev-alchemy/releases) using the pattern
+`dev-alchemy_<version>_<os>_<arch>`, with `.tar.gz` archives for macOS/Linux and `.zip`
+archives for Windows.
 
 After extraction, the executable is named `alchemy` on macOS/Linux and `alchemy.exe` on Windows.
 
