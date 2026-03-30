@@ -59,19 +59,5 @@ net localgroup Administrators ansible /add
 
 ## Running a Windows playbook manually
 
-After remote access is available, you can run the Windows localhost inventory
-from the repository root.
-
-Via WinRM:
-
-```powershell
-$DevAlchemyPath = "C:\path\to\dev-alchemy"
-C:\\cygwin64\\bin\\bash.exe -l -c "cd $DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_winrm.yml -l windows_host"
-```
-
-Via SSH:
-
-```powershell
-$DevAlchemyPath = "C:\path\to\dev-alchemy"
-C:\\cygwin64\\bin\\bash.exe -l -c "cd $DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_ssh.yml -l windows_host --ask-pass -vvv"
-```
+After remote access is available, use the Windows examples in
+[Running Playbooks](./running-playbooks.md).

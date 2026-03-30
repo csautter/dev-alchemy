@@ -202,60 +202,13 @@ alchemy provision --help
 
 ### 5. Run the Playbook
 
-#### Run the Playbook on localhost
+The manual `ansible-playbook` workflows for localhost, remote hosts,
+VMs, and Windows live in the dedicated guide:
 
-Dry run to check for issues:
+- [Running Playbooks](./docs/running-playbooks.md)
 
-```bash
-ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml --check
-```
-
-```bash
-ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml
-```
-
-#### Run the Playbook on a remote host or in a VM
-
-Dry run to check for issues:
-
-```bash
-HOST="192.168.179.21"
-# write to inventory file
-cat <<EOF > inventory/remote.yml
-all:
-  hosts:
-    $HOST:
-      ansible_user: admin
-EOF
-ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass --ask-become-pass --check
-```
-
-Apply the playbook:
-
-```bash
-ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pass --ask-become-pass
-```
-
-You can customize the inventory or pass variables via CLI.
-
-#### Run the Playbook on Windows
-
-If the Windows target does not already have remote access configured, start with
-[Windows Ansible Access](./docs/windows-ansible-access.md).
-
-Apply the playbook via WinRM:
-
-```powershell
-$DevAlchemyPath = "C:\path\to\dev-alchemy"
-C:\\cygwin64\\bin\\bash.exe -l -c "cd $DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_winrm.yml -l windows_host"
-```
-
-Apply the playbook via SSH:
-
-```powershell
-$DevAlchemyPath = "C:\path\to\dev-alchemy"
-C:\\cygwin64\\bin\\bash.exe -l -c "cd $DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_ssh.yml -l windows_host --ask-pass -vvv"
-```
+If the Windows target does not already have remote access configured, start
+with [Windows Ansible Access](./docs/windows-ansible-access.md).
 
 ## 🧩 Structure
 
@@ -348,8 +301,10 @@ alchemy stop ubuntu --type server --arch amd64
 alchemy start ubuntu --type server --arch amd64
 ```
 
-For platform-specific testing examples, environment variables, Docker-based flows, and troubleshooting commands, see:
+For manual playbook commands, platform-specific testing examples, environment
+variables, Docker-based flows, and troubleshooting commands, see:
 
+- [Running Playbooks](./docs/running-playbooks.md)
 - [Testing Workflows](./docs/testing-workflows.md)
 - [Windows Ansible Access](./docs/windows-ansible-access.md)
 
