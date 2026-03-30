@@ -7,17 +7,20 @@ unified way to test, provision, and manage machines across **macOS**,
 **Linux**, and **Windows**.
 
 Built for small teams working with heterogeneous device fleets,
-**devalchemy** helps turn both fresh and existing machines into consistent,
-replicable setups. It is not intended to replace classic centralized
-MDM solutions. Instead, it starts where those tools usually stop by managing
-developer tooling, workflows, and team-specific environment standards.
+**devalchemy** addresses a costly and familiar problem: developers lose hours
+setting up machines, guessing how a system is supposed to work, and applying
+OS-specific hacks just to reach a usable baseline. It turns both fresh and
+existing machines into consistent, reproducible developer setups across
+**macOS**, **Linux**, and **Windows**.
 
-With its infrastructure-as-code approach, **devalchemy** reduces onboarding
-time, gives teams more independence in evolving their setups, and enables
-administrators to define guardrails using familiar software delivery practices
-such as version control and CI/CD. It can also be integrated into existing
-environments, including more complex scenarios such as consultants working
-within client-managed setups.
+It is not intended to replace classic centralized UEM/MDM solutions. Instead, it
+starts where those tools usually stop by managing developer tooling,
+workflows, and team-specific environment standards. With its
+infrastructure-as-code approach, **devalchemy** helps teams reduce onboarding
+time, lower recurring support effort, and keep setups maintainable through
+unified standards, version control, and CI/CD. It can also be integrated into
+existing environments, including more complex scenarios such as consultants
+working within client-managed setups.
 
 > _"Transform your system into a dev powerhouse — with a touch of automation magic."_
 
@@ -34,17 +37,22 @@ within client-managed setups.
 
 ## Evolutionary Background
 
-**devalchemy** was born out of the need for a streamlined, consistent development environment across different platforms. As developers ourselves, we understand the pain points of setting up and maintaining development environments. With **devalchemy**, we aim to simplify this process, allowing developers to focus on what they do best: writing code.
+**devalchemy** grew out of repeated onboarding and support pain in
+cross-platform teams. When every operating system needs different workarounds,
+setup knowledge becomes fragmented, failures are harder to reproduce, and
+senior team members spend too much time helping others get unstuck. The goal
+is to standardize those workflows so teams spend less time fixing machines and
+more time delivering work.
 
-Painpoints addressed:
+Key problems addressed:
 
-- Inconsistent setups across different OSes
-- Time-consuming manual installations
-- Faster onboarding of new team members
-- Difficulty in maintaining and updating dev environments
-- Failing development setups are not reproducible.
-- Over-reliance on OS-specific scripts
-- Security concerns with elevated privileges
+- Developers lose time figuring out how each machine should be configured
+- Inconsistent setups across different operating systems
+- Slow onboarding for new team members
+- High support effort when setup issues are hard to reproduce
+- Environment standards that drift and become harder to maintain
+- Over-reliance on OS-specific scripts and manual fixes
+- Security concerns from using elevated privileges more often than necessary
 
 ## Base Concepts
 
