@@ -102,7 +102,7 @@ Expand-Archive "dev-alchemy_${Version}_windows_amd64.zip" -DestinationPath .
 When you run a release binary outside a Git checkout, Dev Alchemy extracts its embedded
 runtime assets into the managed app-data directory and executes from there.
 
-### 2. Clone the repo
+### 2. Clone the repo for development or to run playbooks directly from the repository:
 
 ```bash
 git clone https://github.com/csautter/dev-alchemy.git
@@ -110,11 +110,6 @@ cd dev-alchemy
 ```
 
 ### 3. Install Host Dependencies
-
-Use the unified CLI binary for your chosen workflow:
-
-- macOS / Linux: `alchemy`
-- Windows: `alchemy.exe`
 
 #### macOS
 
