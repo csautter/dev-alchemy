@@ -353,19 +353,15 @@ For platform-specific testing examples, environment variables, Docker-based flow
 - [Testing Workflows](./docs/testing-workflows.md)
 - [Windows Ansible Access](./docs/windows-ansible-access.md)
 
-## 📦 Supported Tools
+## 📦 Example Roles
 
-Out-of-the-box roles can install (depending on platform):
+The repository includes a growing set of example Ansible roles. The current
+catalog lives in:
 
-- java
-- jetbrains
-- k9s
-- kind
-- kubectl
-- kubelogin
-- spotify
+- [Example Ansible Roles](./docs/example-roles.md)
 
-> Full list in `roles/` and tagged tasks
+For the source of truth, inspect [`roles/`](./roles/) and the relevant tagged
+tasks.
 
 ---
 
