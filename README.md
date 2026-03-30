@@ -75,6 +75,17 @@ Dev Alchemy follows a few simple ideas:
 That makes it practical both for daily developer use and for testing changes in
 VMs before applying them to real machines.
 
+You can also use the built-in wrapper for host-local provisioning:
+
+```bash
+alchemy provision local --check
+alchemy provision local
+```
+
+On Windows this uses the documented localhost WinRM inventory. On macOS and
+Linux it uses the standard localhost inventory. The macOS/Linux local target is
+currently marked unstable until it has been validated end-to-end.
+
 ## 🚀 Getting Started
 
 ### 1. Choose how you want to run it
@@ -182,7 +193,14 @@ There are two common entry paths.
 
 #### A. Configure the current machine directly
 
-For macOS or Linux localhost runs from the repository root:
+Use the built-in wrapper first when you want the shared command surface:
+
+```bash
+alchemy provision local --check
+alchemy provision local
+```
+
+For the underlying direct `ansible-playbook` commands from the repository root:
 
 ```bash
 ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml --check

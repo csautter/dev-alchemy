@@ -150,6 +150,67 @@ func TestBuildWindowsProvisionArgs(t *testing.T) {
 	}
 }
 
+func TestBuildLocalProvisionArgsForWindows(t *testing.T) {
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsWindows, true)
+	if err != nil {
+		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
+	}
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost_windows_winrm.yml") {
+		t.Fatalf("expected windows localhost winrm inventory, args: %v", args)
+	}
+	if got := strings.Join(args, " "); !strings.Contains(got, "-l windows_host") {
+		t.Fatalf("expected windows localhost limit, args: %v", args)
+	}
+	if args[len(args)-1] != "--check" {
+		t.Fatalf("expected --check to be passed through when requested, args: %v", args)
+	}
+}
+
+func TestBuildLocalProvisionArgsForDarwin(t *testing.T) {
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsDarwin, false)
+	if err != nil {
+		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
+	}
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost.yaml") {
+		t.Fatalf("expected unix localhost inventory, args: %v", args)
+	}
+	if got := strings.Join(args, " "); !strings.Contains(got, "-l localhost") {
+		t.Fatalf("expected localhost limit for darwin, args: %v", args)
+	}
+	if args[len(args)-1] == "--check" {
+		t.Fatalf("did not expect --check when not requested, args: %v", args)
+	}
+}
+
+func TestBuildLocalProvisionArgsForLinux(t *testing.T) {
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsLinux, true)
+	if err != nil {
+		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
+	}
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost.yaml") {
+		t.Fatalf("expected unix localhost inventory, args: %v", args)
+	}
+	if got := strings.Join(args, " "); !strings.Contains(got, "-l localhost") {
+		t.Fatalf("expected localhost limit for linux, args: %v", args)
+	}
+	if args[len(args)-1] != "--check" {
+		t.Fatalf("expected --check to be passed through when requested, args: %v", args)
+	}
+}
+
+func TestBuildLocalProvisionArgsReturnsErrorForUnsupportedHost(t *testing.T) {
+	_, err := buildLocalProvisionArgs(alchemy_build.HostOsType("solaris"), false)
+	if err == nil {
+		t.Fatal("expected unsupported host OS to return an error")
+	}
+	if !strings.Contains(err.Error(), "local provision is not implemented") {
+		t.Fatalf("expected unsupported local provision error, got: %v", err)
+	}
+}
+
 func TestLoadWindowsHypervAnsibleConnectionConfig_UsesDotEnvValues(t *testing.T) {
 	projectDir := t.TempDir()
 	dotEnvPath := filepath.Join(projectDir, ".env")

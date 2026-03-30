@@ -13,6 +13,8 @@ var (
 	check bool
 )
 
+const localProvisionVirtualizationEngine = alchemy_build.VirtualizationEngine("local")
+
 func isProvisionSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	if vm.HostOs == alchemy_build.HostOsWindows &&
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineHyperv &&
@@ -30,12 +32,47 @@ func isProvisionSupported(vm alchemy_build.VirtualMachineConfig) bool {
 				vm.Arch == "arm64"))
 }
 
+func currentHostLocalProvisionVirtualMachine() (alchemy_build.VirtualMachineConfig, bool) {
+	hostOs := alchemy_build.GetCurrentHostOs()
+	switch hostOs {
+	case alchemy_build.HostOsWindows, alchemy_build.HostOsDarwin, alchemy_build.HostOsLinux:
+		return alchemy_build.VirtualMachineConfig{
+			OS:                   "local",
+			Arch:                 "-",
+			HostOs:               hostOs,
+			VirtualizationEngine: localProvisionVirtualizationEngine,
+		}, true
+	default:
+		return alchemy_build.VirtualMachineConfig{}, false
+	}
+}
+
+func isLocalProvisionUnstable(hostOs alchemy_build.HostOsType) bool {
+	return hostOs != alchemy_build.HostOsWindows
+}
+
+func provisionStatus(vm alchemy_build.VirtualMachineConfig) string {
+	if vm.OS == "local" {
+		if isLocalProvisionUnstable(vm.HostOs) {
+			return "unstable"
+		}
+		return "stable"
+	}
+	if alchemy_build.IsVirtualizationEngineUnstable(vm.VirtualizationEngine) {
+		return "unstable"
+	}
+	return "stable"
+}
+
 func availableProvisionVirtualMachines() []alchemy_build.VirtualMachineConfig {
 	var supported []alchemy_build.VirtualMachineConfig
 	for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
 		if isProvisionSupported(vm) {
 			supported = append(supported, vm)
 		}
+	}
+	if localVM, ok := currentHostLocalProvisionVirtualMachine(); ok {
+		supported = append(supported, localVM)
 	}
 	return supported
 }
@@ -47,19 +84,20 @@ func printAvailableProvisionCombinations() error {
 		fmt.Sprintf("Available provision combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
 		"No provision combinations are available for the current host OS.",
 		vms,
-		[]string{"OS", "Type", "Arch"},
+		[]string{"OS", "Type", "Arch", "Status"},
 		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
-			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch}, nil
+			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, provisionStatus(vm)}, nil
 		},
 	)
 }
 
 var provisionCmd = &cobra.Command{
-	Use:   "provision <osname>",
-	Short: "Provision and test Ansible configuration against a VM",
-	Long: `Runs Ansible provisioning against VM targets.
+	Use:   "provision <osname|local>",
+	Short: "Provision and test Ansible configuration against a VM or the local host",
+	Long: `Runs Ansible provisioning against VM targets or the current host.
 
 Examples:
+  alchemy provision local --check
   alchemy provision macos --arch arm64 --check
   alchemy provision windows11 --arch amd64 --check
   alchemy provision windows11 --arch arm64 --check
@@ -71,6 +109,28 @@ Examples:
 
 		if osName == "all" {
 			return fmt.Errorf("❌ \"all\" is not supported for provision; provide one target, for example: alchemy provision windows11 --arch amd64 --check")
+		}
+
+		if osName == "local" {
+			if cmd.Flags().Changed("arch") || cmd.Flags().Changed("type") {
+				return fmt.Errorf("❌ local provisioning does not accept --arch or --type; use `alchemy provision local [--check]`")
+			}
+
+			selectedVM, ok := currentHostLocalProvisionVirtualMachine()
+			if !ok {
+				return fmt.Errorf("❌ local provisioning is not available for host OS: %s", alchemy_build.GetCurrentHostOs())
+			}
+
+			if isLocalProvisionUnstable(selectedVM.HostOs) {
+				fmt.Printf("⚠️ Local provisioning on host OS %s is currently marked unstable and has not been validated end-to-end yet.\n", selectedVM.HostOs)
+			}
+
+			fmt.Printf("🔧 Provisioning local host for OS: %s (check=%t)\n", selectedVM.HostOs, check)
+			if err := runProvision(selectedVM, check); err != nil {
+				return fmt.Errorf("failed provisioning local host for host_os=%s: %w", selectedVM.HostOs, err)
+			}
+
+			return nil
 		}
 
 		if osName != "ubuntu" {

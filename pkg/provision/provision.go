@@ -71,6 +71,11 @@ const (
 	utmIPv4ProbeSubnetPrefixMinimum = 24
 
 	defaultAnsibleSSHCommonArgs = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
+
+	localUnixInventoryPath           = "./inventory/localhost.yaml"
+	localUnixInventoryTarget         = "localhost"
+	localWindowsWinRMInventoryPath   = "./inventory/localhost_windows_winrm.yml"
+	localWindowsWinRMInventoryTarget = "windows_host"
 )
 
 var (
@@ -147,6 +152,9 @@ var inspectProvisionTarget = alchemy_deploy.InspectStartTarget
 var runProvisionCommandWithCombinedOutputWithEnv = runCommandWithCombinedOutputWithEnv
 
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	if isLocalProvisionTarget(vm) {
+		return runLocalProvision(vm, check)
+	}
 	if isHypervWindows11Amd64ProvisionTarget(vm) {
 		return runHypervWindows11Provision(vm, check)
 	}
@@ -171,6 +179,10 @@ func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 		vm.HostOs,
 		vm.VirtualizationEngine,
 	)
+}
+
+func isLocalProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
+	return vm.OS == "local"
 }
 
 func isHypervWindows11Amd64ProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
@@ -206,6 +218,21 @@ func isTartMacOSProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
 		vm.Arch == "arm64" &&
 		vm.HostOs == alchemy_build.HostOsDarwin &&
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineTart
+}
+
+func runLocalProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+
+	args, err := buildLocalProvisionArgs(vm.HostOs, check)
+	if err != nil {
+		return err
+	}
+
+	if err := runAnsibleProvisionCommand(projectDir, args, 90*time.Minute, fmt.Sprintf("local:%s:provision", vm.HostOs)); err != nil {
+		return fmt.Errorf("ansible provisioning failed for local host %s: %w", vm.HostOs, err)
+	}
+
+	return nil
 }
 
 func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool) error {
@@ -959,6 +986,15 @@ func buildSSHProvisionArgs(projectDir string, ip string, connectionConfig ubuntu
 	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, check)
 }
 
+func buildLocalProvisionArgs(hostOs alchemy_build.HostOsType, check bool) ([]string, error) {
+	inventoryPath, inventoryTarget, err := localProvisionInventory(hostOs)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildStaticInventoryProvisionArgs(inventoryPath, inventoryTarget, check), nil
+}
+
 func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, check bool) ([]string, func() error, error) {
 
 	extraVarsFile, err := os.CreateTemp(projectDir, ".ansible-extra-vars-*.json")
@@ -999,6 +1035,34 @@ func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, c
 	}
 
 	return args, cleanup, nil
+}
+
+func buildStaticInventoryProvisionArgs(inventoryPath string, inventoryTarget string, check bool) []string {
+	args := []string{
+		"./playbooks/setup.yml",
+		"-i",
+		inventoryPath,
+	}
+	if inventoryTarget != "" {
+		args = append(args, "-l", inventoryTarget)
+	}
+	args = append(args, "-vvv")
+	if check {
+		args = append(args, "--check")
+	}
+
+	return args
+}
+
+func localProvisionInventory(hostOs alchemy_build.HostOsType) (string, string, error) {
+	switch hostOs {
+	case alchemy_build.HostOsWindows:
+		return localWindowsWinRMInventoryPath, localWindowsWinRMInventoryTarget, nil
+	case alchemy_build.HostOsDarwin, alchemy_build.HostOsLinux:
+		return localUnixInventoryPath, localUnixInventoryTarget, nil
+	default:
+		return "", "", fmt.Errorf("local provision is not implemented for host OS %s", hostOs)
+	}
 }
 
 func loadWindowsHypervAnsibleConnectionConfig(projectDir string) (windowsAnsibleConnectionConfig, error) {

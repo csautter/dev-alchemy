@@ -14,6 +14,17 @@ below when you want to run `playbooks/setup.yml` directly from the repository.
 
 ## Run on localhost
 
+CLI wrapper:
+
+```bash
+alchemy provision local --check
+alchemy provision local
+```
+
+`alchemy provision local` uses `inventory/localhost.yaml` on macOS/Linux and
+`inventory/localhost_windows_winrm.yml` on Windows. The macOS/Linux local
+target is currently marked unstable until it has been validated end-to-end.
+
 Dry run:
 
 ```bash
