@@ -1,174 +1,54 @@
 # 🧪 devalchemy
 
-**devalchemy** is an opinionated, cross-platform orchestration toolkit for
-development and non-development environments. It combines
-[Ansible](https://www.ansible.com/) with OS-specific system tools to provide a
-unified way to test, provision, and manage machines across **macOS**,
-**Linux**, and **Windows**.
+**devalchemy** is an opinionated cross-platform automation toolkit for setting
+up, testing, and maintaining developer environments on **macOS**, **Linux**,
+and **Windows**. It combines [Ansible](https://www.ansible.com/) with
+host-specific VM and system tooling so teams can manage local machines, remote
+hosts, and disposable test systems through one repository.
 
-Built for small teams working with heterogeneous device fleets,
-**devalchemy** addresses a costly and familiar problem: developers lose hours
-setting up machines, guessing how a system is supposed to work, and applying
-OS-specific hacks just to reach a usable baseline. It turns both fresh and
-existing machines into consistent, reproducible developer setups across
-**macOS**, **Linux**, and **Windows**.
+It is especially useful when a team has a mixed device fleet and wants one
+repeatable way to:
 
-It is not intended to replace classic centralized UEM/MDM solutions. Instead, it
-starts where those tools usually stop by managing developer tooling,
-workflows, and team-specific environment standards. With its
-infrastructure-as-code approach, **devalchemy** helps teams reduce onboarding
-time, lower recurring support effort, and keep setups maintainable through
-unified standards, version control, and CI/CD. It can also be integrated into
-existing environments, including more complex scenarios such as consultants
-working within client-managed setups.
+- onboard developers faster
+- keep machine setup consistent across operating systems
+- test provisioning changes safely before rolling them out
+- reduce one-off scripts, tribal knowledge, and repeated support work
 
-> _"Transform your system into a dev powerhouse — with a touch of automation magic."_
+Dev Alchemy is not a replacement for classic MDM/UEM tooling. It complements
+those tools by handling the developer-tooling and workflow layer that often
+remains manual, team-specific, and hard to reproduce.
 
-## ✨ Features
+> _"Transform your system into a dev powerhouse with a touch of automation magic."_
 
-- ✅ Unified setup for macOS, Linux, and Windows
-- 📦 Install development tools, CLIs, languages, and more
-- ⚙️ Easily extensible Ansible roles and playbooks
-- 💻 Consistent dev experience across all platforms
-- 🔒 Minimal privileges needed (no full root where not required)
-- 🐳 Automated cross-platform testing via Docker and VMs
+## Why It Helps
 
----
+Without a shared automation baseline, cross-platform teams usually run into the
+same problems:
 
-## Evolutionary Background
+- developers spend hours figuring out how a machine is supposed to look
+- onboarding depends too much on senior team members
+- setup differences become hard to debug and reproduce
+- OS-specific scripts drift over time
 
-**devalchemy** grew out of repeated onboarding and support pain in
-cross-platform teams. When every operating system needs different workarounds,
-setup knowledge becomes fragmented, failures are harder to reproduce, and
-senior team members spend too much time helping others get unstuck. The goal
-is to standardize those workflows so teams spend less time fixing machines and
-more time delivering work.
+Dev Alchemy addresses that by keeping setup logic in versioned Ansible roles
+and playbooks, then using host-appropriate tooling to apply and test them.
 
-Key problems addressed:
+## Support Snapshot
 
-- Developers lose time figuring out how each machine should be configured
-- Inconsistent setups across different operating systems
-- Slow onboarding for new team members
-- High support effort when setup issues are hard to reproduce
-- Environment standards that drift and become harder to maintain
-- Over-reliance on OS-specific scripts and manual fixes
-- Security concerns from using elevated privileges more often than necessary
+The project currently supports these host-to-target workflows:
 
-## Base Concepts
+| Host OS | What you can automate today |
+| --- | --- |
+| **macOS** | Managed workflows for **macOS** (Tart), **Ubuntu** (UTM), and **Windows 11** (UTM) |
+| **Windows** | Managed workflows for **Ubuntu** (Hyper-V) and **Windows 11** (Hyper-V, plus VirtualBox as unstable) |
+| **Linux** | Direct Ansible runs and Docker-based Linux testing; managed VM workflows are more limited today |
 
-The core idea of **devalchemy** is to use Ansible playbooks and roles to define and automate the setup of development environments. This includes installing essential tools, configuring settings, and managing dependencies.<br>
-Every role is platform independent and can be applied to macOS, Linux, and Windows. The playbooks are designed to be modular, allowing users to pick and choose which components they want to install.<br>
-The setup is idempotent, meaning you can run the playbooks multiple times without causing issues or duplications. This ensures that your development environment remains consistent and up-to-date.<br>
-Despite the common use of Ansible in server environments where changes are **pushed** from a central location, **devalchemy** is designed for local **pull** based execution on individual machines. This approach allows developers to maintain control over their own environments while still benefiting from automation. Every ansible run can be simulated with `--check` to see what changes would be applied.
+This means Dev Alchemy can cover every currently supported guest OS family on a
+**macOS host**, and every currently supported family except **macOS** on a
+**Windows host**.
 
----
-
-## 🚀 Getting Started
-
-### 1. Download a Release Binary
-
-Release assets are published on the
-[GitHub Releases page](https://github.com/csautter/dev-alchemy/releases) using the pattern
-`dev-alchemy_<version>_<os>_<arch>`, with `.tar.gz` archives for macOS/Linux and `.zip`
-archives for Windows.
-
-After extraction, the executable is named `alchemy` on macOS/Linux and `alchemy.exe` on Windows.
-
-The examples below resolve the latest published release tag automatically before downloading
-the matching archive for the selected platform.
-
-#### macOS / Linux example
-
-```bash
-TAG="$(curl -fsSL https://api.github.com/repos/csautter/dev-alchemy/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
-VERSION="${TAG#v}"
-curl -fLO "https://github.com/csautter/dev-alchemy/releases/download/${TAG}/dev-alchemy_${VERSION}_linux_amd64.tar.gz"
-tar -xzf "dev-alchemy_${VERSION}_linux_amd64.tar.gz"
-chmod +x ./alchemy
-./alchemy build list
-```
-
-#### Windows example
-
-```powershell
-$Release = Invoke-RestMethod "https://api.github.com/repos/csautter/dev-alchemy/releases/latest"
-$Tag = $Release.tag_name
-$Version = $Tag.TrimStart("v")
-Invoke-WebRequest -OutFile "dev-alchemy_${Version}_windows_amd64.zip" "https://github.com/csautter/dev-alchemy/releases/download/$Tag/dev-alchemy_${Version}_windows_amd64.zip"
-Expand-Archive "dev-alchemy_${Version}_windows_amd64.zip" -DestinationPath .
-.\alchemy.exe build list
-```
-
-When you run a release binary outside a Git checkout, Dev Alchemy extracts its embedded
-runtime assets into the managed app-data directory and executes from there. See
-[Managed Application Data](./docs/managed-application-data.md) for the directory
-layout and override options.
-
-### 2. Clone the repo for development or to run playbooks directly from the repository:
-
-```bash
-git clone https://github.com/csautter/dev-alchemy.git
-cd dev-alchemy
-```
-
-### 3. Install Host Dependencies
-
-#### macOS
-
-```bash
-alchemy install
-```
-
-This runs [scripts/macos/dev-alchemy-install-dependencies.sh](./scripts/macos/dev-alchemy-install-dependencies.sh).
-
-#### Ubuntu / Debian
-
-The `install` command is currently intended for macOS and Windows hosts. On Linux, install Ansible manually:
-
-```bash
-sudo apt update && sudo apt install ansible
-```
-
-#### Windows
-
-Run the command in an elevated PowerShell session (Run as Administrator):
-
-```powershell
-alchemy.exe install
-```
-
-This runs [scripts/windows/dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1).
-
-To force a VM rebuild even when the cached build artifact already exists, use:
-
-```powershell
-alchemy.exe build windows11 --arch amd64 --no-cache
-```
-
-#### Managed application data
-
-Dev Alchemy stores VM build and deployment state outside the repository in an
-OS-appropriate app-data directory. You can override the base location with
-`DEV_ALCHEMY_APP_DATA_DIR`.
-
-For platform defaults, managed subdirectories, exported environment variables,
-and standalone runtime behavior, see
-[Managed Application Data](./docs/managed-application-data.md).
-
-##### Windows remote access
-
-Windows hosts usually need either `WinRM` or `SSH` enabled before Ansible can
-manage them, including some localhost-style runs on the same machine.
-
-The setup commands, security notes, and manual Windows playbook examples live in the dedicated guide:
-
-- [Windows Ansible Access](./docs/windows-ansible-access.md)
-
----
-
-### 4. Discover Available Targets and Commands
-
-Use the `list` subcommands to see what the current host can build, create, start, provision, stop, or destroy before running a longer workflow:
+Use the built-in discovery commands to see the exact combinations available on
+your current machine:
 
 ```bash
 alchemy build list
@@ -179,7 +59,116 @@ alchemy stop list
 alchemy destroy list
 ```
 
-Use `--help` on the root command or any subcommand to inspect supported flags and usage details:
+> Note: macOS guests are only supported on macOS hosts due to Apple platform
+> and licensing restrictions.
+
+## Base Model
+
+Dev Alchemy follows a few simple ideas:
+
+- **Ansible roles and playbooks are the source of truth** for machine setup
+- **roles stay cross-platform where possible**, with OS-specific handling where needed
+- **runs are idempotent**, so the same workflow can be applied repeatedly
+- **execution is pull-oriented**, so machines can run their own automation locally
+- **`--check` mode matters**, so changes can be previewed before they apply
+
+That makes it practical both for daily developer use and for testing changes in
+VMs before applying them to real machines.
+
+## 🚀 Getting Started
+
+### 1. Choose how you want to run it
+
+You can either:
+
+- download a release binary for normal use
+- clone the repository when you want to edit playbooks, roles, or project code
+
+#### Download a release binary
+
+Release assets are published on the
+[GitHub Releases page](https://github.com/csautter/dev-alchemy/releases) as
+`dev-alchemy_<version>_<os>_<arch>`.
+
+After extraction, the executable is named `alchemy` on macOS/Linux and
+`alchemy.exe` on Windows.
+
+macOS / Linux example:
+
+```bash
+TAG="$(curl -fsSL https://api.github.com/repos/csautter/dev-alchemy/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
+VERSION="${TAG#v}"
+curl -fLO "https://github.com/csautter/dev-alchemy/releases/download/${TAG}/dev-alchemy_${VERSION}_linux_amd64.tar.gz"
+tar -xzf "dev-alchemy_${VERSION}_linux_amd64.tar.gz"
+chmod +x ./alchemy
+./alchemy build list
+```
+
+Windows example:
+
+```powershell
+$Release = Invoke-RestMethod "https://api.github.com/repos/csautter/dev-alchemy/releases/latest"
+$Tag = $Release.tag_name
+$Version = $Tag.TrimStart("v")
+Invoke-WebRequest -OutFile "dev-alchemy_${Version}_windows_amd64.zip" "https://github.com/csautter/dev-alchemy/releases/download/$Tag/dev-alchemy_${Version}_windows_amd64.zip"
+Expand-Archive "dev-alchemy_${Version}_windows_amd64.zip" -DestinationPath .
+.\alchemy.exe build list
+```
+
+When you run a release binary outside a Git checkout, Dev Alchemy extracts its
+embedded runtime assets into a managed app-data directory. See
+[Managed Application Data](./docs/managed-application-data.md) for the default
+locations and override options.
+
+#### Clone the repository
+
+```bash
+git clone https://github.com/csautter/dev-alchemy.git
+cd dev-alchemy
+```
+
+### 2. Install host dependencies
+
+#### macOS
+
+```bash
+alchemy install
+```
+
+This runs
+[scripts/macos/dev-alchemy-install-dependencies.sh](./scripts/macos/dev-alchemy-install-dependencies.sh).
+
+#### Ubuntu / Debian
+
+The `install` command is currently intended for macOS and Windows hosts. On
+Linux, install Ansible manually:
+
+```bash
+sudo apt update && sudo apt install ansible
+```
+
+#### Windows
+
+Run the command in an elevated PowerShell session:
+
+```powershell
+alchemy.exe install
+```
+
+This runs
+[scripts/windows/dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1).
+
+### 3. Discover what your host supports
+
+Start with the `list` commands before running a longer workflow:
+
+```bash
+alchemy build list
+alchemy create list
+alchemy provision list
+```
+
+Use `--help` when you want the supported flags for a command:
 
 ```bash
 alchemy --help
@@ -187,142 +176,103 @@ alchemy build --help
 alchemy provision --help
 ```
 
----
+### 4. Run your first useful workflow
 
-### 5. Run the Playbook
+There are two common entry paths.
 
-The manual `ansible-playbook` workflows for localhost, remote hosts,
-VMs, and Windows live in the dedicated guide:
+#### A. Configure the current machine directly
 
-- [Running Playbooks](./docs/running-playbooks.md)
-
-If the Windows target does not already have remote access configured, start
-with [Windows Ansible Access](./docs/windows-ansible-access.md).
-
-## Testing
-
-### 🧪 Cross-Platform Testing Matrix
-
-| Host OS     |                                        Test Linux                                         |              Test macOS              |                                                       Test Windows                                                       |
-| ----------- | :---------------------------------------------------------------------------------------: | :----------------------------------: | :----------------------------------------------------------------------------------------------------------------------: |
-| **macOS**   | Docker<br><sub>✅ Implemented</sub><br>\_\_\_<br>UTM Qemu VM<br><sub>✅ Implemented</sub> | Tart VM<br><sub>✅ Implemented</sub> |                                         UTM Qemu VM<br><sub>✅ Implemented</sub>                                         |
-| **Linux**   |                            Docker<br><sub>✅ Implemented</sub>                            |                 ---                  |                                  VM (e.g., VirtualBox)<br><sub>❌ Not implemented</sub>                                  |
-| **Windows** |   WSL<br><sub>❌ Not implemented</sub><br>\_\_\_<br>Docker<br><sub>✅ Implemented</sub>   |                 ---                  | Docker Desktop (Windows Containers) <br><sub>✅ Implemented</sub><br>\_\_\_<br>VM (Hyper-V)<br><sub>✅ Implemented</sub><br>\_\_\_<br>VM (VirtualBox)<br><sub>⚠️ Unstable</sub> |
-
-> <sub>Not implemented</sub> entries indicate solutions not yet implemented in this project. Only solutions marked as **Implemented** are currently available out-of-the-box.
-
-- **Docker**: Used for lightweight Linux container testing on macOS, Linux, and Windows.
-- **Windows Containers**: Used for lightweight Windows container testing on Windows hosts with Docker Desktop.
-- **Tart VM**: Used for macOS VM testing on macOS hosts.
-- **UTM VM**: Used for Windows VM testing on macOS hosts.
-- **WSL**: Windows Subsystem for Linux, enables Linux testing on Windows.
-- **VM**: Generic virtual machine solutions (e.g., VirtualBox, Hyper-V) for cross-platform testing.
-- **Hyper-V**: Used for Windows VM testing on Windows hosts.
-
-> Note: macOS VM testing is only supported on macOS hosts due to Apple licensing restrictions. There might exist workarounds, but they are not covered here.
-
-### Workflow
-
-Most testing flows now go through the same VM lifecycle interface:
+For macOS or Linux localhost runs from the repository root:
 
 ```bash
-alchemy build <osname> [--type <type>] [--arch <arch>]
-alchemy create <osname> [--type <type>] [--arch <arch>]
-alchemy start <osname> [--type <type>] [--arch <arch>]
-alchemy provision <osname> [--type <type>] [--arch <arch>] --check
-alchemy provision <osname> [--type <type>] [--arch <arch>]
-alchemy stop <osname> [--type <type>] [--arch <arch>]
-alchemy destroy <osname> [--type <type>] [--arch <arch>]
+ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml --check
+ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml
 ```
 
-- `build` creates or refreshes the reusable VM artifact.
-- `create` creates the managed VM target from that artifact.
-- `start` starts an existing created VM when it is stopped.
-- `provision` runs the Ansible workflow against the running target.
-- `stop` shuts the VM down without deleting it.
-- `destroy` removes the managed VM target.
+For Windows localhost or remote-target examples, use
+[Running Playbooks](./docs/running-playbooks.md).
 
-Depending on the backend, the initial boot may happen during `create` or require a small host-specific step. After a VM has been created, use `start` whenever you want to boot it again.
+#### B. Test the setup in a disposable VM first
 
-Examples:
+Example on a supported host:
 
 ```bash
 alchemy build ubuntu --type server --arch amd64
 alchemy create ubuntu --type server --arch amd64
 alchemy provision ubuntu --type server --arch amd64 --check
-
-alchemy stop ubuntu --type server --arch amd64
-alchemy start ubuntu --type server --arch amd64
+alchemy provision ubuntu --type server --arch amd64
 ```
 
-For manual playbook commands, platform-specific testing examples, environment
-variables, Docker-based flows, and troubleshooting commands, see:
+If you are targeting Windows and remote access is not configured yet, start
+with [Windows Ansible Access](./docs/windows-ansible-access.md).
 
-- [Running Playbooks](./docs/running-playbooks.md)
-- [Testing Workflows](./docs/testing-workflows.md)
-- [Windows Ansible Access](./docs/windows-ansible-access.md)
+## Docs Map
+
+The root README is the fast entry point. Use these guides when you want the
+next level of detail:
+
+- [Running Playbooks](./docs/running-playbooks.md) for localhost, remote-host,
+  VM, and Windows `ansible-playbook` examples
+- [Testing Workflows](./docs/testing-workflows.md) for host-specific VM and
+  Docker test flows
+- [Managed Application Data](./docs/managed-application-data.md) for cache,
+  runtime, and app-data locations
+- [Windows Ansible Access](./docs/windows-ansible-access.md) for WinRM and SSH
+  setup on Windows targets
+- [Example Ansible Roles](./docs/example-roles.md) for the current sample role
+  catalog and repository layout
+- [Troubleshooting Guide](./docs/troubleshooting.md) for rare host-specific
+  issues
 
 ## 📦 Example Roles
 
-The repository includes a growing set of example Ansible roles. The catalog,
-repository layout overview, and quick customization examples live in:
+The repository already includes example roles for common developer tooling such
+as `brew`, `java`, `jetbrains`, `k9s`, `kind`, `kubectl`, `kubelogin`,
+`openssh`, `python`, and `spotify`.
 
-- [Example Ansible Roles](./docs/example-roles.md)
-
-For the source of truth, inspect [`roles/`](./roles/) and the relevant tagged
-tasks.
-
----
-
-## Troubleshooting
-
-Rare, host-specific issues are documented separately:
-
-- [Troubleshooting Guide](./docs/troubleshooting.md)
+Use [Example Ansible Roles](./docs/example-roles.md) as the catalog and
+[`roles/`](./roles/) as the source of truth.
 
 ## 🤝 Contributing
 
-Contributions welcome! Feel free to:
+Contributions are welcome. Good areas to improve include:
 
-- Add new roles (e.g., Rust, Java, etc.)
-- Improve cross-platform support
-- Fix bugs or enhance docs
+- more roles and playbooks
+- broader cross-platform coverage
+- better docs and troubleshooting guidance
+- bug fixes and test coverage
 
-Review the [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution terms and the Contributor License Agreement (CLA).
-
----
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution terms and the
+Contributor License Agreement (CLA).
 
 ## 📜 License
 
-Dev Alchemy is available under a dual-licensing model:
+Dev Alchemy uses a dual-licensing model.
 
 ### Open Source
 
-The community edition is licensed under the **GNU Affero General Public License v3 (AGPLv3)**.
+The community edition is licensed under the **GNU Affero General Public License
+v3 (AGPLv3)**.
 
-See [LICENSE.md](./LICENSE.md) for the full license text.
+See [LICENSE.md](./LICENSE.md).
 
 ### Commercial Use
 
-If you need to use Dev Alchemy in commercial products, SaaS platforms, or other closed-source environments without AGPL obligations, a separate commercial license is available.
+If you need to use Dev Alchemy in commercial products, SaaS platforms, or
+other closed-source environments without AGPL obligations, a separate
+commercial license is available.
 
-See [LICENSE_COMMERCIAL.md](./LICENSE_COMMERCIAL.md) for commercial licensing terms.
+See [LICENSE_COMMERCIAL.md](./LICENSE_COMMERCIAL.md).
 
-For commercial inquiries, contact:
-📧 cc@sautter.cc
+For commercial inquiries: `cc@sautter.cc`
 
 ### Historical Note
 
-Early releases were published under the **MIT License**.
-If you are using an older tag or release, refer to the license file included with that version for the exact terms that apply.
-
----
+Early releases were published under the **MIT License**. If you use an older
+tag or release, refer to the license file included with that version.
 
 ## 💡 Inspiration
 
-This project was born from a need to simplify dev environment onboarding across multiple systems, without resorting to
-OS-specific scripts. With Ansible and a touch of Dev Alchemy, setup becomes reproducible and delightful.
-
----
-
-🧪 _Happy hacking with `devalchemy`!_
+This project grew out of real onboarding and support pain in mixed-OS teams.
+The goal is simple: make machine setup reproducible, testable, and much less
+dependent on memory or hand-written host-specific scripts.
