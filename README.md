@@ -41,21 +41,66 @@ Despite the common use of Ansible in server environments where changes are **pus
 
 ## 🚀 Getting Started
 
-### 1. Clone the repo
+### 1. Download a Release Binary
+
+Release assets are published on the
+[GitHub Releases page](https://github.com/csautter/dev-alchemy/releases) with these names:
+
+- `dev-alchemy_<version>_darwin_amd64.tar.gz`
+- `dev-alchemy_<version>_darwin_arm64.tar.gz`
+- `dev-alchemy_<version>_linux_amd64.tar.gz`
+- `dev-alchemy_<version>_linux_arm64.tar.gz`
+- `dev-alchemy_<version>_windows_amd64.zip`
+- `dev-alchemy_<version>_windows_arm64.zip`
+
+After extraction, the executable is named `alchemy` on macOS/Linux and `alchemy.exe` on Windows.
+
+The examples below resolve the latest published release tag automatically before downloading
+the matching archive for the selected platform.
+
+#### macOS / Linux example
+
+```bash
+TAG="$(curl -fsSL https://api.github.com/repos/csautter/dev-alchemy/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
+VERSION="${TAG#v}"
+curl -fLO "https://github.com/csautter/dev-alchemy/releases/download/${TAG}/dev-alchemy_${VERSION}_linux_amd64.tar.gz"
+tar -xzf "dev-alchemy_${VERSION}_linux_amd64.tar.gz"
+chmod +x ./alchemy
+./alchemy build list
+```
+
+#### Windows example
+
+```powershell
+$Release = Invoke-RestMethod "https://api.github.com/repos/csautter/dev-alchemy/releases/latest"
+$Tag = $Release.tag_name
+$Version = $Tag.TrimStart("v")
+Invoke-WebRequest -OutFile "dev-alchemy_${Version}_windows_amd64.zip" "https://github.com/csautter/dev-alchemy/releases/download/$Tag/dev-alchemy_${Version}_windows_amd64.zip"
+Expand-Archive "dev-alchemy_${Version}_windows_amd64.zip" -DestinationPath .
+.\alchemy.exe build list
+```
+
+When you run a release binary outside a Git checkout, Dev Alchemy extracts its embedded
+runtime assets into the managed app-data directory and executes from there.
+
+### 2. Clone the repo
 
 ```bash
 git clone https://github.com/csautter/dev-alchemy.git
 cd dev-alchemy
 ```
 
-### 2. Install Host Dependencies
+### 3. Install Host Dependencies
 
-Use the unified CLI command from the repository root.
+Use the unified CLI binary for your chosen workflow:
+
+- macOS / Linux: `alchemy`
+- Windows: `alchemy.exe`
 
 #### macOS
 
 ```bash
-go run cmd/main.go install
+alchemy install
 ```
 
 This runs [scripts/macos/dev-alchemy-install-dependencies.sh](./scripts/macos/dev-alchemy-install-dependencies.sh).
@@ -73,9 +118,9 @@ sudo apt update && sudo apt install ansible
 Use the `list` subcommands to see what the current host can build, create, or provision before running a longer workflow:
 
 ```bash
-go run cmd/main.go build list
-go run cmd/main.go create list
-go run cmd/main.go provision list
+alchemy build list
+alchemy create list
+alchemy provision list
 ```
 
 #### Windows
@@ -83,15 +128,15 @@ go run cmd/main.go provision list
 Run the command in an elevated PowerShell session (Run as Administrator):
 
 ```powershell
-go run cmd/main.go install
+alchemy.exe install
 ```
 
 This runs [scripts/windows/dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1).
 
 To force a VM rebuild even when the cached build artifact already exists, use:
 
-```bash
-go run cmd/main.go build windows11 --arch amd64 --no-cache
+```powershell
+alchemy.exe build windows11 --arch amd64 --no-cache
 ```
 
 #### Managed application data
@@ -107,8 +152,13 @@ Under that root, Dev Alchemy manages:
 - `cache/` for downloaded files and build artifacts
 - `.vagrant/` for isolated Vagrant state
 - `packer_cache/` for Packer plugin/download cache
+- `project/` for the embedded runtime project used by standalone binaries outside a Git checkout
 
 You can override the default location by setting `DEV_ALCHEMY_APP_DATA_DIR`. Dev Alchemy also exports `DEV_ALCHEMY_CACHE_DIR`, `DEV_ALCHEMY_VAGRANT_DIR`, and `DEV_ALCHEMY_PACKER_CACHE_DIR` for helper scripts and manual workflows.
+
+On the first standalone run, Dev Alchemy extracts bundled scripts, playbooks, and other
+runtime assets into `DEV_ALCHEMY_APP_DATA_DIR/project`. Later runs keep that managed
+tree in sync so the standalone `alchemy` binary can operate without a repository checkout.
 
 
 
@@ -282,37 +332,37 @@ docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 
 #### Local tests for Ubuntu on Windows with Hyper-v
 
-To test changes locally on Ubuntu with a Windows host system using Hyper-V, use the Go wrapper workflow from repository root.
+To test changes locally on Ubuntu with a Windows host system using Hyper-V, use the unified CLI workflow from repository root.
 
 Install host dependencies first:
 
 ```powershell
-go run cmd/main.go install
+alchemy.exe install
 ```
 
 ##### Build the Ubuntu box
 
 ```powershell
 # server
-go run cmd/main.go build ubuntu --type server --arch amd64
+alchemy.exe build ubuntu --type server --arch amd64
 # desktop
-go run cmd/main.go build ubuntu --type desktop --arch amd64
+alchemy.exe build ubuntu --type desktop --arch amd64
 ```
 
 ##### Create/start the Ubuntu VM
 
 ```powershell
 $env:VAGRANT_HYPERV_SWITCH = "Default Switch"
-go run cmd/main.go create ubuntu --type server --arch amd64
+alchemy.exe create ubuntu --type server --arch amd64
 # or desktop
-go run cmd/main.go create ubuntu --type desktop --arch amd64
+alchemy.exe create ubuntu --type desktop --arch amd64
 ```
 
 ##### Provision the Ubuntu VM
 
 ```powershell
-go run cmd/main.go provision ubuntu --type server --arch amd64 --check
-go run cmd/main.go provision ubuntu --type server --arch amd64
+alchemy.exe provision ubuntu --type server --arch amd64 --check
+alchemy.exe provision ubuntu --type server --arch amd64
 ```
 
 The command discovers the VM IP automatically and runs Ansible through the Windows/Cygwin wrapper.
@@ -352,7 +402,7 @@ To test changes locally on Windows using Hyper-V, you can create a new virtual m
 Install host dependencies first:
 
 ```powershell
-go run cmd/main.go install
+alchemy.exe install
 ```
 
 ##### Download a Windows .iso file
@@ -369,13 +419,13 @@ Check [README.md](./build/packer/windows/README.md) for a guide to build a Windo
 
 Check [README.md](./deployments/vagrant/ansible-windows/README.md) for a guide to run the built Windows VM with Vagrant and Hyper-V.
 
-##### Provision the Windows VM (via Go wrapper)
+##### Provision the Windows VM (via unified CLI)
 
 After the VM is running, provision it from the repository root using the unified command:
 
 ```bash
-go run cmd/main.go provision windows11 --arch amd64 --check
-go run cmd/main.go provision windows11 --arch amd64
+alchemy.exe provision windows11 --arch amd64 --check
+alchemy.exe provision windows11 --arch amd64
 ```
 
 The command discovers the VM IP automatically and runs Ansible through the Windows/Cygwin wrapper.
@@ -448,7 +498,7 @@ Check [README.md](./build/packer/windows/README.md) for a guide to build a Windo
 Install host dependencies first:
 
 ```bash
-go run cmd/main.go install
+alchemy install
 ```
 
 You can run the following commands to build and create the Windows 11 VM in UTM:
@@ -457,10 +507,10 @@ You can run the following commands to build and create the Windows 11 VM in UTM:
 # arm64 requires sudo to create a custom .iso file for automated installation.
 # sudo rights are evaluated at runtime, so you can run the build command without sudo and it will ask for sudo rights only if needed.
 arch=arm64 # or amd64
-# sudo go run cmd/main.go build windows11 --arch $arch --headless
-go run cmd/main.go build windows11 --arch $arch --headless
+# sudo alchemy build windows11 --arch $arch --headless
+alchemy build windows11 --arch $arch --headless
 # `--headless` applies to `build`, not `create`.
-go run cmd/main.go create windows11 --arch $arch
+alchemy create windows11 --arch $arch
 ```
 
 Open UTM and start the created Windows VM.
@@ -479,8 +529,8 @@ UTM_WINDOWS_ANSIBLE_PORT=5985
 Now provision the running UTM VM from the repository root:
 
 ```bash
-go run cmd/main.go provision windows11 --arch $arch --check
-go run cmd/main.go provision windows11 --arch $arch
+alchemy provision windows11 --arch $arch --check
+alchemy provision windows11 --arch $arch
 ```
 
 The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target. On macOS it also sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for the ansible process automatically.
@@ -502,7 +552,7 @@ On macOS you can use UTM to run a Ubuntu VM for testing ansible changes on Ubunt
 Install host dependencies first:
 
 ```bash
-go run cmd/main.go install
+alchemy install
 ```
 
 You can run the following commands to build and create the Ubuntu VM in UTM:
@@ -510,8 +560,8 @@ You can run the following commands to build and create the Ubuntu VM in UTM:
 ```bash
 arch=arm64 # or amd64
 type=desktop # or server
-go run cmd/main.go build ubuntu --arch $arch --type $type
-go run cmd/main.go create ubuntu --arch $arch --type $type
+alchemy build ubuntu --arch $arch --type $type
+alchemy create ubuntu --arch $arch --type $type
 ```
 
 Open UTM and start the created Ubuntu VM.
@@ -532,8 +582,8 @@ UTM_UBUNTU_ANSIBLE_SSH_RETRIES=3
 Now provision the running UTM VM from the repository root:
 
 ```bash
-go run cmd/main.go provision ubuntu --type $type --arch $arch --check
-go run cmd/main.go provision ubuntu --type $type --arch $arch
+alchemy provision ubuntu --type $type --arch $arch --check
+alchemy provision ubuntu --type $type --arch $arch
 ```
 
 The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target. On macOS it also sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for the ansible process automatically.

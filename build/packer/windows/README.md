@@ -8,7 +8,7 @@ This directory contains the Packer templates for building Windows 11 images on W
 
 - [Packer](https://www.packer.io/downloads) installed
 - Windows host or compatible environment
-- For repository-managed host dependencies, run `go run cmd/main.go install` from repo root on macOS or Windows before building.
+- For repository-managed host dependencies, run `alchemy` on macOS or `alchemy.exe` on Windows from repo root before building.
 
 ### Usage
 
@@ -63,16 +63,16 @@ The process is idempotent, so you can re-run commands without issues.
 ```bash
 arch=arm64 # or amd64
 export DEV_ALCHEMY_APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
-go run cmd/main.go install
-go run cmd/main.go build windows11 --arch $arch
-go run cmd/main.go create windows11 --arch $arch
+alchemy install
+alchemy build windows11 --arch $arch
+alchemy create windows11 --arch $arch
 ```
 
 Start the VM in UTM and provision it from repository root with the unified wrapper:
 
 ```bash
-go run cmd/main.go provision windows11 --arch $arch --check
-go run cmd/main.go provision windows11 --arch $arch
+alchemy provision windows11 --arch $arch --check
+alchemy provision windows11 --arch $arch
 ```
 
 Set the required WinRM credentials in project-root `.env` or process environment before provisioning:

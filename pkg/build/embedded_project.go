@@ -2,10 +2,12 @@ package build
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	runtimeassets "github.com/csautter/dev-alchemy"
@@ -66,14 +68,16 @@ func ensureEmbeddedProjectDir(appDataDir string) (string, error) {
 		return "", fmt.Errorf("build embedded asset manifest: %w", err)
 	}
 
+	if manifestMatches(projectRoot, embeddedProjectManifestFile, manifestHash) {
+		return projectDir, nil
+	}
+
 	if err := syncEmbeddedProject(runtimeassets.FS(), projectRoot); err != nil {
 		return "", fmt.Errorf("extract embedded project assets: %w", err)
 	}
 
-	if !manifestMatches(projectRoot, embeddedProjectManifestFile, manifestHash) {
-		if err := projectRoot.WriteFile(embeddedProjectManifestFile, []byte(manifestHash+"\n"), 0o600); err != nil {
-			return "", fmt.Errorf("write embedded asset manifest: %w", err)
-		}
+	if err := projectRoot.WriteFile(embeddedProjectManifestFile, []byte(manifestHash+"\n"), 0o600); err != nil {
+		return "", fmt.Errorf("write embedded asset manifest: %w", err)
 	}
 
 	return projectDir, nil
@@ -89,6 +93,15 @@ func manifestMatches(root *os.Root, path string, want string) bool {
 }
 
 func syncEmbeddedProject(source fs.FS, destination *os.Root) error {
+	sourceEntries, err := embeddedProjectEntries(source)
+	if err != nil {
+		return err
+	}
+
+	if err := pruneEmbeddedProject(destination, sourceEntries); err != nil {
+		return err
+	}
+
 	return fs.WalkDir(source, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -126,6 +139,81 @@ func syncEmbeddedProject(source fs.FS, destination *os.Root) error {
 
 		return destination.WriteFile(targetPath, content, mode)
 	})
+}
+
+type embeddedProjectEntry struct {
+	isDir bool
+}
+
+func embeddedProjectEntries(source fs.FS) (map[string]embeddedProjectEntry, error) {
+	entries := make(map[string]embeddedProjectEntry)
+
+	err := fs.WalkDir(source, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == "." {
+			return nil
+		}
+
+		entries[path] = embeddedProjectEntry{isDir: d.IsDir()}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return entries, nil
+}
+
+type staleEmbeddedProjectEntry struct {
+	path  string
+	isDir bool
+}
+
+func pruneEmbeddedProject(destination *os.Root, sourceEntries map[string]embeddedProjectEntry) error {
+	var staleEntries []staleEmbeddedProjectEntry
+
+	if err := fs.WalkDir(destination.FS(), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == "." || path == embeddedProjectManifestFile {
+			return nil
+		}
+
+		sourceEntry, ok := sourceEntries[path]
+		if ok && sourceEntry.isDir == d.IsDir() {
+			return nil
+		}
+
+		staleEntries = append(staleEntries, staleEmbeddedProjectEntry{
+			path:  path,
+			isDir: d.IsDir(),
+		})
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	sort.Slice(staleEntries, func(i, j int) bool {
+		return strings.Count(staleEntries[i].path, "/") > strings.Count(staleEntries[j].path, "/")
+	})
+
+	for _, entry := range staleEntries {
+		targetPath := filepath.FromSlash(entry.path)
+		var err error
+		if entry.isDir {
+			err = destination.RemoveAll(targetPath)
+		} else {
+			err = destination.Remove(targetPath)
+		}
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func embeddedFileMode(path string, mode fs.FileMode) fs.FileMode {

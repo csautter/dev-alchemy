@@ -1,6 +1,6 @@
 # Run Ubuntu with Vagrant and Hyper-V
 
-This guide covers the Windows-host workflow for Ubuntu Hyper-V with the Go wrapper:
+This guide covers the Windows-host workflow for Ubuntu Hyper-V with the Dev Alchemy CLI:
 
 1. Build the box (`alchemy build`)
 2. Create/start the VM (`alchemy create`)
@@ -21,7 +21,7 @@ Set `DEV_ALCHEMY_APP_DATA_DIR` if you want to override the default root.
 - Run the dependency installer from repository root in an elevated PowerShell session:
 
 ```powershell
-go run cmd/main.go install
+alchemy.exe install
 ```
 
 - [Vagrant](https://www.vagrantup.com/downloads)
@@ -36,9 +36,9 @@ Run from repository root:
 
 ```powershell
 # server
-go run cmd/main.go build ubuntu --type server --arch amd64
+alchemy.exe build ubuntu --type server --arch amd64
 # desktop
-go run cmd/main.go build ubuntu --type desktop --arch amd64
+alchemy.exe build ubuntu --type desktop --arch amd64
 ```
 
 Expected artifacts:
@@ -58,9 +58,9 @@ Then create/start with the wrapper:
 
 ```powershell
 # server
-go run cmd/main.go create ubuntu --type server --arch amd64
+alchemy.exe create ubuntu --type server --arch amd64
 # desktop
-go run cmd/main.go create ubuntu --type desktop --arch amd64
+alchemy.exe create ubuntu --type desktop --arch amd64
 ```
 
 Default guest credentials:
@@ -77,12 +77,12 @@ Run provisioning from repository root:
 
 ```powershell
 # server
-go run cmd/main.go provision ubuntu --type server --arch amd64 --check
-go run cmd/main.go provision ubuntu --type server --arch amd64
+alchemy.exe provision ubuntu --type server --arch amd64 --check
+alchemy.exe provision ubuntu --type server --arch amd64
 
 # desktop
-go run cmd/main.go provision ubuntu --type desktop --arch amd64 --check
-go run cmd/main.go provision ubuntu --type desktop --arch amd64
+alchemy.exe provision ubuntu --type desktop --arch amd64 --check
+alchemy.exe provision ubuntu --type desktop --arch amd64
 ```
 
 Optional `.env` / environment overrides:
