@@ -1,22 +1,72 @@
+$ErrorActionPreference = "Stop"
+
 # Download and install Windows ADK Deployment Tools (includes oscdimg)
-# https://learn.microsoft.com/de-de/windows-hardware/get-started/adk-install
+# https://learn.microsoft.com/windows-hardware/get-started/adk-install
 $adkUrl = "https://go.microsoft.com/fwlink/?linkid=2289980" # Windows ADK for Windows 11, version 22H2
-$adkInstaller = "$env:TEMP\adksetup.exe"
+$adkInstaller = Join-Path $env:TEMP "adksetup.exe"
+$windowsKitsRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits"
 
-Write-Host "Downloading Windows ADK installer..."
-Invoke-WebRequest -Uri $adkUrl -OutFile $adkInstaller
+function Get-OscdimgPath {
+    if (-not (Test-Path $windowsKitsRoot)) {
+        return $null
+    }
 
-Write-Host "Starting Windows ADK installer (Deployment Tools only)..."
-Start-Process -FilePath $adkInstaller -ArgumentList "/features OptionId.DeploymentTools /quiet /norestart" -Wait
-
-# Find oscdimg.exe and add its folder to the PATH for the current session
-$oscdimgPath = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-
-if ($oscdimgPath) {
-    $oscdimgDir = $oscdimgPath.DirectoryName
-    Write-Host "oscdimg.exe found at $oscdimgDir"
-    $env:Path += ";$oscdimgDir"
-    Write-Host "Added oscdimg directory to PATH for this session."
-} else {
-    Write-Host "oscdimg.exe not found. Please check the ADK installation."
+    return Get-ChildItem -Path $windowsKitsRoot -Recurse -Filter oscdimg.exe -ErrorAction SilentlyContinue |
+        Select-Object -First 1
 }
+
+function Add-PathIfMissing {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    $pathEntries = $env:Path -split ';'
+    if ($pathEntries -contains $Directory) {
+        Write-Host "oscdimg directory already present in PATH for this session."
+        return
+    }
+
+    $env:Path += ";$Directory"
+    Write-Host "Added oscdimg directory to PATH for this session."
+}
+
+function Add-GitHubPathIfAvailable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    if (-not $env:GITHUB_PATH) {
+        return
+    }
+
+    if ((Test-Path $env:GITHUB_PATH) -and (Select-String -Path $env:GITHUB_PATH -SimpleMatch -Pattern $Directory -Quiet)) {
+        Write-Host "oscdimg directory already exported to GITHUB_PATH."
+        return
+    }
+
+    $Directory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    Write-Host "Exported oscdimg directory to GITHUB_PATH."
+}
+
+$oscdimgPath = Get-OscdimgPath
+if (-not $oscdimgPath) {
+    Write-Host "oscdimg.exe not found. Downloading Windows ADK installer..."
+    Invoke-WebRequest -Uri $adkUrl -OutFile $adkInstaller
+
+    Write-Host "Starting Windows ADK installer (Deployment Tools only)..."
+    Start-Process -FilePath $adkInstaller -ArgumentList "/features OptionId.DeploymentTools /quiet /norestart" -Wait
+
+    $oscdimgPath = Get-OscdimgPath
+}
+
+if (-not $oscdimgPath) {
+    Write-Error "oscdimg.exe not found after ADK installation. Please check the ADK installation."
+    exit 1
+}
+
+$oscdimgDir = $oscdimgPath.DirectoryName
+Write-Host "oscdimg.exe found at $oscdimgDir"
+Add-PathIfMissing -Directory $oscdimgDir
+Add-GitHubPathIfAvailable -Directory $oscdimgDir
