@@ -127,16 +127,6 @@ The `install` command is currently intended for macOS and Windows hosts. On Linu
 sudo apt update && sudo apt install ansible
 ```
 
-#### Discover supported targets
-
-Use the `list` subcommands to see what the current host can build, create, or provision before running a longer workflow:
-
-```bash
-alchemy build list
-alchemy create list
-alchemy provision list
-```
-
 #### Windows
 
 Run the command in an elevated PowerShell session (Run as Administrator):
@@ -187,7 +177,30 @@ The setup commands, security notes, and manual Windows playbook examples live in
 
 ---
 
-### 3. Run the Playbook
+### 4. Discover Available Targets and Commands
+
+Use the `list` subcommands to see what the current host can build, create, start, provision, stop, or destroy before running a longer workflow:
+
+```bash
+alchemy build list
+alchemy create list
+alchemy start list
+alchemy provision list
+alchemy stop list
+alchemy destroy list
+```
+
+Use `--help` on the root command or any subcommand to inspect supported flags and usage details:
+
+```bash
+alchemy --help
+alchemy build --help
+alchemy provision --help
+```
+
+---
+
+### 5. Run the Playbook
 
 #### Run the Playbook on localhost
 
@@ -301,291 +314,44 @@ devalchemy/
 
 > Note: macOS VM testing is only supported on macOS hosts due to Apple licensing restrictions. There might exist workarounds, but they are not covered here.
 
-## System agnostic test approaches
+### Workflow
 
-### Local tests for Ubuntu (on linux, WSL, windows or macos)
-
-To test ansible roles for ubuntu, you can use the provided docker-compose setup:
+Most testing flows now go through the same VM lifecycle interface:
 
 ```bash
-docker compose -f deployments/docker-compose/ansible/docker-compose.yml up
+alchemy build <osname> [--type <type>] [--arch <arch>]
+alchemy create <osname> [--type <type>] [--arch <arch>]
+alchemy start <osname> [--type <type>] [--arch <arch>]
+alchemy provision <osname> [--type <type>] [--arch <arch>] --check
+alchemy provision <osname> [--type <type>] [--arch <arch>]
+alchemy stop <osname> [--type <type>] [--arch <arch>]
+alchemy destroy <osname> [--type <type>] [--arch <arch>]
 ```
 
-The container will run the ansible playbook within itself. This is a good way to test changes locally without affecting your host system.
+- `build` creates or refreshes the reusable VM artifact.
+- `create` creates the managed VM target from that artifact.
+- `start` starts an existing created VM when it is stopped.
+- `provision` runs the Ansible workflow against the running target.
+- `stop` shuts the VM down without deleting it.
+- `destroy` removes the managed VM target.
 
-To cleanup afterwards, simply run:
+Depending on the backend, the initial boot may happen during `create` or require a small host-specific step. After a VM has been created, use `start` whenever you want to boot it again.
+
+Examples:
 
 ```bash
-docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
+alchemy build ubuntu --type server --arch amd64
+alchemy create ubuntu --type server --arch amd64
+alchemy provision ubuntu --type server --arch amd64 --check
+
+alchemy stop ubuntu --type server --arch amd64
+alchemy start ubuntu --type server --arch amd64
 ```
 
-## Windows specific test approaches
+For platform-specific testing examples, environment variables, Docker-based flows, and troubleshooting commands, see:
 
-#### Local tests for Ubuntu on Windows with Hyper-v
-
-To test changes locally on Ubuntu with a Windows host system using Hyper-V, use the unified CLI workflow from repository root.
-
-Install host dependencies first:
-
-```powershell
-alchemy.exe install
-```
-
-##### Build the Ubuntu box
-
-```powershell
-# server
-alchemy.exe build ubuntu --type server --arch amd64
-# desktop
-alchemy.exe build ubuntu --type desktop --arch amd64
-```
-
-##### Create/start the Ubuntu VM
-
-```powershell
-$env:VAGRANT_HYPERV_SWITCH = "Default Switch"
-alchemy.exe create ubuntu --type server --arch amd64
-# or desktop
-alchemy.exe create ubuntu --type desktop --arch amd64
-```
-
-##### Provision the Ubuntu VM
-
-```powershell
-alchemy.exe provision ubuntu --type server --arch amd64 --check
-alchemy.exe provision ubuntu --type server --arch amd64
-```
-
-The command discovers the VM IP automatically and runs Ansible through the Windows/Cygwin wrapper.
-Optional Ubuntu provisioning overrides can be set in `.env` using `HYPERV_UBUNTU_ANSIBLE_*`.
-
-For complete manual/advanced steps, see:
-
-- [Ubuntu Packer README](./build/packer/linux/ubuntu/README.md)
-- [Ubuntu Hyper-V deployment README](./deployments/vagrant/linux-ubuntu-hyperv/README.md)
-
-### Local tests for windows (on windows)
-
-#### Use Docker Desktop with Windows Containers
-
-To test changes locally on windows, you can use the provided docker-compose setup:
-
-```bash
-docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml up
-```
-
-The container will run the ansible playbook against itself.
-
-To cleanup afterwards, run:
-
-```bash
-docker compose -f deployments/docker-compose/ansible-windows/docker-compose.yml down
-```
-
-Check the [README](deployments/docker-compose/ansible-windows/README.md) in the `deployments/docker-compose/ansible-windows/` folder for more details.
-
----
-
-#### Use Hyper-V VM
-
-To test changes locally on Windows using Hyper-V, you can create a new virtual machine and configure it to run the Ansible playbook.
-
-Install host dependencies first:
-
-```powershell
-alchemy.exe install
-```
-
-##### Download a Windows .iso file
-
-You will need a Windows .iso file to use as the installation media for your virtual machine. You can download a Windows 10 or Windows Server .iso file from the Microsoft website.
-
-Or use script to download a Windows 11 `.iso` file: [download_win_11.ps1](./scripts/windows/download_win_11.ps1). By default it stores the ISO under the managed cache directory described above.
-
-##### Build a Windows VM
-
-Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and Hyper-V.
-
-##### Run the Windows VM
-
-Check [README.md](./deployments/vagrant/ansible-windows/README.md) for a guide to run the built Windows VM with Vagrant and Hyper-V.
-
-##### Provision the Windows VM (via unified CLI)
-
-After the VM is running, provision it from the repository root using the unified command:
-
-```bash
-alchemy.exe provision windows11 --arch amd64 --check
-alchemy.exe provision windows11 --arch amd64
-```
-
-The command discovers the VM IP automatically and runs Ansible through the Windows/Cygwin wrapper.
-
-Set WinRM credentials in project-root `.env` (or process environment):
-
-```dotenv
-HYPERV_WINDOWS_ANSIBLE_USER=Administrator
-HYPERV_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
-# Optional (defaults shown):
-HYPERV_WINDOWS_ANSIBLE_CONNECTION=winrm
-HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT=basic
-HYPERV_WINDOWS_ANSIBLE_PORT=5985
-```
-
-Optional shell path overrides for the Windows/Cygwin wrapper:
-
-```powershell
-$env:CYGWIN_BASH_PATH = "C:\tools\cygwin\bin\bash.exe"
-# or, if you prefer setting the Cygwin terminal path:
-$env:CYGWIN_TERMINAL_PATH = "C:\tools\cygwin\bin\mintty.exe"
-```
-
-Path resolution precedence for provisioning:
-
-1. `CYGWIN_BASH_PATH` (highest priority)
-2. `CYGWIN_TERMINAL_PATH` (used only when `CYGWIN_BASH_PATH` is unset)
-3. Auto-detect `C:\tools\cygwin\bin\bash.exe`
-4. Auto-detect `C:\cygwin64\bin\bash.exe`
-
-If `CYGWIN_TERMINAL_PATH` points to `mintty.exe`, provisioning resolves it to the sibling `bash.exe`.
-
-## macOS specific test approaches
-
-### Local tests for macOS (on macos)
-
-To test changes locally on macOS, you can use the provided script:
-
-```bash
-./scripts/macos/test-ansible-macos.sh
-```
-
-The script will run the ansible playbook against a temporary virtual machine managed by Tart.
-Tart is a lightweight VM manager for macOS. You can find more information about Tart [here](https://github.com/cirruslabs/tart).
-
-By default, Dev Alchemy uses the Tart image's development credentials for Ansible access (`admin` / `admin`). Override them in `.env` if your image uses different credentials or if you want to avoid relying on the documented defaults:
-
-```bash
-TART_MACOS_ANSIBLE_USER=admin
-TART_MACOS_ANSIBLE_PASSWORD=admin
-```
-
-`TART_MACOS_ANSIBLE_BECOME_PASSWORD` also defaults to `TART_MACOS_ANSIBLE_PASSWORD` when unset.
-
-To cleanup afterwards, run:
-
-```bash
-tart delete sequoia-base
-```
-
-This will delete the temporary VM.
-
----
-
-### Local tests for windows (on macos)
-
-On macOS you can use UTM to run a Windows VM for testing ansible changes on windows. UTM is a powerful and easy-to-use virtual machine manager for macOS.
-Check [README.md](./build/packer/windows/README.md) for a guide to build a Windows VM with packer and qemu on macos.
-
-Install host dependencies first:
-
-```bash
-alchemy install
-```
-
-You can run the following commands to build and create the Windows 11 VM in UTM:
-
-```bash
-# arm64 requires sudo to create a custom .iso file for automated installation.
-# sudo rights are evaluated at runtime, so you can run the build command without sudo and it will ask for sudo rights only if needed.
-arch=arm64 # or amd64
-# sudo alchemy build windows11 --arch $arch --headless
-alchemy build windows11 --arch $arch --headless
-# `--headless` applies to `build`, not `create`.
-alchemy create windows11 --arch $arch
-```
-
-Open UTM and start the created Windows VM.
-
-Set WinRM credentials for the provisioning wrapper in project-root `.env` (or process environment):
-
-```dotenv
-UTM_WINDOWS_ANSIBLE_USER=Administrator
-UTM_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
-# Optional (defaults shown):
-UTM_WINDOWS_ANSIBLE_CONNECTION=winrm
-UTM_WINDOWS_ANSIBLE_WINRM_TRANSPORT=basic
-UTM_WINDOWS_ANSIBLE_PORT=5985
-```
-
-Now provision the running UTM VM from the repository root:
-
-```bash
-alchemy provision windows11 --arch $arch --check
-alchemy provision windows11 --arch $arch
-```
-
-The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target. On macOS it also sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for the ansible process automatically.
-
-If you need to inspect the discovered IP manually for troubleshooting:
-
-```bash
-bash ./deployments/utm/determine-vm-ip-address.sh --arch $arch --os windows11
-```
-
-> ℹ️ Note: newly built Windows images install a dedicated WinRM firewall rule for TCP `5985` on all network profiles, so later NIC or network-profile changes should not break reachability. Older images may still need their network switched to `Private` or an equivalent firewall rule added manually.
-
----
-
-### Local tests for Ubuntu (on macos)
-
-On macOS you can use UTM to run a Ubuntu VM for testing ansible changes on Ubuntu. UTM is a powerful and easy-to-use virtual machine manager for macOS.
-
-Install host dependencies first:
-
-```bash
-alchemy install
-```
-
-You can run the following commands to build and create the Ubuntu VM in UTM:
-
-```bash
-arch=arm64 # or amd64
-type=desktop # or server
-alchemy build ubuntu --arch $arch --type $type
-alchemy create ubuntu --arch $arch --type $type
-```
-
-Open UTM and start the created Ubuntu VM.
-
-Set Ubuntu SSH credentials for the provisioning wrapper in project-root `.env` (or process environment):
-
-```dotenv
-UTM_UBUNTU_ANSIBLE_USER=packer
-UTM_UBUNTU_ANSIBLE_PASSWORD=P@ssw0rd!
-UTM_UBUNTU_ANSIBLE_BECOME_PASSWORD=P@ssw0rd!
-# Optional (defaults shown):
-UTM_UBUNTU_ANSIBLE_CONNECTION=ssh
-UTM_UBUNTU_ANSIBLE_SSH_COMMON_ARGS=-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no
-UTM_UBUNTU_ANSIBLE_SSH_TIMEOUT=120
-UTM_UBUNTU_ANSIBLE_SSH_RETRIES=3
-```
-
-Now provision the running UTM VM from the repository root:
-
-```bash
-alchemy provision ubuntu --type $type --arch $arch --check
-alchemy provision ubuntu --type $type --arch $arch
-```
-
-The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target. On macOS it also sets `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` for the ansible process automatically.
-
-If you need to inspect the discovered IP manually for troubleshooting:
-
-```bash
-bash ./deployments/utm/determine-vm-ip-address.sh --arch $arch --os "ubuntu-$type"
-```
-
----
+- [Testing Workflows](./docs/testing-workflows.md)
+- [Windows Ansible Access](./docs/windows-ansible-access.md)
 
 ## 📦 Supported Tools
 
