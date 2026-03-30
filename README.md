@@ -365,16 +365,6 @@ tasks.
 
 ---
 
-## 🌍 Cross-Platform Notes
-
-| Platform | Status       | Notes            |
-| -------- | ------------ | ---------------- |
-| macOS    | ✅ Supported | via Homebrew     |
-| Linux    | ✅ Supported | tested on Ubuntu |
-| Windows  | ✅ Supported | via cygwin       |
-
----
-
 ## Troubleshooting
 
 - On Windows with cygwin, it can happen that the ansible installation within cygwin is shadowed by another ansible python installation on the windows host. Don't try to install ansible directly on your windows host. Uninstall any other ansible installation and make sure to use the cygwin python installation to install ansible via pip.
