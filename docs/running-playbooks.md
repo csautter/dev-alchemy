@@ -82,8 +82,8 @@ If you run `ansible-playbook` directly with
 own secure WinRM connection variables and credentials.
 
 ```powershell
-$DevAlchemyPath = "C:\path\to\dev-alchemy"
-C:\\cygwin64\\bin\\bash.exe -l -c "cd $DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_winrm.yml -l windows_host"
+alchemy.exe provision local --check
+alchemy.exe provision local
 ```
 
 ### Via SSH
