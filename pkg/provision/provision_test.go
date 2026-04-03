@@ -1,8 +1,10 @@
 package provision
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -281,6 +283,9 @@ func TestLocalWindowsProvisionBootstrapPowerShellHandlesMissingWSManPaths(t *tes
 	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS'") {
 		t.Fatal("expected bootstrap script to create a dedicated HTTPS firewall rule")
 	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Write-Output 'Local Windows provision bootstrap completed.'") {
+		t.Fatal("expected bootstrap script to emit explicit progress output")
+	}
 }
 
 func TestLocalWindowsProvisionCleanupPowerShellOnlyRestoresExistingWSManPaths(t *testing.T) {
@@ -307,6 +312,9 @@ func TestLocalWindowsProvisionCleanupPowerShellOnlyRestoresExistingWSManPaths(t 
 	}
 	if strings.Contains(localWindowsProvisionCleanupPowerShell, "Disable-PSRemoting") {
 		t.Fatal("expected cleanup script to avoid Disable-PSRemoting and restore secure state directly")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Write-Output 'Local Windows provision cleanup completed.'") {
+		t.Fatal("expected cleanup script to emit explicit progress output")
 	}
 }
 
@@ -369,6 +377,47 @@ func TestDecodeLocalWindowsPowerShellOutputHandlesUTF16LE(t *testing.T) {
 	decoded := decodeLocalWindowsPowerShellOutput([]byte{0xFF, 0xFE, 'O', 0x00, 'K', 0x00})
 	if decoded != "OK" {
 		t.Fatalf("expected UTF-16LE output to decode, got %q", decoded)
+	}
+}
+
+func TestLogLocalWindowsPowerShellOutputChunkLogsCompleteLinesWithPrefix(t *testing.T) {
+	var buffer bytes.Buffer
+	previousOutput := log.Writer()
+	previousFlags := log.Flags()
+	previousPrefix := log.Prefix()
+	log.SetOutput(&buffer)
+	log.SetFlags(0)
+	log.SetPrefix("")
+	t.Cleanup(func() {
+		log.SetOutput(previousOutput)
+		log.SetFlags(previousFlags)
+		log.SetPrefix(previousPrefix)
+	})
+
+	pending := logLocalWindowsPowerShellOutputChunk(localWindowsBootstrapLogPrefix, "first line\r\nsecond", "", false)
+	if pending != "second" {
+		t.Fatalf("expected incomplete line to be buffered, got %q", pending)
+	}
+
+	pending = logLocalWindowsPowerShellOutputChunk(localWindowsBootstrapLogPrefix, " line\n\nthird line", pending, false)
+	if pending != "third line" {
+		t.Fatalf("expected trailing partial line to remain buffered, got %q", pending)
+	}
+
+	pending = logLocalWindowsPowerShellOutputChunk(localWindowsBootstrapLogPrefix, "", pending, true)
+	if pending != "" {
+		t.Fatalf("expected flush to clear the buffered line, got %q", pending)
+	}
+
+	logs := strings.TrimSpace(buffer.String())
+	if !strings.Contains(logs, localWindowsBootstrapLogPrefix+" powershell: first line") {
+		t.Fatalf("expected first log line with prefix, got %q", logs)
+	}
+	if !strings.Contains(logs, localWindowsBootstrapLogPrefix+" powershell: second line") {
+		t.Fatalf("expected second log line with prefix, got %q", logs)
+	}
+	if !strings.Contains(logs, localWindowsBootstrapLogPrefix+" powershell: third line") {
+		t.Fatalf("expected flushed partial line with prefix, got %q", logs)
 	}
 }
 

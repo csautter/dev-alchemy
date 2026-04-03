@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +24,8 @@ const (
 	localWindowsProvisionPasswordEnvVar   = "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
 	localWindowsForceWinRMUninstallEnvVar = "DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_WINRM_UNINSTALL"
 	localWindowsFirewallRuleName          = "DevAlchemyLocalWinRMHTTPS"
+	localWindowsBootstrapLogPrefix        = "local:windows:bootstrap"
+	localWindowsCleanupLogPrefix          = "local:windows:cleanup"
 )
 
 var setupLocalWindowsProvisionSessionFunc = setupLocalWindowsProvisionSession
@@ -135,6 +137,7 @@ func setupLocalWindowsProvisionSession(projectDir string) (localWindowsProvision
 		localWindowsProvisionBootstrapPowerShell,
 		buildLocalWindowsProvisionScriptEnv(statePath, password),
 		localWindowsBootstrapTimeout,
+		localWindowsBootstrapLogPrefix,
 	)
 	if runErr != nil {
 		cleanupErr := cleanupLocalWindowsProvisionSession(projectDir, localWindowsProvisionSession{StatePath: statePath})
@@ -168,6 +171,7 @@ func cleanupLocalWindowsProvisionSession(projectDir string, session localWindows
 		localWindowsProvisionCleanupPowerShell,
 		buildLocalWindowsProvisionScriptEnv(session.StatePath, ""),
 		localWindowsCleanupTimeout,
+		localWindowsCleanupLogPrefix,
 	)
 	removeErr := os.Remove(session.StatePath)
 	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
@@ -183,7 +187,7 @@ func cleanupLocalWindowsProvisionSession(projectDir string, session localWindows
 	return nil
 }
 
-func runLocalWindowsPowerShellScript(projectDir string, script string, extraEnv []string, timeout time.Duration) (string, error) {
+func runLocalWindowsPowerShellScript(projectDir string, script string, extraEnv []string, timeout time.Duration, logPrefix string) (string, error) {
 	elevatedScriptPath, outputPath, cleanupFiles, err := writeElevatedLocalWindowsPowerShellArtifacts(projectDir, script, extraEnv)
 	if err != nil {
 		return "", err
@@ -192,7 +196,7 @@ func runLocalWindowsPowerShellScript(projectDir string, script string, extraEnv 
 
 	stopStreaming := make(chan struct{})
 	streamingDone := make(chan struct{})
-	go streamLocalWindowsPowerShellOutput(outputPath, os.Stdout, stopStreaming, streamingDone)
+	go streamLocalWindowsPowerShellOutput(outputPath, logPrefix, stopStreaming, streamingDone)
 
 	output, runErr := runProvisionCommandWithCombinedOutputWithEnv(
 		projectDir,
@@ -337,13 +341,14 @@ func filterNonEmptyStrings(values ...string) []string {
 	return filtered
 }
 
-func streamLocalWindowsPowerShellOutput(outputPath string, writer io.Writer, stop <-chan struct{}, done chan<- struct{}) {
+func streamLocalWindowsPowerShellOutput(outputPath string, logPrefix string, stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
 
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 
 	printedLength := 0
+	pendingLine := ""
 	flush := func() {
 		content, err := os.ReadFile(outputPath)
 		if err != nil {
@@ -358,7 +363,7 @@ func streamLocalWindowsPowerShellOutput(outputPath string, writer io.Writer, sto
 			return
 		}
 
-		_, _ = io.WriteString(writer, decoded[printedLength:])
+		pendingLine = logLocalWindowsPowerShellOutputChunk(logPrefix, decoded[printedLength:], pendingLine, false)
 		printedLength = len(decoded)
 	}
 
@@ -366,11 +371,40 @@ func streamLocalWindowsPowerShellOutput(outputPath string, writer io.Writer, sto
 		select {
 		case <-stop:
 			flush()
+			logLocalWindowsPowerShellOutputChunk(logPrefix, "", pendingLine, true)
 			return
 		case <-ticker.C:
 			flush()
 		}
 	}
+}
+
+func logLocalWindowsPowerShellOutputChunk(logPrefix string, chunk string, pendingLine string, flushPartial bool) string {
+	pendingLine += strings.ReplaceAll(chunk, "\r\n", "\n")
+	pendingLine = strings.ReplaceAll(pendingLine, "\r", "\n")
+
+	for {
+		newlineIndex := strings.IndexByte(pendingLine, '\n')
+		if newlineIndex < 0 {
+			break
+		}
+
+		line := strings.TrimSpace(pendingLine[:newlineIndex])
+		if line != "" {
+			log.Printf("%s powershell: %s", logPrefix, line)
+		}
+		pendingLine = pendingLine[newlineIndex+1:]
+	}
+
+	if flushPartial {
+		line := strings.TrimSpace(pendingLine)
+		if line != "" {
+			log.Printf("%s powershell: %s", logPrefix, line)
+		}
+		return ""
+	}
+
+	return pendingLine
 }
 
 func decodeLocalWindowsPowerShellOutput(content []byte) string {
@@ -526,6 +560,8 @@ if ([string]::IsNullOrWhiteSpace($userName)) {
 if ([string]::IsNullOrWhiteSpace($passwordPlain)) {
     throw 'DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD is required.'
 }
+
+Write-Output 'Validating local Windows provision bootstrap inputs.'
 
 function Save-State($state) {
     $state | ConvertTo-Json -Compress | Set-Content -Path $statePath -Encoding Ascii
@@ -685,7 +721,9 @@ $state = @{
     CreatedCertificateThumbprint = ''
 }
 Save-State $state
+Write-Output 'Captured existing WinRM, firewall, and local policy state.'
 
+Write-Output 'Ensuring the WinRM service is enabled for local provisioning.'
 if ([string]$state.WinRMServiceStartMode -eq 'Disabled') {
     Set-Service -Name 'WinRM' -StartupType Manual
 }
@@ -693,6 +731,7 @@ if (-not $state.WinRMServiceWasRunning) {
     Start-Service -Name 'WinRM'
 }
 
+Write-Output 'Configuring WinRM authentication and local token filter policy.'
 Assert-WsmanPathExists 'WSMan:\localhost\Service\AllowUnencrypted'
 Assert-WsmanPathExists 'WSMan:\localhost\Service\Auth\Basic'
 Set-Item -Path 'WSMan:\localhost\Service\AllowUnencrypted' -Value $false
@@ -704,19 +743,27 @@ $httpsListener = @(
         Where-Object { $_.Keys -match 'Transport=HTTPS' -and $_.Keys -match 'Port=5986' }
 )
 if ($httpsListener.Count -eq 0) {
+    Write-Output 'Creating a localhost WinRM HTTPS listener and certificate.'
     $certificate = New-SelfSignedCertificate -DnsName 'localhost' -CertStoreLocation 'Cert:\LocalMachine\My' -FriendlyName 'Dev Alchemy Local WinRM HTTPS'
     New-Item -Path WSMan:\localhost\Listener -Transport HTTPS -Address * -CertificateThumbprint $certificate.Thumbprint -Port 5986 -Force | Out-Null
     $state.CreatedHttpsListener = $true
     $state.CreatedCertificateThumbprint = $certificate.Thumbprint
     Save-State $state
+} else {
+    Write-Output 'Reusing the existing localhost WinRM HTTPS listener.'
 }
 
 if (-not [bool]$state.FirewallRuleExisted) {
+    Write-Output 'Creating the local WinRM HTTPS firewall rule.'
     New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS' -DisplayName 'Dev Alchemy Local WinRM HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5986 -Profile Any | Out-Null
 } elseif (-not [bool]$state.FirewallRuleEnabled) {
+    Write-Output 'Enabling the existing local WinRM HTTPS firewall rule.'
     Enable-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS' | Out-Null
+} else {
+    Write-Output 'Keeping the existing local WinRM HTTPS firewall rule enabled.'
 }
 
+Write-Output 'Creating or updating the temporary local Ansible account.'
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force
 $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
 if ($null -eq $localUser) {
@@ -728,6 +775,7 @@ if ($null -eq $localUser) {
 }
 
 $administratorsGroupName = Get-LocalAdministratorsGroupName
+Write-Output 'Ensuring the temporary local Ansible account is an administrator.'
 $isAdministrator = @(
     Get-LocalGroupMember -Group $administratorsGroupName -ErrorAction SilentlyContinue |
         Where-Object { $null -ne $_.SID -and $_.SID.Value -eq $localUser.SID.Value }
@@ -735,6 +783,8 @@ $isAdministrator = @(
 if (-not $isAdministrator) {
     Add-LocalGroupMember -Group $administratorsGroupName -Member $userName
 }
+
+Write-Output 'Local Windows provision bootstrap completed.'
 `
 
 const localWindowsProvisionCleanupPowerShell = `
@@ -743,9 +793,11 @@ $ErrorActionPreference = 'Stop'
 $statePath = $env:DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH
 $forceWinRMUninstall = [System.Convert]::ToBoolean($env:DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_WINRM_UNINSTALL)
 if ([string]::IsNullOrWhiteSpace($statePath) -or -not (Test-Path -Path $statePath)) {
+    Write-Output 'No local Windows provision state file was found; skipping cleanup.'
     return
 }
 
+Write-Output 'Loading local Windows provision cleanup state.'
 $state = Get-Content -Path $statePath -Raw | ConvertFrom-Json
 
 function Restore-WinRMServiceState([bool]$wasRunning, [string]$startMode) {
@@ -827,6 +879,7 @@ function Restore-FirewallRuleState([string]$name, [bool]$existed, [bool]$enabled
 
 $userName = [string]$state.UserName
 if (-not [string]::IsNullOrWhiteSpace($userName)) {
+    Write-Output 'Disabling the temporary local Ansible account.'
     $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
     if ($null -ne $localUser) {
         Disable-LocalUser -Name $userName
@@ -834,6 +887,7 @@ if (-not [string]::IsNullOrWhiteSpace($userName)) {
 }
 
 if ([bool]$state.CreatedHttpsListener) {
+    Write-Output 'Removing the localhost WinRM HTTPS listener created for provisioning.'
     Get-ChildItem -Path WSMan:\localhost\Listener -ErrorAction SilentlyContinue |
         Where-Object { $_.Keys -match 'Transport=HTTPS' -and $_.Keys -match 'Port=5986' } |
         ForEach-Object { Remove-Item -Path $_.PSPath -Recurse -Force }
@@ -843,10 +897,12 @@ $originalListenerKeys = @()
 if ($null -ne $state.ListenerKeys) {
     $originalListenerKeys = @($state.ListenerKeys | ForEach-Object { [string]$_ })
 }
+Write-Output 'Removing temporary WinRM listeners that were added during provisioning.'
 Get-ChildItem -Path WSMan:\localhost\Listener -ErrorAction SilentlyContinue |
     Where-Object { $originalListenerKeys -notcontains [string]$_.Keys } |
     ForEach-Object { Remove-Item -Path $_.PSPath -Recurse -Force }
 
+Write-Output 'Restoring WinRM authentication, registry, and firewall settings.'
 if ($forceWinRMUninstall -and (Test-Path -Path 'WSMan:\localhost\Service\Auth\Basic')) {
     Set-Item -Path 'WSMan:\localhost\Service\Auth\Basic' -Value $false
 } elseif ([bool]$state.BasicAuthPathExisted -and (Test-Path -Path 'WSMan:\localhost\Service\Auth\Basic')) {
@@ -862,6 +918,7 @@ Restore-FirewallRuleState 'DevAlchemyLocalWinRMHTTPS' ([bool]$state.FirewallRule
 
 $certificateThumbprint = [string]$state.CreatedCertificateThumbprint
 if (-not [string]::IsNullOrWhiteSpace($certificateThumbprint)) {
+    Write-Output 'Removing the temporary localhost WinRM certificate.'
     $certificatePath = 'Cert:\LocalMachine\My\' + $certificateThumbprint
     if (Test-Path -Path $certificatePath) {
         Remove-Item -Path $certificatePath -Force
@@ -869,12 +926,16 @@ if (-not [string]::IsNullOrWhiteSpace($certificateThumbprint)) {
 }
 
 if ($forceWinRMUninstall) {
+    Write-Output 'Force WinRM uninstall mode is enabled; removing listeners and disabling WinRM.'
     Get-ChildItem -Path WSMan:\localhost\Listener -ErrorAction SilentlyContinue |
         ForEach-Object { Remove-Item -Path $_.PSPath -Recurse -Force }
     Get-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS' -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
     Disable-WinRMFirewallRules
     Restore-WinRMServiceState $false 'Disabled'
 } else {
+    Write-Output 'Restoring the original WinRM service state.'
     Restore-WinRMServiceState ([bool]$state.WinRMServiceWasRunning) ([string]$state.WinRMServiceStartMode)
 }
+
+Write-Output 'Local Windows provision cleanup completed.'
 `
