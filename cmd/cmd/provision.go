@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 	alchemy_provision "github.com/csautter/dev-alchemy/pkg/provision"
@@ -10,10 +14,17 @@ import (
 )
 
 var (
-	check bool
+	check     bool
+	assumeYes bool
 )
 
 const localProvisionVirtualizationEngine = alchemy_build.VirtualizationEngine("local")
+
+var (
+	currentHostLocalProvisionVirtualMachineFunc = currentHostLocalProvisionVirtualMachine
+	runProvisionFunc                            = alchemy_provision.RunProvision
+	promptForConfirmationFunc                   = promptForConfirmation
+)
 
 func isProvisionSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	if vm.HostOs == alchemy_build.HostOsWindows &&
@@ -116,13 +127,16 @@ Examples:
 				return fmt.Errorf("❌ local provisioning does not accept --arch or --type; use `alchemy provision local [--check]`")
 			}
 
-			selectedVM, ok := currentHostLocalProvisionVirtualMachine()
+			selectedVM, ok := currentHostLocalProvisionVirtualMachineFunc()
 			if !ok {
 				return fmt.Errorf("❌ local provisioning is not available for host OS: %s", alchemy_build.GetCurrentHostOs())
 			}
 
 			if isLocalProvisionUnstable(selectedVM.HostOs) {
 				fmt.Printf("⚠️ Local provisioning on host OS %s is currently marked unstable and has not been validated end-to-end yet.\n", selectedVM.HostOs)
+			}
+			if err := confirmProvisionIntent(cmd, selectedVM); err != nil {
+				return err
 			}
 
 			fmt.Printf("🔧 Provisioning local host for OS: %s (check=%t)\n", selectedVM.HostOs, check)
@@ -170,7 +184,7 @@ var provisionListCmd = &cobra.Command{
 }
 
 func runProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
-	return alchemy_provision.RunProvision(vm, check)
+	return runProvisionFunc(vm, check)
 }
 
 func init() {
@@ -180,4 +194,67 @@ func init() {
 	provisionCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	provisionCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	provisionCmd.Flags().BoolVar(&check, "check", false, "Run ansible with --check (dry-run)")
+	provisionCmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Skip confirmation prompts for operations that change local system state")
+}
+
+func confirmProvisionIntent(cmd *cobra.Command, vm alchemy_build.VirtualMachineConfig) error {
+	if assumeYes || !requiresProvisionConfirmation(vm) {
+		return nil
+	}
+
+	const message = "Local Windows provisioning will temporarily enable or reconfigure WinRM, create or update a temporary local administrator account for Ansible, and create a self-signed HTTPS listener. Windows will also show a UAC elevation prompt for the setup and cleanup steps."
+
+	if !isInteractiveInput(cmd.InOrStdin()) {
+		return fmt.Errorf("%s Re-run with --yes to continue non-interactively", message)
+	}
+
+	confirmed, err := promptForConfirmationFunc(
+		cmd.InOrStdin(),
+		cmd.OutOrStdout(),
+		message+" Continue? [y/N]: ",
+	)
+	if err != nil {
+		return fmt.Errorf("failed to read confirmation for local Windows provisioning: %w", err)
+	}
+	if !confirmed {
+		return fmt.Errorf("local Windows provisioning cancelled")
+	}
+
+	return nil
+}
+
+func requiresProvisionConfirmation(vm alchemy_build.VirtualMachineConfig) bool {
+	return vm.OS == "local" && vm.HostOs == alchemy_build.HostOsWindows
+}
+
+func isInteractiveInput(input io.Reader) bool {
+	file, ok := input.(*os.File)
+	if !ok {
+		return true
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+
+	return info.Mode()&os.ModeCharDevice != 0
+}
+
+func promptForConfirmation(input io.Reader, output io.Writer, prompt string) (bool, error) {
+	if _, err := fmt.Fprint(output, prompt); err != nil {
+		return false, err
+	}
+
+	line, err := bufio.NewReader(input).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false, err
+	}
+
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
 }

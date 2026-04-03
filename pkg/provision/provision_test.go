@@ -250,6 +250,73 @@ func TestGenerateSecureLocalWindowsProvisionPasswordMeetsComplexityRequirements(
 	}
 }
 
+func TestLocalWindowsProvisionBootstrapPowerShellHandlesMissingWSManPaths(t *testing.T) {
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "function Get-WsmanBoolState") {
+		t.Fatal("expected bootstrap script to tolerate missing WSMan paths")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "function Get-WinRMServiceState") {
+		t.Fatal("expected bootstrap script to capture the original WinRM service state")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Assert-WsmanPathExists 'WSMan:\\localhost\\Service\\Auth\\Basic'") {
+		t.Fatal("expected bootstrap script to validate WSMan auth path after preparing WinRM")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "BasicAuthPathExisted") {
+		t.Fatal("expected bootstrap state to capture whether WSMan auth already existed")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "WinRMServiceStartMode") {
+		t.Fatal("expected bootstrap state to capture the original WinRM startup mode")
+	}
+}
+
+func TestLocalWindowsProvisionCleanupPowerShellOnlyRestoresExistingWSManPaths(t *testing.T) {
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$state.BasicAuthPathExisted") {
+		t.Fatal("expected cleanup script to restore Basic auth only when the original path existed")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$state.AllowUnencryptedPathExisted") {
+		t.Fatal("expected cleanup script to restore AllowUnencrypted only when the original path existed")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Restore-WinRMServiceState") {
+		t.Fatal("expected cleanup script to restore the original WinRM service state")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$originalListenerKeys") {
+		t.Fatal("expected cleanup script to remove listeners that were added during provisioning")
+	}
+}
+
+func TestBuildElevatedLocalWindowsPowerShellScriptIncludesEnvAndOutputCapture(t *testing.T) {
+	script := buildElevatedLocalWindowsPowerShellScript("Write-Output 'hello'", []string{
+		"DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER=devalchemy_ansible",
+		"DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD=S3cret!'Value",
+	}, `C:\Temp\alchemy-output.log`)
+
+	if !strings.Contains(script, "$env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER = 'devalchemy_ansible'") {
+		t.Fatal("expected elevated script to populate process environment values")
+	}
+	if !strings.Contains(script, "$env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD = 'S3cret!''Value'") {
+		t.Fatal("expected elevated script to escape embedded single quotes in environment values")
+	}
+	if !strings.Contains(script, "} *>> $outputPath") {
+		t.Fatal("expected elevated script to redirect all PowerShell streams to the output file")
+	}
+	if !strings.Contains(script, "Write-Output 'hello'") {
+		t.Fatal("expected elevated script to include the original bootstrap body")
+	}
+}
+
+func TestBuildLocalWindowsElevationLauncherPowerShellUsesRunAs(t *testing.T) {
+	launcher := buildLocalWindowsElevationLauncherPowerShell(`C:\Temp\bootstrap.ps1`, `C:\Temp\bootstrap.log`)
+
+	if !strings.Contains(launcher, "Start-Process -FilePath 'powershell.exe'") {
+		t.Fatal("expected launcher to start a new powershell process")
+	}
+	if !strings.Contains(launcher, "-Verb RunAs") {
+		t.Fatal("expected launcher to request UAC elevation with RunAs")
+	}
+	if !strings.Contains(launcher, `-File "C:\Temp\bootstrap.ps1"`) {
+		t.Fatal("expected launcher to run the generated elevated script file")
+	}
+}
+
 func TestRunLocalWindowsProvisionAlwaysCleansUpSecureSession(t *testing.T) {
 	previousSetup := setupLocalWindowsProvisionSessionFunc
 	previousCleanup := cleanupLocalWindowsProvisionSessionFunc

@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"bytes"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
+	"github.com/spf13/cobra"
 )
 
 func TestRunProvisionReturnsErrorForUnsupportedConfig(t *testing.T) {
@@ -231,5 +235,83 @@ func TestProvisionStatusMarksLocalNonWindowsHostsUnstable(t *testing.T) {
 		HostOs: alchemy_build.HostOsLinux,
 	}); got != "unstable" {
 		t.Fatalf("expected linux local provision to be unstable, got %q", got)
+	}
+}
+
+func TestConfirmProvisionIntentRequiresYesForNonInteractiveWindowsLocal(t *testing.T) {
+	previousAssumeYes := assumeYes
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+	})
+	assumeYes = false
+
+	inputFile, err := os.CreateTemp(t.TempDir(), "confirmation-input-*.txt")
+	if err != nil {
+		t.Fatalf("failed to create temp input file: %v", err)
+	}
+	defer inputFile.Close()
+
+	command := &cobra.Command{}
+	command.SetIn(inputFile)
+	command.SetOut(&bytes.Buffer{})
+
+	err = confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	})
+	if err == nil {
+		t.Fatal("expected non-interactive windows local provisioning to require --yes")
+	}
+	if !strings.Contains(err.Error(), "Re-run with --yes") {
+		t.Fatalf("expected --yes guidance in error, got: %v", err)
+	}
+}
+
+func TestConfirmProvisionIntentPromptsForInteractiveWindowsLocal(t *testing.T) {
+	previousAssumeYes := assumeYes
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+	})
+	assumeYes = false
+
+	var output bytes.Buffer
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBufferString("yes\n"))
+	command.SetOut(&output)
+
+	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	}); err != nil {
+		t.Fatalf("expected interactive confirmation to succeed, got: %v", err)
+	}
+	if !strings.Contains(output.String(), "Continue? [y/N]:") {
+		t.Fatalf("expected prompt output, got %q", output.String())
+	}
+}
+
+func TestConfirmProvisionIntentSkipsPromptWhenYesFlagIsSet(t *testing.T) {
+	previousAssumeYes := assumeYes
+	previousPrompt := promptForConfirmationFunc
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+		promptForConfirmationFunc = previousPrompt
+	})
+	assumeYes = true
+
+	promptForConfirmationFunc = func(input io.Reader, output io.Writer, prompt string) (bool, error) {
+		t.Fatal("did not expect confirmation prompt when --yes is set")
+		return false, nil
+	}
+
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBufferString(""))
+	command.SetOut(&bytes.Buffer{})
+
+	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	}); err != nil {
+		t.Fatalf("expected --yes to skip confirmation, got: %v", err)
 	}
 }

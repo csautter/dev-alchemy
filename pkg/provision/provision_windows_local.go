@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -159,7 +160,13 @@ func cleanupLocalWindowsProvisionSession(projectDir string, session localWindows
 }
 
 func runLocalWindowsPowerShellScript(projectDir string, script string, extraEnv []string, timeout time.Duration) (string, error) {
-	return runProvisionCommandWithCombinedOutputWithEnv(
+	elevatedScriptPath, outputPath, cleanupFiles, err := writeElevatedLocalWindowsPowerShellArtifacts(projectDir, script, extraEnv)
+	if err != nil {
+		return "", err
+	}
+	defer cleanupFiles()
+
+	output, runErr := runProvisionCommandWithCombinedOutputWithEnv(
 		projectDir,
 		timeout,
 		"powershell.exe",
@@ -170,10 +177,134 @@ func runLocalWindowsPowerShellScript(projectDir string, script string, extraEnv 
 			"-ExecutionPolicy",
 			"Bypass",
 			"-Command",
-			script,
+			buildLocalWindowsElevationLauncherPowerShell(elevatedScriptPath, outputPath),
 		},
-		extraEnv,
+		nil,
 	)
+
+	scriptOutputBytes, readErr := os.ReadFile(outputPath)
+	scriptOutput := strings.TrimSpace(string(scriptOutputBytes))
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		if runErr != nil {
+			return "", fmt.Errorf("failed to read elevated local windows provisioning output from %q: %w (launcher output: %s; launcher error: %v)", outputPath, readErr, strings.TrimSpace(output), runErr)
+		}
+		return "", fmt.Errorf("failed to read elevated local windows provisioning output from %q: %w", outputPath, readErr)
+	}
+
+	if runErr != nil {
+		combinedOutput := strings.TrimSpace(strings.Join(filterNonEmptyStrings(scriptOutput, strings.TrimSpace(output)), "\n"))
+		if combinedOutput == "" {
+			combinedOutput = "no output captured; the Windows UAC prompt may have been cancelled"
+		}
+		return combinedOutput, runErr
+	}
+
+	return scriptOutput, nil
+}
+
+func writeElevatedLocalWindowsPowerShellArtifacts(projectDir string, script string, extraEnv []string) (string, string, func(), error) {
+	elevatedScriptFile, err := os.CreateTemp(projectDir, ".local-windows-provision-elevated-*.ps1")
+	if err != nil {
+		return "", "", nil, fmt.Errorf("failed to create elevated local windows provisioning script: %w", err)
+	}
+	elevatedScriptPath := elevatedScriptFile.Name()
+	if err := elevatedScriptFile.Close(); err != nil {
+		_ = os.Remove(elevatedScriptPath)
+		return "", "", nil, fmt.Errorf("failed to close elevated local windows provisioning script %q: %w", elevatedScriptPath, err)
+	}
+
+	outputFile, err := os.CreateTemp(projectDir, ".local-windows-provision-output-*.log")
+	if err != nil {
+		_ = os.Remove(elevatedScriptPath)
+		return "", "", nil, fmt.Errorf("failed to create elevated local windows provisioning output file: %w", err)
+	}
+	outputPath := outputFile.Name()
+	if err := outputFile.Close(); err != nil {
+		_ = os.Remove(elevatedScriptPath)
+		_ = os.Remove(outputPath)
+		return "", "", nil, fmt.Errorf("failed to close elevated local windows provisioning output file %q: %w", outputPath, err)
+	}
+
+	scriptContent := buildElevatedLocalWindowsPowerShellScript(script, extraEnv, outputPath)
+	if err := os.WriteFile(elevatedScriptPath, []byte(scriptContent), 0o600); err != nil {
+		_ = os.Remove(elevatedScriptPath)
+		_ = os.Remove(outputPath)
+		return "", "", nil, fmt.Errorf("failed to write elevated local windows provisioning script %q: %w", elevatedScriptPath, err)
+	}
+
+	cleanupFiles := func() {
+		_ = os.Remove(elevatedScriptPath)
+		_ = os.Remove(outputPath)
+	}
+
+	return elevatedScriptPath, outputPath, cleanupFiles, nil
+}
+
+func buildElevatedLocalWindowsPowerShellScript(script string, extraEnv []string, outputPath string) string {
+	var builder strings.Builder
+	builder.WriteString("$ErrorActionPreference = 'Stop'\n\n")
+	builder.WriteString(fmt.Sprintf("$outputPath = '%s'\n", escapePowerShellSingleQuotedString(outputPath)))
+	builder.WriteString("if (Test-Path -Path $outputPath) {\n")
+	builder.WriteString("    Remove-Item -Path $outputPath -Force\n")
+	builder.WriteString("}\n\n")
+	for _, entry := range extraEnv {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		builder.WriteString(fmt.Sprintf("$env:%s = '%s'\n", key, escapePowerShellSingleQuotedString(value)))
+	}
+	if len(extraEnv) > 0 {
+		builder.WriteString("\n")
+	}
+	builder.WriteString("try {\n")
+	builder.WriteString("    & {\n")
+	builder.WriteString(script)
+	builder.WriteString("\n    } *>> $outputPath\n")
+	builder.WriteString("    exit $LASTEXITCODE\n")
+	builder.WriteString("} catch {\n")
+	builder.WriteString("    ($_ | Out-String) | Add-Content -Path $outputPath -Encoding Ascii\n")
+	builder.WriteString("    exit 1\n")
+	builder.WriteString("}\n")
+
+	return builder.String()
+}
+
+func buildLocalWindowsElevationLauncherPowerShell(elevatedScriptPath string, outputPath string) string {
+	return fmt.Sprintf(`
+$ErrorActionPreference = 'Stop'
+
+$elevatedScriptPath = '%s'
+$outputPath = '%s'
+
+try {
+    $argumentList = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%s"'
+    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentList -Verb RunAs -Wait -PassThru
+    exit $process.ExitCode
+} catch {
+    ($_ | Out-String) | Add-Content -Path $outputPath -Encoding Ascii
+    exit 1
+}
+`, escapePowerShellSingleQuotedString(elevatedScriptPath), escapePowerShellSingleQuotedString(outputPath), escapePowerShellDoubleQuotedArgument(elevatedScriptPath))
+}
+
+func escapePowerShellSingleQuotedString(value string) string {
+	return strings.ReplaceAll(value, "'", "''")
+}
+
+func escapePowerShellDoubleQuotedArgument(value string) string {
+	return strings.ReplaceAll(filepath.Clean(value), `"`, `""`)
+}
+
+func filterNonEmptyStrings(values ...string) []string {
+	filtered := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		filtered = append(filtered, value)
+	}
+	return filtered
 }
 
 func generateSecureLocalWindowsProvisionPassword() (string, error) {
@@ -250,8 +381,68 @@ function Save-State($state) {
     $state | ConvertTo-Json -Compress | Set-Content -Path $statePath -Encoding Ascii
 }
 
-function Get-WsmanBoolValue([string]$path) {
-    return [System.Convert]::ToBoolean((Get-Item -Path $path).Value)
+function Get-WsmanBoolState([string]$path) {
+    if (-not (Test-Path -Path $path)) {
+        return @{
+            Exists = $false
+            Value = $false
+        }
+    }
+
+    return @{
+        Exists = $true
+        Value = [System.Convert]::ToBoolean((Get-Item -Path $path).Value)
+    }
+}
+
+function Assert-WsmanPathExists([string]$path) {
+    if (-not (Test-Path -Path $path)) {
+        throw ("Required WSMan path was not found after preparing WinRM: " + $path)
+    }
+}
+
+function Get-WinRMServiceState() {
+    $service = Get-CimInstance -ClassName Win32_Service -Filter "Name='WinRM'" -ErrorAction Stop
+    if ($null -eq $service) {
+        throw 'WinRM service is not installed on this host.'
+    }
+
+    return @{
+        WasRunning = ([string]$service.State -eq 'Running')
+        StartMode = [string]$service.StartMode
+    }
+}
+
+function Restore-WinRMServiceState([bool]$wasRunning, [string]$startMode) {
+    $service = Get-Service -Name 'WinRM' -ErrorAction SilentlyContinue
+    if ($null -eq $service) {
+        return
+    }
+
+    if ($wasRunning) {
+        if ($service.Status -ne 'Running') {
+            Start-Service -Name 'WinRM'
+            $service = Get-Service -Name 'WinRM'
+        }
+    } elseif ($service.Status -eq 'Running') {
+        Stop-Service -Name 'WinRM' -Force
+        $service = Get-Service -Name 'WinRM'
+    }
+
+    switch ($startMode.ToLowerInvariant()) {
+        'auto' {
+            Set-Service -Name 'WinRM' -StartupType Automatic
+        }
+        'manual' {
+            Set-Service -Name 'WinRM' -StartupType Manual
+        }
+        'disabled' {
+            if ($service.Status -eq 'Running') {
+                Stop-Service -Name 'WinRM' -Force
+            }
+            Set-Service -Name 'WinRM' -StartupType Disabled
+        }
+    }
 }
 
 $listenerKeys = @()
@@ -261,12 +452,20 @@ try {
     $listenerKeys = @()
 }
 
+$winRMServiceState = Get-WinRMServiceState
+$basicAuthState = Get-WsmanBoolState 'WSMan:\localhost\Service\Auth\Basic'
+$allowUnencryptedState = Get-WsmanBoolState 'WSMan:\localhost\Service\AllowUnencrypted'
+
 $state = @{
     UserName = $userName
+    ListenerKeys = @($listenerKeys)
     HadListeners = ($listenerKeys.Count -gt 0)
-    WinRMServiceWasRunning = ((Get-Service -Name 'WinRM').Status -eq 'Running')
-    BasicAuthEnabled = (Get-WsmanBoolValue 'WSMan:\localhost\Service\Auth\Basic')
-    AllowUnencryptedEnabled = (Get-WsmanBoolValue 'WSMan:\localhost\Service\AllowUnencrypted')
+    WinRMServiceWasRunning = [bool]$winRMServiceState.WasRunning
+    WinRMServiceStartMode = [string]$winRMServiceState.StartMode
+    BasicAuthPathExisted = [bool]$basicAuthState.Exists
+    BasicAuthEnabled = [bool]$basicAuthState.Value
+    AllowUnencryptedPathExisted = [bool]$allowUnencryptedState.Exists
+    AllowUnencryptedEnabled = [bool]$allowUnencryptedState.Value
     CreatedHttpsListener = $false
     CreatedCertificateThumbprint = ''
 }
@@ -275,9 +474,14 @@ Save-State $state
 if (-not $state.HadListeners) {
     Enable-PSRemoting -Force -SkipNetworkProfileCheck
 } elseif (-not $state.WinRMServiceWasRunning) {
+    if ([string]$state.WinRMServiceStartMode -eq 'Disabled') {
+        Set-Service -Name 'WinRM' -StartupType Manual
+    }
     Start-Service -Name 'WinRM'
 }
 
+Assert-WsmanPathExists 'WSMan:\localhost\Service\AllowUnencrypted'
+Assert-WsmanPathExists 'WSMan:\localhost\Service\Auth\Basic'
 Set-Item -Path 'WSMan:\localhost\Service\AllowUnencrypted' -Value $false
 Set-Item -Path 'WSMan:\localhost\Service\Auth\Basic' -Value $true
 
@@ -335,8 +539,20 @@ if ([bool]$state.CreatedHttpsListener) {
         ForEach-Object { Remove-Item -Path $_.PSPath -Recurse -Force }
 }
 
-Set-Item -Path 'WSMan:\localhost\Service\Auth\Basic' -Value ([bool]$state.BasicAuthEnabled)
-Set-Item -Path 'WSMan:\localhost\Service\AllowUnencrypted' -Value ([bool]$state.AllowUnencryptedEnabled)
+$originalListenerKeys = @()
+if ($null -ne $state.ListenerKeys) {
+    $originalListenerKeys = @($state.ListenerKeys | ForEach-Object { [string]$_ })
+}
+Get-ChildItem -Path WSMan:\localhost\Listener -ErrorAction SilentlyContinue |
+    Where-Object { $originalListenerKeys -notcontains [string]$_.Keys } |
+    ForEach-Object { Remove-Item -Path $_.PSPath -Recurse -Force }
+
+if ([bool]$state.BasicAuthPathExisted -and (Test-Path -Path 'WSMan:\localhost\Service\Auth\Basic')) {
+    Set-Item -Path 'WSMan:\localhost\Service\Auth\Basic' -Value ([bool]$state.BasicAuthEnabled)
+}
+if ([bool]$state.AllowUnencryptedPathExisted -and (Test-Path -Path 'WSMan:\localhost\Service\AllowUnencrypted')) {
+    Set-Item -Path 'WSMan:\localhost\Service\AllowUnencrypted' -Value ([bool]$state.AllowUnencryptedEnabled)
+}
 
 $certificateThumbprint = [string]$state.CreatedCertificateThumbprint
 if (-not [string]::IsNullOrWhiteSpace($certificateThumbprint)) {
@@ -347,8 +563,7 @@ if (-not [string]::IsNullOrWhiteSpace($certificateThumbprint)) {
 }
 
 if (-not [bool]$state.HadListeners) {
-    Disable-PSRemoting -Force
-} elseif (-not [bool]$state.WinRMServiceWasRunning) {
-    Stop-Service -Name 'WinRM' -Force
+    Disable-PSRemoting -Force -ErrorAction SilentlyContinue
 }
+Restore-WinRMServiceState ([bool]$state.WinRMServiceWasRunning) ([string]$state.WinRMServiceStartMode)
 `
