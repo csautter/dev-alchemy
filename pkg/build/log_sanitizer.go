@@ -7,12 +7,12 @@ import (
 )
 
 var sensitiveTextPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)(--windowslogonpassword\s+)(\S+)`),
-	regexp.MustCompile(`(?i)(--token\s+)(\S+)`),
-	regexp.MustCompile(`(?i)(winrm_password\s*=\s*)(\"[^\"]*\"|\S+)`),
-	regexp.MustCompile(`(?i)(ansible_(?:become_)?password\s*[:=]\s*)(\"[^\"]*\"|'[^']*'|\S+)`),
-	regexp.MustCompile(`(?i)(generated password:\s*)(\S+)`),
-	regexp.MustCompile(`(?i)(password for user:\s*\S+\s*[:=]?\s*)(\S+)`),
+	regexp.MustCompile(`(?i)(--windowslogonpassword\s+)(\S+)`),                                 // #nosec G101 -- redaction pattern for log sanitization, not a credential.
+	regexp.MustCompile(`(?i)(--token\s+)(\S+)`),                                                // #nosec G101 -- redaction pattern for log sanitization, not a credential.
+	regexp.MustCompile(`(?i)(winrm_password\s*=\s*)(\"[^\"]*\"|\S+)`),                          // #nosec G101 -- redaction pattern for log sanitization, not a credential.
+	regexp.MustCompile(`(?i)(ansible_(?:become_)?password\s*[:=]\s*)(\"[^\"]*\"|'[^']*'|\S+)`), // #nosec G101 -- redaction pattern for log sanitization, not a credential.
+	regexp.MustCompile(`(?i)(generated password:\s*)(\S+)`),                                    // #nosec G101 -- redaction pattern for log sanitization, not a credential.
+	regexp.MustCompile(`(?i)(password for user:\s*\S+\s*[:=]?\s*)(\S+)`),                       // #nosec G101 -- redaction pattern for log sanitization, not a credential.
 }
 
 func sanitizeSensitiveText(input string) string {
@@ -61,7 +61,7 @@ func expectsSecretValue(arg string) bool {
 
 func discoverRuntimeSecrets() []string {
 	secrets := []string{
-		"P@ssw0rd!",
+		"P@ssw0rd!", // #nosec G101 -- redact the documented default VM password from logs when it appears.
 	}
 
 	for _, envEntry := range os.Environ() {

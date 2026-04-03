@@ -232,6 +232,7 @@ func runLocalWindowsPowerShellScript(projectDir string, script string, extraEnv 
 	close(stopStreaming)
 	<-streamingDone
 
+	// #nosec G304 -- outputPath is created by writeElevatedLocalWindowsPowerShellArtifacts under the managed project directory.
 	scriptOutputBytes, readErr := os.ReadFile(outputPath)
 	scriptOutput := strings.TrimSpace(decodeLocalWindowsPowerShellOutput(scriptOutputBytes))
 	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
@@ -375,6 +376,7 @@ func streamLocalWindowsPowerShellOutput(outputPath string, logPrefix string, sto
 	printedLength := 0
 	pendingLine := ""
 	flush := func() {
+		// #nosec G304 -- outputPath is created by writeElevatedLocalWindowsPowerShellArtifacts under the managed project directory.
 		content, err := os.ReadFile(outputPath)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {

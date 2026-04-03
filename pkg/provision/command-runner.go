@@ -19,8 +19,8 @@ const (
 )
 
 var (
-	ansiblePasswordJSONRegex     = regexp.MustCompile(`(?i)(\"ansible_password\"\s*:\s*\")[^\"]*(\")`)
-	ansiblePasswordKeyValueRegex = regexp.MustCompile(`(?i)(ansible_password=)\S+`)
+	ansiblePasswordJSONRegex     = regexp.MustCompile(`(?i)(\"ansible_password\"\s*:\s*\")[^\"]*(\")`) // #nosec G101 -- redaction pattern for log sanitization, not a credential.
+	ansiblePasswordKeyValueRegex = regexp.MustCompile(`(?i)(ansible_password=)\S+`)                    // #nosec G101 -- redaction pattern for log sanitization, not a credential.
 )
 
 func runCommandWithStreamingLogs(workingDir string, timeout time.Duration, executable string, args []string, logPrefix string) error {

@@ -21,7 +21,7 @@ import (
 
 const (
 	hypervWindowsAnsibleUserEnvVar           = "HYPERV_WINDOWS_ANSIBLE_USER"
-	hypervWindowsAnsiblePasswordEnvVar       = "HYPERV_WINDOWS_ANSIBLE_PASSWORD"
+	hypervWindowsAnsiblePasswordEnvVar       = "HYPERV_WINDOWS_ANSIBLE_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
 	hypervWindowsAnsibleConnectionEnvVar     = "HYPERV_WINDOWS_ANSIBLE_CONNECTION"
 	hypervWindowsAnsibleWinrmTransportEnvVar = "HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT"
 	hypervWindowsAnsiblePortEnvVar           = "HYPERV_WINDOWS_ANSIBLE_PORT"
@@ -74,6 +74,9 @@ const (
 	defaultAnsibleVerbosity     = 3
 	maxAnsibleVerbosity         = 4
 	defaultProvisionPlaybook    = "./playbooks/setup.yml"
+	defaultUbuntuGuestPassword  = "P@ssw0rd!" // #nosec G101 -- documented default credential for disposable local/test Ubuntu guests.
+	defaultTartGuestUser        = "admin"
+	defaultTartGuestPassword    = "admin" // #nosec G101 -- documented default Tart guest credential for local testing.
 
 	localUnixInventoryPath   = "./inventory/localhost.yaml"
 	localUnixInventoryTarget = "localhost"
@@ -1295,7 +1298,7 @@ func loadUbuntuAnsibleConnectionConfig(projectDir string, envVars ubuntuAnsibleC
 		return ubuntuAnsibleConnectionConfig{}, err
 	}
 
-	password := defaultIfEmpty(resolveEnvValue(envVars.Password, valuesFromFile), "P@ssw0rd!")
+	password := defaultIfEmpty(resolveEnvValue(envVars.Password, valuesFromFile), defaultUbuntuGuestPassword)
 	connectionConfig := ubuntuAnsibleConnectionConfig{
 		User:           defaultIfEmpty(resolveEnvValue(envVars.User, valuesFromFile), "packer"),
 		Password:       password,
@@ -1321,12 +1324,12 @@ func loadMacOSTartAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConne
 
 	password := defaultIfEmpty(
 		resolveEnvValue(tartMacOSAnsiblePasswordEnvVar, valuesFromFile),
-		"admin", // Default Tart guest credential; override in .env via TART_MACOS_ANSIBLE_PASSWORD as documented in README.md "Local tests for macOS (on macos)".
+		defaultTartGuestPassword,
 	)
 	connectionConfig := ubuntuAnsibleConnectionConfig{
 		User: defaultIfEmpty(
 			resolveEnvValue(tartMacOSAnsibleUserEnvVar, valuesFromFile),
-			"admin", // Default Tart guest credential; override in .env via TART_MACOS_ANSIBLE_USER as documented in README.md "Local tests for macOS (on macos)".
+			defaultTartGuestUser,
 		),
 		Password:       password,
 		BecomePassword: defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleBecomePasswordEnvVar, valuesFromFile), password),
