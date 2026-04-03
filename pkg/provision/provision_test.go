@@ -78,7 +78,7 @@ func TestBuildWindowsProvisionArgs(t *testing.T) {
 		Port:           "5985",
 	}
 
-	args, cleanup, err := buildWindowsProvisionArgs(projectDir, "172.25.125.159", config, true)
+	args, cleanup, err := buildWindowsProvisionArgs(projectDir, "172.25.125.159", config, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
 	if err != nil {
 		t.Fatalf("buildWindowsProvisionArgs returned error: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestBuildWindowsStaticInventoryProvisionArgsIncludesSecureWinRMSettings(t *
 		ServerCertValidation: "ignore",
 	}
 
-	args, cleanup, err := buildWindowsStaticInventoryProvisionArgs(projectDir, localWindowsWinRMInventoryPath, localWindowsWinRMInventoryTarget, config, true)
+	args, cleanup, err := buildWindowsStaticInventoryProvisionArgs(projectDir, localWindowsWinRMInventoryPath, localWindowsWinRMInventoryTarget, config, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
 	if err != nil {
 		t.Fatalf("buildWindowsStaticInventoryProvisionArgs returned error: %v", err)
 	}
@@ -411,7 +411,7 @@ func TestRunLocalWindowsProvisionAlwaysCleansUpSecureSession(t *testing.T) {
 		return errors.New("ansible failed")
 	}
 
-	err := runLocalWindowsProvision(projectDir, true)
+	err := runLocalWindowsProvision(projectDir, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
 	if err == nil {
 		t.Fatal("expected local windows provision to return an ansible error")
 	}
@@ -446,7 +446,7 @@ func TestRunLocalWindowsProvisionCleansUpWhenArgumentBuildFails(t *testing.T) {
 		return nil
 	}
 
-	err := runLocalWindowsProvision("/definitely/missing/project-dir", false)
+	err := runLocalWindowsProvision("/definitely/missing/project-dir", ProvisionOptions{Verbosity: defaultAnsibleVerbosity})
 	if err == nil {
 		t.Fatal("expected local windows provision to fail when arg build cannot create temp files")
 	}
@@ -459,7 +459,7 @@ func TestRunLocalWindowsProvisionCleansUpWhenArgumentBuildFails(t *testing.T) {
 }
 
 func TestBuildLocalProvisionArgsForWindows(t *testing.T) {
-	args, err := buildLocalProvisionArgs(alchemy_build.HostOsWindows, true)
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsWindows, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
 	if err != nil {
 		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
 	}
@@ -476,7 +476,7 @@ func TestBuildLocalProvisionArgsForWindows(t *testing.T) {
 }
 
 func TestBuildLocalProvisionArgsForDarwin(t *testing.T) {
-	args, err := buildLocalProvisionArgs(alchemy_build.HostOsDarwin, false)
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsDarwin, ProvisionOptions{Verbosity: defaultAnsibleVerbosity})
 	if err != nil {
 		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
 	}
@@ -493,7 +493,7 @@ func TestBuildLocalProvisionArgsForDarwin(t *testing.T) {
 }
 
 func TestBuildLocalProvisionArgsForLinux(t *testing.T) {
-	args, err := buildLocalProvisionArgs(alchemy_build.HostOsLinux, true)
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsLinux, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
 	if err != nil {
 		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
 	}
@@ -510,12 +510,56 @@ func TestBuildLocalProvisionArgsForLinux(t *testing.T) {
 }
 
 func TestBuildLocalProvisionArgsReturnsErrorForUnsupportedHost(t *testing.T) {
-	_, err := buildLocalProvisionArgs(alchemy_build.HostOsType("solaris"), false)
+	_, err := buildLocalProvisionArgs(alchemy_build.HostOsType("solaris"), ProvisionOptions{Verbosity: defaultAnsibleVerbosity})
 	if err == nil {
 		t.Fatal("expected unsupported host OS to return an error")
 	}
 	if !strings.Contains(err.Error(), "local provision is not implemented") {
 		t.Fatalf("expected unsupported local provision error, got: %v", err)
+	}
+}
+
+func TestBuildLocalProvisionArgsUsesCustomInventoryWithoutDefaultLimit(t *testing.T) {
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsLinux, ProvisionOptions{
+		Verbosity:     1,
+		InventoryPath: "./inventory/custom.yml",
+		ExtraArgs:     []string{"--limit", "workstation", "--diff"},
+	})
+	if err != nil {
+		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
+	}
+
+	got := strings.Join(args, " ")
+	if !strings.Contains(got, "-i ./inventory/custom.yml") {
+		t.Fatalf("expected custom inventory path, args: %v", args)
+	}
+	if strings.Contains(got, "-l localhost") {
+		t.Fatalf("did not expect default localhost limit with custom inventory, args: %v", args)
+	}
+	if !strings.Contains(got, "--limit workstation --diff") {
+		t.Fatalf("expected extra ansible args to be appended, args: %v", args)
+	}
+	if !strings.Contains(got, "-v") || strings.Contains(got, "-vv") {
+		t.Fatalf("expected verbosity level 1 to render as -v, args: %v", args)
+	}
+}
+
+func TestBuildStaticInventoryProvisionArgsAppendsProvisionOptions(t *testing.T) {
+	args := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
+		Check:     true,
+		Verbosity: 2,
+		ExtraArgs: []string{"--diff", "--tags", "java"},
+	})
+
+	got := strings.Join(args, " ")
+	if !strings.Contains(got, "-l localhost") {
+		t.Fatalf("expected inventory limit to be preserved, args: %v", args)
+	}
+	if !strings.Contains(got, "-vv") || strings.Contains(got, "-vvv") {
+		t.Fatalf("expected verbosity level 2 to render as -vv, args: %v", args)
+	}
+	if !strings.Contains(got, "--check --diff --tags java") {
+		t.Fatalf("expected check flag and extra ansible args to be appended, args: %v", args)
 	}
 }
 
@@ -1068,7 +1112,7 @@ func TestBuildSSHProvisionArgs(t *testing.T) {
 		SshRetries:     "3",
 	}
 
-	args, cleanup, err := buildSSHProvisionArgs(projectDir, "172.24.78.254", config, true)
+	args, cleanup, err := buildSSHProvisionArgs(projectDir, "172.24.78.254", config, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
 	if err != nil {
 		t.Fatalf("buildSSHProvisionArgs returned error: %v", err)
 	}

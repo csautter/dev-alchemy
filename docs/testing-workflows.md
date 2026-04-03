@@ -55,11 +55,14 @@ machine instead of a managed VM:
 
 ```bash
 alchemy provision local --check
+alchemy provision local -- --diff
+alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
 alchemy provision local
 ```
 
 - Windows uses `inventory/localhost_windows_winrm.yml`.
 - macOS and Linux use `inventory/localhost.yaml`.
+- Pass additional `ansible-playbook` flags after `--` when needed.
 - The macOS/Linux local target is currently marked unstable until it has been
   validated end-to-end.
 

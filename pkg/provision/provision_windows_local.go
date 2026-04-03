@@ -34,18 +34,24 @@ type localWindowsProvisionSession struct {
 	StatePath        string
 }
 
-func runLocalWindowsProvision(projectDir string, check bool) error {
+func runLocalWindowsProvision(projectDir string, options ProvisionOptions) error {
 	session, err := setupLocalWindowsProvisionSessionFunc(projectDir)
 	if err != nil {
 		return err
 	}
 
-	args, argsCleanup, err := buildWindowsStaticInventoryProvisionArgs(
-		projectDir,
+	inventoryPath, inventoryTarget := resolveStaticInventoryPathAndTarget(
 		localWindowsWinRMInventoryPath,
 		localWindowsWinRMInventoryTarget,
+		options,
+	)
+
+	args, argsCleanup, err := buildWindowsStaticInventoryProvisionArgs(
+		projectDir,
+		inventoryPath,
+		inventoryTarget,
 		session.ConnectionConfig,
-		check,
+		options,
 	)
 	if err != nil {
 		cleanupErr := cleanupLocalWindowsProvisionSessionFunc(projectDir, session)
@@ -84,13 +90,13 @@ func runLocalWindowsProvision(projectDir string, check bool) error {
 	return nil
 }
 
-func buildWindowsStaticInventoryProvisionArgs(projectDir string, inventoryPath string, inventoryTarget string, connectionConfig windowsAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
+func buildWindowsStaticInventoryProvisionArgs(projectDir string, inventoryPath string, inventoryTarget string, connectionConfig windowsAnsibleConnectionConfig, options ProvisionOptions) ([]string, func() error, error) {
 	extraVars, err := buildWindowsProvisionExtraVars(connectionConfig)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return buildStaticInventoryProvisionArgsWithExtraVars(projectDir, inventoryPath, inventoryTarget, extraVars, check)
+	return buildStaticInventoryProvisionArgsWithExtraVars(projectDir, inventoryPath, inventoryTarget, extraVars, options)
 }
 
 func buildLocalWindowsProvisionScriptEnv(statePath string, password string) []string {

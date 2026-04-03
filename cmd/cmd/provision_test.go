@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
+	alchemy_provision "github.com/csautter/dev-alchemy/pkg/provision"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +20,7 @@ func TestRunProvisionReturnsErrorForUnsupportedConfig(t *testing.T) {
 		VirtualizationEngine: alchemy_build.VirtualizationEngineVirtualBox,
 	}
 
-	err := runProvision(vm, false)
+	err := runProvision(vm, alchemy_provision.ProvisionOptions{Verbosity: 3})
 	if err == nil {
 		t.Fatal("expected runProvision to return an error for unsupported vm configuration")
 	}
@@ -82,6 +83,107 @@ func TestProvisionCommandRejectsArchAndTypeForLocalTarget(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "does not accept --arch or --type") {
 		t.Fatalf("expected explicit local flag validation error, got: %v", err)
+	}
+}
+
+func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
+	previousArch := arch
+	previousOsType := osType
+	previousCheck := check
+	previousInventoryPath := inventoryPath
+	previousAnsibleVerbosity := ansibleVerbosity
+	previousCurrentHostLocalProvisionVirtualMachineFunc := currentHostLocalProvisionVirtualMachineFunc
+	previousRunProvisionFunc := runProvisionFunc
+	previousRootOut := rootCmd.OutOrStdout()
+	previousRootErr := rootCmd.ErrOrStderr()
+	t.Cleanup(func() {
+		arch = previousArch
+		osType = previousOsType
+		check = previousCheck
+		inventoryPath = previousInventoryPath
+		ansibleVerbosity = previousAnsibleVerbosity
+		currentHostLocalProvisionVirtualMachineFunc = previousCurrentHostLocalProvisionVirtualMachineFunc
+		runProvisionFunc = previousRunProvisionFunc
+		provisionCmd.SetArgs(nil)
+		rootCmd.SetArgs(nil)
+		rootCmd.SetOut(previousRootOut)
+		rootCmd.SetErr(previousRootErr)
+		for _, flagName := range []string{"arch", "type", "check", "inventory-path", "verbosity"} {
+			provisionCmd.Flags().Lookup(flagName).Changed = false
+		}
+	})
+
+	currentHostLocalProvisionVirtualMachineFunc = func() (alchemy_build.VirtualMachineConfig, bool) {
+		return alchemy_build.VirtualMachineConfig{
+			OS:                   "local",
+			Arch:                 "-",
+			HostOs:               alchemy_build.HostOsLinux,
+			VirtualizationEngine: localProvisionVirtualizationEngine,
+		}, true
+	}
+
+	var capturedOptions alchemy_provision.ProvisionOptions
+	runProvisionFunc = func(vm alchemy_build.VirtualMachineConfig, options alchemy_provision.ProvisionOptions) error {
+		capturedOptions = options
+		return nil
+	}
+
+	rootCmd.SetArgs([]string{
+		"provision",
+		"local",
+		"--check",
+		"--inventory-path", "./inventory/custom.yml",
+		"--verbosity", "1",
+		"--",
+		"--diff",
+		"--tags", "java",
+	})
+
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("expected provision command to execute successfully, got: %v", err)
+	}
+	if !capturedOptions.Check {
+		t.Fatal("expected --check to propagate into provision options")
+	}
+	if capturedOptions.Verbosity != 1 {
+		t.Fatalf("expected verbosity 1, got %d", capturedOptions.Verbosity)
+	}
+	if capturedOptions.InventoryPath != "./inventory/custom.yml" {
+		t.Fatalf("expected custom inventory path, got %q", capturedOptions.InventoryPath)
+	}
+	if got := strings.Join(capturedOptions.ExtraArgs, " "); got != "--diff --tags java" {
+		t.Fatalf("expected ansible args after -- to be preserved, got %q", got)
+	}
+}
+
+func TestProvisionCommandRejectsInventoryPathForVMTargets(t *testing.T) {
+	previousArch := arch
+	previousOsType := osType
+	previousCheck := check
+	previousInventoryPath := inventoryPath
+	t.Cleanup(func() {
+		arch = previousArch
+		osType = previousOsType
+		check = previousCheck
+		inventoryPath = previousInventoryPath
+		provisionCmd.Flags().Lookup("inventory-path").Changed = false
+	})
+
+	arch = "amd64"
+	osType = "server"
+	check = false
+	inventoryPath = "./inventory/custom.yml"
+	provisionCmd.Flags().Lookup("inventory-path").Changed = true
+
+	err := provisionCmd.RunE(provisionCmd, []string{"windows11"})
+	if err == nil {
+		t.Fatal("expected VM provision to reject --inventory-path")
+	}
+	if !strings.Contains(err.Error(), "--inventory-path is only supported for local provisioning") {
+		t.Fatalf("expected explicit inventory-path validation error, got: %v", err)
 	}
 }
 
@@ -361,11 +463,11 @@ func TestRunProvisionConfiguresForceWinRMUninstall(t *testing.T) {
 			restored = true
 		}
 	}
-	runProvisionFunc = func(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	runProvisionFunc = func(vm alchemy_build.VirtualMachineConfig, options alchemy_provision.ProvisionOptions) error {
 		return nil
 	}
 
-	if err := runProvision(alchemy_build.VirtualMachineConfig{OS: "local", HostOs: alchemy_build.HostOsWindows}, true); err != nil {
+	if err := runProvision(alchemy_build.VirtualMachineConfig{OS: "local", HostOs: alchemy_build.HostOsWindows}, alchemy_provision.ProvisionOptions{Check: true, Verbosity: 3}); err != nil {
 		t.Fatalf("expected runProvision to succeed, got: %v", err)
 	}
 	if !configured {

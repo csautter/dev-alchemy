@@ -79,6 +79,9 @@ You can also use the built-in wrapper for host-local provisioning:
 
 ```bash
 alchemy provision local --check
+# pass through extra ansible-playbook flags after `--`
+alchemy provision local -- --diff --tags java
+alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
 alchemy provision local --check --yes
 alchemy provision local --check --yes --force-winrm-uninstall
 alchemy provision local
@@ -208,6 +211,8 @@ Use the built-in wrapper first when you want the shared command surface:
 
 ```bash
 alchemy provision local --check
+alchemy provision local -- --diff
+alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
 alchemy provision local
 ```
 
