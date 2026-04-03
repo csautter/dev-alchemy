@@ -90,6 +90,23 @@ func TestProvisionCommandRejectsArchAndTypeForLocalTarget(t *testing.T) {
 	}
 }
 
+func TestProvisionCommandRejectsVerbosityOutsideSupportedRange(t *testing.T) {
+	previousAnsibleVerbosity := ansibleVerbosity
+	t.Cleanup(func() {
+		ansibleVerbosity = previousAnsibleVerbosity
+	})
+
+	ansibleVerbosity = 5
+
+	err := provisionCmd.RunE(provisionCmd, []string{"local"})
+	if err == nil {
+		t.Fatal("expected an error when verbosity exceeds the documented range")
+	}
+	if !strings.Contains(err.Error(), "ansible verbosity must be between 0 and 4") {
+		t.Fatalf("expected explicit verbosity validation error, got: %v", err)
+	}
+}
+
 func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 	previousArch := arch
 	previousOsType := osType

@@ -72,6 +72,7 @@ const (
 
 	defaultAnsibleSSHCommonArgs = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
 	defaultAnsibleVerbosity     = 3
+	maxAnsibleVerbosity         = 4
 	defaultProvisionPlaybook    = "./playbooks/setup.yml"
 
 	localUnixInventoryPath   = "./inventory/localhost.yaml"
@@ -185,9 +186,17 @@ func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	})
 }
 
+func ValidateProvisionVerbosity(verbosity int) error {
+	if verbosity < 0 || verbosity > maxAnsibleVerbosity {
+		return fmt.Errorf("ansible verbosity must be between 0 and %d: %d", maxAnsibleVerbosity, verbosity)
+	}
+
+	return nil
+}
+
 func RunProvisionWithOptions(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
-	if options.Verbosity < 0 {
-		return fmt.Errorf("ansible verbosity cannot be negative: %d", options.Verbosity)
+	if err := ValidateProvisionVerbosity(options.Verbosity); err != nil {
+		return err
 	}
 
 	if isLocalProvisionTarget(vm) {
@@ -1048,10 +1057,13 @@ func buildLocalProvisionArgs(hostOs alchemy_build.HostOsType, options ProvisionO
 
 	inventoryPath, inventoryTarget := resolveStaticInventoryPathAndTarget(defaultInventoryPath, defaultInventoryTarget, options)
 
-	return buildStaticInventoryProvisionArgs(inventoryPath, inventoryTarget, options), nil
+	return buildStaticInventoryProvisionArgs(inventoryPath, inventoryTarget, options)
 }
 
 func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, options ProvisionOptions) ([]string, func() error, error) {
+	if err := ValidateProvisionVerbosity(options.Verbosity); err != nil {
+		return nil, nil, err
+	}
 
 	extraVarsFile, err := os.CreateTemp(projectDir, ".ansible-extra-vars-*.json")
 	if err != nil {
@@ -1086,10 +1098,20 @@ func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, o
 		"@" + filepath.Base(extraVarsFilePath),
 	}
 
-	return appendProvisionCommandOptions(args, options), cleanup, nil
+	args, err = appendProvisionCommandOptions(args, options)
+	if err != nil {
+		_ = cleanup()
+		return nil, nil, err
+	}
+
+	return args, cleanup, nil
 }
 
 func buildStaticInventoryProvisionArgsWithExtraVars(projectDir string, inventoryPath string, inventoryTarget string, extraVars []byte, options ProvisionOptions) ([]string, func() error, error) {
+	if err := ValidateProvisionVerbosity(options.Verbosity); err != nil {
+		return nil, nil, err
+	}
+
 	extraVarsFile, err := os.CreateTemp(projectDir, ".ansible-extra-vars-*.json")
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create ansible extra-vars temp file: %w", err)
@@ -1123,10 +1145,16 @@ func buildStaticInventoryProvisionArgsWithExtraVars(projectDir string, inventory
 	}
 	args = append(args, "--extra-vars", "@"+filepath.Base(extraVarsFilePath))
 
-	return appendProvisionCommandOptions(args, options), cleanup, nil
+	args, err = appendProvisionCommandOptions(args, options)
+	if err != nil {
+		_ = cleanup()
+		return nil, nil, err
+	}
+
+	return args, cleanup, nil
 }
 
-func buildStaticInventoryProvisionArgs(inventoryPath string, inventoryTarget string, options ProvisionOptions) []string {
+func buildStaticInventoryProvisionArgs(inventoryPath string, inventoryTarget string, options ProvisionOptions) ([]string, error) {
 	args := []string{
 		resolveProvisionPlaybookPath(options),
 		"-i",
@@ -1139,7 +1167,10 @@ func buildStaticInventoryProvisionArgs(inventoryPath string, inventoryTarget str
 	return appendProvisionCommandOptions(args, options)
 }
 
-func appendProvisionCommandOptions(args []string, options ProvisionOptions) []string {
+func appendProvisionCommandOptions(args []string, options ProvisionOptions) ([]string, error) {
+	if err := ValidateProvisionVerbosity(options.Verbosity); err != nil {
+		return nil, err
+	}
 	if options.Verbosity > 0 {
 		args = append(args, "-"+strings.Repeat("v", options.Verbosity))
 	}
@@ -1150,7 +1181,7 @@ func appendProvisionCommandOptions(args []string, options ProvisionOptions) []st
 		args = append(args, options.ExtraArgs...)
 	}
 
-	return args
+	return args, nil
 }
 
 func resolveStaticInventoryPathAndTarget(defaultInventoryPath string, defaultInventoryTarget string, options ProvisionOptions) (string, string) {

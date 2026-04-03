@@ -141,6 +141,9 @@ Examples:
 			InventoryPath: strings.TrimSpace(inventoryPath),
 			ExtraArgs:     extraAnsibleArgs,
 		}
+		if err := alchemy_provision.ValidateProvisionVerbosity(options.Verbosity); err != nil {
+			return err
+		}
 
 		if osName == "all" {
 			return fmt.Errorf("❌ \"all\" is not supported for provision; provide one target, for example: alchemy provision windows11 --arch amd64 --check")

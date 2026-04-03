@@ -612,11 +612,14 @@ func TestBuildLocalProvisionArgsUsesCustomInventoryWithoutDefaultLimit(t *testin
 }
 
 func TestBuildStaticInventoryProvisionArgsAppendsProvisionOptions(t *testing.T) {
-	args := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
+	args, err := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
 		Check:     true,
 		Verbosity: 2,
 		ExtraArgs: []string{"--diff", "--tags", "java"},
 	})
+	if err != nil {
+		t.Fatalf("buildStaticInventoryProvisionArgs returned error: %v", err)
+	}
 
 	got := strings.Join(args, " ")
 	if !strings.Contains(got, "-l localhost") {
@@ -631,16 +634,31 @@ func TestBuildStaticInventoryProvisionArgsAppendsProvisionOptions(t *testing.T) 
 }
 
 func TestBuildStaticInventoryProvisionArgsUsesCustomPlaybookPath(t *testing.T) {
-	args := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
+	args, err := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
 		PlaybookPath: "./playbooks/bootstrap.yml",
 		Verbosity:    defaultAnsibleVerbosity,
 	})
+	if err != nil {
+		t.Fatalf("buildStaticInventoryProvisionArgs returned error: %v", err)
+	}
 
 	if len(args) == 0 {
 		t.Fatal("expected ansible args to be returned")
 	}
 	if args[0] != "./playbooks/bootstrap.yml" {
 		t.Fatalf("expected custom playbook path as first arg, got %q", args[0])
+	}
+}
+
+func TestBuildStaticInventoryProvisionArgsRejectsVerbosityOutsideSupportedRange(t *testing.T) {
+	_, err := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
+		Verbosity: maxAnsibleVerbosity + 1,
+	})
+	if err == nil {
+		t.Fatal("expected buildStaticInventoryProvisionArgs to reject unsupported verbosity")
+	}
+	if !strings.Contains(err.Error(), "ansible verbosity must be between 0 and 4") {
+		t.Fatalf("expected explicit verbosity validation error, got: %v", err)
 	}
 }
 
