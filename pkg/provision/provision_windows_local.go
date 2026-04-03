@@ -312,7 +312,16 @@ $elevatedScriptPath = '%s'
 $outputPath = '%s'
 
 try {
+    $windowsIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $windowsPrincipal = New-Object Security.Principal.WindowsPrincipal($windowsIdentity)
+    $isElevated = $windowsPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
     $argumentList = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%s"'
+    if ($isElevated) {
+        & 'powershell.exe' -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $elevatedScriptPath
+        exit $LASTEXITCODE
+    }
+
     $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentList -Verb RunAs -WindowStyle Hidden -Wait -PassThru
     exit $process.ExitCode
 } catch {

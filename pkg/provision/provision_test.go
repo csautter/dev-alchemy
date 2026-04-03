@@ -338,9 +338,18 @@ func TestBuildElevatedLocalWindowsPowerShellScriptIncludesEnvAndOutputCapture(t 
 	}
 }
 
-func TestBuildLocalWindowsElevationLauncherPowerShellUsesRunAs(t *testing.T) {
+func TestBuildLocalWindowsElevationLauncherPowerShellDetectsElevatedShellBeforeRunAs(t *testing.T) {
 	launcher := buildLocalWindowsElevationLauncherPowerShell(`C:\Temp\bootstrap.ps1`, `C:\Temp\bootstrap.log`)
 
+	if !strings.Contains(launcher, "[Security.Principal.WindowsIdentity]::GetCurrent()") {
+		t.Fatal("expected launcher to inspect the current Windows identity")
+	}
+	if !strings.Contains(launcher, "WindowsBuiltInRole]::Administrator") {
+		t.Fatal("expected launcher to check whether the current shell is already elevated")
+	}
+	if !strings.Contains(launcher, "& 'powershell.exe' -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $elevatedScriptPath") {
+		t.Fatal("expected launcher to run the generated script directly when already elevated")
+	}
 	if !strings.Contains(launcher, "Start-Process -FilePath 'powershell.exe'") {
 		t.Fatal("expected launcher to start a new powershell process")
 	}
