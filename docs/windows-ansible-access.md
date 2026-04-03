@@ -23,18 +23,27 @@ Use only the option you actually need.
 
 ## Security note
 
-Enabling unencrypted WinRM and Basic authentication increases exposure on the
-target machine. Use these settings only in trusted environments or for testing.
-For production environments, prefer encrypted connections and stronger
-authentication methods, and limit firewall access to trusted networks.
+For localhost runs through `alchemy provision local`, Dev Alchemy now handles a
+temporary secure setup for you on Windows: it creates a dedicated local admin
+account with a random password, enables WinRM over HTTPS for the duration of
+the run, and disables the temporary account during cleanup. If WinRM was not
+enabled before the run, the wrapper disables it again afterwards.
+
+Manual WinRM setup should also prefer encrypted transport. Avoid unencrypted
+WinRM unless you are in a tightly controlled test environment and understand
+the exposure you are accepting.
 
 ## Option 1: Enable WinRM
 
+For localhost provisioning, prefer:
+
 ```powershell
-Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true; `
-Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true; `
-Enable-PSRemoting -Force
+alchemy.exe provision local --check
+alchemy.exe provision local
 ```
+
+For manual `ansible-playbook` use, set up an encrypted WinRM listener and pass
+your own credentials and connection variables to Ansible.
 
 ## Option 2: Enable SSH Server
 
@@ -49,7 +58,8 @@ In both cases you may still need to allow inbound connections through the local
 firewall. Make sure the account you use for Ansible has administrator
 privileges.
 
-If you need a dedicated user for testing, you can create one:
+If you need a dedicated user for testing, you can create one, but for the
+localhost wrapper this is handled automatically:
 
 ```powershell
 # Optional: prefer an existing admin user when possible

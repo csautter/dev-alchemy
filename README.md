@@ -83,8 +83,11 @@ alchemy provision local
 ```
 
 On Windows this uses the documented localhost WinRM inventory. On macOS and
-Linux it uses the standard localhost inventory. The macOS/Linux local target is
-currently marked unstable until it has been validated end-to-end.
+Linux it uses the standard localhost inventory. On Windows the wrapper
+creates a temporary administrator account with a random password, enables
+encrypted WinRM over HTTPS for the run, and then disables the temporary account
+again during cleanup. The macOS/Linux local target is currently marked unstable
+until it has been validated end-to-end.
 
 ## 🚀 Getting Started
 

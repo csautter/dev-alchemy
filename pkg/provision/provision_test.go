@@ -150,6 +150,192 @@ func TestBuildWindowsProvisionArgs(t *testing.T) {
 	}
 }
 
+func TestBuildWindowsStaticInventoryProvisionArgsIncludesSecureWinRMSettings(t *testing.T) {
+	projectDir := t.TempDir()
+	config := windowsAnsibleConnectionConfig{
+		User:                 localWindowsProvisionUserName,
+		Password:             "N3wP@ssw0rd!",
+		Connection:           "winrm",
+		WinrmTransport:       "basic",
+		Port:                 localWindowsWinRMHTTPSPort,
+		WinrmScheme:          "https",
+		ServerCertValidation: "ignore",
+	}
+
+	args, cleanup, err := buildWindowsStaticInventoryProvisionArgs(projectDir, localWindowsWinRMInventoryPath, localWindowsWinRMInventoryTarget, config, true)
+	if err != nil {
+		t.Fatalf("buildWindowsStaticInventoryProvisionArgs returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			t.Fatalf("failed to clean up extra vars file: %v", cleanupErr)
+		}
+	})
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost_windows_winrm.yml") {
+		t.Fatalf("expected windows localhost inventory, args: %v", args)
+	}
+	if got := strings.Join(args, " "); !strings.Contains(got, "-l windows_host") {
+		t.Fatalf("expected windows localhost limit, args: %v", args)
+	}
+	if args[len(args)-1] != "--check" {
+		t.Fatalf("expected --check to be passed through, args: %v", args)
+	}
+
+	extraVarsIndex := -1
+	for index, arg := range args {
+		if arg == "--extra-vars" {
+			extraVarsIndex = index + 1
+			break
+		}
+	}
+	if extraVarsIndex <= 0 || extraVarsIndex >= len(args) {
+		t.Fatalf("expected --extra-vars with @temp file reference, args: %v", args)
+	}
+
+	extraVarsFilePath := filepath.Join(projectDir, strings.TrimPrefix(args[extraVarsIndex], "@"))
+	content, readErr := os.ReadFile(extraVarsFilePath)
+	if readErr != nil {
+		t.Fatalf("failed to read extra vars file %q: %v", extraVarsFilePath, readErr)
+	}
+
+	extraVars := map[string]string{}
+	if err := json.Unmarshal(content, &extraVars); err != nil {
+		t.Fatalf("expected extra vars file to contain valid JSON, got error: %v", err)
+	}
+
+	for key, expected := range map[string]string{
+		"ansible_user":                         localWindowsProvisionUserName,
+		"ansible_password":                     "N3wP@ssw0rd!",
+		"ansible_connection":                   "winrm",
+		"ansible_winrm_transport":              "basic",
+		"ansible_port":                         localWindowsWinRMHTTPSPort,
+		"ansible_winrm_scheme":                 "https",
+		"ansible_winrm_server_cert_validation": "ignore",
+	} {
+		if extraVars[key] != expected {
+			t.Fatalf("expected %s=%q in extra vars, got: %v", key, expected, extraVars)
+		}
+	}
+}
+
+func TestGenerateSecureLocalWindowsProvisionPasswordMeetsComplexityRequirements(t *testing.T) {
+	password, err := generateSecureLocalWindowsProvisionPassword()
+	if err != nil {
+		t.Fatalf("generateSecureLocalWindowsProvisionPassword returned error: %v", err)
+	}
+	if len(password) != 24 {
+		t.Fatalf("expected 24-character password, got %d", len(password))
+	}
+
+	var hasLower bool
+	var hasUpper bool
+	var hasDigit bool
+	var hasSpecial bool
+	for _, char := range password {
+		switch {
+		case char >= 'a' && char <= 'z':
+			hasLower = true
+		case char >= 'A' && char <= 'Z':
+			hasUpper = true
+		case char >= '0' && char <= '9':
+			hasDigit = true
+		default:
+			hasSpecial = true
+		}
+	}
+
+	if !hasLower || !hasUpper || !hasDigit || !hasSpecial {
+		t.Fatalf("expected password to include lower, upper, digit, and special characters, got %q", password)
+	}
+}
+
+func TestRunLocalWindowsProvisionAlwaysCleansUpSecureSession(t *testing.T) {
+	previousSetup := setupLocalWindowsProvisionSessionFunc
+	previousCleanup := cleanupLocalWindowsProvisionSessionFunc
+	previousRunner := runAnsibleProvisionCommandFunc
+	t.Cleanup(func() {
+		setupLocalWindowsProvisionSessionFunc = previousSetup
+		cleanupLocalWindowsProvisionSessionFunc = previousCleanup
+		runAnsibleProvisionCommandFunc = previousRunner
+	})
+
+	projectDir := t.TempDir()
+	statePath := filepath.Join(projectDir, "session-state.json")
+	var cleanedUp bool
+
+	setupLocalWindowsProvisionSessionFunc = func(_ string) (localWindowsProvisionSession, error) {
+		return localWindowsProvisionSession{
+			ConnectionConfig: windowsAnsibleConnectionConfig{
+				User:                 localWindowsProvisionUserName,
+				Password:             "N3wP@ssw0rd!",
+				Connection:           "winrm",
+				WinrmTransport:       "basic",
+				Port:                 localWindowsWinRMHTTPSPort,
+				WinrmScheme:          "https",
+				ServerCertValidation: "ignore",
+			},
+			StatePath: statePath,
+		}, nil
+	}
+	cleanupLocalWindowsProvisionSessionFunc = func(_ string, session localWindowsProvisionSession) error {
+		if session.StatePath != statePath {
+			t.Fatalf("expected cleanup to receive state path %q, got %q", statePath, session.StatePath)
+		}
+		cleanedUp = true
+		return nil
+	}
+	runAnsibleProvisionCommandFunc = func(_ string, _ []string, _ time.Duration, _ string) error {
+		return errors.New("ansible failed")
+	}
+
+	err := runLocalWindowsProvision(projectDir, true)
+	if err == nil {
+		t.Fatal("expected local windows provision to return an ansible error")
+	}
+	if !strings.Contains(err.Error(), "ansible provisioning failed for local host windows") {
+		t.Fatalf("expected wrapped ansible error, got: %v", err)
+	}
+	if !cleanedUp {
+		t.Fatal("expected secure local windows cleanup to run after ansible failure")
+	}
+}
+
+func TestRunLocalWindowsProvisionCleansUpWhenArgumentBuildFails(t *testing.T) {
+	previousSetup := setupLocalWindowsProvisionSessionFunc
+	previousCleanup := cleanupLocalWindowsProvisionSessionFunc
+	t.Cleanup(func() {
+		setupLocalWindowsProvisionSessionFunc = previousSetup
+		cleanupLocalWindowsProvisionSessionFunc = previousCleanup
+	})
+
+	var cleanedUp bool
+	setupLocalWindowsProvisionSessionFunc = func(_ string) (localWindowsProvisionSession, error) {
+		return localWindowsProvisionSession{
+			ConnectionConfig: windowsAnsibleConnectionConfig{
+				User:       localWindowsProvisionUserName,
+				Connection: "winrm",
+			},
+			StatePath: filepath.Join(t.TempDir(), "session-state.json"),
+		}, nil
+	}
+	cleanupLocalWindowsProvisionSessionFunc = func(_ string, _ localWindowsProvisionSession) error {
+		cleanedUp = true
+		return nil
+	}
+
+	err := runLocalWindowsProvision("/definitely/missing/project-dir", false)
+	if err == nil {
+		t.Fatal("expected local windows provision to fail when arg build cannot create temp files")
+	}
+	if !strings.Contains(err.Error(), "failed to build ansible arguments") {
+		t.Fatalf("expected arg-build error, got: %v", err)
+	}
+	if !cleanedUp {
+		t.Fatal("expected secure local windows cleanup to run after arg-build failure")
+	}
+}
+
 func TestBuildLocalProvisionArgsForWindows(t *testing.T) {
 	args, err := buildLocalProvisionArgs(alchemy_build.HostOsWindows, true)
 	if err != nil {
