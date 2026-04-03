@@ -86,14 +86,16 @@ alchemy provision local
 
 On Windows this uses the documented localhost WinRM inventory. On macOS and
 Linux it uses the standard localhost inventory. On Windows the wrapper
-creates a temporary administrator account with a random password, enables
-encrypted WinRM over HTTPS for the run, and then disables the temporary account
-again during cleanup. Because those are significant host changes, the Windows
-local flow asks for confirmation by default; use `--yes` when you need to run
-it non-interactively. Windows will also show a UAC prompt before the privileged
-bootstrap and cleanup steps run. Use
-`--force-winrm-uninstall` to force uninstall and disable of WinRM. The macOS/Linux local target is
-currently marked unstable until it has been validated end-to-end.
+creates a temporary administrator account with a random password, configures a
+temporary WinRM HTTPS listener for the run, and then disables the temporary
+account again during cleanup. Because those are significant host changes, the
+Windows local flow asks for confirmation by default; use `--yes` when you need
+to run it non-interactively. Windows will also show a UAC prompt before the
+privileged bootstrap and cleanup steps run, and the bootstrap/cleanup logs are
+streamed back into the main terminal. Use `--force-winrm-uninstall` to force
+cleanup to disable WinRM and remove transient remoting setup after the run. The
+macOS/Linux local target is currently marked unstable until it has been
+validated end-to-end.
 
 ## 🚀 Getting Started
 

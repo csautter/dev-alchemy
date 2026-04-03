@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,7 @@ const (
 	localWindowsProvisionUserEnvVar       = "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER"
 	localWindowsProvisionPasswordEnvVar   = "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
 	localWindowsForceWinRMUninstallEnvVar = "DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_WINRM_UNINSTALL"
+	localWindowsFirewallRuleName          = "DevAlchemyLocalWinRMHTTPS"
 )
 
 var setupLocalWindowsProvisionSessionFunc = setupLocalWindowsProvisionSession
@@ -182,6 +184,10 @@ func runLocalWindowsPowerShellScript(projectDir string, script string, extraEnv 
 	}
 	defer cleanupFiles()
 
+	stopStreaming := make(chan struct{})
+	streamingDone := make(chan struct{})
+	go streamLocalWindowsPowerShellOutput(outputPath, os.Stdout, stopStreaming, streamingDone)
+
 	output, runErr := runProvisionCommandWithCombinedOutputWithEnv(
 		projectDir,
 		timeout,
@@ -197,9 +203,11 @@ func runLocalWindowsPowerShellScript(projectDir string, script string, extraEnv 
 		},
 		nil,
 	)
+	close(stopStreaming)
+	<-streamingDone
 
 	scriptOutputBytes, readErr := os.ReadFile(outputPath)
-	scriptOutput := strings.TrimSpace(string(scriptOutputBytes))
+	scriptOutput := strings.TrimSpace(decodeLocalWindowsPowerShellOutput(scriptOutputBytes))
 	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
 		if runErr != nil {
 			return "", fmt.Errorf("failed to read elevated local windows provisioning output from %q: %w (launcher output: %s; launcher error: %v)", outputPath, readErr, strings.TrimSpace(output), runErr)
@@ -295,10 +303,10 @@ $outputPath = '%s'
 
 try {
     $argumentList = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%s"'
-    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentList -Verb RunAs -Wait -PassThru
+    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentList -Verb RunAs -WindowStyle Hidden -Wait -PassThru
     exit $process.ExitCode
 } catch {
-    ($_ | Out-String) | Add-Content -Path $outputPath -Encoding Ascii
+    ($_ | Out-String) | Add-Content -Path $outputPath -Encoding UTF8
     exit 1
 }
 `, escapePowerShellSingleQuotedString(elevatedScriptPath), escapePowerShellSingleQuotedString(outputPath), escapePowerShellDoubleQuotedArgument(elevatedScriptPath))
@@ -321,6 +329,125 @@ func filterNonEmptyStrings(values ...string) []string {
 		filtered = append(filtered, value)
 	}
 	return filtered
+}
+
+func streamLocalWindowsPowerShellOutput(outputPath string, writer io.Writer, stop <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	printedLength := 0
+	flush := func() {
+		content, err := os.ReadFile(outputPath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return
+			}
+			return
+		}
+
+		decoded := decodeLocalWindowsPowerShellOutput(content)
+		if len(decoded) <= printedLength {
+			return
+		}
+
+		_, _ = io.WriteString(writer, decoded[printedLength:])
+		printedLength = len(decoded)
+	}
+
+	for {
+		select {
+		case <-stop:
+			flush()
+			return
+		case <-ticker.C:
+			flush()
+		}
+	}
+}
+
+func decodeLocalWindowsPowerShellOutput(content []byte) string {
+	if len(content) == 0 {
+		return ""
+	}
+
+	if len(content) >= 2 {
+		switch {
+		case content[0] == 0xFF && content[1] == 0xFE:
+			return decodeUTF16LittleEndian(content[2:])
+		case content[0] == 0xFE && content[1] == 0xFF:
+			return decodeUTF16BigEndian(content[2:])
+		}
+	}
+	if len(content) >= 3 && content[0] == 0xEF && content[1] == 0xBB && content[2] == 0xBF {
+		return string(content[3:])
+	}
+
+	if looksLikeUTF16LittleEndian(content) {
+		return decodeUTF16LittleEndian(content)
+	}
+	if looksLikeUTF16BigEndian(content) {
+		return decodeUTF16BigEndian(content)
+	}
+
+	return string(content)
+}
+
+func looksLikeUTF16LittleEndian(content []byte) bool {
+	if len(content) < 4 || len(content)%2 != 0 {
+		return false
+	}
+
+	zeroCount := 0
+	sampleCount := 0
+	for index := 1; index < len(content) && sampleCount < 16; index += 2 {
+		sampleCount++
+		if content[index] == 0 {
+			zeroCount++
+		}
+	}
+
+	return sampleCount > 0 && zeroCount*2 >= sampleCount
+}
+
+func looksLikeUTF16BigEndian(content []byte) bool {
+	if len(content) < 4 || len(content)%2 != 0 {
+		return false
+	}
+
+	zeroCount := 0
+	sampleCount := 0
+	for index := 0; index < len(content) && sampleCount < 16; index += 2 {
+		sampleCount++
+		if content[index] == 0 {
+			zeroCount++
+		}
+	}
+
+	return sampleCount > 0 && zeroCount*2 >= sampleCount
+}
+
+func decodeUTF16LittleEndian(content []byte) string {
+	if len(content)%2 != 0 {
+		content = content[:len(content)-1]
+	}
+	runes := make([]rune, 0, len(content)/2)
+	for index := 0; index+1 < len(content); index += 2 {
+		runes = append(runes, rune(uint16(content[index])|uint16(content[index+1])<<8))
+	}
+	return string(runes)
+}
+
+func decodeUTF16BigEndian(content []byte) string {
+	if len(content)%2 != 0 {
+		content = content[:len(content)-1]
+	}
+	runes := make([]rune, 0, len(content)/2)
+	for index := 0; index+1 < len(content); index += 2 {
+		runes = append(runes, rune(uint16(content[index])<<8|uint16(content[index+1])))
+	}
+	return string(runes)
 }
 
 func generateSecureLocalWindowsProvisionPassword() (string, error) {
@@ -452,6 +579,42 @@ function Get-RegistryDWORDState([string]$path, [string]$name) {
     }
 }
 
+function Set-RegistryDWORDValue([string]$path, [string]$name, [int]$value) {
+    if (-not (Test-Path -Path $path)) {
+        New-Item -Path $path -Force | Out-Null
+    }
+
+    if ($null -eq (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue)) {
+        New-ItemProperty -Path $path -Name $name -Value $value -PropertyType DWord -Force | Out-Null
+    } else {
+        Set-ItemProperty -Path $path -Name $name -Value $value
+    }
+}
+
+function Get-NetFirewallRuleState([string]$name) {
+    $rule = Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $rule) {
+        return @{
+            Exists = $false
+            Enabled = $false
+        }
+    }
+
+    return @{
+        Exists = $true
+        Enabled = ($rule.Enabled -eq 'True')
+    }
+}
+
+function Get-LocalAdministratorsGroupName() {
+    $group = Get-LocalGroup | Where-Object { $null -ne $_.SID -and $_.SID.Value -eq 'S-1-5-32-544' } | Select-Object -First 1
+    if ($null -eq $group) {
+        throw 'The built-in local Administrators group was not found.'
+    }
+
+    return [string]$group.Name
+}
+
 function Restore-WinRMServiceState([bool]$wasRunning, [string]$startMode) {
     $service = Get-Service -Name 'WinRM' -ErrorAction SilentlyContinue
     if ($null -eq $service) {
@@ -495,6 +658,7 @@ $winRMServiceState = Get-WinRMServiceState
 $basicAuthState = Get-WsmanBoolState 'WSMan:\localhost\Service\Auth\Basic'
 $allowUnencryptedState = Get-WsmanBoolState 'WSMan:\localhost\Service\AllowUnencrypted'
 $localAccountTokenFilterPolicyState = Get-RegistryDWORDState 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'LocalAccountTokenFilterPolicy'
+$firewallRuleState = Get-NetFirewallRuleState 'DevAlchemyLocalWinRMHTTPS'
 
 $state = @{
     UserName = $userName
@@ -509,17 +673,17 @@ $state = @{
     AllowUnencryptedEnabled = [bool]$allowUnencryptedState.Value
     LocalAccountTokenFilterPolicyExisted = [bool]$localAccountTokenFilterPolicyState.Exists
     LocalAccountTokenFilterPolicyValue = [int]$localAccountTokenFilterPolicyState.Value
+    FirewallRuleExisted = [bool]$firewallRuleState.Exists
+    FirewallRuleEnabled = [bool]$firewallRuleState.Enabled
     CreatedHttpsListener = $false
     CreatedCertificateThumbprint = ''
 }
 Save-State $state
 
-if (-not $state.HadListeners) {
-    Enable-PSRemoting -Force -SkipNetworkProfileCheck
-} elseif (-not $state.WinRMServiceWasRunning) {
-    if ([string]$state.WinRMServiceStartMode -eq 'Disabled') {
-        Set-Service -Name 'WinRM' -StartupType Manual
-    }
+if ([string]$state.WinRMServiceStartMode -eq 'Disabled') {
+    Set-Service -Name 'WinRM' -StartupType Manual
+}
+if (-not $state.WinRMServiceWasRunning) {
     Start-Service -Name 'WinRM'
 }
 
@@ -527,6 +691,7 @@ Assert-WsmanPathExists 'WSMan:\localhost\Service\AllowUnencrypted'
 Assert-WsmanPathExists 'WSMan:\localhost\Service\Auth\Basic'
 Set-Item -Path 'WSMan:\localhost\Service\AllowUnencrypted' -Value $false
 Set-Item -Path 'WSMan:\localhost\Service\Auth\Basic' -Value $true
+Set-RegistryDWORDValue 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'LocalAccountTokenFilterPolicy' 1
 
 $httpsListener = @(
     Get-ChildItem -Path WSMan:\localhost\Listener -ErrorAction SilentlyContinue |
@@ -540,21 +705,29 @@ if ($httpsListener.Count -eq 0) {
     Save-State $state
 }
 
+if (-not [bool]$state.FirewallRuleExisted) {
+    New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS' -DisplayName 'Dev Alchemy Local WinRM HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5986 -Profile Any | Out-Null
+} elseif (-not [bool]$state.FirewallRuleEnabled) {
+    Enable-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS' | Out-Null
+}
+
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force
 $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
 if ($null -eq $localUser) {
-    New-LocalUser -Name $userName -Password $securePassword -PasswordNeverExpires -Description 'Dev Alchemy Ansible acct' | Out-Null
+    $localUser = New-LocalUser -Name $userName -Password $securePassword -PasswordNeverExpires -Description 'Dev Alchemy Ansible acct'
 } else {
     Set-LocalUser -Name $userName -Password $securePassword -Description 'Dev Alchemy Ansible acct'
     Enable-LocalUser -Name $userName
+    $localUser = Get-LocalUser -Name $userName
 }
 
+$administratorsGroupName = Get-LocalAdministratorsGroupName
 $isAdministrator = @(
-    Get-LocalGroupMember -Group 'Administrators' -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match ("(^|\\\\)" + [regex]::Escape($userName) + '$') }
+    Get-LocalGroupMember -Group $administratorsGroupName -ErrorAction SilentlyContinue |
+        Where-Object { $null -ne $_.SID -and $_.SID.Value -eq $localUser.SID.Value }
 ).Count -gt 0
 if (-not $isAdministrator) {
-    Add-LocalGroupMember -Group 'Administrators' -Member $userName
+    Add-LocalGroupMember -Group $administratorsGroupName -Member $userName
 }
 `
 
@@ -626,6 +799,26 @@ function Disable-WinRMFirewallRules() {
     }
 }
 
+function Restore-FirewallRuleState([string]$name, [bool]$existed, [bool]$enabled) {
+    $rule = Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $existed) {
+        if ($null -ne $rule) {
+            $rule | Remove-NetFirewallRule | Out-Null
+        }
+        return
+    }
+
+    if ($null -eq $rule) {
+        return
+    }
+
+    if ($enabled) {
+        $rule | Enable-NetFirewallRule | Out-Null
+    } else {
+        $rule | Disable-NetFirewallRule | Out-Null
+    }
+}
+
 $userName = [string]$state.UserName
 if (-not [string]::IsNullOrWhiteSpace($userName)) {
     $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
@@ -659,6 +852,7 @@ if ($forceWinRMUninstall -and (Test-Path -Path 'WSMan:\localhost\Service\AllowUn
     Set-Item -Path 'WSMan:\localhost\Service\AllowUnencrypted' -Value ([bool]$state.AllowUnencryptedEnabled)
 }
 Restore-RegistryDWORDState 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'LocalAccountTokenFilterPolicy' ([bool]$state.LocalAccountTokenFilterPolicyExisted) ([int]$state.LocalAccountTokenFilterPolicyValue)
+Restore-FirewallRuleState 'DevAlchemyLocalWinRMHTTPS' ([bool]$state.FirewallRuleExisted) ([bool]$state.FirewallRuleEnabled)
 
 $certificateThumbprint = [string]$state.CreatedCertificateThumbprint
 if (-not [string]::IsNullOrWhiteSpace($certificateThumbprint)) {
@@ -671,12 +865,9 @@ if (-not [string]::IsNullOrWhiteSpace($certificateThumbprint)) {
 if ($forceWinRMUninstall) {
     Get-ChildItem -Path WSMan:\localhost\Listener -ErrorAction SilentlyContinue |
         ForEach-Object { Remove-Item -Path $_.PSPath -Recurse -Force }
-    Disable-PSRemoting -Force -ErrorAction SilentlyContinue
+    Get-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS' -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
     Disable-WinRMFirewallRules
     Restore-WinRMServiceState $false 'Disabled'
-} elseif (-not [bool]$state.HadListeners) {
-    Disable-PSRemoting -Force -ErrorAction SilentlyContinue
-    Restore-WinRMServiceState ([bool]$state.WinRMServiceWasRunning) ([string]$state.WinRMServiceStartMode)
 } else {
     Restore-WinRMServiceState ([bool]$state.WinRMServiceWasRunning) ([string]$state.WinRMServiceStartMode)
 }

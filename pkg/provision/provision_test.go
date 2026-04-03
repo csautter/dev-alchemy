@@ -257,6 +257,9 @@ func TestLocalWindowsProvisionBootstrapPowerShellHandlesMissingWSManPaths(t *tes
 	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "function Get-WinRMServiceState") {
 		t.Fatal("expected bootstrap script to capture the original WinRM service state")
 	}
+	if strings.Contains(localWindowsProvisionBootstrapPowerShell, "Enable-PSRemoting") {
+		t.Fatal("expected bootstrap script to avoid Enable-PSRemoting so it does not create an HTTP listener")
+	}
 	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Assert-WsmanPathExists 'WSMan:\\localhost\\Service\\Auth\\Basic'") {
 		t.Fatal("expected bootstrap script to validate WSMan auth path after preparing WinRM")
 	}
@@ -271,6 +274,12 @@ func TestLocalWindowsProvisionBootstrapPowerShellHandlesMissingWSManPaths(t *tes
 	}
 	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Dev Alchemy Ansible acct") {
 		t.Fatal("expected bootstrap script to use a Windows-safe local user description")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "S-1-5-32-544") {
+		t.Fatal("expected bootstrap script to resolve the built-in Administrators group by SID")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS'") {
+		t.Fatal("expected bootstrap script to create a dedicated HTTPS firewall rule")
 	}
 }
 
@@ -295,6 +304,9 @@ func TestLocalWindowsProvisionCleanupPowerShellOnlyRestoresExistingWSManPaths(t 
 	}
 	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Restore-RegistryDWORDState") {
 		t.Fatal("expected cleanup script to restore LocalAccountTokenFilterPolicy")
+	}
+	if strings.Contains(localWindowsProvisionCleanupPowerShell, "Disable-PSRemoting") {
+		t.Fatal("expected cleanup script to avoid Disable-PSRemoting and restore secure state directly")
 	}
 }
 
@@ -327,6 +339,9 @@ func TestBuildLocalWindowsElevationLauncherPowerShellUsesRunAs(t *testing.T) {
 	if !strings.Contains(launcher, "-Verb RunAs") {
 		t.Fatal("expected launcher to request UAC elevation with RunAs")
 	}
+	if !strings.Contains(launcher, "-WindowStyle Hidden") {
+		t.Fatal("expected launcher to hide the elevated powershell window")
+	}
 	if !strings.Contains(launcher, `-File "C:\Temp\bootstrap.ps1"`) {
 		t.Fatal("expected launcher to run the generated elevated script file")
 	}
@@ -347,6 +362,13 @@ func TestBuildLocalWindowsProvisionScriptEnvIncludesForceFlag(t *testing.T) {
 	}
 	if !strings.Contains(got, localWindowsProvisionPasswordEnvVar+"=P@ssw0rd!") {
 		t.Fatal("expected bootstrap env to include the generated password")
+	}
+}
+
+func TestDecodeLocalWindowsPowerShellOutputHandlesUTF16LE(t *testing.T) {
+	decoded := decodeLocalWindowsPowerShellOutput([]byte{0xFF, 0xFE, 'O', 0x00, 'K', 0x00})
+	if decoded != "OK" {
+		t.Fatalf("expected UTF-16LE output to decode, got %q", decoded)
 	}
 }
 
