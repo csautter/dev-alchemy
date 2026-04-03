@@ -17,6 +17,7 @@ var (
 	check               bool
 	assumeYes           bool
 	forceWinRMUninstall bool
+	playbookPath        string
 	inventoryPath       string
 	ansibleVerbosity    int
 )
@@ -114,6 +115,7 @@ var provisionCmd = &cobra.Command{
 Important Ansible options exposed directly:
   --check                 Run ansible-playbook with --check.
   --verbosity N           Set Ansible verbosity. The default is 3, equivalent to -vvv.
+  --playbook PATH         Override the playbook path. The default is ./playbooks/setup.yml.
   --inventory-path PATH   Override the default inventory file for local provisioning.
 
 Pass any other ansible-playbook flags after --.
@@ -121,6 +123,7 @@ When --inventory-path is set, Alchemy stops forcing the default local --limit ta
 
 Examples:
   alchemy provision local --check
+  alchemy provision local --playbook ./playbooks/bootstrap.yml
   alchemy provision local -- --diff
   alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
   alchemy provision macos --arch arm64 --check
@@ -134,6 +137,7 @@ Examples:
 		options := alchemy_provision.ProvisionOptions{
 			Check:         check,
 			Verbosity:     ansibleVerbosity,
+			PlaybookPath:  strings.TrimSpace(playbookPath),
 			InventoryPath: strings.TrimSpace(inventoryPath),
 			ExtraArgs:     extraAnsibleArgs,
 		}
@@ -225,6 +229,7 @@ func init() {
 	provisionCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	provisionCmd.Flags().BoolVar(&check, "check", false, "Run ansible with --check (dry-run)")
 	provisionCmd.Flags().IntVar(&ansibleVerbosity, "verbosity", 3, "Ansible verbosity level (0-4). Default 3 is equivalent to -vvv")
+	provisionCmd.Flags().StringVar(&playbookPath, "playbook", alchemy_provision.DefaultProvisionPlaybookPath(), "Override the Ansible playbook path")
 	provisionCmd.Flags().StringVar(&inventoryPath, "inventory-path", "", "Override the default inventory file for local provisioning; pass -- --limit <host-pattern> if your custom inventory needs a target")
 	provisionCmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Skip confirmation prompts for operations that change local system state")
 	provisionCmd.Flags().BoolVar(&forceWinRMUninstall, "force-winrm-uninstall", false, "For local Windows provisioning, force cleanup to disable WinRM and remove transient setup after the run")

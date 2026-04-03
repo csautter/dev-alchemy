@@ -33,10 +33,12 @@ func TestProvisionCommandRejectsAllTarget(t *testing.T) {
 	previousArch := arch
 	previousOsType := osType
 	previousCheck := check
+	previousPlaybookPath := playbookPath
 	t.Cleanup(func() {
 		arch = previousArch
 		osType = previousOsType
 		check = previousCheck
+		playbookPath = previousPlaybookPath
 	})
 
 	arch = "amd64"
@@ -56,10 +58,12 @@ func TestProvisionCommandRejectsArchAndTypeForLocalTarget(t *testing.T) {
 	previousArch := arch
 	previousOsType := osType
 	previousCheck := check
+	previousPlaybookPath := playbookPath
 	t.Cleanup(func() {
 		arch = previousArch
 		osType = previousOsType
 		check = previousCheck
+		playbookPath = previousPlaybookPath
 	})
 
 	arch = "arm64"
@@ -90,6 +94,7 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 	previousArch := arch
 	previousOsType := osType
 	previousCheck := check
+	previousPlaybookPath := playbookPath
 	previousInventoryPath := inventoryPath
 	previousAnsibleVerbosity := ansibleVerbosity
 	previousCurrentHostLocalProvisionVirtualMachineFunc := currentHostLocalProvisionVirtualMachineFunc
@@ -100,6 +105,7 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 		arch = previousArch
 		osType = previousOsType
 		check = previousCheck
+		playbookPath = previousPlaybookPath
 		inventoryPath = previousInventoryPath
 		ansibleVerbosity = previousAnsibleVerbosity
 		currentHostLocalProvisionVirtualMachineFunc = previousCurrentHostLocalProvisionVirtualMachineFunc
@@ -108,7 +114,7 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 		rootCmd.SetArgs(nil)
 		rootCmd.SetOut(previousRootOut)
 		rootCmd.SetErr(previousRootErr)
-		for _, flagName := range []string{"arch", "type", "check", "inventory-path", "verbosity"} {
+		for _, flagName := range []string{"arch", "type", "check", "playbook", "inventory-path", "verbosity"} {
 			provisionCmd.Flags().Lookup(flagName).Changed = false
 		}
 	})
@@ -132,6 +138,7 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 		"provision",
 		"local",
 		"--check",
+		"--playbook", "./playbooks/bootstrap.yml",
 		"--inventory-path", "./inventory/custom.yml",
 		"--verbosity", "1",
 		"--",
@@ -151,6 +158,9 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 	if capturedOptions.Verbosity != 1 {
 		t.Fatalf("expected verbosity 1, got %d", capturedOptions.Verbosity)
 	}
+	if capturedOptions.PlaybookPath != "./playbooks/bootstrap.yml" {
+		t.Fatalf("expected custom playbook path, got %q", capturedOptions.PlaybookPath)
+	}
 	if capturedOptions.InventoryPath != "./inventory/custom.yml" {
 		t.Fatalf("expected custom inventory path, got %q", capturedOptions.InventoryPath)
 	}
@@ -163,11 +173,13 @@ func TestProvisionCommandRejectsInventoryPathForVMTargets(t *testing.T) {
 	previousArch := arch
 	previousOsType := osType
 	previousCheck := check
+	previousPlaybookPath := playbookPath
 	previousInventoryPath := inventoryPath
 	t.Cleanup(func() {
 		arch = previousArch
 		osType = previousOsType
 		check = previousCheck
+		playbookPath = previousPlaybookPath
 		inventoryPath = previousInventoryPath
 		provisionCmd.Flags().Lookup("inventory-path").Changed = false
 	})

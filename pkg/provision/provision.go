@@ -72,6 +72,7 @@ const (
 
 	defaultAnsibleSSHCommonArgs = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
 	defaultAnsibleVerbosity     = 3
+	defaultProvisionPlaybook    = "./playbooks/setup.yml"
 
 	localUnixInventoryPath   = "./inventory/localhost.yaml"
 	localUnixInventoryTarget = "localhost"
@@ -93,6 +94,7 @@ var localWindowsForceWinRMUninstall bool
 type ProvisionOptions struct {
 	Check         bool
 	Verbosity     int
+	PlaybookPath  string
 	InventoryPath string
 	ExtraArgs     []string
 }
@@ -171,10 +173,15 @@ func SetLocalWindowsForceWinRMUninstall(force bool) func() {
 	}
 }
 
+func DefaultProvisionPlaybookPath() string {
+	return defaultProvisionPlaybook
+}
+
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	return RunProvisionWithOptions(vm, ProvisionOptions{
-		Check:     check,
-		Verbosity: defaultAnsibleVerbosity,
+		Check:        check,
+		Verbosity:    defaultAnsibleVerbosity,
+		PlaybookPath: defaultProvisionPlaybook,
 	})
 }
 
@@ -1070,7 +1077,7 @@ func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, o
 	}
 
 	args := []string{
-		"./playbooks/setup.yml",
+		resolveProvisionPlaybookPath(options),
 		"-i",
 		ip + ",",
 		"-l",
@@ -1107,7 +1114,7 @@ func buildStaticInventoryProvisionArgsWithExtraVars(projectDir string, inventory
 	}
 
 	args := []string{
-		"./playbooks/setup.yml",
+		resolveProvisionPlaybookPath(options),
 		"-i",
 		inventoryPath,
 	}
@@ -1121,7 +1128,7 @@ func buildStaticInventoryProvisionArgsWithExtraVars(projectDir string, inventory
 
 func buildStaticInventoryProvisionArgs(inventoryPath string, inventoryTarget string, options ProvisionOptions) []string {
 	args := []string{
-		"./playbooks/setup.yml",
+		resolveProvisionPlaybookPath(options),
 		"-i",
 		inventoryPath,
 	}
@@ -1152,6 +1159,14 @@ func resolveStaticInventoryPathAndTarget(defaultInventoryPath string, defaultInv
 	}
 
 	return defaultInventoryPath, defaultInventoryTarget
+}
+
+func resolveProvisionPlaybookPath(options ProvisionOptions) string {
+	if playbookPath := strings.TrimSpace(options.PlaybookPath); playbookPath != "" {
+		return playbookPath
+	}
+
+	return defaultProvisionPlaybook
 }
 
 func localProvisionInventory(hostOs alchemy_build.HostOsType) (string, string, error) {

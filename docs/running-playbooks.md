@@ -18,6 +18,7 @@ CLI wrapper:
 
 ```bash
 alchemy provision local --check
+alchemy provision local --playbook ./playbooks/bootstrap.yml
 alchemy provision local -- --diff --tags java
 alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
 alchemy provision local
@@ -29,8 +30,9 @@ creates a temporary administrator account with a random password, enables
 encrypted WinRM over HTTPS for the run, and then restores the WinRM state while
 disabling the temporary account during cleanup. The macOS/Linux local target is
 currently marked unstable until it has been validated end-to-end. Extra
-`ansible-playbook` flags can be passed after `--`, and `--inventory-path`
-overrides the default local inventory file.
+`ansible-playbook` flags can be passed after `--`, `--inventory-path`
+overrides the default local inventory file, and `--playbook` overrides the
+default playbook path.
 
 Dry run:
 

@@ -563,6 +563,20 @@ func TestBuildStaticInventoryProvisionArgsAppendsProvisionOptions(t *testing.T) 
 	}
 }
 
+func TestBuildStaticInventoryProvisionArgsUsesCustomPlaybookPath(t *testing.T) {
+	args := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
+		PlaybookPath: "./playbooks/bootstrap.yml",
+		Verbosity:    defaultAnsibleVerbosity,
+	})
+
+	if len(args) == 0 {
+		t.Fatal("expected ansible args to be returned")
+	}
+	if args[0] != "./playbooks/bootstrap.yml" {
+		t.Fatalf("expected custom playbook path as first arg, got %q", args[0])
+	}
+}
+
 func TestLoadWindowsHypervAnsibleConnectionConfig_UsesDotEnvValues(t *testing.T) {
 	projectDir := t.TempDir()
 	dotEnvPath := filepath.Join(projectDir, ".env")
