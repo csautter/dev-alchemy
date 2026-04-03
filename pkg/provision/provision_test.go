@@ -280,8 +280,17 @@ func TestLocalWindowsProvisionBootstrapPowerShellHandlesMissingWSManPaths(t *tes
 	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "S-1-5-32-544") {
 		t.Fatal("expected bootstrap script to resolve the built-in Administrators group by SID")
 	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "-Address IP:127.0.0.1") {
+		t.Fatal("expected bootstrap script to bind the WinRM HTTPS listener to loopback only")
+	}
+	if strings.Contains(localWindowsProvisionBootstrapPowerShell, "-Address *") {
+		t.Fatal("expected bootstrap script to avoid binding the WinRM HTTPS listener to every interface")
+	}
 	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS'") {
 		t.Fatal("expected bootstrap script to create a dedicated HTTPS firewall rule")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "-LocalAddress 127.0.0.1 -LocalPort 5986") {
+		t.Fatal("expected bootstrap script to scope the WinRM HTTPS firewall rule to loopback")
 	}
 	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Write-Output 'Local Windows provision bootstrap completed.'") {
 		t.Fatal("expected bootstrap script to emit explicit progress output")

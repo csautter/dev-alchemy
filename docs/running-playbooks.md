@@ -27,12 +27,12 @@ alchemy provision local
 `alchemy provision local` uses `inventory/localhost.yaml` on macOS/Linux and
 `inventory/localhost_windows_winrm.yml` on Windows. On Windows the wrapper
 creates a temporary administrator account with a random password, enables
-encrypted WinRM over HTTPS for the run, and then restores the WinRM state while
-disabling the temporary account during cleanup. The macOS/Linux local target is
-currently marked unstable until it has been validated end-to-end. Extra
-`ansible-playbook` flags can be passed after `--`, `--inventory-path`
-overrides the default local inventory file, and `--playbook` overrides the
-default playbook path.
+encrypted WinRM over HTTPS on the loopback address for the run, and then
+restores the WinRM state while disabling the temporary account during cleanup.
+The macOS/Linux local target is currently marked unstable until it has been
+validated end-to-end. Extra `ansible-playbook` flags can be passed after `--`,
+`--inventory-path` overrides the default local inventory file, and `--playbook`
+overrides the default playbook path.
 
 Dry run:
 

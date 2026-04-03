@@ -754,7 +754,7 @@ $httpsListener = @(
 if ($httpsListener.Count -eq 0) {
     Write-Output 'Creating a localhost WinRM HTTPS listener and certificate.'
     $certificate = New-SelfSignedCertificate -DnsName 'localhost' -CertStoreLocation 'Cert:\LocalMachine\My' -FriendlyName 'Dev Alchemy Local WinRM HTTPS'
-    New-Item -Path WSMan:\localhost\Listener -Transport HTTPS -Address * -CertificateThumbprint $certificate.Thumbprint -Port 5986 -Force | Out-Null
+    New-Item -Path WSMan:\localhost\Listener -Transport HTTPS -Address IP:127.0.0.1 -CertificateThumbprint $certificate.Thumbprint -Port 5986 -Force | Out-Null
     $state.CreatedHttpsListener = $true
     $state.CreatedCertificateThumbprint = $certificate.Thumbprint
     Save-State $state
@@ -764,7 +764,7 @@ if ($httpsListener.Count -eq 0) {
 
 if (-not [bool]$state.FirewallRuleExisted) {
     Write-Output 'Creating the local WinRM HTTPS firewall rule.'
-    New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS' -DisplayName 'Dev Alchemy Local WinRM HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5986 -Profile Any | Out-Null
+    New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS' -DisplayName 'Dev Alchemy Local WinRM HTTPS' -Direction Inbound -Action Allow -Protocol TCP -LocalAddress 127.0.0.1 -LocalPort 5986 -Profile Any | Out-Null
 } elseif (-not [bool]$state.FirewallRuleEnabled) {
     Write-Output 'Enabling the existing local WinRM HTTPS firewall rule.'
     Enable-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS' | Out-Null

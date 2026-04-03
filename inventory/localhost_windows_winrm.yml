@@ -1,7 +1,7 @@
 all:
   hosts:
     windows_host:
-      ansible_host: localhost
+      ansible_host: 127.0.0.1
       # `alchemy provision local` injects temporary WinRM credentials and
       # transport settings at runtime. Direct ansible-playbook use should pass
       # the required WinRM variables explicitly.

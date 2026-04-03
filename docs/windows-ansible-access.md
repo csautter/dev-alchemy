@@ -25,9 +25,10 @@ Use only the option you actually need.
 
 For localhost runs through `alchemy provision local`, Dev Alchemy now handles a
 temporary secure setup for you on Windows: it creates a dedicated local admin
-account with a random password, enables WinRM over HTTPS for the duration of
-the run, and disables the temporary account during cleanup. If WinRM was not
-enabled before the run, the wrapper disables it again afterwards.
+account with a random password, enables WinRM over HTTPS on the loopback
+address for the duration of the run, and disables the temporary account during
+cleanup. If WinRM was not enabled before the run, the wrapper disables it again
+afterwards.
 
 Manual WinRM setup should also prefer encrypted transport. Avoid unencrypted
 WinRM unless you are in a tightly controlled test environment and understand
