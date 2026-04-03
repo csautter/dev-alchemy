@@ -315,3 +315,90 @@ func TestConfirmProvisionIntentSkipsPromptWhenYesFlagIsSet(t *testing.T) {
 		t.Fatalf("expected --yes to skip confirmation, got: %v", err)
 	}
 }
+
+func TestConfirmProvisionIntentMentionsForceWinRMUninstall(t *testing.T) {
+	previousAssumeYes := assumeYes
+	previousForceWinRMUninstall := forceWinRMUninstall
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+		forceWinRMUninstall = previousForceWinRMUninstall
+	})
+	assumeYes = false
+	forceWinRMUninstall = true
+
+	var output bytes.Buffer
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBufferString("yes\n"))
+	command.SetOut(&output)
+
+	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	}); err != nil {
+		t.Fatalf("expected interactive confirmation to succeed, got: %v", err)
+	}
+	if !strings.Contains(output.String(), "--force-winrm-uninstall") {
+		t.Fatalf("expected prompt to mention force winrm uninstall, got %q", output.String())
+	}
+}
+
+func TestRunProvisionConfiguresForceWinRMUninstall(t *testing.T) {
+	previousForceWinRMUninstall := forceWinRMUninstall
+	previousConfigure := configureLocalWindowsProvisionFunc
+	previousRunProvisionFunc := runProvisionFunc
+	t.Cleanup(func() {
+		forceWinRMUninstall = previousForceWinRMUninstall
+		configureLocalWindowsProvisionFunc = previousConfigure
+		runProvisionFunc = previousRunProvisionFunc
+	})
+
+	forceWinRMUninstall = true
+	var configured bool
+	var restored bool
+	configureLocalWindowsProvisionFunc = func(force bool) func() {
+		configured = force
+		return func() {
+			restored = true
+		}
+	}
+	runProvisionFunc = func(vm alchemy_build.VirtualMachineConfig, check bool) error {
+		return nil
+	}
+
+	if err := runProvision(alchemy_build.VirtualMachineConfig{OS: "local", HostOs: alchemy_build.HostOsWindows}, true); err != nil {
+		t.Fatalf("expected runProvision to succeed, got: %v", err)
+	}
+	if !configured {
+		t.Fatal("expected runProvision to configure force winrm uninstall")
+	}
+	if !restored {
+		t.Fatal("expected runProvision to restore local windows provision configuration")
+	}
+}
+
+func TestProvisionCommandRejectsForceWinRMUninstallForNonWindowsLocal(t *testing.T) {
+	previousForceWinRMUninstall := forceWinRMUninstall
+	previousCurrentHostLocalProvisionVirtualMachineFunc := currentHostLocalProvisionVirtualMachineFunc
+	t.Cleanup(func() {
+		forceWinRMUninstall = previousForceWinRMUninstall
+		currentHostLocalProvisionVirtualMachineFunc = previousCurrentHostLocalProvisionVirtualMachineFunc
+	})
+
+	forceWinRMUninstall = true
+	currentHostLocalProvisionVirtualMachineFunc = func() (alchemy_build.VirtualMachineConfig, bool) {
+		return alchemy_build.VirtualMachineConfig{
+			OS:                   "local",
+			Arch:                 "-",
+			HostOs:               alchemy_build.HostOsLinux,
+			VirtualizationEngine: localProvisionVirtualizationEngine,
+		}, true
+	}
+
+	err := provisionCmd.RunE(provisionCmd, []string{"local"})
+	if err == nil {
+		t.Fatal("expected non-windows local run with force winrm uninstall to fail")
+	}
+	if !strings.Contains(err.Error(), "--force-winrm-uninstall is only supported") {
+		t.Fatalf("expected explicit force-winrm-uninstall validation error, got: %v", err)
+	}
+}

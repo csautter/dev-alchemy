@@ -17,6 +17,11 @@ const (
 	localWindowsProvisionUserName    = "devalchemy_ansible"
 	localWindowsBootstrapTimeout     = 2 * time.Minute
 	localWindowsCleanupTimeout       = 2 * time.Minute
+
+	localWindowsProvisionStatePathEnvVar  = "DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH"
+	localWindowsProvisionUserEnvVar       = "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER"
+	localWindowsProvisionPasswordEnvVar   = "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
+	localWindowsForceWinRMUninstallEnvVar = "DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_WINRM_UNINSTALL"
 )
 
 var setupLocalWindowsProvisionSessionFunc = setupLocalWindowsProvisionSession
@@ -86,6 +91,21 @@ func buildWindowsStaticInventoryProvisionArgs(projectDir string, inventoryPath s
 	return buildStaticInventoryProvisionArgsWithExtraVars(projectDir, inventoryPath, inventoryTarget, extraVars, check)
 }
 
+func buildLocalWindowsProvisionScriptEnv(statePath string, password string) []string {
+	env := []string{
+		localWindowsProvisionStatePathEnvVar + "=" + statePath,
+		localWindowsForceWinRMUninstallEnvVar + "=" + fmt.Sprintf("%t", localWindowsForceWinRMUninstall),
+	}
+	if password == "" {
+		return env
+	}
+
+	return append(env,
+		localWindowsProvisionUserEnvVar+"="+localWindowsProvisionUserName,
+		localWindowsProvisionPasswordEnvVar+"="+password,
+	)
+}
+
 func setupLocalWindowsProvisionSession(projectDir string) (localWindowsProvisionSession, error) {
 	password, err := generateSecureLocalWindowsProvisionPassword()
 	if err != nil {
@@ -105,11 +125,7 @@ func setupLocalWindowsProvisionSession(projectDir string) (localWindowsProvision
 	output, runErr := runLocalWindowsPowerShellScript(
 		projectDir,
 		localWindowsProvisionBootstrapPowerShell,
-		[]string{
-			"DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH=" + statePath,
-			"DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER=" + localWindowsProvisionUserName,
-			"DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD=" + password,
-		},
+		buildLocalWindowsProvisionScriptEnv(statePath, password),
 		localWindowsBootstrapTimeout,
 	)
 	if runErr != nil {
@@ -142,7 +158,7 @@ func cleanupLocalWindowsProvisionSession(projectDir string, session localWindows
 	output, runErr := runLocalWindowsPowerShellScript(
 		projectDir,
 		localWindowsProvisionCleanupPowerShell,
-		[]string{"DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH=" + session.StatePath},
+		buildLocalWindowsProvisionScriptEnv(session.StatePath, ""),
 		localWindowsCleanupTimeout,
 	)
 	removeErr := os.Remove(session.StatePath)
@@ -366,6 +382,7 @@ $ErrorActionPreference = 'Stop'
 $statePath = $env:DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH
 $userName = $env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER
 $passwordPlain = $env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD
+$forceWinRMUninstall = [System.Convert]::ToBoolean($env:DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_WINRM_UNINSTALL)
 
 if ([string]::IsNullOrWhiteSpace($statePath)) {
     throw 'DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH is required.'
@@ -413,6 +430,28 @@ function Get-WinRMServiceState() {
     }
 }
 
+function Get-RegistryDWORDState([string]$path, [string]$name) {
+    if (-not (Test-Path -Path $path)) {
+        return @{
+            Exists = $false
+            Value = 0
+        }
+    }
+
+    $property = Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue
+    if ($null -eq $property) {
+        return @{
+            Exists = $false
+            Value = 0
+        }
+    }
+
+    return @{
+        Exists = $true
+        Value = [int]($property.$name)
+    }
+}
+
 function Restore-WinRMServiceState([bool]$wasRunning, [string]$startMode) {
     $service = Get-Service -Name 'WinRM' -ErrorAction SilentlyContinue
     if ($null -eq $service) {
@@ -455,9 +494,11 @@ try {
 $winRMServiceState = Get-WinRMServiceState
 $basicAuthState = Get-WsmanBoolState 'WSMan:\localhost\Service\Auth\Basic'
 $allowUnencryptedState = Get-WsmanBoolState 'WSMan:\localhost\Service\AllowUnencrypted'
+$localAccountTokenFilterPolicyState = Get-RegistryDWORDState 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'LocalAccountTokenFilterPolicy'
 
 $state = @{
     UserName = $userName
+    ForceWinRMUninstall = [bool]$forceWinRMUninstall
     ListenerKeys = @($listenerKeys)
     HadListeners = ($listenerKeys.Count -gt 0)
     WinRMServiceWasRunning = [bool]$winRMServiceState.WasRunning
@@ -466,6 +507,8 @@ $state = @{
     BasicAuthEnabled = [bool]$basicAuthState.Value
     AllowUnencryptedPathExisted = [bool]$allowUnencryptedState.Exists
     AllowUnencryptedEnabled = [bool]$allowUnencryptedState.Value
+    LocalAccountTokenFilterPolicyExisted = [bool]$localAccountTokenFilterPolicyState.Exists
+    LocalAccountTokenFilterPolicyValue = [int]$localAccountTokenFilterPolicyState.Value
     CreatedHttpsListener = $false
     CreatedCertificateThumbprint = ''
 }
@@ -500,9 +543,9 @@ if ($httpsListener.Count -eq 0) {
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force
 $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
 if ($null -eq $localUser) {
-    New-LocalUser -Name $userName -Password $securePassword -PasswordNeverExpires -Description 'Temporary Dev Alchemy Ansible provisioning account' | Out-Null
+    New-LocalUser -Name $userName -Password $securePassword -PasswordNeverExpires -Description 'Dev Alchemy Ansible acct' | Out-Null
 } else {
-    Set-LocalUser -Name $userName -Password $securePassword -Description 'Temporary Dev Alchemy Ansible provisioning account'
+    Set-LocalUser -Name $userName -Password $securePassword -Description 'Dev Alchemy Ansible acct'
     Enable-LocalUser -Name $userName
 }
 
@@ -519,11 +562,69 @@ const localWindowsProvisionCleanupPowerShell = `
 $ErrorActionPreference = 'Stop'
 
 $statePath = $env:DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH
+$forceWinRMUninstall = [System.Convert]::ToBoolean($env:DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_WINRM_UNINSTALL)
 if ([string]::IsNullOrWhiteSpace($statePath) -or -not (Test-Path -Path $statePath)) {
     return
 }
 
 $state = Get-Content -Path $statePath -Raw | ConvertFrom-Json
+
+function Restore-WinRMServiceState([bool]$wasRunning, [string]$startMode) {
+    $service = Get-Service -Name 'WinRM' -ErrorAction SilentlyContinue
+    if ($null -eq $service) {
+        return
+    }
+
+    if ($wasRunning) {
+        if ($service.Status -ne 'Running') {
+            Start-Service -Name 'WinRM'
+            $service = Get-Service -Name 'WinRM'
+        }
+    } elseif ($service.Status -eq 'Running') {
+        Stop-Service -Name 'WinRM' -Force
+        $service = Get-Service -Name 'WinRM'
+    }
+
+    switch ($startMode.ToLowerInvariant()) {
+        'auto' {
+            Set-Service -Name 'WinRM' -StartupType Automatic
+        }
+        'manual' {
+            Set-Service -Name 'WinRM' -StartupType Manual
+        }
+        'disabled' {
+            if ($service.Status -eq 'Running') {
+                Stop-Service -Name 'WinRM' -Force
+            }
+            Set-Service -Name 'WinRM' -StartupType Disabled
+        }
+    }
+}
+
+function Restore-RegistryDWORDState([string]$path, [string]$name, [bool]$existed, [int]$value) {
+    if ($existed) {
+        if (-not (Test-Path -Path $path)) {
+            New-Item -Path $path -Force | Out-Null
+        }
+        if ($null -eq (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue)) {
+            New-ItemProperty -Path $path -Name $name -Value $value -PropertyType DWord -Force | Out-Null
+        } else {
+            Set-ItemProperty -Path $path -Name $name -Value $value
+        }
+        return
+    }
+
+    if (Test-Path -Path $path) {
+        Remove-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue
+    }
+}
+
+function Disable-WinRMFirewallRules() {
+    $rules = Get-NetFirewallRule -DisplayGroup 'Windows Remote Management' -ErrorAction SilentlyContinue
+    if ($null -ne $rules) {
+        $rules | Disable-NetFirewallRule | Out-Null
+    }
+}
 
 $userName = [string]$state.UserName
 if (-not [string]::IsNullOrWhiteSpace($userName)) {
@@ -547,12 +648,17 @@ Get-ChildItem -Path WSMan:\localhost\Listener -ErrorAction SilentlyContinue |
     Where-Object { $originalListenerKeys -notcontains [string]$_.Keys } |
     ForEach-Object { Remove-Item -Path $_.PSPath -Recurse -Force }
 
-if ([bool]$state.BasicAuthPathExisted -and (Test-Path -Path 'WSMan:\localhost\Service\Auth\Basic')) {
+if ($forceWinRMUninstall -and (Test-Path -Path 'WSMan:\localhost\Service\Auth\Basic')) {
+    Set-Item -Path 'WSMan:\localhost\Service\Auth\Basic' -Value $false
+} elseif ([bool]$state.BasicAuthPathExisted -and (Test-Path -Path 'WSMan:\localhost\Service\Auth\Basic')) {
     Set-Item -Path 'WSMan:\localhost\Service\Auth\Basic' -Value ([bool]$state.BasicAuthEnabled)
 }
-if ([bool]$state.AllowUnencryptedPathExisted -and (Test-Path -Path 'WSMan:\localhost\Service\AllowUnencrypted')) {
+if ($forceWinRMUninstall -and (Test-Path -Path 'WSMan:\localhost\Service\AllowUnencrypted')) {
+    Set-Item -Path 'WSMan:\localhost\Service\AllowUnencrypted' -Value $false
+} elseif ([bool]$state.AllowUnencryptedPathExisted -and (Test-Path -Path 'WSMan:\localhost\Service\AllowUnencrypted')) {
     Set-Item -Path 'WSMan:\localhost\Service\AllowUnencrypted' -Value ([bool]$state.AllowUnencryptedEnabled)
 }
+Restore-RegistryDWORDState 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'LocalAccountTokenFilterPolicy' ([bool]$state.LocalAccountTokenFilterPolicyExisted) ([int]$state.LocalAccountTokenFilterPolicyValue)
 
 $certificateThumbprint = [string]$state.CreatedCertificateThumbprint
 if (-not [string]::IsNullOrWhiteSpace($certificateThumbprint)) {
@@ -562,8 +668,16 @@ if (-not [string]::IsNullOrWhiteSpace($certificateThumbprint)) {
     }
 }
 
-if (-not [bool]$state.HadListeners) {
+if ($forceWinRMUninstall) {
+    Get-ChildItem -Path WSMan:\localhost\Listener -ErrorAction SilentlyContinue |
+        ForEach-Object { Remove-Item -Path $_.PSPath -Recurse -Force }
     Disable-PSRemoting -Force -ErrorAction SilentlyContinue
+    Disable-WinRMFirewallRules
+    Restore-WinRMServiceState $false 'Disabled'
+} elseif (-not [bool]$state.HadListeners) {
+    Disable-PSRemoting -Force -ErrorAction SilentlyContinue
+    Restore-WinRMServiceState ([bool]$state.WinRMServiceWasRunning) ([string]$state.WinRMServiceStartMode)
+} else {
+    Restore-WinRMServiceState ([bool]$state.WinRMServiceWasRunning) ([string]$state.WinRMServiceStartMode)
 }
-Restore-WinRMServiceState ([bool]$state.WinRMServiceWasRunning) ([string]$state.WinRMServiceStartMode)
 `

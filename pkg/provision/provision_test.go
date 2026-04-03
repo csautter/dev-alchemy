@@ -266,6 +266,12 @@ func TestLocalWindowsProvisionBootstrapPowerShellHandlesMissingWSManPaths(t *tes
 	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "WinRMServiceStartMode") {
 		t.Fatal("expected bootstrap state to capture the original WinRM startup mode")
 	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "LocalAccountTokenFilterPolicy") {
+		t.Fatal("expected bootstrap state to capture the LocalAccountTokenFilterPolicy setting")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Dev Alchemy Ansible acct") {
+		t.Fatal("expected bootstrap script to use a Windows-safe local user description")
+	}
 }
 
 func TestLocalWindowsProvisionCleanupPowerShellOnlyRestoresExistingWSManPaths(t *testing.T) {
@@ -280,6 +286,15 @@ func TestLocalWindowsProvisionCleanupPowerShellOnlyRestoresExistingWSManPaths(t 
 	}
 	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$originalListenerKeys") {
 		t.Fatal("expected cleanup script to remove listeners that were added during provisioning")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "function Restore-WinRMServiceState") {
+		t.Fatal("expected cleanup script to define its own WinRM restore helper")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$forceWinRMUninstall") {
+		t.Fatal("expected cleanup script to honor force WinRM uninstall mode")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Restore-RegistryDWORDState") {
+		t.Fatal("expected cleanup script to restore LocalAccountTokenFilterPolicy")
 	}
 }
 
@@ -314,6 +329,24 @@ func TestBuildLocalWindowsElevationLauncherPowerShellUsesRunAs(t *testing.T) {
 	}
 	if !strings.Contains(launcher, `-File "C:\Temp\bootstrap.ps1"`) {
 		t.Fatal("expected launcher to run the generated elevated script file")
+	}
+}
+
+func TestBuildLocalWindowsProvisionScriptEnvIncludesForceFlag(t *testing.T) {
+	restore := SetLocalWindowsForceWinRMUninstall(true)
+	defer restore()
+
+	env := buildLocalWindowsProvisionScriptEnv("state.json", "P@ssw0rd!")
+	got := strings.Join(env, "\n")
+
+	if !strings.Contains(got, localWindowsForceWinRMUninstallEnvVar+"=true") {
+		t.Fatal("expected force winrm uninstall env var to be included")
+	}
+	if !strings.Contains(got, localWindowsProvisionUserEnvVar+"="+localWindowsProvisionUserName) {
+		t.Fatal("expected bootstrap env to include the temporary ansible user")
+	}
+	if !strings.Contains(got, localWindowsProvisionPasswordEnvVar+"=P@ssw0rd!") {
+		t.Fatal("expected bootstrap env to include the generated password")
 	}
 }
 

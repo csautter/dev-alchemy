@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	check     bool
-	assumeYes bool
+	check               bool
+	assumeYes           bool
+	forceWinRMUninstall bool
 )
 
 const localProvisionVirtualizationEngine = alchemy_build.VirtualizationEngine("local")
@@ -23,6 +24,7 @@ const localProvisionVirtualizationEngine = alchemy_build.VirtualizationEngine("l
 var (
 	currentHostLocalProvisionVirtualMachineFunc = currentHostLocalProvisionVirtualMachine
 	runProvisionFunc                            = alchemy_provision.RunProvision
+	configureLocalWindowsProvisionFunc          = alchemy_provision.SetLocalWindowsForceWinRMUninstall
 	promptForConfirmationFunc                   = promptForConfirmation
 )
 
@@ -131,6 +133,9 @@ Examples:
 			if !ok {
 				return fmt.Errorf("❌ local provisioning is not available for host OS: %s", alchemy_build.GetCurrentHostOs())
 			}
+			if forceWinRMUninstall && selectedVM.HostOs != alchemy_build.HostOsWindows {
+				return fmt.Errorf("❌ --force-winrm-uninstall is only supported for local Windows provisioning")
+			}
 
 			if isLocalProvisionUnstable(selectedVM.HostOs) {
 				fmt.Printf("⚠️ Local provisioning on host OS %s is currently marked unstable and has not been validated end-to-end yet.\n", selectedVM.HostOs)
@@ -184,6 +189,9 @@ var provisionListCmd = &cobra.Command{
 }
 
 func runProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	restoreLocalWindowsProvision := configureLocalWindowsProvisionFunc(forceWinRMUninstall)
+	defer restoreLocalWindowsProvision()
+
 	return runProvisionFunc(vm, check)
 }
 
@@ -195,6 +203,7 @@ func init() {
 	provisionCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	provisionCmd.Flags().BoolVar(&check, "check", false, "Run ansible with --check (dry-run)")
 	provisionCmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Skip confirmation prompts for operations that change local system state")
+	provisionCmd.Flags().BoolVar(&forceWinRMUninstall, "force-winrm-uninstall", false, "For local Windows provisioning, force cleanup to disable WinRM and remove transient setup after the run")
 }
 
 func confirmProvisionIntent(cmd *cobra.Command, vm alchemy_build.VirtualMachineConfig) error {
@@ -202,7 +211,10 @@ func confirmProvisionIntent(cmd *cobra.Command, vm alchemy_build.VirtualMachineC
 		return nil
 	}
 
-	const message = "Local Windows provisioning will temporarily enable or reconfigure WinRM, create or update a temporary local administrator account for Ansible, and create a self-signed HTTPS listener. Windows will also show a UAC elevation prompt for the setup and cleanup steps."
+	message := "Local Windows provisioning will temporarily enable or reconfigure WinRM, create or update a temporary local administrator account for Ansible, and create a self-signed HTTPS listener. Windows will also show a UAC elevation prompt for the setup and cleanup steps."
+	if forceWinRMUninstall {
+		message += " Because --force-winrm-uninstall is set, cleanup will aggressively disable WinRM and remove transient configuration even if the run fails."
+	}
 
 	if !isInteractiveInput(cmd.InOrStdin()) {
 		return fmt.Errorf("%s Re-run with --yes to continue non-interactively", message)

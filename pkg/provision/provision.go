@@ -87,6 +87,8 @@ var (
 	}
 )
 
+var localWindowsForceWinRMUninstall bool
+
 type windowsAnsibleConnectionConfig struct {
 	User                 string
 	Password             string
@@ -151,6 +153,15 @@ type tartProvisionAvailabilityOptions struct {
 var inspectProvisionTarget = alchemy_deploy.InspectStartTarget
 var runProvisionCommandWithCombinedOutputWithEnv = runCommandWithCombinedOutputWithEnv
 var runAnsibleProvisionCommandFunc = runAnsibleProvisionCommand
+
+func SetLocalWindowsForceWinRMUninstall(force bool) func() {
+	previous := localWindowsForceWinRMUninstall
+	localWindowsForceWinRMUninstall = force
+
+	return func() {
+		localWindowsForceWinRMUninstall = previous
+	}
+}
 
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	if isLocalProvisionTarget(vm) {
