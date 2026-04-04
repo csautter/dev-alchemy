@@ -113,14 +113,6 @@ jobs:
         run: ansible --version
         if: runner.os != 'Windows'
 
-      - name: Windows enable winrm
-        if: runner.os == 'Windows' && matrix.ansible_protocol == 'winrm'
-        shell: powershell
-        run: |
-          Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true;
-          Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true;
-          Enable-PSRemoting -Force;
-
       - name: Run all Ansible roles
         shell: bash
         run: |
