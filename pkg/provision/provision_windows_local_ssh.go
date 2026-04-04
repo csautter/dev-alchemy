@@ -151,9 +151,9 @@ func setupLocalWindowsSSHProvisionSession(projectDir string, options ProvisionOp
 	if err != nil {
 		return localWindowsSSHProvisionSession{}, fmt.Errorf("failed to generate secure local windows provision password: %w", err)
 	}
-	sshPort, err := selectAvailableLocalWindowsSSHPort()
+	sshPort, err := selectLocalWindowsSSHBootstrapPort(projectDir)
 	if err != nil {
-		return localWindowsSSHProvisionSession{}, fmt.Errorf("failed to allocate a temporary local windows ssh port: %w", err)
+		return localWindowsSSHProvisionSession{}, fmt.Errorf("failed to select a local windows ssh port for bootstrap: %w", err)
 	}
 
 	privateKeyPEM, publicAuthorizedKey, err := generateSecureLocalWindowsProvisionSSHKeyPair()
@@ -427,6 +427,45 @@ func writeSSHBytes(buffer *bytes.Buffer, value []byte) {
 	binary.BigEndian.PutUint32(lengthBytes[:], uint32(len(value)))
 	buffer.Write(lengthBytes[:])
 	buffer.Write(value)
+}
+
+func selectLocalWindowsSSHBootstrapPort(projectDir string) (string, error) {
+	standardPort := fmt.Sprintf("%d", sshPort)
+	listenerProcesses, err := inspectLocalWindowsSSHListener(projectDir, sshPort)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect whether standard SSH port %s is available: %w", standardPort, err)
+	}
+
+	if canUseStandardLocalWindowsSSHPort(listenerProcesses) {
+		if len(listenerProcesses) == 0 {
+			log.Printf("%s: standard SSH port %s is free; using it for this provisioning run.", localWindowsSSHBootstrapLogPrefix, standardPort)
+		} else {
+			log.Printf("%s: standard SSH port %s is already owned only by sshd; using it for this provisioning run.", localWindowsSSHBootstrapLogPrefix, standardPort)
+		}
+		return standardPort, nil
+	}
+
+	selectedPort, err := selectAvailableLocalWindowsSSHPort()
+	if err != nil {
+		return "", err
+	}
+	log.Printf("%s: standard SSH port %s is owned by %s; using temporary loopback port %s instead.", localWindowsSSHBootstrapLogPrefix, standardPort, summarizeLocalWindowsSSHListenerProcesses(listenerProcesses), selectedPort)
+
+	return selectedPort, nil
+}
+
+func canUseStandardLocalWindowsSSHPort(processes []localWindowsSSHListenerProcess) bool {
+	if len(processes) == 0 {
+		return true
+	}
+
+	for _, process := range processes {
+		if !strings.EqualFold(strings.TrimSpace(process.ProcessName), "sshd") {
+			return false
+		}
+	}
+
+	return true
 }
 
 func selectAvailableLocalWindowsSSHPort() (string, error) {

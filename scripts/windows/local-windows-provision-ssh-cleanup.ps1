@@ -63,6 +63,18 @@ function Disable-ServiceState([string]$name) {
     Set-Service -Name $name -StartupType Disabled
 }
 
+function Reload-ServiceRuntimeConfiguration([string]$name) {
+    $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($null -eq $service) {
+        return
+    }
+    if ($service.Status -ne 'Running') {
+        return
+    }
+
+    Restart-Service -Name $name -Force
+}
+
 function Restore-NetFirewallRuleState([string]$name, [bool]$existed, [bool]$enabled) {
     $rule = Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $existed) {
@@ -226,6 +238,11 @@ Restore-FileState (Join-Path $env:ProgramData 'ssh\sshd_config') ([bool]$state.S
 Write-Output 'Restoring OpenSSH firewall rules.'
 Restore-LoopbackFirewallRuleState $localFirewallRuleName ([bool]$state.LocalFirewallRuleExisted) ([bool]$state.LocalFirewallRuleEnabled) ([string]$state.LocalFirewallRulePort)
 Restore-NetFirewallRuleState $openSSHBuiltInFirewallRuleName ([bool]$state.BuiltInFirewallRuleExisted) ([bool]$state.BuiltInFirewallRuleEnabled)
+
+if (-not $forceSSHUninstall) {
+    Write-Output 'Reloading sshd so the restored SSH configuration takes effect.'
+    Reload-ServiceRuntimeConfiguration 'sshd'
+}
 
 if ($forceSSHUninstall) {
     Write-Output 'Force SSH uninstall mode is enabled; disabling sshd and removing SSH firewall rules without uninstalling OpenSSH Server to avoid requiring a reboot.'

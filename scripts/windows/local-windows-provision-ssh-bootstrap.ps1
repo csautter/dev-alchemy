@@ -38,6 +38,11 @@ if ([string]::IsNullOrWhiteSpace($sshPortString) -or -not [int]::TryParse($sshPo
 }
 
 Write-Output 'Validating local Windows SSH provision bootstrap inputs.'
+if ($sshPort -eq 22) {
+    Write-Output 'Using the standard OpenSSH port 22 for this provisioning run.'
+} else {
+    Write-Output ('Using temporary loopback SSH port ' + $sshPortString + ' for this provisioning run because the standard SSH port 22 is not available for exclusive Windows sshd use.')
+}
 
 function Save-State($state) {
     $state | ConvertTo-Json -Compress | Set-Content -Path $statePath -Encoding Ascii

@@ -409,6 +409,24 @@ func TestBuildLocalWindowsSSHProvisionScriptEnvIncludesForceFlag(t *testing.T) {
 	}
 }
 
+func TestCanUseStandardLocalWindowsSSHPort(t *testing.T) {
+	if !canUseStandardLocalWindowsSSHPort(nil) {
+		t.Fatal("expected the standard ssh port to be usable when no listener is present")
+	}
+	if !canUseStandardLocalWindowsSSHPort([]localWindowsSSHListenerProcess{{ID: 1234, ProcessName: "sshd"}}) {
+		t.Fatal("expected the standard ssh port to be usable when only sshd owns it")
+	}
+	if canUseStandardLocalWindowsSSHPort([]localWindowsSSHListenerProcess{{ID: 1234, ProcessName: "wslrelay"}}) {
+		t.Fatal("did not expect the standard ssh port to be usable when another process owns it")
+	}
+	if canUseStandardLocalWindowsSSHPort([]localWindowsSSHListenerProcess{
+		{ID: 1234, ProcessName: "sshd"},
+		{ID: 5678, ProcessName: "wslrelay"},
+	}) {
+		t.Fatal("did not expect the standard ssh port to be usable when a non-sshd process shares it")
+	}
+}
+
 func TestParseLocalWindowsSSHListenerProcessesSupportsArrays(t *testing.T) {
 	processes, err := parseLocalWindowsSSHListenerProcesses(`[{"Id":6172,"ProcessName":"sshd"},{"Id":19388,"ProcessName":"wslrelay"}]`)
 	if err != nil {
@@ -1579,6 +1597,12 @@ func TestLocalWindowsSSHProvisionBootstrapPowerShellConfiguresOpenSSHServer(t *t
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_SSH_PORT") {
 		t.Fatal("expected ssh bootstrap script to require the temporary ssh port environment variable")
 	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Using the standard OpenSSH port 22 for this provisioning run.") {
+		t.Fatal("expected ssh bootstrap script to log when it can safely keep port 22")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "standard SSH port 22 is not available for exclusive Windows sshd use") {
+		t.Fatal("expected ssh bootstrap script to explain when it switches to a temporary port")
+	}
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Per-user authorized keys state: existed=") {
 		t.Fatal("expected ssh bootstrap script to log per-user authorized_keys state for debugging")
 	}
@@ -1635,6 +1659,12 @@ func TestLocalWindowsSSHProvisionCleanupPowerShellRestoresOpenSSHState(t *testin
 	}
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "state.LocalFirewallRulePort") {
 		t.Fatal("expected ssh cleanup script to remember the original loopback firewall rule port")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Reload-ServiceRuntimeConfiguration") {
+		t.Fatal("expected ssh cleanup script to reload sshd after restoring the original ssh configuration")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Reloading sshd so the restored SSH configuration takes effect.") {
+		t.Fatal("expected ssh cleanup script to log when it reloads sshd after restoring configuration")
 	}
 	if strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "'/D', 'Y'") {
 		t.Fatal("expected ssh cleanup script to avoid locale-sensitive takeown /D Y usage")
