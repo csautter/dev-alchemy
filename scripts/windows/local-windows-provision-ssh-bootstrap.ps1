@@ -4,6 +4,7 @@ $statePath = $env:DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH
 $userName = $env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER
 $passwordPlain = $env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD
 $publicKey = $env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_SSH_PUBLIC_KEY
+$sshPortString = $env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_SSH_PORT
 $forceSSHUninstall = [System.Convert]::ToBoolean($env:DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_SSH_UNINSTALL)
 
 $openSSHCapabilityName = 'OpenSSH.Server~~~~0.0.1.0'
@@ -30,6 +31,10 @@ if ([string]::IsNullOrWhiteSpace($passwordPlain)) {
 }
 if ([string]::IsNullOrWhiteSpace($publicKey)) {
     throw 'DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_SSH_PUBLIC_KEY is required.'
+}
+[int]$sshPort = 0
+if ([string]::IsNullOrWhiteSpace($sshPortString) -or -not [int]::TryParse($sshPortString, [ref]$sshPort) -or $sshPort -lt 1 -or $sshPort -gt 65535) {
+    throw 'DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_SSH_PORT must be a valid TCP port.'
 }
 
 Write-Output 'Validating local Windows SSH provision bootstrap inputs.'
@@ -145,12 +150,20 @@ function Get-NetFirewallRuleState([string]$name) {
         return @{
             Exists = $false
             Enabled = $false
+            LocalPort = ''
         }
+    }
+
+    $localPort = ''
+    $portFilter = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $rule -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $portFilter -and $null -ne $portFilter.LocalPort) {
+        $localPort = [string]$portFilter.LocalPort
     }
 
     return @{
         Exists = $true
         Enabled = ($rule.Enabled -eq 'True')
+        LocalPort = $localPort
     }
 }
 
@@ -330,19 +343,17 @@ function Grant-AdministrativePathAccess([string]$path) {
     $null = & icacls.exe @icaclsArgs 2>$null
 }
 
-function Disable-AdministratorsMatchBlock([string]$path) {
-    if (-not (Test-Path -Path $path)) {
-        return $false
+function Write-TemporarySshdConfig([string]$path, [string]$port) {
+    $lines = @()
+    if (Test-Path -Path $path) {
+        $lines = Get-Content -Path $path
     }
-
-    $lines = Get-Content -Path $path
     if ($null -eq $lines) {
-        return $false
+        $lines = @()
     }
 
     $updatedLines = New-Object System.Collections.Generic.List[string]
     $insideAdministratorsMatchBlock = $false
-    $changed = $false
 
     foreach ($line in $lines) {
         if ($insideAdministratorsMatchBlock) {
@@ -355,7 +366,6 @@ function Disable-AdministratorsMatchBlock([string]$path) {
             } else {
                 if ($line -notmatch '^\s*#') {
                     $updatedLines.Add('# ' + $line)
-                    $changed = $true
                 } else {
                     $updatedLines.Add($line)
                 }
@@ -367,33 +377,46 @@ function Disable-AdministratorsMatchBlock([string]$path) {
             $insideAdministratorsMatchBlock = $true
             if ($line -notmatch '^\s*#') {
                 $updatedLines.Add('# ' + $line)
-                $changed = $true
             } else {
                 $updatedLines.Add($line)
             }
             continue
         }
 
+        if ($line -match '^\s*(Port|ListenAddress|AddressFamily)\s+' -and $line -notmatch '^\s*#') {
+            $updatedLines.Add('# ' + $line)
+            continue
+        }
+
         $updatedLines.Add($line)
     }
 
-    if (-not $changed) {
-        return $false
+    $directory = Split-Path -Parent $path
+    if (-not [string]::IsNullOrWhiteSpace($directory) -and -not (Test-Path -Path $directory)) {
+        New-Item -Path $directory -ItemType Directory -Force | Out-Null
     }
 
-    [System.IO.File]::WriteAllText($path, (($updatedLines -join "`r`n") + "`r`n"), [System.Text.UTF8Encoding]::new($false))
-    return $true
+    $managedLines = @(
+        '# Dev Alchemy temporary local Windows SSH provisioning settings',
+        ('Port ' + $port),
+        'ListenAddress 127.0.0.1',
+        'AddressFamily inet',
+        ''
+    )
+    $allLines = $managedLines + @($updatedLines.ToArray())
+    [System.IO.File]::WriteAllText($path, (($allLines -join "`r`n") + "`r`n"), [System.Text.UTF8Encoding]::new($false))
 }
 
 function Write-StateSummary($state) {
     Write-Output ('OpenSSH capability state: installed=' + [string][bool]$state.CapabilityInstalled + ', state=' + [string]$state.CapabilityState)
     Write-Output ('sshd service state: existed=' + [string][bool]$state.SshdServiceExisted + ', running=' + [string][bool]$state.SshdServiceWasRunning + ', startMode=' + [string]$state.SshdServiceStartMode)
-    Write-Output ('Firewall state: builtInRule existed=' + [string][bool]$state.BuiltInFirewallRuleExisted + ', enabled=' + [string][bool]$state.BuiltInFirewallRuleEnabled + '; loopbackRule existed=' + [string][bool]$state.LocalFirewallRuleExisted + ', enabled=' + [string][bool]$state.LocalFirewallRuleEnabled)
+    Write-Output ('Firewall state: builtInRule existed=' + [string][bool]$state.BuiltInFirewallRuleExisted + ', enabled=' + [string][bool]$state.BuiltInFirewallRuleEnabled + '; loopbackRule existed=' + [string][bool]$state.LocalFirewallRuleExisted + ', enabled=' + [string][bool]$state.LocalFirewallRuleEnabled + ', localPort=' + [string]$state.LocalFirewallRulePort)
     Write-Output ('OpenSSH shell state: defaultShell existed=' + [string][bool]$state.DefaultShellExisted + ', value=' + [string]$state.DefaultShellValue)
     Write-Output ('OpenSSH sshd_config state: existed=' + [string][bool]$state.SshdConfigExisted + ', path=' + $sshdConfigPath)
     Write-Output ('Authorized keys state: existed=' + [string][bool]$state.AuthorizedKeysExisted + ', path=' + $administratorsAuthorizedKeysPath)
     Write-Output ('Per-user authorized keys state: existed=' + [string][bool]$state.UserAuthorizedKeysExisted + ', path=' + [string]$state.UserAuthorizedKeysPath)
     Write-Output ('Local user state: existed=' + [string][bool]$state.UserExisted + ', enabled=' + [string][bool]$state.UserWasEnabled + ', wasAdministrator=' + [string][bool]$state.UserWasAdministrator + ', description=' + [string]$state.UserDescription)
+    Write-Output ('Temporary loopback SSH port: ' + [string]$state.ProvisionPort)
     Write-Output ('Force SSH uninstall requested: ' + [string][bool]$state.ForceSSHUninstall)
 }
 
@@ -425,6 +448,7 @@ $state = @{
     BuiltInFirewallRuleEnabled = [bool]$builtInFirewallRuleState.Enabled
     LocalFirewallRuleExisted = [bool]$localFirewallRuleState.Exists
     LocalFirewallRuleEnabled = [bool]$localFirewallRuleState.Enabled
+    LocalFirewallRulePort = [string]$localFirewallRuleState.LocalPort
     DefaultShellExisted = [bool]$defaultShellState.Exists
     DefaultShellValue = [string]$defaultShellState.Value
     SshdConfigExisted = [bool]$sshdConfigState.Exists
@@ -442,6 +466,7 @@ $state = @{
     UserWasEnabled = [bool]$userState.Enabled
     UserDescription = [string]$userState.Description
     UserWasAdministrator = [bool]$userWasAdministrator
+    ProvisionPort = [string]$sshPortString
     ForceSSHUninstall = [bool]$forceSSHUninstall
 }
 Save-State $state
@@ -482,15 +507,13 @@ if (-not [bool]$state.BuiltInFirewallRuleExisted) {
     }
 }
 
-if (-not [bool]$state.LocalFirewallRuleExisted) {
-    Write-Output 'Creating the loopback-only OpenSSH firewall rule.'
-    New-NetFirewallRule -Name $localFirewallRuleName -DisplayName 'Dev Alchemy Local OpenSSH Loopback' -Direction Inbound -Action Allow -Protocol TCP -LocalAddress 127.0.0.1 -LocalPort 22 -Profile Any | Out-Null
-} elseif (-not [bool]$state.LocalFirewallRuleEnabled) {
-    Write-Output 'Enabling the existing loopback-only OpenSSH firewall rule.'
-    Enable-NetFirewallRule -Name $localFirewallRuleName | Out-Null
+if ([bool]$state.LocalFirewallRuleExisted) {
+    Write-Output ('Reconfiguring the existing loopback-only OpenSSH firewall rule for temporary local port ' + $sshPortString + '.')
+    Get-NetFirewallRule -Name $localFirewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
 } else {
-    Write-Output 'Keeping the existing loopback-only OpenSSH firewall rule enabled.'
+    Write-Output ('Creating the loopback-only OpenSSH firewall rule for temporary local port ' + $sshPortString + '.')
 }
+New-NetFirewallRule -Name $localFirewallRuleName -DisplayName 'Dev Alchemy Local OpenSSH Loopback' -Direction Inbound -Action Allow -Protocol TCP -LocalAddress 127.0.0.1 -LocalPort $sshPortString -Profile Any | Out-Null
 
 Write-Output 'Setting the OpenSSH default shell to PowerShell for Ansible.'
 if (-not (Test-Path -Path $defaultShellRegistryPath)) {
@@ -498,11 +521,8 @@ if (-not (Test-Path -Path $defaultShellRegistryPath)) {
 }
 New-ItemProperty -Path $defaultShellRegistryPath -Name $defaultShellRegistryName -Value $defaultShellPath -PropertyType String -Force | Out-Null
 
-if (Disable-AdministratorsMatchBlock $sshdConfigPath) {
-    Write-Output 'Temporarily disabled the default Match Group administrators block in sshd_config for this provisioning run.'
-} else {
-    Write-Output 'Keeping the existing sshd_config administrators match settings unchanged for this provisioning run.'
-}
+Write-TemporarySshdConfig $sshdConfigPath $sshPortString
+Write-Output ('Wrote a temporary loopback-only sshd_config for this provisioning run on port ' + $sshPortString + '.')
 
 Write-Output 'Creating or updating the temporary local Ansible account.'
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force

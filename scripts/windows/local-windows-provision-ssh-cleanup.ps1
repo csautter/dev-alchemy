@@ -83,6 +83,22 @@ function Restore-NetFirewallRuleState([string]$name, [bool]$existed, [bool]$enab
     }
 }
 
+function Restore-LoopbackFirewallRuleState([string]$name, [bool]$existed, [bool]$enabled, [string]$localPort) {
+    Get-NetFirewallRule -Name $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
+
+    if (-not $existed) {
+        return
+    }
+    if ([string]::IsNullOrWhiteSpace($localPort)) {
+        return
+    }
+
+    New-NetFirewallRule -Name $name -DisplayName 'Dev Alchemy Local OpenSSH Loopback' -Direction Inbound -Action Allow -Protocol TCP -LocalAddress 127.0.0.1 -LocalPort $localPort -Profile Any | Out-Null
+    if (-not $enabled) {
+        Disable-NetFirewallRule -Name $name | Out-Null
+    }
+}
+
 function Restore-RegistryStringState([string]$path, [string]$name, [bool]$existed, [string]$value) {
     if ($existed) {
         if (-not (Test-Path -Path $path)) {
@@ -208,7 +224,7 @@ Restore-RegistryStringState $defaultShellRegistryPath $defaultShellRegistryName 
 Restore-FileState (Join-Path $env:ProgramData 'ssh\sshd_config') ([bool]$state.SshdConfigExisted) ([string]$state.SshdConfigContentBase64) ([string]$state.SshdConfigSddl)
 
 Write-Output 'Restoring OpenSSH firewall rules.'
-Restore-NetFirewallRuleState $localFirewallRuleName ([bool]$state.LocalFirewallRuleExisted) ([bool]$state.LocalFirewallRuleEnabled)
+Restore-LoopbackFirewallRuleState $localFirewallRuleName ([bool]$state.LocalFirewallRuleExisted) ([bool]$state.LocalFirewallRuleEnabled) ([string]$state.LocalFirewallRulePort)
 Restore-NetFirewallRuleState $openSSHBuiltInFirewallRuleName ([bool]$state.BuiltInFirewallRuleExisted) ([bool]$state.BuiltInFirewallRuleEnabled)
 
 if ($forceSSHUninstall) {

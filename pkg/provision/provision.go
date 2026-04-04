@@ -134,6 +134,7 @@ type sshAnsibleConnectionConfig struct {
 	Password        string
 	BecomePassword  string
 	Connection      string
+	Port            string
 	SshCommonArgs   string
 	SshTimeout      string
 	SshRetries      string
@@ -1075,6 +1076,9 @@ func buildSSHProvisionExtraVars(connectionConfig sshAnsibleConnectionConfig) ([]
 	}
 	if connectionConfig.BecomePassword != "" {
 		extraVars["ansible_become_password"] = connectionConfig.BecomePassword
+	}
+	if connectionConfig.Port != "" {
+		extraVars["ansible_port"] = connectionConfig.Port
 	}
 	if connectionConfig.SshCommonArgs != "" {
 		extraVars["ansible_ssh_common_args"] = connectionConfig.SshCommonArgs

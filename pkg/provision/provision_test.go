@@ -389,7 +389,7 @@ func TestBuildLocalWindowsWinRMProvisionScriptEnvIncludesForceFlag(t *testing.T)
 }
 
 func TestBuildLocalWindowsSSHProvisionScriptEnvIncludesForceFlag(t *testing.T) {
-	env := buildLocalWindowsSSHProvisionScriptEnv("state.json", "P@ssw0rd!", "ssh-rsa AAAA", ProvisionOptions{LocalWindowsForceSSHUninstall: true})
+	env := buildLocalWindowsSSHProvisionScriptEnv("state.json", "P@ssw0rd!", "ssh-rsa AAAA", "2222", ProvisionOptions{LocalWindowsForceSSHUninstall: true})
 	got := strings.Join(env, "\n")
 
 	if !strings.Contains(got, localWindowsForceSSHUninstallEnvVar+"=true") {
@@ -403,6 +403,65 @@ func TestBuildLocalWindowsSSHProvisionScriptEnvIncludesForceFlag(t *testing.T) {
 	}
 	if !strings.Contains(got, localWindowsProvisionSSHPublicKeyEnvVar+"=ssh-rsa AAAA") {
 		t.Fatal("expected ssh bootstrap env to include the generated public key")
+	}
+	if !strings.Contains(got, localWindowsSSHPortEnvVar+"=2222") {
+		t.Fatal("expected ssh bootstrap env to include the temporary ssh port")
+	}
+}
+
+func TestParseLocalWindowsSSHListenerProcessesSupportsArrays(t *testing.T) {
+	processes, err := parseLocalWindowsSSHListenerProcesses(`[{"Id":6172,"ProcessName":"sshd"},{"Id":19388,"ProcessName":"wslrelay"}]`)
+	if err != nil {
+		t.Fatalf("parseLocalWindowsSSHListenerProcesses returned error: %v", err)
+	}
+	if len(processes) != 2 {
+		t.Fatalf("expected 2 listener processes, got %d", len(processes))
+	}
+	if processes[0].ProcessName != "sshd" || processes[1].ProcessName != "wslrelay" {
+		t.Fatalf("unexpected parsed listener processes: %+v", processes)
+	}
+}
+
+func TestValidateLocalWindowsSSHListenerRejectsWSLRelay(t *testing.T) {
+	err := validateLocalWindowsSSHListener("22", []localWindowsSSHListenerProcess{
+		{ID: 6172, ProcessName: "sshd"},
+		{ID: 19388, ProcessName: "wslrelay"},
+	})
+	if err == nil {
+		t.Fatal("expected listener validation to fail when wslrelay shares the ssh port")
+	}
+	if !strings.Contains(err.Error(), "WSL SSH forwarding") {
+		t.Fatalf("expected WSL-specific listener guidance, got: %v", err)
+	}
+}
+
+func TestValidateLocalWindowsSSHListenerAcceptsWindowsSSHDOnly(t *testing.T) {
+	err := validateLocalWindowsSSHListener("2222", []localWindowsSSHListenerProcess{
+		{ID: 6172, ProcessName: "sshd"},
+	})
+	if err != nil {
+		t.Fatalf("expected sshd-only listener validation to succeed, got: %v", err)
+	}
+}
+
+func TestValidateLocalWindowsSSHRemoteBannerRejectsNonWindowsServer(t *testing.T) {
+	output := "debug1: Remote protocol version 2.0, remote software version OpenSSH_8.4p1 Debian-5+deb11u5"
+
+	err := validateLocalWindowsSSHRemoteBanner("22", output)
+	if err == nil {
+		t.Fatal("expected remote banner validation to fail for non-Windows OpenSSH")
+	}
+	if !strings.Contains(err.Error(), "Debian") {
+		t.Fatalf("expected banner validation error to include the unexpected banner, got: %v", err)
+	}
+}
+
+func TestValidateLocalWindowsSSHRemoteBannerAcceptsWindowsOpenSSH(t *testing.T) {
+	output := "debug1: Remote protocol version 2.0, remote software version OpenSSH_for_Windows_9.5"
+
+	err := validateLocalWindowsSSHRemoteBanner("2222", output)
+	if err != nil {
+		t.Fatalf("expected Windows OpenSSH banner validation to succeed, got: %v", err)
 	}
 }
 
@@ -1379,6 +1438,7 @@ func TestBuildSSHStaticInventoryProvisionArgsIncludesWindowsShellSettings(t *tes
 	config := sshAnsibleConnectionConfig{
 		User:            localWindowsProvisionUserName,
 		Connection:      "ssh",
+		Port:            "2222",
 		SshCommonArgs:   localWindowsSSHCommonArgs,
 		SshTimeout:      "120",
 		SshRetries:      "3",
@@ -1426,6 +1486,7 @@ func TestBuildSSHStaticInventoryProvisionArgsIncludesWindowsShellSettings(t *tes
 	for key, expected := range map[string]string{
 		"ansible_user":                 localWindowsProvisionUserName,
 		"ansible_connection":           "ssh",
+		"ansible_port":                 "2222",
 		"ansible_ssh_common_args":      localWindowsSSHCommonArgs,
 		"ansible_ssh_timeout":          "120",
 		"ansible_ssh_retries":          "3",
@@ -1500,11 +1561,23 @@ func TestLocalWindowsSSHProvisionBootstrapPowerShellConfiguresOpenSSHServer(t *t
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Ensure-LocalUserProfile") {
 		t.Fatal("expected ssh bootstrap script to ensure the temporary local ssh user has a Windows profile")
 	}
-	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Disable-AdministratorsMatchBlock") {
-		t.Fatal("expected ssh bootstrap script to handle the default administrators match block in sshd_config")
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Write-TemporarySshdConfig") {
+		t.Fatal("expected ssh bootstrap script to write a temporary loopback-only sshd_config")
 	}
-	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Temporarily disabled the default Match Group administrators block in sshd_config") {
-		t.Fatal("expected ssh bootstrap script to log when it disables the default administrators match block")
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Wrote a temporary loopback-only sshd_config for this provisioning run on port") {
+		t.Fatal("expected ssh bootstrap script to log the temporary sshd_config port override")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "ListenAddress 127.0.0.1") {
+		t.Fatal("expected ssh bootstrap script to constrain the temporary sshd_config to loopback")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "AddressFamily inet") {
+		t.Fatal("expected ssh bootstrap script to constrain the temporary sshd_config to IPv4 loopback")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Temporary loopback SSH port: ") {
+		t.Fatal("expected ssh bootstrap script to log the selected temporary ssh port")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_SSH_PORT") {
+		t.Fatal("expected ssh bootstrap script to require the temporary ssh port environment variable")
 	}
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Per-user authorized keys state: existed=") {
 		t.Fatal("expected ssh bootstrap script to log per-user authorized_keys state for debugging")
@@ -1526,6 +1599,9 @@ func TestLocalWindowsSSHProvisionBootstrapPowerShellConfiguresOpenSSHServer(t *t
 	}
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "DevAlchemyLocalSSHDLoopback") {
 		t.Fatal("expected ssh bootstrap script to manage a dedicated loopback firewall rule")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Reconfiguring the existing loopback-only OpenSSH firewall rule for temporary local port") {
+		t.Fatal("expected ssh bootstrap script to recreate the loopback firewall rule on the selected temporary port")
 	}
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "OpenSSH-Server-In-TCP") {
 		t.Fatal("expected ssh bootstrap script to manage the broad built-in firewall rule")
@@ -1553,6 +1629,12 @@ func TestLocalWindowsSSHProvisionCleanupPowerShellRestoresOpenSSHState(t *testin
 	}
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Grant-AdministrativePathAccess") {
 		t.Fatal("expected ssh cleanup script to recover access to stale per-user SSH paths before restoring them")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Restore-LoopbackFirewallRuleState") {
+		t.Fatal("expected ssh cleanup script to restore the dedicated loopback firewall rule with its original port")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "state.LocalFirewallRulePort") {
+		t.Fatal("expected ssh cleanup script to remember the original loopback firewall rule port")
 	}
 	if strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "'/D', 'Y'") {
 		t.Fatal("expected ssh cleanup script to avoid locale-sensitive takeown /D Y usage")
