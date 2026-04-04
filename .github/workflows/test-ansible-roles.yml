@@ -8,6 +8,14 @@ on:
       - "roles/**"
       - "playbooks/**"
       - "inventory/**"
+      - "pkg/provision/**"
+      - "cmd/cmd/provision.go"
+      - "cmd/cmd/provision_test.go"
+      - "scripts/windows/local-windows-provision-ssh-bootstrap.ps1"
+      - "scripts/windows/local-windows-provision-ssh-cleanup.ps1"
+      - "scripts/windows/local-windows-provision-winrm-bootstrap.ps1"
+      - "scripts/windows/local-windows-provision-winrm-cleanup.ps1"
+      - "runtimeassets.go"
       - ".github/workflows/test-ansible-roles.yml"
   pull_request:
     branches: [main, feat*]
@@ -15,6 +23,14 @@ on:
       - "roles/**"
       - "playbooks/**"
       - "inventory/**"
+      - "pkg/provision/**"
+      - "cmd/cmd/provision.go"
+      - "cmd/cmd/provision_test.go"
+      - "scripts/windows/local-windows-provision-ssh-bootstrap.ps1"
+      - "scripts/windows/local-windows-provision-ssh-cleanup.ps1"
+      - "scripts/windows/local-windows-provision-winrm-bootstrap.ps1"
+      - "scripts/windows/local-windows-provision-winrm-cleanup.ps1"
+      - "runtimeassets.go"
       - ".github/workflows/test-ansible-roles.yml"
 
 concurrency:
@@ -105,34 +121,6 @@ jobs:
           Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true;
           Enable-PSRemoting -Force;
 
-      - name: Windows enable ssh
-        if: runner.os == 'Windows' && matrix.ansible_protocol == 'ssh'
-        shell: powershell
-        run: |
-          Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0;
-          Start-Service sshd; Set-Service -Name sshd -StartupType 'Automatic';
-
-      # hardcoded passwords are bad, but this is just for testing
-      - name: Windows create local ansible user
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          net user ansible 'Secret123!@#' /add;
-          net localgroup Administrators ansible /add;
-
-      - name: Check if ssh user on windows can connect
-        if: runner.os == 'Windows' && matrix.ansible_protocol == 'ssh'
-        shell: powershell
-        run: |
-          sshpass -p 'Secret123!@#' ssh -o StrictHostKeyChecking=no ansible@localhost -p 22 "whoami"
-
-      # Set default shell for OpenSSH to PowerShell, otherwise Ansible will fail with the default cmd.exe
-      - name: Set default shell for OpenSSH on Windows to PowerShell
-        if: runner.os == 'Windows' && matrix.ansible_protocol == 'ssh'
-        shell: powershell
-        run: |
-          New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name 'DefaultShell' -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -PropertyType String -Force
-
       - name: Run all Ansible roles
         shell: bash
         run: |
@@ -141,41 +129,18 @@ jobs:
           ANSIBLE_FORCE_COLOR: "true"
         if: runner.os != 'Windows'
 
-      - name: Run all Ansible roles on Windows over SSH (with retries)
-        if: runner.os == 'Windows' && matrix.ansible_protocol == 'ssh'
-        shell: powershell
-        env:
-          ANSIBLE_FORCE_COLOR: "true"
-        run: |
-          $maxRetries = 6
-          $success = $false
-          $workspace = $env:GITHUB_WORKSPACE
-          $drive = $workspace.Substring(0, 1).ToLowerInvariant()
-          $rest = $workspace.Substring(2).Replace('\', '/')
-          $cygwinWorkspace = "/cygdrive/$drive$rest"
-
-          for ($count = 1; $count -le $maxRetries -and -not $success; $count++) {
-            & $env:CYGWIN_BASH_PATH -l -c "cd '$cygwinWorkspace' && ansible-playbook -i inventory/localhost_windows_ssh.yml -l windows_host playbooks/setup.yml"
-            if ($LASTEXITCODE -eq 0) {
-              $success = $true
-            } else {
-              Write-Host "Attempt $count failed with exit code $LASTEXITCODE."
-              if ($count -lt $maxRetries) { Start-Sleep -Seconds 10 }
-            }
-          }
-          if (-not $success) { throw "All $maxRetries attempts failed." }
-
       - name: Run all Ansible roles on Windows via local provision wrapper (with retries)
-        if: runner.os == 'Windows' && matrix.ansible_protocol == 'winrm'
+        if: runner.os == 'Windows'
         shell: powershell
         env:
           ANSIBLE_FORCE_COLOR: "true"
         run: |
           $maxRetries = 6
           $success = $false
+          $provisionArgs = @("run", "cmd/main.go", "provision", "local", "--proto", "${{ matrix.ansible_protocol }}", "--yes")
 
           for ($count = 1; $count -le $maxRetries -and -not $success; $count++) {
-            go run cmd/main.go provision local --yes
+            & go @provisionArgs
             if ($LASTEXITCODE -eq 0) {
               $success = $true
             } else {
