@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0](https://github.com/csautter/dev-alchemy/compare/v0.9.2...v0.10.0) (2026-04-04)
+
+
+### Added
+
+* **provision:** add generic ansible arg passthrough and inventory override ([0d2f284](https://github.com/csautter/dev-alchemy/commit/0d2f2842f3d4b09aa6935399c4b5ec34296f73a8))
+* **provision:** add local host provision target ([833e077](https://github.com/csautter/dev-alchemy/commit/833e0776371e1beb42cff2432aee2b38208d3f79))
+* **provision:** add local host provisioning with Windows WinRM bootstrap ([521aa46](https://github.com/csautter/dev-alchemy/commit/521aa464c5be6c6c012f8750a3ce879da495751f))
+* **provision:** allow overriding ansible playbook path ([71f74a3](https://github.com/csautter/dev-alchemy/commit/71f74a3b63d91d2b48d295e1ab31385bb1a399cc))
+* **provision:** secure local Windows WinRM provisioning ([ba8f592](https://github.com/csautter/dev-alchemy/commit/ba8f5928050965d821d7d77c550e66d135883691))
+* restructure docs ([585b871](https://github.com/csautter/dev-alchemy/commit/585b8713c75ab8d24cc79397810344a03acd22f8))
+
+
+### Fixed
+
+* **ci:** run Windows winrm role test via provision local ([3585a69](https://github.com/csautter/dev-alchemy/commit/3585a69eb5593ba944b9bcc617222873336261b1))
+* **provision:** bind local Windows WinRM bootstrap to loopback ([768eeed](https://github.com/csautter/dev-alchemy/commit/768eeedd337f13610d8f6bb8d5bd450d54fb2b3a))
+* **provision:** elevate and confirm local Windows WinRM bootstrap ([dc0adaa](https://github.com/csautter/dev-alchemy/commit/dc0adaa77dce00cc13ff4b3db99824af964fb5ea))
+* **provision:** enforce documented ansible verbosity range ([5d1dd8a](https://github.com/csautter/dev-alchemy/commit/5d1dd8a6a3b19fa49c052d5839645d2ba165c723))
+* **provision:** harden local Windows WinRM bootstrap cleanup ([310d4f1](https://github.com/csautter/dev-alchemy/commit/310d4f123bdb5e3be663edc7602fadeeae4d0c92))
+* **provision:** log local Windows PowerShell bootstrap and cleanup progress ([146a8f1](https://github.com/csautter/dev-alchemy/commit/146a8f1210d1c0596dea72e3981b67b6981576ba))
+* **provision:** skip Windows RunAs hop in elevated shells ([42ce281](https://github.com/csautter/dev-alchemy/commit/42ce2815c8d0f65417a61f7f231696040484a0b0))
+* **provision:** use HTTPS-only local WinRM bootstrap on Windows ([a1fe0e7](https://github.com/csautter/dev-alchemy/commit/a1fe0e7e4644336a132068c61210dc4c44e1a8fe))
+* **security:** triage and suppress provision gosec findings ([a528c99](https://github.com/csautter/dev-alchemy/commit/a528c99c09de1ecece4b1fe5372488c1b2d34f98))
+
+
+### Changed
+
+* **provision:** extract local Windows WinRM scripts into ps1 assets ([60971c8](https://github.com/csautter/dev-alchemy/commit/60971c80b58a5e5c8dcdf999f4ec56fab1dd6966))
+* **provision:** move windows local logic into dedicated file ([80c6895](https://github.com/csautter/dev-alchemy/commit/80c68954144ab64974b680a7fabbe969b790d207))
+
+
+### CI
+
+* run full cmd package tests in deploy unit workflow ([c8f1880](https://github.com/csautter/dev-alchemy/commit/c8f18804a4e3344ed7cd62822556ea866046a6e8))
+
 ## [0.9.2](https://github.com/csautter/dev-alchemy/compare/v0.9.1...v0.9.2) (2026-03-30)
 
 
