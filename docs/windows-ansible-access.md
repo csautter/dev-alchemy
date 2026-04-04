@@ -73,12 +73,18 @@ cleanup leaves that rotated password in place. If the wrapper installed
 OpenSSH Server for the run, cleanup disables `sshd` but does not uninstall the
 OpenSSH Server capability.
 
-For manual setup:
+For manual setup, install OpenSSH Server, start `sshd`, and set the OpenSSH
+default shell to PowerShell so Ansible sessions do not fall back to `cmd.exe`:
 
 ```powershell
 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; `
-Start-Service sshd; Set-Service -Name sshd -StartupType 'Automatic';
+Start-Service sshd; Set-Service -Name sshd -StartupType 'Automatic'; `
+New-Item -Path 'HKLM:\SOFTWARE\OpenSSH' -Force | Out-Null; `
+New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -PropertyType String -Force | Out-Null
 ```
+
+If you skip the `DefaultShell` setting, OpenSSH can still launch `cmd.exe`,
+which commonly breaks Ansible-over-SSH runs on Windows.
 
 ## Remove OpenSSH Server After a Wrapper Run
 

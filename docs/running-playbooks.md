@@ -70,7 +70,11 @@ own secure WinRM connection variables and credentials.
 
 If you run `ansible-playbook` directly with
 `inventory/localhost_windows_ssh.yml`, you are responsible for supplying your
-own secure SSH user, key, and shell variables.
+own secure SSH user, key, and shell variables. Make sure the Windows OpenSSH
+server is configured with `HKLM:\SOFTWARE\OpenSSH\DefaultShell` set to
+`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` as described in
+[Windows Ansible Access](./windows-ansible-access.md), or Ansible may connect
+through `cmd.exe` instead of PowerShell.
 
 ```powershell
 $DevAlchemyPath = "C:\path\to\dev-alchemy"
