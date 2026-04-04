@@ -48,6 +48,26 @@ alchemy provision --help
 
 ## System-Agnostic Docker Workflow
 
+## Local Host Provisioning
+
+Use the shared local wrapper when you want to apply the playbook to the current
+machine instead of a managed VM:
+
+```bash
+alchemy provision local --check
+alchemy provision local --playbook ./playbooks/bootstrap.yml
+alchemy provision local -- --diff
+alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
+alchemy provision local
+```
+
+- Windows uses `inventory/localhost_windows_winrm.yml`.
+- macOS and Linux use `inventory/localhost.yaml`.
+- Use `--playbook` to point provision runs at a different playbook file.
+- Pass additional `ansible-playbook` flags after `--` when needed.
+- The macOS/Linux local target is currently marked unstable until it has been
+  validated end-to-end.
+
 ### Ubuntu role tests on Linux, WSL, Windows, or macOS
 
 Use the provided Docker Compose setup to run the Ubuntu-focused Ansible playbook inside a container:

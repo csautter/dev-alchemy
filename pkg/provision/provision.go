@@ -21,7 +21,7 @@ import (
 
 const (
 	hypervWindowsAnsibleUserEnvVar           = "HYPERV_WINDOWS_ANSIBLE_USER"
-	hypervWindowsAnsiblePasswordEnvVar       = "HYPERV_WINDOWS_ANSIBLE_PASSWORD"
+	hypervWindowsAnsiblePasswordEnvVar       = "HYPERV_WINDOWS_ANSIBLE_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
 	hypervWindowsAnsibleConnectionEnvVar     = "HYPERV_WINDOWS_ANSIBLE_CONNECTION"
 	hypervWindowsAnsibleWinrmTransportEnvVar = "HYPERV_WINDOWS_ANSIBLE_WINRM_TRANSPORT"
 	hypervWindowsAnsiblePortEnvVar           = "HYPERV_WINDOWS_ANSIBLE_PORT"
@@ -71,6 +71,15 @@ const (
 	utmIPv4ProbeSubnetPrefixMinimum = 24
 
 	defaultAnsibleSSHCommonArgs = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
+	defaultAnsibleVerbosity     = 3
+	maxAnsibleVerbosity         = 4
+	defaultProvisionPlaybook    = "./playbooks/setup.yml"
+	defaultUbuntuGuestPassword  = "P@ssw0rd!" // #nosec G101 -- documented default credential for disposable local/test Ubuntu guests.
+	defaultTartGuestUser        = "admin"
+	defaultTartGuestPassword    = "admin" // #nosec G101 -- documented default Tart guest credential for local testing.
+
+	localUnixInventoryPath   = "./inventory/localhost.yaml"
+	localUnixInventoryTarget = "localhost"
 )
 
 var (
@@ -84,12 +93,24 @@ var (
 	}
 )
 
+var localWindowsForceWinRMUninstall bool
+
+type ProvisionOptions struct {
+	Check         bool
+	Verbosity     int
+	PlaybookPath  string
+	InventoryPath string
+	ExtraArgs     []string
+}
+
 type windowsAnsibleConnectionConfig struct {
-	User           string
-	Password       string
-	Connection     string
-	WinrmTransport string
-	Port           string
+	User                 string
+	Password             string
+	Connection           string
+	WinrmTransport       string
+	Port                 string
+	WinrmScheme          string
+	ServerCertValidation string
 }
 
 type windowsAnsibleConnectionEnvVars struct {
@@ -145,22 +166,59 @@ type tartProvisionAvailabilityOptions struct {
 
 var inspectProvisionTarget = alchemy_deploy.InspectStartTarget
 var runProvisionCommandWithCombinedOutputWithEnv = runCommandWithCombinedOutputWithEnv
+var runAnsibleProvisionCommandFunc = runAnsibleProvisionCommand
+
+func SetLocalWindowsForceWinRMUninstall(force bool) func() {
+	previous := localWindowsForceWinRMUninstall
+	localWindowsForceWinRMUninstall = force
+
+	return func() {
+		localWindowsForceWinRMUninstall = previous
+	}
+}
+
+func DefaultProvisionPlaybookPath() string {
+	return defaultProvisionPlaybook
+}
 
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+	return RunProvisionWithOptions(vm, ProvisionOptions{
+		Check:        check,
+		Verbosity:    defaultAnsibleVerbosity,
+		PlaybookPath: defaultProvisionPlaybook,
+	})
+}
+
+func ValidateProvisionVerbosity(verbosity int) error {
+	if verbosity < 0 || verbosity > maxAnsibleVerbosity {
+		return fmt.Errorf("ansible verbosity must be between 0 and %d: %d", maxAnsibleVerbosity, verbosity)
+	}
+
+	return nil
+}
+
+func RunProvisionWithOptions(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
+	if err := ValidateProvisionVerbosity(options.Verbosity); err != nil {
+		return err
+	}
+
+	if isLocalProvisionTarget(vm) {
+		return runLocalProvision(vm, options)
+	}
 	if isHypervWindows11Amd64ProvisionTarget(vm) {
-		return runHypervWindows11Provision(vm, check)
+		return runHypervWindows11Provision(vm, options)
 	}
 	if isUtmWindows11ProvisionTarget(vm) {
-		return runUtmWindows11Provision(vm, check)
+		return runUtmWindows11Provision(vm, options)
 	}
 	if isUtmUbuntuProvisionTarget(vm) {
-		return runUtmUbuntuProvision(vm, check)
+		return runUtmUbuntuProvision(vm, options)
 	}
 	if isTartMacOSProvisionTarget(vm) {
-		return runTartMacOSProvision(vm, check)
+		return runTartMacOSProvision(vm, options)
 	}
 	if isHypervUbuntuAmd64ProvisionTarget(vm) {
-		return runHypervUbuntuProvision(vm, check)
+		return runHypervUbuntuProvision(vm, options)
 	}
 
 	return fmt.Errorf(
@@ -171,6 +229,10 @@ func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 		vm.HostOs,
 		vm.VirtualizationEngine,
 	)
+}
+
+func isLocalProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
+	return vm.OS == "local"
 }
 
 func isHypervWindows11Amd64ProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
@@ -208,7 +270,26 @@ func isTartMacOSProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineTart
 }
 
-func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+func runLocalProvision(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+
+	if vm.HostOs == alchemy_build.HostOsWindows {
+		return runLocalWindowsProvision(projectDir, options)
+	}
+
+	args, err := buildLocalProvisionArgs(vm.HostOs, options)
+	if err != nil {
+		return err
+	}
+
+	if err := runAnsibleProvisionCommandFunc(projectDir, args, 90*time.Minute, fmt.Sprintf("local:%s:provision", vm.HostOs)); err != nil {
+		return fmt.Errorf("ansible provisioning failed for local host %s: %w", vm.HostOs, err)
+	}
+
+	return nil
+}
+
+func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
 	if err := ensureProvisionTargetRunning(vm); err != nil {
 		return err
 	}
@@ -229,7 +310,7 @@ func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bo
 		return fmt.Errorf("failed to load hyper-v windows ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildWindowsProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildWindowsProvisionArgs(projectDir, ip, connectionConfig, options)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -250,7 +331,7 @@ func runHypervWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bo
 	return nil
 }
 
-func runUtmWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+func runUtmWindows11Provision(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
 	if err := ensureProvisionTargetRunning(vm); err != nil {
 		return err
 	}
@@ -267,7 +348,7 @@ func runUtmWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool)
 		return fmt.Errorf("failed to load UTM windows ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildWindowsProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildWindowsProvisionArgs(projectDir, ip, connectionConfig, options)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -288,7 +369,7 @@ func runUtmWindows11Provision(vm alchemy_build.VirtualMachineConfig, check bool)
 	return nil
 }
 
-func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
 	if err := ensureProvisionTargetRunning(vm); err != nil {
 		return err
 	}
@@ -309,7 +390,7 @@ func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool)
 		return fmt.Errorf("failed to load hyper-v ubuntu ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, options)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -335,7 +416,7 @@ func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool)
 	return nil
 }
 
-func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
 	if err := ensureProvisionTargetRunning(vm); err != nil {
 		return err
 	}
@@ -352,7 +433,7 @@ func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) er
 		return fmt.Errorf("failed to load UTM ubuntu ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, options)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -378,7 +459,7 @@ func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, check bool) er
 	return nil
 }
 
-func runTartMacOSProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
+func runTartMacOSProvision(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
 	if err := ensureProvisionTargetRunning(vm); err != nil {
 		return err
 	}
@@ -400,7 +481,7 @@ func runTartMacOSProvision(vm alchemy_build.VirtualMachineConfig, check bool) er
 		return fmt.Errorf("failed to load Tart macOS ansible configuration: %w", err)
 	}
 
-	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, check)
+	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, options)
 	if err != nil {
 		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
 	}
@@ -927,22 +1008,34 @@ func uint32ToIPv4(value uint32) net.IP {
 	).To4()
 }
 
-func buildWindowsProvisionArgs(projectDir string, ip string, connectionConfig windowsAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
-	extraVars, err := json.Marshal(map[string]string{
+func buildWindowsProvisionArgs(projectDir string, ip string, connectionConfig windowsAnsibleConnectionConfig, options ProvisionOptions) ([]string, func() error, error) {
+	extraVars, err := buildWindowsProvisionExtraVars(connectionConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, options)
+}
+
+func buildWindowsProvisionExtraVars(connectionConfig windowsAnsibleConnectionConfig) ([]byte, error) {
+	extraVars := map[string]string{
 		"ansible_user":            connectionConfig.User,
 		"ansible_password":        connectionConfig.Password,
 		"ansible_connection":      connectionConfig.Connection,
 		"ansible_winrm_transport": connectionConfig.WinrmTransport,
 		"ansible_port":            connectionConfig.Port,
-	})
-	if err != nil {
-		return nil, nil, err
+	}
+	if connectionConfig.WinrmScheme != "" {
+		extraVars["ansible_winrm_scheme"] = connectionConfig.WinrmScheme
+	}
+	if connectionConfig.ServerCertValidation != "" {
+		extraVars["ansible_winrm_server_cert_validation"] = connectionConfig.ServerCertValidation
 	}
 
-	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, check)
+	return json.Marshal(extraVars)
 }
 
-func buildSSHProvisionArgs(projectDir string, ip string, connectionConfig ubuntuAnsibleConnectionConfig, check bool) ([]string, func() error, error) {
+func buildSSHProvisionArgs(projectDir string, ip string, connectionConfig ubuntuAnsibleConnectionConfig, options ProvisionOptions) ([]string, func() error, error) {
 	extraVars, err := json.Marshal(map[string]string{
 		"ansible_user":            connectionConfig.User,
 		"ansible_password":        connectionConfig.Password,
@@ -956,10 +1049,24 @@ func buildSSHProvisionArgs(projectDir string, ip string, connectionConfig ubuntu
 		return nil, nil, err
 	}
 
-	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, check)
+	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, options)
 }
 
-func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, check bool) ([]string, func() error, error) {
+func buildLocalProvisionArgs(hostOs alchemy_build.HostOsType, options ProvisionOptions) ([]string, error) {
+	defaultInventoryPath, defaultInventoryTarget, err := localProvisionInventory(hostOs)
+	if err != nil {
+		return nil, err
+	}
+
+	inventoryPath, inventoryTarget := resolveStaticInventoryPathAndTarget(defaultInventoryPath, defaultInventoryTarget, options)
+
+	return buildStaticInventoryProvisionArgs(inventoryPath, inventoryTarget, options)
+}
+
+func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, options ProvisionOptions) ([]string, func() error, error) {
+	if err := ValidateProvisionVerbosity(options.Verbosity); err != nil {
+		return nil, nil, err
+	}
 
 	extraVarsFile, err := os.CreateTemp(projectDir, ".ansible-extra-vars-*.json")
 	if err != nil {
@@ -985,20 +1092,126 @@ func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, c
 	}
 
 	args := []string{
-		"./playbooks/setup.yml",
+		resolveProvisionPlaybookPath(options),
 		"-i",
 		ip + ",",
 		"-l",
 		ip,
 		"--extra-vars",
 		"@" + filepath.Base(extraVarsFilePath),
-		"-vvv",
 	}
-	if check {
-		args = append(args, "--check")
+
+	args, err = appendProvisionCommandOptions(args, options)
+	if err != nil {
+		_ = cleanup()
+		return nil, nil, err
 	}
 
 	return args, cleanup, nil
+}
+
+func buildStaticInventoryProvisionArgsWithExtraVars(projectDir string, inventoryPath string, inventoryTarget string, extraVars []byte, options ProvisionOptions) ([]string, func() error, error) {
+	if err := ValidateProvisionVerbosity(options.Verbosity); err != nil {
+		return nil, nil, err
+	}
+
+	extraVarsFile, err := os.CreateTemp(projectDir, ".ansible-extra-vars-*.json")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create ansible extra-vars temp file: %w", err)
+	}
+	extraVarsFilePath := extraVarsFile.Name()
+	if _, err := extraVarsFile.Write(extraVars); err != nil {
+		_ = extraVarsFile.Close()
+		_ = os.Remove(extraVarsFilePath)
+		return nil, nil, fmt.Errorf("failed to write ansible extra-vars temp file: %w", err)
+	}
+	if err := extraVarsFile.Close(); err != nil {
+		_ = os.Remove(extraVarsFilePath)
+		return nil, nil, fmt.Errorf("failed to close ansible extra-vars temp file: %w", err)
+	}
+
+	cleanup := func() error {
+		err := os.Remove(extraVarsFilePath)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+
+	args := []string{
+		resolveProvisionPlaybookPath(options),
+		"-i",
+		inventoryPath,
+	}
+	if inventoryTarget != "" {
+		args = append(args, "-l", inventoryTarget)
+	}
+	args = append(args, "--extra-vars", "@"+filepath.Base(extraVarsFilePath))
+
+	args, err = appendProvisionCommandOptions(args, options)
+	if err != nil {
+		_ = cleanup()
+		return nil, nil, err
+	}
+
+	return args, cleanup, nil
+}
+
+func buildStaticInventoryProvisionArgs(inventoryPath string, inventoryTarget string, options ProvisionOptions) ([]string, error) {
+	args := []string{
+		resolveProvisionPlaybookPath(options),
+		"-i",
+		inventoryPath,
+	}
+	if inventoryTarget != "" {
+		args = append(args, "-l", inventoryTarget)
+	}
+
+	return appendProvisionCommandOptions(args, options)
+}
+
+func appendProvisionCommandOptions(args []string, options ProvisionOptions) ([]string, error) {
+	if err := ValidateProvisionVerbosity(options.Verbosity); err != nil {
+		return nil, err
+	}
+	if options.Verbosity > 0 {
+		args = append(args, "-"+strings.Repeat("v", options.Verbosity))
+	}
+	if options.Check {
+		args = append(args, "--check")
+	}
+	if len(options.ExtraArgs) > 0 {
+		args = append(args, options.ExtraArgs...)
+	}
+
+	return args, nil
+}
+
+func resolveStaticInventoryPathAndTarget(defaultInventoryPath string, defaultInventoryTarget string, options ProvisionOptions) (string, string) {
+	if inventoryPath := strings.TrimSpace(options.InventoryPath); inventoryPath != "" {
+		return inventoryPath, ""
+	}
+
+	return defaultInventoryPath, defaultInventoryTarget
+}
+
+func resolveProvisionPlaybookPath(options ProvisionOptions) string {
+	if playbookPath := strings.TrimSpace(options.PlaybookPath); playbookPath != "" {
+		return playbookPath
+	}
+
+	return defaultProvisionPlaybook
+}
+
+func localProvisionInventory(hostOs alchemy_build.HostOsType) (string, string, error) {
+	switch hostOs {
+	case alchemy_build.HostOsWindows:
+		return localWindowsWinRMInventoryPath, localWindowsWinRMInventoryTarget, nil
+	case alchemy_build.HostOsDarwin, alchemy_build.HostOsLinux:
+		return localUnixInventoryPath, localUnixInventoryTarget, nil
+	default:
+		return "", "", fmt.Errorf("local provision is not implemented for host OS %s", hostOs)
+	}
 }
 
 func loadWindowsHypervAnsibleConnectionConfig(projectDir string) (windowsAnsibleConnectionConfig, error) {
@@ -1085,7 +1298,7 @@ func loadUbuntuAnsibleConnectionConfig(projectDir string, envVars ubuntuAnsibleC
 		return ubuntuAnsibleConnectionConfig{}, err
 	}
 
-	password := defaultIfEmpty(resolveEnvValue(envVars.Password, valuesFromFile), "P@ssw0rd!")
+	password := defaultIfEmpty(resolveEnvValue(envVars.Password, valuesFromFile), defaultUbuntuGuestPassword)
 	connectionConfig := ubuntuAnsibleConnectionConfig{
 		User:           defaultIfEmpty(resolveEnvValue(envVars.User, valuesFromFile), "packer"),
 		Password:       password,
@@ -1111,12 +1324,12 @@ func loadMacOSTartAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConne
 
 	password := defaultIfEmpty(
 		resolveEnvValue(tartMacOSAnsiblePasswordEnvVar, valuesFromFile),
-		"admin", // Default Tart guest credential; override in .env via TART_MACOS_ANSIBLE_PASSWORD as documented in README.md "Local tests for macOS (on macos)".
+		defaultTartGuestPassword,
 	)
 	connectionConfig := ubuntuAnsibleConnectionConfig{
 		User: defaultIfEmpty(
 			resolveEnvValue(tartMacOSAnsibleUserEnvVar, valuesFromFile),
-			"admin", // Default Tart guest credential; override in .env via TART_MACOS_ANSIBLE_USER as documented in README.md "Local tests for macOS (on macos)".
+			defaultTartGuestUser,
 		),
 		Password:       password,
 		BecomePassword: defaultIfEmpty(resolveEnvValue(tartMacOSAnsibleBecomePasswordEnvVar, valuesFromFile), password),

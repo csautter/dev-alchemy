@@ -1,10 +1,15 @@
 package cmd
 
 import (
+	"bytes"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
+	alchemy_provision "github.com/csautter/dev-alchemy/pkg/provision"
+	"github.com/spf13/cobra"
 )
 
 func TestRunProvisionReturnsErrorForUnsupportedConfig(t *testing.T) {
@@ -15,7 +20,7 @@ func TestRunProvisionReturnsErrorForUnsupportedConfig(t *testing.T) {
 		VirtualizationEngine: alchemy_build.VirtualizationEngineVirtualBox,
 	}
 
-	err := runProvision(vm, false)
+	err := runProvision(vm, alchemy_provision.ProvisionOptions{Verbosity: 3})
 	if err == nil {
 		t.Fatal("expected runProvision to return an error for unsupported vm configuration")
 	}
@@ -28,10 +33,12 @@ func TestProvisionCommandRejectsAllTarget(t *testing.T) {
 	previousArch := arch
 	previousOsType := osType
 	previousCheck := check
+	previousPlaybookPath := playbookPath
 	t.Cleanup(func() {
 		arch = previousArch
 		osType = previousOsType
 		check = previousCheck
+		playbookPath = previousPlaybookPath
 	})
 
 	arch = "amd64"
@@ -44,6 +51,168 @@ func TestProvisionCommandRejectsAllTarget(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "\"all\" is not supported for provision") {
 		t.Fatalf("expected explicit unsupported-all error, got: %v", err)
+	}
+}
+
+func TestProvisionCommandRejectsArchAndTypeForLocalTarget(t *testing.T) {
+	previousArch := arch
+	previousOsType := osType
+	previousCheck := check
+	previousPlaybookPath := playbookPath
+	t.Cleanup(func() {
+		arch = previousArch
+		osType = previousOsType
+		check = previousCheck
+		playbookPath = previousPlaybookPath
+	})
+
+	arch = "arm64"
+	osType = "server"
+	check = false
+
+	if err := provisionCmd.Flags().Set("arch", "arm64"); err != nil {
+		t.Fatalf("failed to mark arch flag as changed: %v", err)
+	}
+	if err := provisionCmd.Flags().Set("type", "server"); err != nil {
+		t.Fatalf("failed to mark type flag as changed: %v", err)
+	}
+	t.Cleanup(func() {
+		provisionCmd.Flags().Lookup("arch").Changed = false
+		provisionCmd.Flags().Lookup("type").Changed = false
+	})
+
+	err := provisionCmd.RunE(provisionCmd, []string{"local"})
+	if err == nil {
+		t.Fatal("expected an error when local target is combined with arch/type flags")
+	}
+	if !strings.Contains(err.Error(), "does not accept --arch or --type") {
+		t.Fatalf("expected explicit local flag validation error, got: %v", err)
+	}
+}
+
+func TestProvisionCommandRejectsVerbosityOutsideSupportedRange(t *testing.T) {
+	previousAnsibleVerbosity := ansibleVerbosity
+	t.Cleanup(func() {
+		ansibleVerbosity = previousAnsibleVerbosity
+	})
+
+	ansibleVerbosity = 5
+
+	err := provisionCmd.RunE(provisionCmd, []string{"local"})
+	if err == nil {
+		t.Fatal("expected an error when verbosity exceeds the documented range")
+	}
+	if !strings.Contains(err.Error(), "ansible verbosity must be between 0 and 4") {
+		t.Fatalf("expected explicit verbosity validation error, got: %v", err)
+	}
+}
+
+func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
+	previousArch := arch
+	previousOsType := osType
+	previousCheck := check
+	previousPlaybookPath := playbookPath
+	previousInventoryPath := inventoryPath
+	previousAnsibleVerbosity := ansibleVerbosity
+	previousCurrentHostLocalProvisionVirtualMachineFunc := currentHostLocalProvisionVirtualMachineFunc
+	previousRunProvisionFunc := runProvisionFunc
+	previousRootOut := rootCmd.OutOrStdout()
+	previousRootErr := rootCmd.ErrOrStderr()
+	t.Cleanup(func() {
+		arch = previousArch
+		osType = previousOsType
+		check = previousCheck
+		playbookPath = previousPlaybookPath
+		inventoryPath = previousInventoryPath
+		ansibleVerbosity = previousAnsibleVerbosity
+		currentHostLocalProvisionVirtualMachineFunc = previousCurrentHostLocalProvisionVirtualMachineFunc
+		runProvisionFunc = previousRunProvisionFunc
+		provisionCmd.SetArgs(nil)
+		rootCmd.SetArgs(nil)
+		rootCmd.SetOut(previousRootOut)
+		rootCmd.SetErr(previousRootErr)
+		for _, flagName := range []string{"arch", "type", "check", "playbook", "inventory-path", "verbosity"} {
+			provisionCmd.Flags().Lookup(flagName).Changed = false
+		}
+	})
+
+	currentHostLocalProvisionVirtualMachineFunc = func() (alchemy_build.VirtualMachineConfig, bool) {
+		return alchemy_build.VirtualMachineConfig{
+			OS:                   "local",
+			Arch:                 "-",
+			HostOs:               alchemy_build.HostOsLinux,
+			VirtualizationEngine: localProvisionVirtualizationEngine,
+		}, true
+	}
+
+	var capturedOptions alchemy_provision.ProvisionOptions
+	runProvisionFunc = func(vm alchemy_build.VirtualMachineConfig, options alchemy_provision.ProvisionOptions) error {
+		capturedOptions = options
+		return nil
+	}
+
+	rootCmd.SetArgs([]string{
+		"provision",
+		"local",
+		"--check",
+		"--playbook", "./playbooks/bootstrap.yml",
+		"--inventory-path", "./inventory/custom.yml",
+		"--verbosity", "1",
+		"--",
+		"--diff",
+		"--tags", "java",
+	})
+
+	rootCmd.SetOut(io.Discard)
+	rootCmd.SetErr(io.Discard)
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("expected provision command to execute successfully, got: %v", err)
+	}
+	if !capturedOptions.Check {
+		t.Fatal("expected --check to propagate into provision options")
+	}
+	if capturedOptions.Verbosity != 1 {
+		t.Fatalf("expected verbosity 1, got %d", capturedOptions.Verbosity)
+	}
+	if capturedOptions.PlaybookPath != "./playbooks/bootstrap.yml" {
+		t.Fatalf("expected custom playbook path, got %q", capturedOptions.PlaybookPath)
+	}
+	if capturedOptions.InventoryPath != "./inventory/custom.yml" {
+		t.Fatalf("expected custom inventory path, got %q", capturedOptions.InventoryPath)
+	}
+	if got := strings.Join(capturedOptions.ExtraArgs, " "); got != "--diff --tags java" {
+		t.Fatalf("expected ansible args after -- to be preserved, got %q", got)
+	}
+}
+
+func TestProvisionCommandRejectsInventoryPathForVMTargets(t *testing.T) {
+	previousArch := arch
+	previousOsType := osType
+	previousCheck := check
+	previousPlaybookPath := playbookPath
+	previousInventoryPath := inventoryPath
+	t.Cleanup(func() {
+		arch = previousArch
+		osType = previousOsType
+		check = previousCheck
+		playbookPath = previousPlaybookPath
+		inventoryPath = previousInventoryPath
+		provisionCmd.Flags().Lookup("inventory-path").Changed = false
+	})
+
+	arch = "amd64"
+	osType = "server"
+	check = false
+	inventoryPath = "./inventory/custom.yml"
+	provisionCmd.Flags().Lookup("inventory-path").Changed = true
+
+	err := provisionCmd.RunE(provisionCmd, []string{"windows11"})
+	if err == nil {
+		t.Fatal("expected VM provision to reject --inventory-path")
+	}
+	if !strings.Contains(err.Error(), "--inventory-path is only supported for local provisioning") {
+		t.Fatalf("expected explicit inventory-path validation error, got: %v", err)
 	}
 }
 
@@ -146,9 +315,221 @@ func TestIsProvisionSupported(t *testing.T) {
 }
 
 func TestAvailableProvisionVirtualMachinesOnlyReturnsSupportedConfigs(t *testing.T) {
+	var foundLocal bool
 	for _, vm := range availableProvisionVirtualMachines() {
+		if vm.OS == "local" {
+			foundLocal = true
+			continue
+		}
 		if !isProvisionSupported(vm) {
 			t.Fatalf("expected only supported provision configs, got engine %q", vm.VirtualizationEngine)
 		}
+	}
+	if !foundLocal {
+		t.Fatal("expected local provision target to be included for the current host")
+	}
+}
+
+func TestCurrentHostLocalProvisionVirtualMachineUsesLocalEngine(t *testing.T) {
+	vm, ok := currentHostLocalProvisionVirtualMachine()
+	if !ok {
+		t.Fatal("expected current host local provision target to be available")
+	}
+	if vm.OS != "local" {
+		t.Fatalf("expected local provision OS, got %q", vm.OS)
+	}
+	if vm.VirtualizationEngine != localProvisionVirtualizationEngine {
+		t.Fatalf("expected local virtualization engine, got %q", vm.VirtualizationEngine)
+	}
+	if vm.Arch != "-" {
+		t.Fatalf("expected local provision arch placeholder, got %q", vm.Arch)
+	}
+}
+
+func TestProvisionStatusMarksLocalNonWindowsHostsUnstable(t *testing.T) {
+	if got := provisionStatus(alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	}); got != "stable" {
+		t.Fatalf("expected windows local provision to be stable, got %q", got)
+	}
+
+	if got := provisionStatus(alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsDarwin,
+	}); got != "unstable" {
+		t.Fatalf("expected darwin local provision to be unstable, got %q", got)
+	}
+
+	if got := provisionStatus(alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsLinux,
+	}); got != "unstable" {
+		t.Fatalf("expected linux local provision to be unstable, got %q", got)
+	}
+}
+
+func TestConfirmProvisionIntentRequiresYesForNonInteractiveWindowsLocal(t *testing.T) {
+	previousAssumeYes := assumeYes
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+	})
+	assumeYes = false
+
+	inputFile, err := os.CreateTemp(t.TempDir(), "confirmation-input-*.txt")
+	if err != nil {
+		t.Fatalf("failed to create temp input file: %v", err)
+	}
+	defer inputFile.Close()
+
+	command := &cobra.Command{}
+	command.SetIn(inputFile)
+	command.SetOut(&bytes.Buffer{})
+
+	err = confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	})
+	if err == nil {
+		t.Fatal("expected non-interactive windows local provisioning to require --yes")
+	}
+	if !strings.Contains(err.Error(), "Re-run with --yes") {
+		t.Fatalf("expected --yes guidance in error, got: %v", err)
+	}
+}
+
+func TestConfirmProvisionIntentPromptsForInteractiveWindowsLocal(t *testing.T) {
+	previousAssumeYes := assumeYes
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+	})
+	assumeYes = false
+
+	var output bytes.Buffer
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBufferString("yes\n"))
+	command.SetOut(&output)
+
+	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	}); err != nil {
+		t.Fatalf("expected interactive confirmation to succeed, got: %v", err)
+	}
+	if !strings.Contains(output.String(), "Continue? [y/N]:") {
+		t.Fatalf("expected prompt output, got %q", output.String())
+	}
+}
+
+func TestConfirmProvisionIntentSkipsPromptWhenYesFlagIsSet(t *testing.T) {
+	previousAssumeYes := assumeYes
+	previousPrompt := promptForConfirmationFunc
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+		promptForConfirmationFunc = previousPrompt
+	})
+	assumeYes = true
+
+	promptForConfirmationFunc = func(input io.Reader, output io.Writer, prompt string) (bool, error) {
+		t.Fatal("did not expect confirmation prompt when --yes is set")
+		return false, nil
+	}
+
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBufferString(""))
+	command.SetOut(&bytes.Buffer{})
+
+	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	}); err != nil {
+		t.Fatalf("expected --yes to skip confirmation, got: %v", err)
+	}
+}
+
+func TestConfirmProvisionIntentMentionsForceWinRMUninstall(t *testing.T) {
+	previousAssumeYes := assumeYes
+	previousForceWinRMUninstall := forceWinRMUninstall
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+		forceWinRMUninstall = previousForceWinRMUninstall
+	})
+	assumeYes = false
+	forceWinRMUninstall = true
+
+	var output bytes.Buffer
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBufferString("yes\n"))
+	command.SetOut(&output)
+
+	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	}); err != nil {
+		t.Fatalf("expected interactive confirmation to succeed, got: %v", err)
+	}
+	if !strings.Contains(output.String(), "--force-winrm-uninstall") {
+		t.Fatalf("expected prompt to mention force winrm uninstall, got %q", output.String())
+	}
+}
+
+func TestRunProvisionConfiguresForceWinRMUninstall(t *testing.T) {
+	previousForceWinRMUninstall := forceWinRMUninstall
+	previousConfigure := configureLocalWindowsProvisionFunc
+	previousRunProvisionFunc := runProvisionFunc
+	t.Cleanup(func() {
+		forceWinRMUninstall = previousForceWinRMUninstall
+		configureLocalWindowsProvisionFunc = previousConfigure
+		runProvisionFunc = previousRunProvisionFunc
+	})
+
+	forceWinRMUninstall = true
+	var configured bool
+	var restored bool
+	configureLocalWindowsProvisionFunc = func(force bool) func() {
+		configured = force
+		return func() {
+			restored = true
+		}
+	}
+	runProvisionFunc = func(vm alchemy_build.VirtualMachineConfig, options alchemy_provision.ProvisionOptions) error {
+		return nil
+	}
+
+	if err := runProvision(alchemy_build.VirtualMachineConfig{OS: "local", HostOs: alchemy_build.HostOsWindows}, alchemy_provision.ProvisionOptions{Check: true, Verbosity: 3}); err != nil {
+		t.Fatalf("expected runProvision to succeed, got: %v", err)
+	}
+	if !configured {
+		t.Fatal("expected runProvision to configure force winrm uninstall")
+	}
+	if !restored {
+		t.Fatal("expected runProvision to restore local windows provision configuration")
+	}
+}
+
+func TestProvisionCommandRejectsForceWinRMUninstallForNonWindowsLocal(t *testing.T) {
+	previousForceWinRMUninstall := forceWinRMUninstall
+	previousCurrentHostLocalProvisionVirtualMachineFunc := currentHostLocalProvisionVirtualMachineFunc
+	t.Cleanup(func() {
+		forceWinRMUninstall = previousForceWinRMUninstall
+		currentHostLocalProvisionVirtualMachineFunc = previousCurrentHostLocalProvisionVirtualMachineFunc
+	})
+
+	forceWinRMUninstall = true
+	currentHostLocalProvisionVirtualMachineFunc = func() (alchemy_build.VirtualMachineConfig, bool) {
+		return alchemy_build.VirtualMachineConfig{
+			OS:                   "local",
+			Arch:                 "-",
+			HostOs:               alchemy_build.HostOsLinux,
+			VirtualizationEngine: localProvisionVirtualizationEngine,
+		}, true
+	}
+
+	err := provisionCmd.RunE(provisionCmd, []string{"local"})
+	if err == nil {
+		t.Fatal("expected non-windows local run with force winrm uninstall to fail")
+	}
+	if !strings.Contains(err.Error(), "--force-winrm-uninstall is only supported") {
+		t.Fatalf("expected explicit force-winrm-uninstall validation error, got: %v", err)
 	}
 }

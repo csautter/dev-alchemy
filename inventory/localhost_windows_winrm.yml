@@ -1,10 +1,9 @@
 all:
   hosts:
     windows_host:
-      ansible_host: localhost
-      ansible_user: ansible
-      # passwords should not be hardcoded, this is just for testing
-      ansible_password: Secret123!@#
-      ansible_connection: winrm
-      ansible_winrm_transport: basic
-      ansible_port: 5985
+      ansible_host: 127.0.0.1
+      # `alchemy provision local` injects temporary WinRM credentials and
+      # transport settings at runtime. Direct ansible-playbook use should pass
+      # the required secure WinRM variables explicitly. See
+      # docs/windows-ansible-access.md for the manual HTTPS setup flow, or use
+      # `alchemy provision local` for localhost runs.

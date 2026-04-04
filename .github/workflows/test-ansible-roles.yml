@@ -52,17 +52,40 @@ jobs:
           python-version: "3.11"
         if: runner.os != 'Windows'
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+        if: runner.os == 'Windows'
+
       - name: Windows install cygwin
         uses: cygwin/cygwin-install-action@v6
         if: runner.os == 'Windows'
         with:
           packages: python39,python39-pip,python39-cryptography,openssh,git,make,gcc-core,gcc-g++,libffi-devel,sshpass
 
+      - name: Windows detect cygwin bash
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $candidates = @(
+            'C:\tools\cygwin\bin\bash.exe',
+            'C:\cygwin64\bin\bash.exe',
+            'C:\cygwin\bin\bash.exe',
+            'D:\cygwin\bin\bash.exe'
+          )
+          $cygwinBashPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $cygwinBashPath) {
+            throw "Unable to find cygwin bash.exe. Checked: $($candidates -join ', ')"
+          }
+          "CYGWIN_BASH_PATH=$cygwinBashPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Windows install Ansible
         if: runner.os == 'Windows'
+        shell: powershell
         run: |
-          echo "current dir: $(pwd)"
-          D:\cygwin\bin\bash.exe -l -c "python -m pip install ansible pywinrm"
+          & $env:CYGWIN_BASH_PATH -l -c "python -m pip install ansible pywinrm"
 
       - name: Install Ansible
         run: |
@@ -118,23 +141,46 @@ jobs:
           ANSIBLE_FORCE_COLOR: "true"
         if: runner.os != 'Windows'
 
-      - name: Run all Ansible roles on Windows (with retries)
-        if: runner.os == 'Windows'
+      - name: Run all Ansible roles on Windows over SSH (with retries)
+        if: runner.os == 'Windows' && matrix.ansible_protocol == 'ssh'
         shell: powershell
         env:
           ANSIBLE_FORCE_COLOR: "true"
         run: |
           $maxRetries = 6
-          $count = 0
-          do {
-            $count++
-            try {
-              C:\cygwin\bin\bash.exe -l -c "cd /cygdrive/d/a/dev-alchemy/dev-alchemy && ansible-playbook -i inventory/localhost_windows_${{ matrix.ansible_protocol }}.yml -l windows_host playbooks/setup.yml"
+          $success = $false
+          $workspace = $env:GITHUB_WORKSPACE
+          $drive = $workspace.Substring(0, 1).ToLowerInvariant()
+          $rest = $workspace.Substring(2).Replace('\', '/')
+          $cygwinWorkspace = "/cygdrive/$drive$rest"
+
+          for ($count = 1; $count -le $maxRetries -and -not $success; $count++) {
+            & $env:CYGWIN_BASH_PATH -l -c "cd '$cygwinWorkspace' && ansible-playbook -i inventory/localhost_windows_ssh.yml -l windows_host playbooks/setup.yml"
+            if ($LASTEXITCODE -eq 0) {
               $success = $true
-            } catch {
-              $success = $false
-              Write-Host "Attempt $count failed."
+            } else {
+              Write-Host "Attempt $count failed with exit code $LASTEXITCODE."
               if ($count -lt $maxRetries) { Start-Sleep -Seconds 10 }
             }
-          } until ($success -or $count -ge $maxRetries)
+          }
+          if (-not $success) { throw "All $maxRetries attempts failed." }
+
+      - name: Run all Ansible roles on Windows via local provision wrapper (with retries)
+        if: runner.os == 'Windows' && matrix.ansible_protocol == 'winrm'
+        shell: powershell
+        env:
+          ANSIBLE_FORCE_COLOR: "true"
+        run: |
+          $maxRetries = 6
+          $success = $false
+
+          for ($count = 1; $count -le $maxRetries -and -not $success; $count++) {
+            go run cmd/main.go provision local --yes
+            if ($LASTEXITCODE -eq 0) {
+              $success = $true
+            } else {
+              Write-Host "Attempt $count failed with exit code $LASTEXITCODE."
+              if ($count -lt $maxRetries) { Start-Sleep -Seconds 10 }
+            }
+          }
           if (-not $success) { throw "All $maxRetries attempts failed." }

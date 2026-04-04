@@ -75,6 +75,34 @@ Dev Alchemy follows a few simple ideas:
 That makes it practical both for daily developer use and for testing changes in
 VMs before applying them to real machines.
 
+You can also use the built-in wrapper for host-local provisioning:
+
+```bash
+alchemy provision local --check
+alchemy provision local --playbook ./playbooks/bootstrap.yml
+# pass through extra ansible-playbook flags after `--`
+alchemy provision local -- --diff --tags java
+alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
+alchemy provision local --check --yes
+alchemy provision local --check --yes --force-winrm-uninstall
+alchemy provision local
+```
+
+On Windows this uses the documented localhost WinRM inventory. On macOS and
+Linux it uses the standard localhost inventory. On Windows the wrapper
+creates a temporary administrator account with a random password, configures a
+temporary loopback-only WinRM HTTPS listener for the run, and then disables the
+temporary account again during cleanup. Because those are significant host
+changes, the Windows local flow asks for confirmation by default; use `--yes`
+to skip those CLI confirmation prompts. On Windows, local provisioning is only
+fully non-interactive when you start `alchemy` from an already elevated shell.
+If the current shell is not elevated, the privileged bootstrap and cleanup
+steps still trigger a UAC prompt before they run. The bootstrap/cleanup logs
+are streamed back into the main terminal. Use `--force-winrm-uninstall` to
+force cleanup to disable WinRM and remove transient remoting setup after the
+run. The macOS/Linux local target is currently marked unstable until it has
+been validated end-to-end.
+
 ## 🚀 Getting Started
 
 ### 1. Choose how you want to run it
@@ -182,7 +210,17 @@ There are two common entry paths.
 
 #### A. Configure the current machine directly
 
-For macOS or Linux localhost runs from the repository root:
+Use the built-in wrapper first when you want the shared command surface:
+
+```bash
+alchemy provision local --check
+alchemy provision local --playbook ./playbooks/bootstrap.yml
+alchemy provision local -- --diff
+alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
+alchemy provision local
+```
+
+For the underlying direct `ansible-playbook` commands from the repository root:
 
 ```bash
 ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml --check

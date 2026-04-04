@@ -1,8 +1,10 @@
 package provision
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -78,7 +80,7 @@ func TestBuildWindowsProvisionArgs(t *testing.T) {
 		Port:           "5985",
 	}
 
-	args, cleanup, err := buildWindowsProvisionArgs(projectDir, "172.25.125.159", config, true)
+	args, cleanup, err := buildWindowsProvisionArgs(projectDir, "172.25.125.159", config, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
 	if err != nil {
 		t.Fatalf("buildWindowsProvisionArgs returned error: %v", err)
 	}
@@ -147,6 +149,516 @@ func TestBuildWindowsProvisionArgs(t *testing.T) {
 	}
 	if _, statErr := os.Stat(extraVarsFilePath); !os.IsNotExist(statErr) {
 		t.Fatalf("expected extra vars temp file to be deleted, stat error: %v", statErr)
+	}
+}
+
+func TestBuildWindowsStaticInventoryProvisionArgsIncludesSecureWinRMSettings(t *testing.T) {
+	projectDir := t.TempDir()
+	config := windowsAnsibleConnectionConfig{
+		User:                 localWindowsProvisionUserName,
+		Password:             "N3wP@ssw0rd!",
+		Connection:           "winrm",
+		WinrmTransport:       "basic",
+		Port:                 localWindowsWinRMHTTPSPort,
+		WinrmScheme:          "https",
+		ServerCertValidation: "ignore",
+	}
+
+	args, cleanup, err := buildWindowsStaticInventoryProvisionArgs(projectDir, localWindowsWinRMInventoryPath, localWindowsWinRMInventoryTarget, config, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
+	if err != nil {
+		t.Fatalf("buildWindowsStaticInventoryProvisionArgs returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			t.Fatalf("failed to clean up extra vars file: %v", cleanupErr)
+		}
+	})
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost_windows_winrm.yml") {
+		t.Fatalf("expected windows localhost inventory, args: %v", args)
+	}
+	if got := strings.Join(args, " "); !strings.Contains(got, "-l windows_host") {
+		t.Fatalf("expected windows localhost limit, args: %v", args)
+	}
+	if args[len(args)-1] != "--check" {
+		t.Fatalf("expected --check to be passed through, args: %v", args)
+	}
+
+	extraVarsIndex := -1
+	for index, arg := range args {
+		if arg == "--extra-vars" {
+			extraVarsIndex = index + 1
+			break
+		}
+	}
+	if extraVarsIndex <= 0 || extraVarsIndex >= len(args) {
+		t.Fatalf("expected --extra-vars with @temp file reference, args: %v", args)
+	}
+
+	extraVarsFilePath := filepath.Join(projectDir, strings.TrimPrefix(args[extraVarsIndex], "@"))
+	content, readErr := os.ReadFile(extraVarsFilePath)
+	if readErr != nil {
+		t.Fatalf("failed to read extra vars file %q: %v", extraVarsFilePath, readErr)
+	}
+
+	extraVars := map[string]string{}
+	if err := json.Unmarshal(content, &extraVars); err != nil {
+		t.Fatalf("expected extra vars file to contain valid JSON, got error: %v", err)
+	}
+
+	for key, expected := range map[string]string{
+		"ansible_user":                         localWindowsProvisionUserName,
+		"ansible_password":                     "N3wP@ssw0rd!",
+		"ansible_connection":                   "winrm",
+		"ansible_winrm_transport":              "basic",
+		"ansible_port":                         localWindowsWinRMHTTPSPort,
+		"ansible_winrm_scheme":                 "https",
+		"ansible_winrm_server_cert_validation": "ignore",
+	} {
+		if extraVars[key] != expected {
+			t.Fatalf("expected %s=%q in extra vars, got: %v", key, expected, extraVars)
+		}
+	}
+}
+
+func TestGenerateSecureLocalWindowsProvisionPasswordMeetsComplexityRequirements(t *testing.T) {
+	password, err := generateSecureLocalWindowsProvisionPassword()
+	if err != nil {
+		t.Fatalf("generateSecureLocalWindowsProvisionPassword returned error: %v", err)
+	}
+	if len(password) != 24 {
+		t.Fatalf("expected 24-character password, got %d", len(password))
+	}
+
+	var hasLower bool
+	var hasUpper bool
+	var hasDigit bool
+	var hasSpecial bool
+	for _, char := range password {
+		switch {
+		case char >= 'a' && char <= 'z':
+			hasLower = true
+		case char >= 'A' && char <= 'Z':
+			hasUpper = true
+		case char >= '0' && char <= '9':
+			hasDigit = true
+		default:
+			hasSpecial = true
+		}
+	}
+
+	if !hasLower || !hasUpper || !hasDigit || !hasSpecial {
+		t.Fatalf("expected password to include lower, upper, digit, and special characters, got %q", password)
+	}
+}
+
+func TestLocalWindowsProvisionBootstrapPowerShellHandlesMissingWSManPaths(t *testing.T) {
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "function Get-WsmanBoolState") {
+		t.Fatal("expected bootstrap script to tolerate missing WSMan paths")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "function Get-WinRMServiceState") {
+		t.Fatal("expected bootstrap script to capture the original WinRM service state")
+	}
+	if strings.Contains(localWindowsProvisionBootstrapPowerShell, "Enable-PSRemoting") {
+		t.Fatal("expected bootstrap script to avoid Enable-PSRemoting so it does not create an HTTP listener")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Assert-WsmanPathExists 'WSMan:\\localhost\\Service\\Auth\\Basic'") {
+		t.Fatal("expected bootstrap script to validate WSMan auth path after preparing WinRM")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "BasicAuthPathExisted") {
+		t.Fatal("expected bootstrap state to capture whether WSMan auth already existed")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "WinRMServiceStartMode") {
+		t.Fatal("expected bootstrap state to capture the original WinRM startup mode")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "LocalAccountTokenFilterPolicy") {
+		t.Fatal("expected bootstrap state to capture the LocalAccountTokenFilterPolicy setting")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Dev Alchemy Ansible acct") {
+		t.Fatal("expected bootstrap script to use a Windows-safe local user description")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "S-1-5-32-544") {
+		t.Fatal("expected bootstrap script to resolve the built-in Administrators group by SID")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "-Address IP:127.0.0.1") {
+		t.Fatal("expected bootstrap script to bind the WinRM HTTPS listener to loopback only")
+	}
+	if strings.Contains(localWindowsProvisionBootstrapPowerShell, "-Address *") {
+		t.Fatal("expected bootstrap script to avoid binding the WinRM HTTPS listener to every interface")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS'") {
+		t.Fatal("expected bootstrap script to create a dedicated HTTPS firewall rule")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "-LocalAddress 127.0.0.1 -LocalPort 5986") {
+		t.Fatal("expected bootstrap script to scope the WinRM HTTPS firewall rule to loopback")
+	}
+	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Write-Output 'Local Windows provision bootstrap completed.'") {
+		t.Fatal("expected bootstrap script to emit explicit progress output")
+	}
+}
+
+func TestLocalWindowsProvisionCleanupPowerShellOnlyRestoresExistingWSManPaths(t *testing.T) {
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$state.BasicAuthPathExisted") {
+		t.Fatal("expected cleanup script to restore Basic auth only when the original path existed")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$state.AllowUnencryptedPathExisted") {
+		t.Fatal("expected cleanup script to restore AllowUnencrypted only when the original path existed")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Restore-WinRMServiceState") {
+		t.Fatal("expected cleanup script to restore the original WinRM service state")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$originalListenerKeys") {
+		t.Fatal("expected cleanup script to remove listeners that were added during provisioning")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "function Restore-WinRMServiceState") {
+		t.Fatal("expected cleanup script to define its own WinRM restore helper")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$forceWinRMUninstall") {
+		t.Fatal("expected cleanup script to honor force WinRM uninstall mode")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Restore-RegistryDWORDState") {
+		t.Fatal("expected cleanup script to restore LocalAccountTokenFilterPolicy")
+	}
+	if strings.Contains(localWindowsProvisionCleanupPowerShell, "Disable-PSRemoting") {
+		t.Fatal("expected cleanup script to avoid Disable-PSRemoting and restore secure state directly")
+	}
+	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Write-Output 'Local Windows provision cleanup completed.'") {
+		t.Fatal("expected cleanup script to emit explicit progress output")
+	}
+}
+
+func TestBuildElevatedLocalWindowsPowerShellScriptIncludesEnvAndOutputCapture(t *testing.T) {
+	script := buildElevatedLocalWindowsPowerShellScript("Write-Output 'hello'", []string{
+		"DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER=devalchemy_ansible",
+		"DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD=S3cret!'Value",
+	}, `C:\Temp\alchemy-output.log`)
+
+	if !strings.Contains(script, "$env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER = 'devalchemy_ansible'") {
+		t.Fatal("expected elevated script to populate process environment values")
+	}
+	if !strings.Contains(script, "$env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_PASSWORD = 'S3cret!''Value'") {
+		t.Fatal("expected elevated script to escape embedded single quotes in environment values")
+	}
+	if !strings.Contains(script, "} *>> $outputPath") {
+		t.Fatal("expected elevated script to redirect all PowerShell streams to the output file")
+	}
+	if !strings.Contains(script, "Write-Output 'hello'") {
+		t.Fatal("expected elevated script to include the original bootstrap body")
+	}
+}
+
+func TestBuildLocalWindowsElevationLauncherPowerShellDetectsElevatedShellBeforeRunAs(t *testing.T) {
+	launcher := buildLocalWindowsElevationLauncherPowerShell(`C:\Temp\bootstrap.ps1`, `C:\Temp\bootstrap.log`)
+
+	if !strings.Contains(launcher, "[Security.Principal.WindowsIdentity]::GetCurrent()") {
+		t.Fatal("expected launcher to inspect the current Windows identity")
+	}
+	if !strings.Contains(launcher, "WindowsBuiltInRole]::Administrator") {
+		t.Fatal("expected launcher to check whether the current shell is already elevated")
+	}
+	if !strings.Contains(launcher, "& 'powershell.exe' -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $elevatedScriptPath") {
+		t.Fatal("expected launcher to run the generated script directly when already elevated")
+	}
+	if !strings.Contains(launcher, "Start-Process -FilePath 'powershell.exe'") {
+		t.Fatal("expected launcher to start a new powershell process")
+	}
+	if !strings.Contains(launcher, "-Verb RunAs") {
+		t.Fatal("expected launcher to request UAC elevation with RunAs")
+	}
+	if !strings.Contains(launcher, "-WindowStyle Hidden") {
+		t.Fatal("expected launcher to hide the elevated powershell window")
+	}
+	if !strings.Contains(launcher, `-File "C:\Temp\bootstrap.ps1"`) {
+		t.Fatal("expected launcher to run the generated elevated script file")
+	}
+}
+
+func TestBuildLocalWindowsProvisionScriptEnvIncludesForceFlag(t *testing.T) {
+	restore := SetLocalWindowsForceWinRMUninstall(true)
+	defer restore()
+
+	env := buildLocalWindowsProvisionScriptEnv("state.json", "P@ssw0rd!")
+	got := strings.Join(env, "\n")
+
+	if !strings.Contains(got, localWindowsForceWinRMUninstallEnvVar+"=true") {
+		t.Fatal("expected force winrm uninstall env var to be included")
+	}
+	if !strings.Contains(got, localWindowsProvisionUserEnvVar+"="+localWindowsProvisionUserName) {
+		t.Fatal("expected bootstrap env to include the temporary ansible user")
+	}
+	if !strings.Contains(got, localWindowsProvisionPasswordEnvVar+"=P@ssw0rd!") {
+		t.Fatal("expected bootstrap env to include the generated password")
+	}
+}
+
+func TestDecodeLocalWindowsPowerShellOutputHandlesUTF16LE(t *testing.T) {
+	decoded := decodeLocalWindowsPowerShellOutput([]byte{0xFF, 0xFE, 'O', 0x00, 'K', 0x00})
+	if decoded != "OK" {
+		t.Fatalf("expected UTF-16LE output to decode, got %q", decoded)
+	}
+}
+
+func TestLogLocalWindowsPowerShellOutputChunkLogsCompleteLinesWithPrefix(t *testing.T) {
+	var buffer bytes.Buffer
+	previousOutput := log.Writer()
+	previousFlags := log.Flags()
+	previousPrefix := log.Prefix()
+	log.SetOutput(&buffer)
+	log.SetFlags(0)
+	log.SetPrefix("")
+	t.Cleanup(func() {
+		log.SetOutput(previousOutput)
+		log.SetFlags(previousFlags)
+		log.SetPrefix(previousPrefix)
+	})
+
+	pending := logLocalWindowsPowerShellOutputChunk(localWindowsBootstrapLogPrefix, "first line\r\nsecond", "", false)
+	if pending != "second" {
+		t.Fatalf("expected incomplete line to be buffered, got %q", pending)
+	}
+
+	pending = logLocalWindowsPowerShellOutputChunk(localWindowsBootstrapLogPrefix, " line\n\nthird line", pending, false)
+	if pending != "third line" {
+		t.Fatalf("expected trailing partial line to remain buffered, got %q", pending)
+	}
+
+	pending = logLocalWindowsPowerShellOutputChunk(localWindowsBootstrapLogPrefix, "", pending, true)
+	if pending != "" {
+		t.Fatalf("expected flush to clear the buffered line, got %q", pending)
+	}
+
+	logs := strings.TrimSpace(buffer.String())
+	if !strings.Contains(logs, localWindowsBootstrapLogPrefix+" powershell: first line") {
+		t.Fatalf("expected first log line with prefix, got %q", logs)
+	}
+	if !strings.Contains(logs, localWindowsBootstrapLogPrefix+" powershell: second line") {
+		t.Fatalf("expected second log line with prefix, got %q", logs)
+	}
+	if !strings.Contains(logs, localWindowsBootstrapLogPrefix+" powershell: third line") {
+		t.Fatalf("expected flushed partial line with prefix, got %q", logs)
+	}
+}
+
+func TestRunLocalWindowsProvisionAlwaysCleansUpSecureSession(t *testing.T) {
+	previousSetup := setupLocalWindowsProvisionSessionFunc
+	previousCleanup := cleanupLocalWindowsProvisionSessionFunc
+	previousRunner := runAnsibleProvisionCommandFunc
+	t.Cleanup(func() {
+		setupLocalWindowsProvisionSessionFunc = previousSetup
+		cleanupLocalWindowsProvisionSessionFunc = previousCleanup
+		runAnsibleProvisionCommandFunc = previousRunner
+	})
+
+	projectDir := t.TempDir()
+	statePath := filepath.Join(projectDir, "session-state.json")
+	var cleanedUp bool
+
+	setupLocalWindowsProvisionSessionFunc = func(_ string) (localWindowsProvisionSession, error) {
+		return localWindowsProvisionSession{
+			ConnectionConfig: windowsAnsibleConnectionConfig{
+				User:                 localWindowsProvisionUserName,
+				Password:             "N3wP@ssw0rd!",
+				Connection:           "winrm",
+				WinrmTransport:       "basic",
+				Port:                 localWindowsWinRMHTTPSPort,
+				WinrmScheme:          "https",
+				ServerCertValidation: "ignore",
+			},
+			StatePath: statePath,
+		}, nil
+	}
+	cleanupLocalWindowsProvisionSessionFunc = func(_ string, session localWindowsProvisionSession) error {
+		if session.StatePath != statePath {
+			t.Fatalf("expected cleanup to receive state path %q, got %q", statePath, session.StatePath)
+		}
+		cleanedUp = true
+		return nil
+	}
+	runAnsibleProvisionCommandFunc = func(_ string, _ []string, _ time.Duration, _ string) error {
+		return errors.New("ansible failed")
+	}
+
+	err := runLocalWindowsProvision(projectDir, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
+	if err == nil {
+		t.Fatal("expected local windows provision to return an ansible error")
+	}
+	if !strings.Contains(err.Error(), "ansible provisioning failed for local host windows") {
+		t.Fatalf("expected wrapped ansible error, got: %v", err)
+	}
+	if !cleanedUp {
+		t.Fatal("expected secure local windows cleanup to run after ansible failure")
+	}
+}
+
+func TestRunLocalWindowsProvisionCleansUpWhenArgumentBuildFails(t *testing.T) {
+	previousSetup := setupLocalWindowsProvisionSessionFunc
+	previousCleanup := cleanupLocalWindowsProvisionSessionFunc
+	t.Cleanup(func() {
+		setupLocalWindowsProvisionSessionFunc = previousSetup
+		cleanupLocalWindowsProvisionSessionFunc = previousCleanup
+	})
+
+	var cleanedUp bool
+	setupLocalWindowsProvisionSessionFunc = func(_ string) (localWindowsProvisionSession, error) {
+		return localWindowsProvisionSession{
+			ConnectionConfig: windowsAnsibleConnectionConfig{
+				User:       localWindowsProvisionUserName,
+				Connection: "winrm",
+			},
+			StatePath: filepath.Join(t.TempDir(), "session-state.json"),
+		}, nil
+	}
+	cleanupLocalWindowsProvisionSessionFunc = func(_ string, _ localWindowsProvisionSession) error {
+		cleanedUp = true
+		return nil
+	}
+
+	err := runLocalWindowsProvision("/definitely/missing/project-dir", ProvisionOptions{Verbosity: defaultAnsibleVerbosity})
+	if err == nil {
+		t.Fatal("expected local windows provision to fail when arg build cannot create temp files")
+	}
+	if !strings.Contains(err.Error(), "failed to build ansible arguments") {
+		t.Fatalf("expected arg-build error, got: %v", err)
+	}
+	if !cleanedUp {
+		t.Fatal("expected secure local windows cleanup to run after arg-build failure")
+	}
+}
+
+func TestBuildLocalProvisionArgsForWindows(t *testing.T) {
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsWindows, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
+	if err != nil {
+		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
+	}
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost_windows_winrm.yml") {
+		t.Fatalf("expected windows localhost winrm inventory, args: %v", args)
+	}
+	if got := strings.Join(args, " "); !strings.Contains(got, "-l windows_host") {
+		t.Fatalf("expected windows localhost limit, args: %v", args)
+	}
+	if args[len(args)-1] != "--check" {
+		t.Fatalf("expected --check to be passed through when requested, args: %v", args)
+	}
+}
+
+func TestBuildLocalProvisionArgsForDarwin(t *testing.T) {
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsDarwin, ProvisionOptions{Verbosity: defaultAnsibleVerbosity})
+	if err != nil {
+		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
+	}
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost.yaml") {
+		t.Fatalf("expected unix localhost inventory, args: %v", args)
+	}
+	if got := strings.Join(args, " "); !strings.Contains(got, "-l localhost") {
+		t.Fatalf("expected localhost limit for darwin, args: %v", args)
+	}
+	if args[len(args)-1] == "--check" {
+		t.Fatalf("did not expect --check when not requested, args: %v", args)
+	}
+}
+
+func TestBuildLocalProvisionArgsForLinux(t *testing.T) {
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsLinux, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
+	if err != nil {
+		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
+	}
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost.yaml") {
+		t.Fatalf("expected unix localhost inventory, args: %v", args)
+	}
+	if got := strings.Join(args, " "); !strings.Contains(got, "-l localhost") {
+		t.Fatalf("expected localhost limit for linux, args: %v", args)
+	}
+	if args[len(args)-1] != "--check" {
+		t.Fatalf("expected --check to be passed through when requested, args: %v", args)
+	}
+}
+
+func TestBuildLocalProvisionArgsReturnsErrorForUnsupportedHost(t *testing.T) {
+	_, err := buildLocalProvisionArgs(alchemy_build.HostOsType("solaris"), ProvisionOptions{Verbosity: defaultAnsibleVerbosity})
+	if err == nil {
+		t.Fatal("expected unsupported host OS to return an error")
+	}
+	if !strings.Contains(err.Error(), "local provision is not implemented") {
+		t.Fatalf("expected unsupported local provision error, got: %v", err)
+	}
+}
+
+func TestBuildLocalProvisionArgsUsesCustomInventoryWithoutDefaultLimit(t *testing.T) {
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsLinux, ProvisionOptions{
+		Verbosity:     1,
+		InventoryPath: "./inventory/custom.yml",
+		ExtraArgs:     []string{"--limit", "workstation", "--diff"},
+	})
+	if err != nil {
+		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
+	}
+
+	got := strings.Join(args, " ")
+	if !strings.Contains(got, "-i ./inventory/custom.yml") {
+		t.Fatalf("expected custom inventory path, args: %v", args)
+	}
+	if strings.Contains(got, "-l localhost") {
+		t.Fatalf("did not expect default localhost limit with custom inventory, args: %v", args)
+	}
+	if !strings.Contains(got, "--limit workstation --diff") {
+		t.Fatalf("expected extra ansible args to be appended, args: %v", args)
+	}
+	if !strings.Contains(got, "-v") || strings.Contains(got, "-vv") {
+		t.Fatalf("expected verbosity level 1 to render as -v, args: %v", args)
+	}
+}
+
+func TestBuildStaticInventoryProvisionArgsAppendsProvisionOptions(t *testing.T) {
+	args, err := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
+		Check:     true,
+		Verbosity: 2,
+		ExtraArgs: []string{"--diff", "--tags", "java"},
+	})
+	if err != nil {
+		t.Fatalf("buildStaticInventoryProvisionArgs returned error: %v", err)
+	}
+
+	got := strings.Join(args, " ")
+	if !strings.Contains(got, "-l localhost") {
+		t.Fatalf("expected inventory limit to be preserved, args: %v", args)
+	}
+	if !strings.Contains(got, "-vv") || strings.Contains(got, "-vvv") {
+		t.Fatalf("expected verbosity level 2 to render as -vv, args: %v", args)
+	}
+	if !strings.Contains(got, "--check --diff --tags java") {
+		t.Fatalf("expected check flag and extra ansible args to be appended, args: %v", args)
+	}
+}
+
+func TestBuildStaticInventoryProvisionArgsUsesCustomPlaybookPath(t *testing.T) {
+	args, err := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
+		PlaybookPath: "./playbooks/bootstrap.yml",
+		Verbosity:    defaultAnsibleVerbosity,
+	})
+	if err != nil {
+		t.Fatalf("buildStaticInventoryProvisionArgs returned error: %v", err)
+	}
+
+	if len(args) == 0 {
+		t.Fatal("expected ansible args to be returned")
+	}
+	if args[0] != "./playbooks/bootstrap.yml" {
+		t.Fatalf("expected custom playbook path as first arg, got %q", args[0])
+	}
+}
+
+func TestBuildStaticInventoryProvisionArgsRejectsVerbosityOutsideSupportedRange(t *testing.T) {
+	_, err := buildStaticInventoryProvisionArgs("./inventory/localhost.yaml", "localhost", ProvisionOptions{
+		Verbosity: maxAnsibleVerbosity + 1,
+	})
+	if err == nil {
+		t.Fatal("expected buildStaticInventoryProvisionArgs to reject unsupported verbosity")
+	}
+	if !strings.Contains(err.Error(), "ansible verbosity must be between 0 and 4") {
+		t.Fatalf("expected explicit verbosity validation error, got: %v", err)
 	}
 }
 
@@ -699,7 +1211,7 @@ func TestBuildSSHProvisionArgs(t *testing.T) {
 		SshRetries:     "3",
 	}
 
-	args, cleanup, err := buildSSHProvisionArgs(projectDir, "172.24.78.254", config, true)
+	args, cleanup, err := buildSSHProvisionArgs(projectDir, "172.24.78.254", config, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
 	if err != nil {
 		t.Fatalf("buildSSHProvisionArgs returned error: %v", err)
 	}
