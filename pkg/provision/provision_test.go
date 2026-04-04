@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -249,6 +250,37 @@ func TestGenerateSecureLocalWindowsProvisionPasswordMeetsComplexityRequirements(
 
 	if !hasLower || !hasUpper || !hasDigit || !hasSpecial {
 		t.Fatalf("expected password to include lower, upper, digit, and special characters, got %q", password)
+	}
+}
+
+func TestWriteSSHBytesEncodesSSHWireStringLength(t *testing.T) {
+	var buffer bytes.Buffer
+	if err := writeSSHBytes(&buffer, []byte("abc")); err != nil {
+		t.Fatalf("writeSSHBytes returned error: %v", err)
+	}
+
+	expected := []byte{0, 0, 0, 3, 'a', 'b', 'c'}
+	if !bytes.Equal(buffer.Bytes(), expected) {
+		t.Fatalf("expected SSH wire encoding %v, got %v", expected, buffer.Bytes())
+	}
+}
+
+func TestSSHWireValueLengthRejectsValuesLargerThanUint32(t *testing.T) {
+	if got, err := sshWireValueLength(7); err != nil || got != 7 {
+		t.Fatalf("expected small length conversion to succeed, got %d, %v", got, err)
+	}
+
+	if strconv.IntSize < 64 {
+		t.Skip("overflow boundary test requires 64-bit ints")
+	}
+
+	maxUint32 := int(^uint32(0))
+	if got, err := sshWireValueLength(maxUint32); err != nil || got != ^uint32(0) {
+		t.Fatalf("expected max uint32 length conversion to succeed, got %d, %v", got, err)
+	}
+
+	if _, err := sshWireValueLength(maxUint32 + 1); err == nil {
+		t.Fatal("expected oversized SSH wire value length to fail")
 	}
 }
 

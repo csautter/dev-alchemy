@@ -376,40 +376,65 @@ func generateSecureLocalWindowsProvisionSSHKeyPair() ([]byte, string, error) {
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	})
 
-	return privateKeyPEM, marshalRSAPublicAuthorizedKey(&privateKey.PublicKey), nil
+	publicAuthorizedKey, err := marshalRSAPublicAuthorizedKey(&privateKey.PublicKey)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return privateKeyPEM, publicAuthorizedKey, nil
 }
 
-func marshalRSAPublicAuthorizedKey(publicKey *rsa.PublicKey) string {
+func marshalRSAPublicAuthorizedKey(publicKey *rsa.PublicKey) (string, error) {
 	var blob bytes.Buffer
-	writeSSHString(&blob, "ssh-rsa")
-	writeSSHMPI(&blob, big.NewInt(int64(publicKey.E)).Bytes())
-	writeSSHMPI(&blob, publicKey.N.Bytes())
+	if err := writeSSHString(&blob, "ssh-rsa"); err != nil {
+		return "", err
+	}
+	if err := writeSSHMPI(&blob, big.NewInt(int64(publicKey.E)).Bytes()); err != nil {
+		return "", err
+	}
+	if err := writeSSHMPI(&blob, publicKey.N.Bytes()); err != nil {
+		return "", err
+	}
 
-	return "ssh-rsa " + base64.StdEncoding.EncodeToString(blob.Bytes())
+	return "ssh-rsa " + base64.StdEncoding.EncodeToString(blob.Bytes()), nil
 }
 
-func writeSSHString(buffer *bytes.Buffer, value string) {
-	writeSSHBytes(buffer, []byte(value))
+func writeSSHString(buffer *bytes.Buffer, value string) error {
+	return writeSSHBytes(buffer, []byte(value))
 }
 
-func writeSSHMPI(buffer *bytes.Buffer, value []byte) {
+func writeSSHMPI(buffer *bytes.Buffer, value []byte) error {
 	trimmed := bytes.TrimLeft(value, "\x00")
 	if len(trimmed) == 0 {
-		writeSSHBytes(buffer, []byte{0})
-		return
+		return writeSSHBytes(buffer, []byte{0})
 	}
 	if trimmed[0]&0x80 != 0 {
 		trimmed = append([]byte{0}, trimmed...)
 	}
 
-	writeSSHBytes(buffer, trimmed)
+	return writeSSHBytes(buffer, trimmed)
 }
 
-func writeSSHBytes(buffer *bytes.Buffer, value []byte) {
+func writeSSHBytes(buffer *bytes.Buffer, value []byte) error {
+	valueLength, err := sshWireValueLength(len(value))
+	if err != nil {
+		return err
+	}
+
 	var lengthBytes [4]byte
-	binary.BigEndian.PutUint32(lengthBytes[:], uint32(len(value)))
+	binary.BigEndian.PutUint32(lengthBytes[:], valueLength)
 	buffer.Write(lengthBytes[:])
 	buffer.Write(value)
+
+	return nil
+}
+
+func sshWireValueLength(length int) (uint32, error) {
+	if int64(length) < 0 || uint64(length) > uint64(^uint32(0)) {
+		return 0, fmt.Errorf("ssh wire value length %d exceeds uint32 maximum", length)
+	}
+
+	return uint32(length), nil
 }
 
 func selectLocalWindowsSSHBootstrapPort(projectDir string) (string, error) {
