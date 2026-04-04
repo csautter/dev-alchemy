@@ -505,6 +505,9 @@ func TestConfirmProvisionIntentMentionsSSHBootstrap(t *testing.T) {
 	if !strings.Contains(output.String(), "OpenSSH Server") {
 		t.Fatalf("expected ssh prompt to mention OpenSSH Server, got %q", output.String())
 	}
+	if !strings.Contains(output.String(), "leave that capability installed") {
+		t.Fatalf("expected ssh prompt to explain that cleanup leaves a newly installed OpenSSH capability in place, got %q", output.String())
+	}
 }
 
 func TestConfirmProvisionIntentMentionsForceSSHUninstall(t *testing.T) {

@@ -65,6 +65,11 @@ alchemy provision local
 
 - Windows uses `inventory/localhost_windows_winrm.yml` by default.
 - Windows can also use `inventory/localhost_windows_ssh.yml` with `--proto ssh`.
+- When Windows local SSH has to install OpenSSH Server, cleanup restores the
+  temporary SSH configuration but leaves the OpenSSH Server capability
+  installed; use the manual rollback steps in
+  [Windows Ansible Access](./windows-ansible-access.md#remove-openssh-server-after-a-wrapper-run)
+  if you need to remove it afterwards.
 - macOS and Linux use `inventory/localhost.yaml`.
 - Use `--playbook` to point provision runs at a different playbook file.
 - Pass additional `ansible-playbook` flags after `--` when needed.

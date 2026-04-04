@@ -99,16 +99,21 @@ WinRM HTTPS listener for the run. The SSH wrapper creates or updates a
 temporary administrator account with a temporary SSH key, enables or installs
 OpenSSH Server when needed, sets the default SSH shell to PowerShell for the
 run, and restores the prior SSH service, firewall, authorized_keys, and shell
-state afterwards. If the `devalchemy_ansible` account already exists, the SSH
-wrapper reuses it as the automation account and rotates its password for the
-run; cleanup does not restore the previous password, so treat that account as
-automation-managed rather than a hand-managed login. Because those are
-significant host changes, the Windows local flow asks for confirmation by
-default; use `--yes` to skip those CLI confirmation prompts. On Windows, local
-provisioning is only fully non-interactive when you start `alchemy` from an
-already elevated shell. If the current shell is not elevated, the privileged
-bootstrap and cleanup steps still trigger a UAC prompt before they run. The
-bootstrap/cleanup logs are streamed back into the main terminal.
+state afterwards. If the wrapper had to install OpenSSH Server for the run,
+cleanup disables `sshd` but leaves the OpenSSH Server capability installed so
+cleanup does not require a reboot. If the `devalchemy_ansible` account already
+exists, the SSH wrapper reuses it as the automation account and rotates its
+password for the run; cleanup does not restore the previous password, so treat
+that account as automation-managed rather than a hand-managed login. Because
+those are significant host changes, the Windows local flow asks for
+confirmation by default; use `--yes` to skip those CLI confirmation prompts.
+On Windows, local provisioning is only fully non-interactive when you start
+`alchemy` from an already elevated shell. If the current shell is not
+elevated, the privileged bootstrap and cleanup steps still trigger a UAC prompt
+before they run. The bootstrap/cleanup logs are streamed back into the main
+terminal. If you need to remove an OpenSSH Server capability that the wrapper
+installed, follow the manual rollback steps in
+[`docs/windows-ansible-access.md`](./docs/windows-ansible-access.md).
 `--force-winrm-uninstall` is only for the default WinRM mode and forces cleanup
 to disable WinRM and remove transient remoting setup after the run. The
 `--force-ssh-uninstall` flag is only for `--proto ssh` and forces cleanup to

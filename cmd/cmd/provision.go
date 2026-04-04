@@ -328,7 +328,7 @@ func confirmProvisionIntent(cmd *cobra.Command, vm alchemy_build.VirtualMachineC
 
 func localWindowsProvisionConfirmationMessage(options alchemy_provision.ProvisionOptions) string {
 	if options.LocalWindowsProtocol == alchemy_provision.LocalWindowsProvisionProtocolSSH {
-		message := "Local Windows provisioning over SSH will temporarily install or reconfigure OpenSSH Server, set the default SSH shell to PowerShell, create or update a temporary local administrator account for Ansible, and authorize a temporary SSH key. If the existing account is reused, its password will be rotated for the run and cleanup will not restore the previous password. Windows will also show a UAC elevation prompt for the setup and cleanup steps."
+		message := "Local Windows provisioning over SSH will temporarily install or reconfigure OpenSSH Server, set the default SSH shell to PowerShell, create or update a temporary local administrator account for Ansible, and authorize a temporary SSH key. Cleanup restores the prior SSH service, firewall, authorized_keys, and shell state, but if this run had to install OpenSSH Server it will leave that capability installed and disable sshd so cleanup does not require a reboot. If the existing account is reused, its password will be rotated for the run and cleanup will not restore the previous password. Windows will also show a UAC elevation prompt for the setup and cleanup steps."
 		if options.LocalWindowsForceSSHUninstall {
 			message += " Because --force-ssh-uninstall is set, cleanup will aggressively disable sshd, remove SSH firewall rules, and remove the transient Ansible user even if the run fails. OpenSSH Server will remain installed so cleanup does not require a reboot."
 		}

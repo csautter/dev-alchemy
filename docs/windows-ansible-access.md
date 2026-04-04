@@ -32,7 +32,9 @@ WinRM state during cleanup. The SSH alternative
 admin account with a temporary SSH key, enables or installs OpenSSH Server when
 needed, sets the default SSH shell to PowerShell for the run, and then restores
 the prior SSH service, firewall, authorized_keys, and shell state during
-cleanup. If the `devalchemy_ansible` account already exists, the SSH flow
+cleanup. If the wrapper had to install OpenSSH Server, cleanup disables `sshd`
+but leaves the OpenSSH Server capability installed so cleanup does not require
+a reboot. If the `devalchemy_ansible` account already exists, the SSH flow
 reuses it and rotates its password for the run; the previous password is not
 restored during cleanup, so reserve that account for automation rather than
 manual sign-in.
@@ -65,7 +67,9 @@ alchemy.exe provision local --proto ssh
 
 The wrapper-managed `devalchemy_ansible` account is intended for automation.
 If it already exists, the SSH bootstrap updates its password before the run and
-cleanup leaves that rotated password in place.
+cleanup leaves that rotated password in place. If the wrapper installed
+OpenSSH Server for the run, cleanup disables `sshd` but does not uninstall the
+OpenSSH Server capability.
 
 For manual setup:
 
@@ -73,6 +77,22 @@ For manual setup:
 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; `
 Start-Service sshd; Set-Service -Name sshd -StartupType 'Automatic';
 ```
+
+## Remove OpenSSH Server After a Wrapper Run
+
+If `alchemy provision local --proto ssh` had to install OpenSSH Server on a
+machine that did not already have it, cleanup leaves the capability installed.
+When you need to roll that back manually, remove the capability yourself after
+the provisioning run:
+
+```powershell
+Stop-Service sshd -ErrorAction SilentlyContinue
+Set-Service -Name sshd -StartupType Disabled -ErrorAction SilentlyContinue
+Remove-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+```
+
+Windows may report the capability removal as pending until the next reboot. If
+that happens, reboot before assuming OpenSSH Server is fully gone.
 
 ## Firewall and account requirements
 

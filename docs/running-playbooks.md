@@ -35,15 +35,21 @@ run, and then restores the WinRM state during cleanup. The SSH wrapper creates
 or updates a temporary administrator account with a temporary SSH key, enables
 or installs OpenSSH Server when needed, sets the default SSH shell to
 PowerShell for the run, and then restores the prior SSH service, firewall,
-authorized_keys, and shell state afterwards. If `devalchemy_ansible` already
-exists, the wrapper reuses it and rotates its password for the run; cleanup
-does not restore the previous password, so that account should be considered
-automation-managed. The macOS/Linux local target is currently marked unstable
-until it has been validated end-to-end. Extra `ansible-playbook` flags can be
-passed after `--`, `--inventory-path` overrides the default local inventory
-file, and `--playbook` overrides the default playbook path.
+authorized_keys, and shell state afterwards. If the wrapper had to install
+OpenSSH Server for the run, cleanup disables `sshd` but leaves the OpenSSH
+Server capability installed so cleanup does not require a reboot. If
+`devalchemy_ansible` already exists, the wrapper reuses it and rotates its
+password for the run; cleanup does not restore the previous password, so that
+account should be considered automation-managed. The macOS/Linux local target
+is currently marked unstable until it has been validated end-to-end. Extra
+`ansible-playbook` flags can be passed after `--`, `--inventory-path`
+overrides the default local inventory file, and `--playbook` overrides the
+default playbook path.
 `--force-winrm-uninstall` only applies to the default WinRM mode, while
-`--force-ssh-uninstall` only applies to `--proto ssh`.
+`--force-ssh-uninstall` only applies to `--proto ssh`. It still does not
+uninstall OpenSSH Server; if you need to roll that back after a run, use the
+manual OpenSSH removal steps in
+[`windows-ansible-access.md`](./windows-ansible-access.md#remove-openssh-server-after-a-wrapper-run).
 
 Dry run:
 
@@ -108,7 +114,9 @@ alchemy.exe provision local --proto ssh
 
 The wrapper-owned `devalchemy_ansible` account may be reused across runs. When
 it is reused, the bootstrap rotates its password and cleanup does not restore
-the previous value.
+the previous value. If the wrapper had to install OpenSSH Server, cleanup
+leaves that capability installed and disables `sshd` instead of uninstalling
+the capability.
 
 If you run `ansible-playbook` directly with
 `inventory/localhost_windows_ssh.yml`, you are responsible for supplying your
