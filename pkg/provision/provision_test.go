@@ -1379,8 +1379,17 @@ func TestLocalWindowsSSHProvisionBootstrapPowerShellConfiguresOpenSSHServer(t *t
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Installing the OpenSSH Server capability.") {
 		t.Fatal("expected ssh bootstrap script to install OpenSSH Server when needed")
 	}
-	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Add-WindowsCapability -Online -Name $openSSHCapabilityName") {
-		t.Fatal("expected ssh bootstrap script to install OpenSSH Server with an explicit capability name")
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Progress updates will be logged every") {
+		t.Fatal("expected ssh bootstrap script to announce periodic capability install progress logging")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Add-WindowsCapability -Online -Name $capabilityName") {
+		t.Fatal("expected ssh bootstrap script to install OpenSSH Server through the heartbeat helper")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Install-WindowsCapabilityWithHeartbeat") {
+		t.Fatal("expected ssh bootstrap script to wrap OpenSSH capability install with heartbeat logging")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "OpenSSH Server capability install is still running after") {
+		t.Fatal("expected ssh bootstrap script to emit heartbeat logs while the capability install is running")
 	}
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Test-OpenSSHCapabilityInstallNeeded") {
 		t.Fatal("expected ssh bootstrap script to decide capability install based on both capability and service state")
@@ -1430,11 +1439,14 @@ func TestLocalWindowsSSHProvisionCleanupPowerShellRestoresOpenSSHState(t *testin
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Restore-FileState") {
 		t.Fatal("expected ssh cleanup script to restore the administrator authorized_keys file")
 	}
-	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Remove-WindowsCapability -Online") {
-		t.Fatal("expected ssh cleanup script to remove OpenSSH when it was installed for provisioning")
+	if strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Remove-WindowsCapability -Online") {
+		t.Fatal("expected ssh cleanup script to avoid uninstalling OpenSSH Server because that requires a reboot")
 	}
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Restore-ServiceState 'sshd'") {
 		t.Fatal("expected ssh cleanup script to restore the original sshd service state")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Disable-ServiceState 'sshd'") {
+		t.Fatal("expected ssh cleanup script to disable sshd instead of uninstalling OpenSSH when cleanup created it")
 	}
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Remove-LocalUser -Name $userName") {
 		t.Fatal("expected ssh cleanup script to remove the temporary local user when it did not exist before")
@@ -1442,14 +1454,14 @@ func TestLocalWindowsSSHProvisionCleanupPowerShellRestoresOpenSSHState(t *testin
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "$forceSSHUninstall") {
 		t.Fatal("expected ssh cleanup script to honor force ssh uninstall mode")
 	}
-	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Force SSH uninstall mode is enabled; uninstalling OpenSSH Server.") {
-		t.Fatal("expected ssh cleanup script to emit explicit force-uninstall progress output")
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "without uninstalling OpenSSH Server to avoid requiring a reboot") {
+		t.Fatal("expected ssh cleanup script to explain why cleanup disables sshd instead of uninstalling OpenSSH")
 	}
-	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Remove-WindowsCapability -Online -Name $openSSHCapabilityName") {
-		t.Fatal("expected ssh cleanup script to remove OpenSSH Server with an explicit capability name")
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "cleanup does not require a reboot") {
+		t.Fatal("expected ssh cleanup script to explain why provisioning-installed sshd is disabled instead of removed")
 	}
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "CapabilityInstallManaged") {
-		t.Fatal("expected ssh cleanup script to remove OpenSSH only when this provisioning run installed it")
+		t.Fatal("expected ssh cleanup script to detect when this provisioning run installed OpenSSH")
 	}
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Leaving the OpenSSH Server capability state unchanged") {
 		t.Fatal("expected ssh cleanup script to log when it preserves a pre-existing pending capability state")

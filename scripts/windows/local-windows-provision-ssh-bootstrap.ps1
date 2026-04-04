@@ -7,6 +7,7 @@ $publicKey = $env:DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_SSH_PUBLIC_KEY
 $forceSSHUninstall = [System.Convert]::ToBoolean($env:DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_SSH_UNINSTALL)
 
 $openSSHCapabilityName = 'OpenSSH.Server~~~~0.0.1.0'
+$openSSHInstallStatusIntervalSeconds = 15
 $openSSHBuiltInFirewallRuleName = 'OpenSSH-Server-In-TCP'
 $localFirewallRuleName = 'DevAlchemyLocalSSHDLoopback'
 $defaultShellRegistryPath = 'HKLM:\SOFTWARE\OpenSSH'
@@ -77,6 +78,46 @@ function Write-OpenSSHPendingStateGuidance($capabilityState, $sshdServiceState) 
     }
 
     Write-Output ('Windows reports the OpenSSH Server capability as "' + [string]$capabilityState.State + '" and sshd is unavailable. A Windows reboot is required before SSH provisioning can continue.')
+}
+
+function Install-WindowsCapabilityWithHeartbeat([string]$name, [int]$statusIntervalSeconds) {
+    $powerShell = [powershell]::Create()
+    $asyncResult = $null
+    try {
+        $null = $powerShell.AddScript({
+            param($capabilityName)
+            $ErrorActionPreference = 'Stop'
+            Add-WindowsCapability -Online -Name $capabilityName | Out-Null
+        }).AddArgument($name)
+
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $asyncResult = $powerShell.BeginInvoke()
+
+        while (-not $asyncResult.AsyncWaitHandle.WaitOne([TimeSpan]::FromSeconds($statusIntervalSeconds))) {
+            $elapsedSeconds = [int][Math]::Floor($stopwatch.Elapsed.TotalSeconds)
+            $currentCapabilityState = Get-WindowsCapabilityState $name
+            Write-Output ('OpenSSH Server capability install is still running after ' + $elapsedSeconds + ' seconds (Windows currently reports state "' + [string]$currentCapabilityState.State + '").')
+        }
+
+        $powerShell.EndInvoke($asyncResult) | Out-Null
+        if ($powerShell.HadErrors) {
+            $errorMessages = @(
+                $powerShell.Streams.Error |
+                    ForEach-Object { [string]$_ } |
+                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            )
+            if ($errorMessages.Count -gt 0) {
+                throw ('Add-WindowsCapability reported errors: ' + ($errorMessages -join ' | '))
+            }
+
+            throw 'Add-WindowsCapability reported one or more PowerShell errors.'
+        }
+    } finally {
+        if ($null -ne $asyncResult) {
+            $asyncResult.AsyncWaitHandle.Dispose()
+        }
+        $powerShell.Dispose()
+    }
 }
 
 function Get-ServiceState([string]$name) {
@@ -249,11 +290,12 @@ Write-OpenSSHPendingStateGuidance $capabilityState $sshdServiceState
 Assert-OpenSSHCapabilityStateIsUsable $capabilityState $sshdServiceState
 
 if (Test-OpenSSHCapabilityInstallNeeded $capabilityState $sshdServiceState) {
-    Write-Output 'Installing the OpenSSH Server capability.'
-    Add-WindowsCapability -Online -Name $openSSHCapabilityName | Out-Null
+    Write-Output ('Installing the OpenSSH Server capability. Progress updates will be logged every ' + $openSSHInstallStatusIntervalSeconds + ' seconds while Windows completes the capability change.')
+    Install-WindowsCapabilityWithHeartbeat $openSSHCapabilityName $openSSHInstallStatusIntervalSeconds
     $state.CapabilityInstallManaged = $true
     Save-State $state
-    Write-Output 'OpenSSH Server capability install completed for this provisioning run.'
+    $postInstallCapabilityState = Get-WindowsCapabilityState $openSSHCapabilityName
+    Write-Output ('OpenSSH Server capability install completed for this provisioning run with state "' + [string]$postInstallCapabilityState.State + '".')
 } elseif ([bool]$state.CapabilityInstalled) {
     Write-Output ('Reusing the existing OpenSSH Server capability in state "' + [string]$state.CapabilityState + '".')
 } elseif ([bool]$state.SshdServiceExisted) {

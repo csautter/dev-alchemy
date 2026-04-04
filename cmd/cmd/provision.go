@@ -117,7 +117,7 @@ Important Ansible options exposed directly:
   --check                 Run ansible-playbook with --check.
   --proto PROTO          For local Windows provisioning, select winrm (default) or ssh.
   --force-winrm-uninstall For local Windows WinRM provisioning, force cleanup to disable WinRM.
-  --force-ssh-uninstall   For local Windows SSH provisioning, force cleanup to uninstall OpenSSH Server and remove the transient user.
+  --force-ssh-uninstall   For local Windows SSH provisioning, force cleanup to disable sshd, remove SSH firewall rules, and remove the transient user without uninstalling OpenSSH Server.
   --verbosity N           Set Ansible verbosity. The default is 3, equivalent to -vvv.
   --playbook PATH         Override the playbook path. The default is ./playbooks/setup.yml.
   --inventory-path PATH   Override the default inventory file for local provisioning.
@@ -271,7 +271,7 @@ func init() {
 	provisionCmd.Flags().StringVar(&inventoryPath, "inventory-path", "", "Override the default inventory file for local provisioning; pass -- --limit <host-pattern> if your custom inventory needs a target")
 	provisionCmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Skip confirmation prompts for operations that change local system state")
 	provisionCmd.Flags().BoolVar(&forceWinRMUninstall, "force-winrm-uninstall", false, "For local Windows provisioning, force cleanup to disable WinRM and remove transient setup after the run")
-	provisionCmd.Flags().BoolVar(&forceSSHUninstall, "force-ssh-uninstall", false, "For local Windows SSH provisioning, force cleanup to uninstall OpenSSH Server and remove the transient Ansible user after the run")
+	provisionCmd.Flags().BoolVar(&forceSSHUninstall, "force-ssh-uninstall", false, "For local Windows SSH provisioning, force cleanup to disable sshd, remove SSH firewall rules, and remove the transient Ansible user after the run without uninstalling OpenSSH Server")
 }
 
 func validateProvisionCommandArgs(cmd *cobra.Command, args []string) error {
@@ -330,7 +330,7 @@ func localWindowsProvisionConfirmationMessage(options alchemy_provision.Provisio
 	if options.LocalWindowsProtocol == alchemy_provision.LocalWindowsProvisionProtocolSSH {
 		message := "Local Windows provisioning over SSH will temporarily install or reconfigure OpenSSH Server, set the default SSH shell to PowerShell, create or update a temporary local administrator account for Ansible, and authorize a temporary SSH key. Windows will also show a UAC elevation prompt for the setup and cleanup steps."
 		if options.LocalWindowsForceSSHUninstall {
-			message += " Because --force-ssh-uninstall is set, cleanup will aggressively uninstall OpenSSH Server and remove the transient Ansible user even if the run fails."
+			message += " Because --force-ssh-uninstall is set, cleanup will aggressively disable sshd, remove SSH firewall rules, and remove the transient Ansible user even if the run fails. OpenSSH Server will remain installed so cleanup does not require a reboot."
 		}
 		return message
 	}

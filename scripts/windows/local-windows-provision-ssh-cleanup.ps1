@@ -2,7 +2,6 @@ $ErrorActionPreference = 'Stop'
 
 $statePath = $env:DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH
 $forceSSHUninstall = [System.Convert]::ToBoolean($env:DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_SSH_UNINSTALL)
-$openSSHCapabilityName = 'OpenSSH.Server~~~~0.0.1.0'
 $openSSHBuiltInFirewallRuleName = 'OpenSSH-Server-In-TCP'
 $localFirewallRuleName = 'DevAlchemyLocalSSHDLoopback'
 $defaultShellRegistryPath = 'HKLM:\SOFTWARE\OpenSSH'
@@ -47,6 +46,19 @@ function Restore-ServiceState([string]$name, [bool]$wasRunning, [string]$startMo
             Set-Service -Name $name -StartupType Disabled
         }
     }
+}
+
+function Disable-ServiceState([string]$name) {
+    $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($null -eq $service) {
+        return
+    }
+
+    if ($service.Status -eq 'Running') {
+        Stop-Service -Name $name -Force
+    }
+
+    Set-Service -Name $name -StartupType Disabled
 }
 
 function Restore-NetFirewallRuleState([string]$name, [bool]$existed, [bool]$enabled) {
@@ -173,26 +185,16 @@ Restore-NetFirewallRuleState $localFirewallRuleName ([bool]$state.LocalFirewallR
 Restore-NetFirewallRuleState $openSSHBuiltInFirewallRuleName ([bool]$state.BuiltInFirewallRuleExisted) ([bool]$state.BuiltInFirewallRuleEnabled)
 
 if ($forceSSHUninstall) {
-    Write-Output 'Force SSH uninstall mode is enabled; uninstalling OpenSSH Server.'
-    $service = Get-Service -Name 'sshd' -ErrorAction SilentlyContinue
-    if ($null -ne $service -and $service.Status -eq 'Running') {
-        Stop-Service -Name 'sshd' -Force
-    }
+    Write-Output 'Force SSH uninstall mode is enabled; disabling sshd and removing SSH firewall rules without uninstalling OpenSSH Server to avoid requiring a reboot.'
     Get-NetFirewallRule -Name $localFirewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
     Get-NetFirewallRule -Name $openSSHBuiltInFirewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
-    Remove-WindowsCapability -Online -Name $openSSHCapabilityName | Out-Null
+    Disable-ServiceState 'sshd'
 } elseif ([bool]$state.CapabilityInstalled) {
     Write-Output 'Restoring the original sshd service state.'
     Restore-ServiceState 'sshd' ([bool]$state.SshdServiceWasRunning) ([string]$state.SshdServiceStartMode)
 } elseif ([bool]$state.CapabilityInstallManaged) {
-    Write-Output 'Removing the OpenSSH Server capability that was installed for provisioning.'
-    $service = Get-Service -Name 'sshd' -ErrorAction SilentlyContinue
-    if ($null -ne $service -and $service.Status -eq 'Running') {
-        Stop-Service -Name 'sshd' -Force
-    }
-    Get-NetFirewallRule -Name $localFirewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
-    Get-NetFirewallRule -Name $openSSHBuiltInFirewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
-    Remove-WindowsCapability -Online -Name $openSSHCapabilityName | Out-Null
+    Write-Output 'Disabling the OpenSSH Server service that was installed for provisioning so cleanup does not require a reboot.'
+    Disable-ServiceState 'sshd'
 } else {
     Write-Output ('Leaving the OpenSSH Server capability state unchanged because it started in state "' + [string]$state.CapabilityState + '" and was not installed by this provisioning run.')
     if ([bool]$state.CapabilityPending) {

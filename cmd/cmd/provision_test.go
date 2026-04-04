@@ -531,6 +531,9 @@ func TestConfirmProvisionIntentMentionsForceSSHUninstall(t *testing.T) {
 	if !strings.Contains(output.String(), "--force-ssh-uninstall") {
 		t.Fatalf("expected prompt to mention force ssh uninstall, got %q", output.String())
 	}
+	if !strings.Contains(output.String(), "remain installed") {
+		t.Fatalf("expected prompt to explain that OpenSSH Server remains installed to avoid a reboot, got %q", output.String())
+	}
 }
 
 func TestRunProvisionPassesOptionsThrough(t *testing.T) {
