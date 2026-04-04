@@ -190,42 +190,57 @@ function Test-IsLocalAdministrator([string]$groupName, [string]$name) {
     ).Count -gt 0
 }
 
+function Remove-LocalUserIfPresent([string]$groupName, [string]$name) {
+    $localUser = Get-LocalUser -Name $name -ErrorAction SilentlyContinue
+    if ($null -eq $localUser) {
+        return
+    }
+
+    if (Test-IsLocalAdministrator $groupName $name) {
+        Remove-LocalGroupMember -Group $groupName -Member $name -ErrorAction SilentlyContinue
+    }
+    Remove-LocalUser -Name $name
+}
+
+function Restore-LocalUserState([string]$groupName, $savedState, [string]$name) {
+    $localUser = Get-LocalUser -Name $name -ErrorAction SilentlyContinue
+    if ($null -eq $localUser) {
+        return
+    }
+
+    if ([bool]$savedState.UserWasAdministrator) {
+        if (-not (Test-IsLocalAdministrator $groupName $name)) {
+            Add-LocalGroupMember -Group $groupName -Member $name -ErrorAction SilentlyContinue
+        }
+    } elseif (Test-IsLocalAdministrator $groupName $name) {
+        Remove-LocalGroupMember -Group $groupName -Member $name -ErrorAction SilentlyContinue
+    }
+
+    Set-LocalUser -Name $name -Description ([string]$savedState.UserDescription)
+    if ([bool]$savedState.UserWasEnabled) {
+        Enable-LocalUser -Name $name
+    } else {
+        Disable-LocalUser -Name $name
+    }
+}
+
 $userName = [string]$state.UserName
 $administratorsGroupName = Get-LocalAdministratorsGroupName
 if (-not [string]::IsNullOrWhiteSpace($userName)) {
-    if ($forceSSHUninstall) {
-        Write-Output 'Force SSH uninstall mode is enabled; removing the local Ansible account.'
-        $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
-        if ($null -ne $localUser) {
-            if (Test-IsLocalAdministrator $administratorsGroupName $userName) {
-                Remove-LocalGroupMember -Group $administratorsGroupName -Member $userName -ErrorAction SilentlyContinue
-            }
-            Remove-LocalUser -Name $userName
+    if ([bool]$state.UserExisted) {
+        if ($forceSSHUninstall) {
+            Write-Output 'Force SSH uninstall mode is enabled; preserving the pre-existing local Ansible account and restoring its original state.'
+        } else {
+            Write-Output 'Restoring the original local Ansible account state.'
         }
-    } elseif ([bool]$state.UserExisted) {
-        Write-Output 'Restoring the original local Ansible account state.'
-        if (-not [bool]$state.UserWasAdministrator -and (Test-IsLocalAdministrator $administratorsGroupName $userName)) {
-            Remove-LocalGroupMember -Group $administratorsGroupName -Member $userName -ErrorAction SilentlyContinue
-        }
-
-        $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
-        if ($null -ne $localUser) {
-            Set-LocalUser -Name $userName -Description ([string]$state.UserDescription)
-            if ([bool]$state.UserWasEnabled) {
-                Enable-LocalUser -Name $userName
-            } else {
-                Disable-LocalUser -Name $userName
-            }
-        }
+        Restore-LocalUserState $administratorsGroupName $state $userName
     } else {
-        Write-Output 'Removing the temporary local Ansible account.'
-        $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
-        if ($null -ne $localUser) {
-            if (Test-IsLocalAdministrator $administratorsGroupName $userName) {
-                Remove-LocalGroupMember -Group $administratorsGroupName -Member $userName -ErrorAction SilentlyContinue
-            }
-            Remove-LocalUser -Name $userName
+        if ($forceSSHUninstall) {
+            Write-Output 'Force SSH uninstall mode is enabled; removing the temporary local Ansible account created for provisioning.'
+        } else {
+            Write-Output 'Removing the temporary local Ansible account.'
         }
+        Remove-LocalUserIfPresent $administratorsGroupName $userName
     }
 }
 
