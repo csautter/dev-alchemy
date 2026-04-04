@@ -1783,8 +1783,20 @@ func TestLocalWindowsSSHProvisionCleanupPowerShellRestoresOpenSSHState(t *testin
 }
 
 func TestLocalWindowsSSHProvisionCleanupPowerShellPreservesPreExistingUserDuringForceUninstall(t *testing.T) {
-	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "if ([bool]$state.UserExisted)") {
-		t.Fatal("expected ssh cleanup script to branch on whether the local ansible user existed before provisioning")
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "function Get-LocalUserCleanupPlan") {
+		t.Fatal("expected ssh cleanup script to define a helper documenting local user cleanup semantics")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Get-LocalUserCleanupPlan ([bool]$state.UserExisted) $forceSSHUninstall") {
+		t.Fatal("expected ssh cleanup script to route force ssh uninstall and prior user existence through the helper")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "A pre-existing local user is always restored; only the temporary user created") {
+		t.Fatal("expected ssh cleanup helper to document that force ssh uninstall only removes temporary users")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "RestoreUser = $true") {
+		t.Fatal("expected ssh cleanup helper to return an explicit restore action for pre-existing users")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "RestoreUser = $false") {
+		t.Fatal("expected ssh cleanup helper to return an explicit removal action for temporary users")
 	}
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Force SSH uninstall mode is enabled; preserving the pre-existing local Ansible account and restoring its original state.") {
 		t.Fatal("expected ssh cleanup script to preserve a pre-existing local user during force ssh uninstall")

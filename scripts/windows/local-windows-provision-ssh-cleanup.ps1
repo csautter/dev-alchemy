@@ -224,22 +224,45 @@ function Restore-LocalUserState([string]$groupName, $savedState, [string]$name) 
     }
 }
 
+function Get-LocalUserCleanupPlan([bool]$userExisted, [bool]$forceSSHUninstall) {
+    # Force SSH uninstall only tears down the SSH access created for provisioning.
+    # A pre-existing local user is always restored; only the temporary user created
+    # for provisioning is removed during cleanup.
+    if ($userExisted) {
+        if ($forceSSHUninstall) {
+            return @{
+                RestoreUser = $true
+                Message = 'Force SSH uninstall mode is enabled; preserving the pre-existing local Ansible account and restoring its original state.'
+            }
+        }
+
+        return @{
+            RestoreUser = $true
+            Message = 'Restoring the original local Ansible account state.'
+        }
+    }
+
+    if ($forceSSHUninstall) {
+        return @{
+            RestoreUser = $false
+            Message = 'Force SSH uninstall mode is enabled; removing the temporary local Ansible account created for provisioning.'
+        }
+    }
+
+    return @{
+        RestoreUser = $false
+        Message = 'Removing the temporary local Ansible account.'
+    }
+}
+
 $userName = [string]$state.UserName
 $administratorsGroupName = Get-LocalAdministratorsGroupName
 if (-not [string]::IsNullOrWhiteSpace($userName)) {
-    if ([bool]$state.UserExisted) {
-        if ($forceSSHUninstall) {
-            Write-Output 'Force SSH uninstall mode is enabled; preserving the pre-existing local Ansible account and restoring its original state.'
-        } else {
-            Write-Output 'Restoring the original local Ansible account state.'
-        }
+    $localUserCleanupPlan = Get-LocalUserCleanupPlan ([bool]$state.UserExisted) $forceSSHUninstall
+    Write-Output ([string]$localUserCleanupPlan.Message)
+    if ([bool]$localUserCleanupPlan.RestoreUser) {
         Restore-LocalUserState $administratorsGroupName $state $userName
     } else {
-        if ($forceSSHUninstall) {
-            Write-Output 'Force SSH uninstall mode is enabled; removing the temporary local Ansible account created for provisioning.'
-        } else {
-            Write-Output 'Removing the temporary local Ansible account.'
-        }
         Remove-LocalUserIfPresent $administratorsGroupName $userName
     }
 }
