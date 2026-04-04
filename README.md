@@ -79,48 +79,16 @@ You can also use the built-in wrapper for host-local provisioning:
 
 ```bash
 alchemy provision local --check
-# switch to SSH transport on Windows if you want to avoid the temporary WinRM setup
 alchemy provision local --proto ssh --check
 alchemy provision local --playbook ./playbooks/bootstrap.yml
-# pass through extra ansible-playbook flags after `--`
-alchemy provision local -- --diff --tags java
-alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
-alchemy provision local --check --yes
-alchemy provision local --check --yes --force-winrm-uninstall
-alchemy provision local --proto ssh --check --yes --force-ssh-uninstall
 alchemy provision local
 ```
 
-On Windows the default local transport is WinRM with
-`inventory/localhost_windows_winrm.yml`, and `--proto ssh` switches to
-`inventory/localhost_windows_ssh.yml`. The WinRM wrapper creates a temporary
-administrator account with a random password and a temporary loopback-only
-WinRM HTTPS listener for the run. The SSH wrapper creates or updates a
-temporary administrator account with a temporary SSH key, enables or installs
-OpenSSH Server when needed, sets the default SSH shell to PowerShell for the
-run, and restores the prior SSH service, firewall, authorized_keys, and shell
-state afterwards. If the wrapper had to install OpenSSH Server for the run,
-cleanup disables `sshd` but leaves the OpenSSH Server capability installed so
-cleanup does not require a reboot. If the `devalchemy_ansible` account already
-exists, the SSH wrapper reuses it as the automation account and rotates its
-password for the run; cleanup does not restore the previous password, so treat
-that account as automation-managed rather than a hand-managed login. Because
-those are significant host changes, the Windows local flow asks for
-confirmation by default; use `--yes` to skip those CLI confirmation prompts.
-On Windows, local provisioning is only fully non-interactive when you start
-`alchemy` from an already elevated shell. If the current shell is not
-elevated, the privileged bootstrap and cleanup steps still trigger a UAC prompt
-before they run. The bootstrap/cleanup logs are streamed back into the main
-terminal. If you need to remove an OpenSSH Server capability that the wrapper
-installed, follow the manual rollback steps in
-[`docs/windows-ansible-access.md`](./docs/windows-ansible-access.md).
-`--force-winrm-uninstall` is only for the default WinRM mode and forces cleanup
-to disable WinRM and remove transient remoting setup after the run. The
-`--force-ssh-uninstall` flag is only for `--proto ssh` and forces cleanup to
-disable `sshd`, remove SSH firewall rules, and remove the transient Ansible
-user after the run without uninstalling OpenSSH Server.
-macOS/Linux local target is currently marked unstable until it has been
-validated end-to-end.
+Use this when you want the same command surface on your real workstation that
+you use for managed test targets. For platform defaults, Windows transport
+behavior, cleanup flags, and rollback steps, see
+[Local Provisioning](./docs/local-provisioning.md) and
+[Windows Ansible Access](./docs/windows-ansible-access.md).
 
 ## 🚀 Getting Started
 
@@ -235,8 +203,6 @@ Use the built-in wrapper first when you want the shared command surface:
 alchemy provision local --check
 alchemy provision local --proto ssh --check
 alchemy provision local --playbook ./playbooks/bootstrap.yml
-alchemy provision local -- --diff
-alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
 alchemy provision local
 ```
 
@@ -247,7 +213,9 @@ ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml --check
 ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml
 ```
 
-For Windows localhost or remote-target examples, use
+For more wrapper examples and platform-specific local behavior, use
+[Local Provisioning](./docs/local-provisioning.md). For direct localhost or
+remote-target `ansible-playbook` examples, use
 [Running Playbooks](./docs/running-playbooks.md).
 
 #### B. Test the setup in a disposable VM first
@@ -269,14 +237,17 @@ with [Windows Ansible Access](./docs/windows-ansible-access.md).
 The root README is the fast entry point. Use these guides when you want the
 next level of detail:
 
-- [Running Playbooks](./docs/running-playbooks.md) for localhost, remote-host,
-  VM, and Windows `ansible-playbook` examples
+- [Local Provisioning](./docs/local-provisioning.md) for the
+  `alchemy provision local` wrapper, platform defaults, and Windows cleanup
+  flags
+- [Running Playbooks](./docs/running-playbooks.md) for direct localhost,
+  remote-host, VM, and Windows `ansible-playbook` examples
 - [Testing Workflows](./docs/testing-workflows.md) for host-specific VM and
   Docker test flows
 - [Managed Application Data](./docs/managed-application-data.md) for cache,
   runtime, and app-data locations
-- [Windows Ansible Access](./docs/windows-ansible-access.md) for WinRM and SSH
-  setup on Windows targets
+- [Windows Ansible Access](./docs/windows-ansible-access.md) for manual WinRM
+  and SSH setup on Windows targets plus OpenSSH rollback notes
 - [Example Ansible Roles](./docs/example-roles.md) for the current sample role
   catalog and repository layout
 - [Troubleshooting Guide](./docs/troubleshooting.md) for rare host-specific

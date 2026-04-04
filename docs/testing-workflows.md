@@ -56,25 +56,12 @@ machine instead of a managed VM:
 ```bash
 alchemy provision local --check
 alchemy provision local --proto ssh --check
-alchemy provision local --proto ssh --check --yes --force-ssh-uninstall
 alchemy provision local --playbook ./playbooks/bootstrap.yml
-alchemy provision local -- --diff
-alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
 alchemy provision local
 ```
 
-- Windows uses `inventory/localhost_windows_winrm.yml` by default.
-- Windows can also use `inventory/localhost_windows_ssh.yml` with `--proto ssh`.
-- When Windows local SSH has to install OpenSSH Server, cleanup restores the
-  temporary SSH configuration but leaves the OpenSSH Server capability
-  installed; use the manual rollback steps in
-  [Windows Ansible Access](./windows-ansible-access.md#remove-openssh-server-after-a-wrapper-run)
-  if you need to remove it afterwards.
-- macOS and Linux use `inventory/localhost.yaml`.
-- Use `--playbook` to point provision runs at a different playbook file.
-- Pass additional `ansible-playbook` flags after `--` when needed.
-- The macOS/Linux local target is currently marked unstable until it has been
-  validated end-to-end.
+For platform defaults, advanced flags, and Windows cleanup behavior, use
+[Local Provisioning](./local-provisioning.md).
 
 ### Ubuntu role tests on Linux, WSL, Windows, or macOS
 

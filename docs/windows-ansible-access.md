@@ -4,7 +4,9 @@ Use this guide only when you want to manage a Windows machine over Ansible and
 the target does not already expose a supported remote transport.
 
 For most Dev Alchemy onboarding flows, the main [README](../README.md) is the
-better starting point. The commands below are mainly for:
+better starting point. For the wrapper-managed localhost flow, start with
+[Local Provisioning](./local-provisioning.md). The commands below are mainly
+for:
 
 - local Ansible runs against the same Windows machine
 - existing Windows hosts that need manual remote-access setup
