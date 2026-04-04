@@ -30,59 +30,38 @@ type localWindowsWinRMProvisionSession struct {
 }
 
 func runLocalWindowsWinRMProvision(projectDir string, options ProvisionOptions) error {
-	session, err := setupLocalWindowsWinRMProvisionSessionFunc(projectDir, options)
-	if err != nil {
-		return err
-	}
+	return runLocalWindowsProvisionSession(projectDir, options, localWindowsProvisionSessionRunner[localWindowsWinRMProvisionSession]{
+		setup:   setupLocalWindowsWinRMProvisionSessionFunc,
+		cleanup: cleanupLocalWindowsWinRMProvisionSessionFunc,
+		buildArgs: func(projectDir string, session localWindowsWinRMProvisionSession, options ProvisionOptions) ([]string, func() error, error) {
+			inventoryPath, inventoryTarget := resolveStaticInventoryPathAndTarget(
+				localWindowsWinRMInventoryPath,
+				localWindowsWinRMInventoryTarget,
+				options,
+			)
 
-	inventoryPath, inventoryTarget := resolveStaticInventoryPathAndTarget(
-		localWindowsWinRMInventoryPath,
-		localWindowsWinRMInventoryTarget,
-		options,
-	)
-
-	args, argsCleanup, err := buildWindowsStaticInventoryProvisionArgs(
-		projectDir,
-		inventoryPath,
-		inventoryTarget,
-		session.ConnectionConfig,
-		options,
-	)
-	if err != nil {
-		cleanupErr := cleanupLocalWindowsWinRMProvisionSessionFunc(projectDir, session, options)
-		if cleanupErr != nil {
-			return fmt.Errorf("failed to build ansible arguments for secure local windows WinRM provision: %w (also failed to restore secure WinRM state: %v)", err, cleanupErr)
-		}
-		return fmt.Errorf("failed to build ansible arguments for secure local windows WinRM provision: %w", err)
-	}
-
-	runErr := runAnsibleProvisionCommandFunc(projectDir, args, 90*time.Minute, "local:windows:winrm:provision")
-	argsCleanupErr := argsCleanup()
-	cleanupErr := cleanupLocalWindowsWinRMProvisionSessionFunc(projectDir, session, options)
-
-	if runErr != nil {
-		if argsCleanupErr != nil && cleanupErr != nil {
-			return fmt.Errorf("ansible provisioning failed for local host windows via winrm: %w (also failed to clean ansible temp files: %v; cleanup failed: %v)", runErr, argsCleanupErr, cleanupErr)
-		}
-		if argsCleanupErr != nil {
-			return fmt.Errorf("ansible provisioning failed for local host windows via winrm: %w (also failed to clean ansible temp files: %v)", runErr, argsCleanupErr)
-		}
-		if cleanupErr != nil {
-			return fmt.Errorf("ansible provisioning failed for local host windows via winrm: %w (also failed to restore secure WinRM state: %v)", runErr, cleanupErr)
-		}
-		return fmt.Errorf("ansible provisioning failed for local host windows via winrm: %w", runErr)
-	}
-	if argsCleanupErr != nil && cleanupErr != nil {
-		return fmt.Errorf("failed to clean ansible temp files: %w (also failed to restore secure WinRM state: %v)", argsCleanupErr, cleanupErr)
-	}
-	if argsCleanupErr != nil {
-		return fmt.Errorf("failed to clean ansible temp files: %w", argsCleanupErr)
-	}
-	if cleanupErr != nil {
-		return fmt.Errorf("failed to restore secure WinRM state after local host windows provision: %w", cleanupErr)
-	}
-
-	return nil
+			return buildWindowsStaticInventoryProvisionArgs(
+				projectDir,
+				inventoryPath,
+				inventoryTarget,
+				session.ConnectionConfig,
+				options,
+			)
+		},
+		buildArgsError: func(err error, cleanupErr error) error {
+			return formatLocalWindowsProvisionStepError(
+				"failed to build ansible arguments for secure local windows WinRM provision",
+				err,
+				cleanupErr,
+				"WinRM",
+			)
+		},
+		provisionResult: func(runErr error, argsCleanupErr error, cleanupErr error) error {
+			return formatLocalWindowsProvisionOutcome("winrm", "WinRM", runErr, argsCleanupErr, cleanupErr)
+		},
+		ansibleLogPrefix: "local:windows:winrm:provision",
+		runTimeout:       90 * time.Minute,
+	})
 }
 
 func buildWindowsStaticInventoryProvisionArgs(projectDir string, inventoryPath string, inventoryTarget string, connectionConfig windowsAnsibleConnectionConfig, options ProvisionOptions) ([]string, func() error, error) {

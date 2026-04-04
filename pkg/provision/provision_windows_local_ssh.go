@@ -58,66 +58,49 @@ type localWindowsSSHListenerProcess struct {
 }
 
 func runLocalWindowsSSHProvision(projectDir string, options ProvisionOptions) error {
-	session, err := setupLocalWindowsSSHProvisionSessionFunc(projectDir, options)
-	if err != nil {
-		return err
-	}
-	if err := runLocalWindowsSSHPreflightFunc(projectDir, session.ConnectionConfig); err != nil {
-		cleanupErr := cleanupLocalWindowsSSHProvisionSessionFunc(projectDir, session, options)
-		if cleanupErr != nil {
-			return fmt.Errorf("local Windows SSH bootstrap completed but the direct SSH preflight failed: %w (also failed to restore secure SSH state: %v)", err, cleanupErr)
-		}
-		return fmt.Errorf("local Windows SSH bootstrap completed but the direct SSH preflight failed: %w", err)
-	}
+	return runLocalWindowsProvisionSession(projectDir, options, localWindowsProvisionSessionRunner[localWindowsSSHProvisionSession]{
+		setup:   setupLocalWindowsSSHProvisionSessionFunc,
+		cleanup: cleanupLocalWindowsSSHProvisionSessionFunc,
+		afterSetup: func(projectDir string, session localWindowsSSHProvisionSession, _ ProvisionOptions) error {
+			return runLocalWindowsSSHPreflightFunc(projectDir, session.ConnectionConfig)
+		},
+		buildArgs: func(projectDir string, session localWindowsSSHProvisionSession, options ProvisionOptions) ([]string, func() error, error) {
+			inventoryPath, inventoryTarget := resolveStaticInventoryPathAndTarget(
+				localWindowsSSHInventoryPath,
+				localWindowsSSHInventoryTarget,
+				options,
+			)
 
-	inventoryPath, inventoryTarget := resolveStaticInventoryPathAndTarget(
-		localWindowsSSHInventoryPath,
-		localWindowsSSHInventoryTarget,
-		options,
-	)
-
-	args, argsCleanup, err := buildSSHStaticInventoryProvisionArgs(
-		projectDir,
-		inventoryPath,
-		inventoryTarget,
-		session.ConnectionConfig,
-		options,
-	)
-	if err != nil {
-		cleanupErr := cleanupLocalWindowsSSHProvisionSessionFunc(projectDir, session, options)
-		if cleanupErr != nil {
-			return fmt.Errorf("failed to build ansible arguments for secure local windows SSH provision: %w (also failed to restore secure SSH state: %v)", err, cleanupErr)
-		}
-		return fmt.Errorf("failed to build ansible arguments for secure local windows SSH provision: %w", err)
-	}
-
-	runErr := runAnsibleProvisionCommandFunc(projectDir, args, 90*time.Minute, "local:windows:ssh:provision")
-	argsCleanupErr := argsCleanup()
-	cleanupErr := cleanupLocalWindowsSSHProvisionSessionFunc(projectDir, session, options)
-
-	if runErr != nil {
-		if argsCleanupErr != nil && cleanupErr != nil {
-			return fmt.Errorf("ansible provisioning failed for local host windows via ssh: %w (also failed to clean ansible temp files: %v; cleanup failed: %v)", runErr, argsCleanupErr, cleanupErr)
-		}
-		if argsCleanupErr != nil {
-			return fmt.Errorf("ansible provisioning failed for local host windows via ssh: %w (also failed to clean ansible temp files: %v)", runErr, argsCleanupErr)
-		}
-		if cleanupErr != nil {
-			return fmt.Errorf("ansible provisioning failed for local host windows via ssh: %w (also failed to restore secure SSH state: %v)", runErr, cleanupErr)
-		}
-		return fmt.Errorf("ansible provisioning failed for local host windows via ssh: %w", runErr)
-	}
-	if argsCleanupErr != nil && cleanupErr != nil {
-		return fmt.Errorf("failed to clean ansible temp files: %w (also failed to restore secure SSH state: %v)", argsCleanupErr, cleanupErr)
-	}
-	if argsCleanupErr != nil {
-		return fmt.Errorf("failed to clean ansible temp files: %w", argsCleanupErr)
-	}
-	if cleanupErr != nil {
-		return fmt.Errorf("failed to restore secure SSH state after local host windows provision: %w", cleanupErr)
-	}
-
-	return nil
+			return buildSSHStaticInventoryProvisionArgs(
+				projectDir,
+				inventoryPath,
+				inventoryTarget,
+				session.ConnectionConfig,
+				options,
+			)
+		},
+		afterSetupError: func(err error, cleanupErr error) error {
+			return formatLocalWindowsProvisionStepError(
+				"local Windows SSH bootstrap completed but the direct SSH preflight failed",
+				err,
+				cleanupErr,
+				"SSH",
+			)
+		},
+		buildArgsError: func(err error, cleanupErr error) error {
+			return formatLocalWindowsProvisionStepError(
+				"failed to build ansible arguments for secure local windows SSH provision",
+				err,
+				cleanupErr,
+				"SSH",
+			)
+		},
+		provisionResult: func(runErr error, argsCleanupErr error, cleanupErr error) error {
+			return formatLocalWindowsProvisionOutcome("ssh", "SSH", runErr, argsCleanupErr, cleanupErr)
+		},
+		ansibleLogPrefix: "local:windows:ssh:provision",
+		runTimeout:       90 * time.Minute,
+	})
 }
 
 func buildSSHStaticInventoryProvisionArgs(projectDir string, inventoryPath string, inventoryTarget string, connectionConfig sshAnsibleConnectionConfig, options ProvisionOptions) ([]string, func() error, error) {

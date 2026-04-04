@@ -681,6 +681,84 @@ func TestRunLocalWindowsProvisionCleansUpWhenArgumentBuildFails(t *testing.T) {
 	}
 }
 
+func TestRunLocalWindowsProvisionSessionWrapsBuildArgFailuresWithCleanupErrors(t *testing.T) {
+	err := runLocalWindowsProvisionSession(t.TempDir(), ProvisionOptions{}, localWindowsProvisionSessionRunner[string]{
+		setup: func(string, ProvisionOptions) (string, error) {
+			return "session", nil
+		},
+		buildArgs: func(string, string, ProvisionOptions) ([]string, func() error, error) {
+			return nil, nil, errors.New("build failed")
+		},
+		cleanup: func(string, string, ProvisionOptions) error {
+			return errors.New("cleanup failed")
+		},
+		buildArgsError: func(err error, cleanupErr error) error {
+			return formatLocalWindowsProvisionStepError(
+				"failed to build ansible arguments for secure local windows WinRM provision",
+				err,
+				cleanupErr,
+				"WinRM",
+			)
+		},
+		provisionResult: func(error, error, error) error {
+			t.Fatal("did not expect provisionResult to run when buildArgs failed")
+			return nil
+		},
+	})
+	if err == nil {
+		t.Fatal("expected build arg failure to be returned")
+	}
+	if !strings.Contains(err.Error(), "failed to build ansible arguments for secure local windows WinRM provision: build failed") {
+		t.Fatalf("expected build arg failure context, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "also failed to restore secure WinRM state: cleanup failed") {
+		t.Fatalf("expected cleanup failure to be merged into build arg failure, got: %v", err)
+	}
+}
+
+func TestRunLocalWindowsProvisionSessionMergesAnsibleAndCleanupFailures(t *testing.T) {
+	previousRunner := runAnsibleProvisionCommandFunc
+	t.Cleanup(func() {
+		runAnsibleProvisionCommandFunc = previousRunner
+	})
+
+	runAnsibleProvisionCommandFunc = func(_ string, _ []string, _ time.Duration, _ string) error {
+		return errors.New("ansible failed")
+	}
+
+	err := runLocalWindowsProvisionSession(t.TempDir(), ProvisionOptions{}, localWindowsProvisionSessionRunner[string]{
+		setup: func(string, ProvisionOptions) (string, error) {
+			return "session", nil
+		},
+		buildArgs: func(string, string, ProvisionOptions) ([]string, func() error, error) {
+			return []string{"ansible-playbook"}, func() error {
+				return errors.New("temp cleanup failed")
+			}, nil
+		},
+		cleanup: func(string, string, ProvisionOptions) error {
+			return errors.New("session cleanup failed")
+		},
+		buildArgsError: func(error, error) error {
+			t.Fatal("did not expect buildArgsError to run when buildArgs succeeded")
+			return nil
+		},
+		provisionResult: func(runErr error, argsCleanupErr error, cleanupErr error) error {
+			return formatLocalWindowsProvisionOutcome("ssh", "SSH", runErr, argsCleanupErr, cleanupErr)
+		},
+		ansibleLogPrefix: "local:windows:ssh:provision",
+		runTimeout:       time.Minute,
+	})
+	if err == nil {
+		t.Fatal("expected ansible failure to be returned")
+	}
+	if !strings.Contains(err.Error(), "ansible provisioning failed for local host windows via ssh: ansible failed") {
+		t.Fatalf("expected ansible failure context, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "also failed to clean ansible temp files: temp cleanup failed; cleanup failed: session cleanup failed") {
+		t.Fatalf("expected both cleanup failures to be merged, got: %v", err)
+	}
+}
+
 func TestBuildLocalProvisionArgsForWindows(t *testing.T) {
 	args, err := buildLocalProvisionArgs(alchemy_build.HostOsWindows, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
 	if err != nil {
