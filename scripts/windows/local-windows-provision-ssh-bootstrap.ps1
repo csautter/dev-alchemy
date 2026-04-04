@@ -14,6 +14,8 @@ $defaultShellRegistryPath = 'HKLM:\SOFTWARE\OpenSSH'
 $defaultShellRegistryName = 'DefaultShell'
 $defaultShellPath = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
 $administratorsAuthorizedKeysPath = Join-Path $env:ProgramData 'ssh\administrators_authorized_keys'
+$sshdConfigPath = Join-Path $env:ProgramData 'ssh\sshd_config'
+$profileListRegistryPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
 $administratorsSid = '*S-1-5-32-544'
 $systemSid = '*S-1-5-18'
 
@@ -183,11 +185,20 @@ function Get-FileState([string]$path) {
         }
     }
 
-    $bytes = [System.IO.File]::ReadAllBytes($path)
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes($path)
+        $sddl = (Get-Acl -Path $path).Sddl
+    } catch {
+        Write-Output ('Taking temporary administrative ownership of "' + $path + '" so provisioning can snapshot and later restore it.')
+        Grant-AdministrativePathAccess $path
+        $bytes = [System.IO.File]::ReadAllBytes($path)
+        $sddl = (Get-Acl -Path $path).Sddl
+    }
+
     return @{
         Exists = $true
         ContentBase64 = [System.Convert]::ToBase64String($bytes)
-        Sddl = (Get-Acl -Path $path).Sddl
+        Sddl = $sddl
     }
 }
 
@@ -198,6 +209,7 @@ function Get-LocalUserState([string]$name) {
             Exists = $false
             Enabled = $false
             Description = ''
+            Sid = ''
         }
     }
 
@@ -205,6 +217,48 @@ function Get-LocalUserState([string]$name) {
         Exists = $true
         Enabled = [bool]$localUser.Enabled
         Description = [string]$localUser.Description
+        Sid = [string]$localUser.SID.Value
+    }
+}
+
+function Get-UserProfileBasePath() {
+    $profilesDirectoryProperty = Get-ItemProperty -Path $profileListRegistryPath -Name 'ProfilesDirectory' -ErrorAction SilentlyContinue
+    if ($null -ne $profilesDirectoryProperty -and -not [string]::IsNullOrWhiteSpace([string]$profilesDirectoryProperty.ProfilesDirectory)) {
+        return [Environment]::ExpandEnvironmentVariables([string]$profilesDirectoryProperty.ProfilesDirectory)
+    }
+
+    return (Join-Path $env:SystemDrive 'Users')
+}
+
+function Get-LocalUserProfilePath([string]$name, [string]$sid) {
+    if (-not [string]::IsNullOrWhiteSpace($sid)) {
+        $profileImagePathProperty = Get-ItemProperty -Path (Join-Path $profileListRegistryPath $sid) -Name 'ProfileImagePath' -ErrorAction SilentlyContinue
+        if ($null -ne $profileImagePathProperty -and -not [string]::IsNullOrWhiteSpace([string]$profileImagePathProperty.ProfileImagePath)) {
+            return [Environment]::ExpandEnvironmentVariables([string]$profileImagePathProperty.ProfileImagePath)
+        }
+    }
+
+    return (Join-Path (Get-UserProfileBasePath) $name)
+}
+
+function Get-LocalUserAuthorizedKeysPath([string]$name, [string]$sid) {
+    return (Join-Path (Join-Path (Get-LocalUserProfilePath $name $sid) '.ssh') 'authorized_keys')
+}
+
+function Ensure-LocalUserProfile([string]$name, [securestring]$password, [string]$sid) {
+    if (-not [string]::IsNullOrWhiteSpace($sid)) {
+        $profileRegistryPath = Join-Path $profileListRegistryPath $sid
+        if (Test-Path -Path $profileRegistryPath) {
+            Write-Output ('Keeping the existing local user profile registration for "' + $name + '".')
+            return
+        }
+    }
+
+    Write-Output ('Ensuring the temporary local Ansible account has a registered Windows user profile.')
+    $credential = New-Object System.Management.Automation.PSCredential ('.\' + $name), $password
+    $process = Start-Process -FilePath 'powershell.exe' -Credential $credential -LoadUserProfile -WindowStyle Hidden -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-Command', 'exit 0') -Wait -PassThru
+    if ($process.ExitCode -ne 0) {
+        throw ('Failed to initialize a local Windows profile for "' + $name + '" (exit code ' + [string]$process.ExitCode + ').')
     }
 }
 
@@ -236,12 +290,109 @@ function Set-AdminAuthorizedKeysPermissions([string]$path) {
     }
 }
 
+function Set-UserAuthorizedKeysPermissions([string]$path, [string]$sid) {
+    if ([string]::IsNullOrWhiteSpace($sid)) {
+        throw 'A local user SID is required to secure the per-user authorized_keys file.'
+    }
+
+    Write-Output ('Setting OpenSSH per-user authorized_keys ACLs with well-known SIDs on ' + $path)
+    $icaclsOutput = & icacls.exe $path /inheritance:r /grant ('*' + $sid + ':F') /grant ($systemSid + ':F') 2>&1
+    $exitCode = $LASTEXITCODE
+    if ($null -ne $icaclsOutput) {
+        $icaclsOutput | ForEach-Object { Write-Output ('icacls: ' + $_) }
+    }
+    if ($exitCode -ne 0) {
+        throw ('icacls.exe failed while securing per-user authorized_keys with exit code ' + $exitCode)
+    }
+}
+
+function Set-PathOwnerBySid([string]$path, [string]$sid) {
+    if ([string]::IsNullOrWhiteSpace($sid)) {
+        throw 'A local user SID is required to set ownership on the path.'
+    }
+    if (-not (Test-Path -Path $path)) {
+        return
+    }
+
+    $acl = Get-Acl -Path $path
+    $acl.SetOwner([System.Security.Principal.SecurityIdentifier]::new($sid))
+    Set-Acl -Path $path -AclObject $acl
+}
+
+function Grant-AdministrativePathAccess([string]$path) {
+    if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -Path $path)) {
+        return
+    }
+
+    $takeownArgs = @('/A', '/F', $path)
+    $icaclsArgs = @($path, '/grant', ($administratorsSid + ':F'), ($systemSid + ':F'))
+    $null = & takeown.exe @takeownArgs 2>$null
+    $null = & icacls.exe @icaclsArgs 2>$null
+}
+
+function Disable-AdministratorsMatchBlock([string]$path) {
+    if (-not (Test-Path -Path $path)) {
+        return $false
+    }
+
+    $lines = Get-Content -Path $path
+    if ($null -eq $lines) {
+        return $false
+    }
+
+    $updatedLines = New-Object System.Collections.Generic.List[string]
+    $insideAdministratorsMatchBlock = $false
+    $changed = $false
+
+    foreach ($line in $lines) {
+        if ($insideAdministratorsMatchBlock) {
+            if ($line -match '^\s*Match\s+') {
+                $insideAdministratorsMatchBlock = $false
+            } elseif ([string]::IsNullOrWhiteSpace($line)) {
+                $insideAdministratorsMatchBlock = $false
+                $updatedLines.Add($line)
+                continue
+            } else {
+                if ($line -notmatch '^\s*#') {
+                    $updatedLines.Add('# ' + $line)
+                    $changed = $true
+                } else {
+                    $updatedLines.Add($line)
+                }
+                continue
+            }
+        }
+
+        if ($line -match '^\s*Match\s+Group\s+administrators\s*$') {
+            $insideAdministratorsMatchBlock = $true
+            if ($line -notmatch '^\s*#') {
+                $updatedLines.Add('# ' + $line)
+                $changed = $true
+            } else {
+                $updatedLines.Add($line)
+            }
+            continue
+        }
+
+        $updatedLines.Add($line)
+    }
+
+    if (-not $changed) {
+        return $false
+    }
+
+    [System.IO.File]::WriteAllText($path, (($updatedLines -join "`r`n") + "`r`n"), [System.Text.UTF8Encoding]::new($false))
+    return $true
+}
+
 function Write-StateSummary($state) {
     Write-Output ('OpenSSH capability state: installed=' + [string][bool]$state.CapabilityInstalled + ', state=' + [string]$state.CapabilityState)
     Write-Output ('sshd service state: existed=' + [string][bool]$state.SshdServiceExisted + ', running=' + [string][bool]$state.SshdServiceWasRunning + ', startMode=' + [string]$state.SshdServiceStartMode)
     Write-Output ('Firewall state: builtInRule existed=' + [string][bool]$state.BuiltInFirewallRuleExisted + ', enabled=' + [string][bool]$state.BuiltInFirewallRuleEnabled + '; loopbackRule existed=' + [string][bool]$state.LocalFirewallRuleExisted + ', enabled=' + [string][bool]$state.LocalFirewallRuleEnabled)
     Write-Output ('OpenSSH shell state: defaultShell existed=' + [string][bool]$state.DefaultShellExisted + ', value=' + [string]$state.DefaultShellValue)
+    Write-Output ('OpenSSH sshd_config state: existed=' + [string][bool]$state.SshdConfigExisted + ', path=' + $sshdConfigPath)
     Write-Output ('Authorized keys state: existed=' + [string][bool]$state.AuthorizedKeysExisted + ', path=' + $administratorsAuthorizedKeysPath)
+    Write-Output ('Per-user authorized keys state: existed=' + [string][bool]$state.UserAuthorizedKeysExisted + ', path=' + [string]$state.UserAuthorizedKeysPath)
     Write-Output ('Local user state: existed=' + [string][bool]$state.UserExisted + ', enabled=' + [string][bool]$state.UserWasEnabled + ', wasAdministrator=' + [string][bool]$state.UserWasAdministrator + ', description=' + [string]$state.UserDescription)
     Write-Output ('Force SSH uninstall requested: ' + [string][bool]$state.ForceSSHUninstall)
 }
@@ -251,6 +402,7 @@ $sshdServiceState = Get-ServiceState 'sshd'
 $builtInFirewallRuleState = Get-NetFirewallRuleState $openSSHBuiltInFirewallRuleName
 $localFirewallRuleState = Get-NetFirewallRuleState $localFirewallRuleName
 $defaultShellState = Get-RegistryStringState $defaultShellRegistryPath $defaultShellRegistryName
+$sshdConfigState = Get-FileState $sshdConfigPath
 $authorizedKeysState = Get-FileState $administratorsAuthorizedKeysPath
 $userState = Get-LocalUserState $userName
 $administratorsGroupName = Get-LocalAdministratorsGroupName
@@ -258,6 +410,8 @@ $userWasAdministrator = $false
 if ($userState.Exists) {
     $userWasAdministrator = Test-IsLocalAdministrator $administratorsGroupName $userName
 }
+$userAuthorizedKeysPath = Get-LocalUserAuthorizedKeysPath $userName ([string]$userState.Sid)
+$userAuthorizedKeysState = Get-FileState $userAuthorizedKeysPath
 
 $state = @{
     CapabilityInstalled = [bool]$capabilityState.Installed
@@ -273,9 +427,16 @@ $state = @{
     LocalFirewallRuleEnabled = [bool]$localFirewallRuleState.Enabled
     DefaultShellExisted = [bool]$defaultShellState.Exists
     DefaultShellValue = [string]$defaultShellState.Value
+    SshdConfigExisted = [bool]$sshdConfigState.Exists
+    SshdConfigContentBase64 = [string]$sshdConfigState.ContentBase64
+    SshdConfigSddl = [string]$sshdConfigState.Sddl
     AuthorizedKeysExisted = [bool]$authorizedKeysState.Exists
     AuthorizedKeysContentBase64 = [string]$authorizedKeysState.ContentBase64
     AuthorizedKeysSddl = [string]$authorizedKeysState.Sddl
+    UserAuthorizedKeysPath = [string]$userAuthorizedKeysPath
+    UserAuthorizedKeysExisted = [bool]$userAuthorizedKeysState.Exists
+    UserAuthorizedKeysContentBase64 = [string]$userAuthorizedKeysState.ContentBase64
+    UserAuthorizedKeysSddl = [string]$userAuthorizedKeysState.Sddl
     UserName = $userName
     UserExisted = [bool]$userState.Exists
     UserWasEnabled = [bool]$userState.Enabled
@@ -337,6 +498,12 @@ if (-not (Test-Path -Path $defaultShellRegistryPath)) {
 }
 New-ItemProperty -Path $defaultShellRegistryPath -Name $defaultShellRegistryName -Value $defaultShellPath -PropertyType String -Force | Out-Null
 
+if (Disable-AdministratorsMatchBlock $sshdConfigPath) {
+    Write-Output 'Temporarily disabled the default Match Group administrators block in sshd_config for this provisioning run.'
+} else {
+    Write-Output 'Keeping the existing sshd_config administrators match settings unchanged for this provisioning run.'
+}
+
 Write-Output 'Creating or updating the temporary local Ansible account.'
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force
 $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
@@ -357,8 +524,14 @@ if (-not (Test-IsLocalAdministrator $administratorsGroupName $userName)) {
 } else {
     Write-Output ('The local user "' + $userName + '" is already a member of "' + $administratorsGroupName + '".')
 }
+Ensure-LocalUserProfile $userName $securePassword ([string]$localUser.SID.Value)
 
-Write-Output 'Installing the temporary SSH public key for administrator logins.'
+Write-Output 'Installing the temporary SSH public key for Windows OpenSSH logins.'
+$localUserSid = [string]$localUser.SID.Value
+$userAuthorizedKeysPath = Get-LocalUserAuthorizedKeysPath $userName $localUserSid
+$state.UserAuthorizedKeysPath = [string]$userAuthorizedKeysPath
+Save-State $state
+
 $sshDirectory = Split-Path -Parent $administratorsAuthorizedKeysPath
 if (-not (Test-Path -Path $sshDirectory)) {
     Write-Output ('Creating the SSH directory "' + $sshDirectory + '".')
@@ -377,7 +550,44 @@ $normalizedAuthorizedKeys += ($publicKey.Trim() + "`r`n")
 [System.IO.File]::WriteAllText($administratorsAuthorizedKeysPath, $normalizedAuthorizedKeys, [System.Text.UTF8Encoding]::new($false))
 Set-AdminAuthorizedKeysPermissions $administratorsAuthorizedKeysPath
 
-Write-Output 'Starting the sshd service.'
-Start-Service -Name 'sshd'
+$userSSHDirectory = Split-Path -Parent $userAuthorizedKeysPath
+$userProfilePath = Split-Path -Parent $userSSHDirectory
+if (-not (Test-Path -Path $userProfilePath)) {
+    Write-Output ('Creating the local user profile directory "' + $userProfilePath + '" for OpenSSH home resolution.')
+    New-Item -Path $userProfilePath -ItemType Directory -Force | Out-Null
+}
+Set-PathOwnerBySid $userProfilePath $localUserSid
+
+if (-not (Test-Path -Path $userSSHDirectory)) {
+    Write-Output ('Creating the per-user SSH directory "' + $userSSHDirectory + '".')
+    New-Item -Path $userSSHDirectory -ItemType Directory -Force | Out-Null
+}
+Set-PathOwnerBySid $userSSHDirectory $localUserSid
+$existingUserAuthorizedKeys = ''
+if (Test-Path -Path $userAuthorizedKeysPath) {
+    Write-Output ('Reading the existing per-user authorized_keys file from "' + $userAuthorizedKeysPath + '".')
+    try {
+        $existingUserAuthorizedKeys = [System.IO.File]::ReadAllText($userAuthorizedKeysPath)
+    } catch {
+        Write-Output ('Taking temporary administrative ownership of "' + $userAuthorizedKeysPath + '" so provisioning can append the temporary key.')
+        Grant-AdministrativePathAccess $userAuthorizedKeysPath
+        $existingUserAuthorizedKeys = [System.IO.File]::ReadAllText($userAuthorizedKeysPath)
+    }
+}
+$normalizedUserAuthorizedKeys = $existingUserAuthorizedKeys.TrimEnd("`r", "`n")
+if (-not [string]::IsNullOrWhiteSpace($normalizedUserAuthorizedKeys)) {
+    $normalizedUserAuthorizedKeys += "`r`n"
+}
+$normalizedUserAuthorizedKeys += ($publicKey.Trim() + "`r`n")
+[System.IO.File]::WriteAllText($userAuthorizedKeysPath, $normalizedUserAuthorizedKeys, [System.Text.UTF8Encoding]::new($false))
+Set-PathOwnerBySid $userAuthorizedKeysPath $localUserSid
+Set-UserAuthorizedKeysPermissions $userAuthorizedKeysPath $localUserSid
+
+Write-Output 'Starting or restarting the sshd service.'
+if ((Get-Service -Name 'sshd').Status -eq 'Running') {
+    Restart-Service -Name 'sshd' -Force
+} else {
+    Start-Service -Name 'sshd'
+}
 
 Write-Output 'Local Windows SSH provision bootstrap completed.'

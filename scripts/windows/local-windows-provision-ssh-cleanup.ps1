@@ -7,6 +7,8 @@ $localFirewallRuleName = 'DevAlchemyLocalSSHDLoopback'
 $defaultShellRegistryPath = 'HKLM:\SOFTWARE\OpenSSH'
 $defaultShellRegistryName = 'DefaultShell'
 $administratorsAuthorizedKeysPath = Join-Path $env:ProgramData 'ssh\administrators_authorized_keys'
+$administratorsSid = '*S-1-5-32-544'
+$systemSid = '*S-1-5-18'
 
 if ([string]::IsNullOrWhiteSpace($statePath) -or -not (Test-Path -Path $statePath)) {
     Write-Output 'No local Windows SSH provision state file was found; skipping cleanup.'
@@ -96,6 +98,18 @@ function Restore-RegistryStringState([string]$path, [string]$name, [bool]$existe
 }
 
 function Restore-FileState([string]$path, [bool]$existed, [string]$contentBase64, [string]$sddl) {
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        return
+    }
+
+    if (Test-Path -Path $path) {
+        Grant-AdministrativePathAccess $path
+        $parentPath = Split-Path -Parent $path
+        if (-not [string]::IsNullOrWhiteSpace($parentPath) -and (Test-Path -Path $parentPath)) {
+            Grant-AdministrativePathAccess $parentPath
+        }
+    }
+
     if ($existed) {
         $directory = Split-Path -Parent $path
         if (-not (Test-Path -Path $directory)) {
@@ -119,6 +133,17 @@ function Restore-FileState([string]$path, [bool]$existed, [string]$contentBase64
     if (Test-Path -Path $path) {
         Remove-Item -Path $path -Force
     }
+}
+
+function Grant-AdministrativePathAccess([string]$path) {
+    if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -Path $path)) {
+        return
+    }
+
+    $takeownArgs = @('/A', '/F', $path)
+    $icaclsArgs = @($path, '/grant', ($administratorsSid + ':F'), ($systemSid + ':F'))
+    $null = & takeown.exe @takeownArgs 2>$null
+    $null = & icacls.exe @icaclsArgs 2>$null
 }
 
 function Get-LocalAdministratorsGroupName() {
@@ -176,9 +201,11 @@ if (-not [string]::IsNullOrWhiteSpace($userName)) {
     }
 }
 
-Write-Output 'Restoring the administrator authorized_keys file and OpenSSH shell configuration.'
+Write-Output 'Restoring the administrator and per-user authorized_keys files plus OpenSSH shell configuration.'
 Restore-FileState $administratorsAuthorizedKeysPath ([bool]$state.AuthorizedKeysExisted) ([string]$state.AuthorizedKeysContentBase64) ([string]$state.AuthorizedKeysSddl)
+Restore-FileState ([string]$state.UserAuthorizedKeysPath) ([bool]$state.UserAuthorizedKeysExisted) ([string]$state.UserAuthorizedKeysContentBase64) ([string]$state.UserAuthorizedKeysSddl)
 Restore-RegistryStringState $defaultShellRegistryPath $defaultShellRegistryName ([bool]$state.DefaultShellExisted) ([string]$state.DefaultShellValue)
+Restore-FileState (Join-Path $env:ProgramData 'ssh\sshd_config') ([bool]$state.SshdConfigExisted) ([string]$state.SshdConfigContentBase64) ([string]$state.SshdConfigSddl)
 
 Write-Output 'Restoring OpenSSH firewall rules.'
 Restore-NetFirewallRuleState $localFirewallRuleName ([bool]$state.LocalFirewallRuleExisted) ([bool]$state.LocalFirewallRuleEnabled)

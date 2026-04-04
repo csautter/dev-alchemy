@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -24,11 +25,13 @@ const (
 	localWindowsSSHDefaultShell     = `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`
 	localWindowsSSHBootstrapTimeout = 15 * time.Minute
 	localWindowsSSHCleanupTimeout   = 10 * time.Minute
+	localWindowsSSHPreflightTimeout = 45 * time.Second
 
 	localWindowsProvisionSSHPublicKeyEnvVar = "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_SSH_PUBLIC_KEY"
 	localWindowsForceSSHUninstallEnvVar     = "DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_SSH_UNINSTALL"
 	localWindowsSSHBootstrapLogPrefix       = "local:windows:ssh:bootstrap"
 	localWindowsSSHCleanupLogPrefix         = "local:windows:ssh:cleanup"
+	localWindowsSSHPreflightLogPrefix       = "local:windows:ssh:preflight"
 	localWindowsSSHBootstrapScriptPath      = "scripts/windows/local-windows-provision-ssh-bootstrap.ps1"
 	localWindowsSSHCleanupScriptPath        = "scripts/windows/local-windows-provision-ssh-cleanup.ps1"
 	localWindowsSSHCommonArgs               = defaultAnsibleSSHCommonArgs + " -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes"
@@ -36,6 +39,7 @@ const (
 
 var setupLocalWindowsSSHProvisionSessionFunc = setupLocalWindowsSSHProvisionSession
 var cleanupLocalWindowsSSHProvisionSessionFunc = cleanupLocalWindowsSSHProvisionSession
+var runLocalWindowsSSHPreflightFunc = runLocalWindowsSSHPreflight
 var localWindowsSSHProvisionBootstrapPowerShell = mustLoadLocalWindowsPowerShellAsset(localWindowsSSHBootstrapScriptPath)
 var localWindowsSSHProvisionCleanupPowerShell = mustLoadLocalWindowsPowerShellAsset(localWindowsSSHCleanupScriptPath)
 
@@ -49,6 +53,13 @@ func runLocalWindowsSSHProvision(projectDir string, options ProvisionOptions) er
 	session, err := setupLocalWindowsSSHProvisionSessionFunc(projectDir, options)
 	if err != nil {
 		return err
+	}
+	if err := runLocalWindowsSSHPreflightFunc(projectDir, session.ConnectionConfig); err != nil {
+		cleanupErr := cleanupLocalWindowsSSHProvisionSessionFunc(projectDir, session, options)
+		if cleanupErr != nil {
+			return fmt.Errorf("local Windows SSH bootstrap completed but the direct SSH preflight failed: %w (also failed to restore secure SSH state: %v)", err, cleanupErr)
+		}
+		return fmt.Errorf("local Windows SSH bootstrap completed but the direct SSH preflight failed: %w", err)
 	}
 
 	inventoryPath, inventoryTarget := resolveStaticInventoryPathAndTarget(
@@ -187,6 +198,66 @@ func setupLocalWindowsSSHProvisionSession(projectDir string, options ProvisionOp
 	}
 
 	return session, nil
+}
+
+func runLocalWindowsSSHPreflight(projectDir string, connectionConfig sshAnsibleConnectionConfig) error {
+	cygwinWorkingDir, err := windowsPathToCygwinPath(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to convert working directory to cygwin path for SSH preflight: %w", err)
+	}
+	cygwinBashExecutable, err := getCygwinBashExecutable()
+	if err != nil {
+		return fmt.Errorf("failed to locate cygwin bash executable for SSH preflight: %w", err)
+	}
+
+	sshArgs := []string{
+		"ssh",
+		"-vvv",
+		"-o", "BatchMode=yes",
+		"-o", "PreferredAuthentications=publickey",
+		"-o", "PubkeyAuthentication=yes",
+		"-o", "PasswordAuthentication=no",
+		"-o", "KbdInteractiveAuthentication=no",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "IdentitiesOnly=yes",
+		"-o", "ConnectTimeout=20",
+		"-i", connectionConfig.PrivateKeyFile,
+		connectionConfig.User + "@" + localWindowsSSHLoopbackIP,
+		"whoami.exe",
+	}
+
+	quotedArgs := make([]string, 0, len(sshArgs))
+	for _, arg := range sshArgs {
+		quotedArgs = append(quotedArgs, bashSingleQuote(arg))
+	}
+
+	bashCommand := "cd " + bashSingleQuote(cygwinWorkingDir) + " && " + strings.Join(quotedArgs, " ")
+	output, err := runProvisionCommandWithCombinedOutputWithEnv(
+		projectDir,
+		localWindowsSSHPreflightTimeout,
+		cygwinBashExecutable,
+		[]string{"-l", "-c", bashCommand},
+		ansibleRuntimeEnv(),
+	)
+	trimmedOutput := strings.TrimSpace(output)
+	if trimmedOutput != "" {
+		for _, line := range strings.Split(trimmedOutput, "\n") {
+			logLine := strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+			if logLine == "" {
+				continue
+			}
+			log.Printf("%s ssh: %s", localWindowsSSHPreflightLogPrefix, logLine)
+		}
+	}
+	if err != nil {
+		details := trimmedOutput
+		if details == "" {
+			details = "no SSH diagnostic output captured"
+		}
+		return fmt.Errorf("temporary SSH authentication test failed before Ansible started: %w; output: %s", err, details)
+	}
+	return nil
 }
 
 func cleanupLocalWindowsSSHProvisionSession(projectDir string, session localWindowsSSHProvisionSession, options ProvisionOptions) error {

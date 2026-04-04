@@ -505,6 +505,70 @@ func TestRunLocalWindowsProvisionAlwaysCleansUpSecureSession(t *testing.T) {
 	}
 }
 
+func TestRunLocalWindowsSSHProvisionStopsAfterPreflightFailureAndCleansUp(t *testing.T) {
+	previousSetup := setupLocalWindowsSSHProvisionSessionFunc
+	previousCleanup := cleanupLocalWindowsSSHProvisionSessionFunc
+	previousPreflight := runLocalWindowsSSHPreflightFunc
+	previousRunner := runAnsibleProvisionCommandFunc
+	t.Cleanup(func() {
+		setupLocalWindowsSSHProvisionSessionFunc = previousSetup
+		cleanupLocalWindowsSSHProvisionSessionFunc = previousCleanup
+		runLocalWindowsSSHPreflightFunc = previousPreflight
+		runAnsibleProvisionCommandFunc = previousRunner
+	})
+
+	projectDir := t.TempDir()
+	statePath := filepath.Join(projectDir, "session-state.json")
+	privateKeyPath := filepath.Join(projectDir, ".local-windows-provision-key-test.pem")
+	var cleanedUp bool
+	var ansibleRan bool
+
+	setupLocalWindowsSSHProvisionSessionFunc = func(_ string, _ ProvisionOptions) (localWindowsSSHProvisionSession, error) {
+		return localWindowsSSHProvisionSession{
+			ConnectionConfig: sshAnsibleConnectionConfig{
+				User:            localWindowsProvisionUserName,
+				Connection:      "ssh",
+				SshCommonArgs:   localWindowsSSHCommonArgs,
+				SshTimeout:      "120",
+				SshRetries:      "3",
+				PrivateKeyFile:  filepath.Base(privateKeyPath),
+				ShellType:       "powershell",
+				ShellExecutable: "powershell.exe",
+			},
+			StatePath:      statePath,
+			PrivateKeyPath: privateKeyPath,
+		}, nil
+	}
+	cleanupLocalWindowsSSHProvisionSessionFunc = func(_ string, session localWindowsSSHProvisionSession, _ ProvisionOptions) error {
+		if session.StatePath != statePath {
+			t.Fatalf("expected cleanup to receive state path %q, got %q", statePath, session.StatePath)
+		}
+		cleanedUp = true
+		return nil
+	}
+	runLocalWindowsSSHPreflightFunc = func(_ string, _ sshAnsibleConnectionConfig) error {
+		return errors.New("permission denied (publickey)")
+	}
+	runAnsibleProvisionCommandFunc = func(_ string, _ []string, _ time.Duration, _ string) error {
+		ansibleRan = true
+		return nil
+	}
+
+	err := runLocalWindowsSSHProvision(projectDir, ProvisionOptions{Check: true, Verbosity: defaultAnsibleVerbosity})
+	if err == nil {
+		t.Fatal("expected local windows ssh provision to fail when the direct ssh preflight fails")
+	}
+	if !strings.Contains(err.Error(), "direct SSH preflight failed") {
+		t.Fatalf("expected preflight error context, got: %v", err)
+	}
+	if ansibleRan {
+		t.Fatal("did not expect ansible to start after the direct ssh preflight failed")
+	}
+	if !cleanedUp {
+		t.Fatal("expected secure local windows cleanup to run after the direct ssh preflight failure")
+	}
+}
+
 func TestRunLocalWindowsProvisionCleansUpWhenArgumentBuildFails(t *testing.T) {
 	previousSetup := setupLocalWindowsWinRMProvisionSessionFunc
 	previousCleanup := cleanupLocalWindowsWinRMProvisionSessionFunc
@@ -1421,6 +1485,42 @@ func TestLocalWindowsSSHProvisionBootstrapPowerShellConfiguresOpenSSHServer(t *t
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Set-AdminAuthorizedKeysPermissions") {
 		t.Fatal("expected ssh bootstrap script to harden administrators_authorized_keys permissions")
 	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Get-LocalUserAuthorizedKeysPath") {
+		t.Fatal("expected ssh bootstrap script to resolve a per-user authorized_keys path for localized Windows SSH auth")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Set-UserAuthorizedKeysPermissions") {
+		t.Fatal("expected ssh bootstrap script to harden the per-user authorized_keys file")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Set-PathOwnerBySid") {
+		t.Fatal("expected ssh bootstrap script to set ownership on the temporary user's SSH paths")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Grant-AdministrativePathAccess") {
+		t.Fatal("expected ssh bootstrap script to recover access to stale per-user SSH files from previous runs")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Ensure-LocalUserProfile") {
+		t.Fatal("expected ssh bootstrap script to ensure the temporary local ssh user has a Windows profile")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Disable-AdministratorsMatchBlock") {
+		t.Fatal("expected ssh bootstrap script to handle the default administrators match block in sshd_config")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Temporarily disabled the default Match Group administrators block in sshd_config") {
+		t.Fatal("expected ssh bootstrap script to log when it disables the default administrators match block")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Per-user authorized keys state: existed=") {
+		t.Fatal("expected ssh bootstrap script to log per-user authorized_keys state for debugging")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Creating the per-user SSH directory") {
+		t.Fatal("expected ssh bootstrap script to create a per-user SSH directory when needed")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Creating the local user profile directory") {
+		t.Fatal("expected ssh bootstrap script to create a local user profile directory when OpenSSH home resolution needs it")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "registered Windows user profile") {
+		t.Fatal("expected ssh bootstrap script to initialize a registered Windows profile for the temporary local ssh user")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Reading the existing per-user authorized_keys file") {
+		t.Fatal("expected ssh bootstrap script to preserve any existing per-user authorized_keys content")
+	}
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Write-StateSummary") {
 		t.Fatal("expected ssh bootstrap script to emit a captured state summary for debugging")
 	}
@@ -1433,11 +1533,29 @@ func TestLocalWindowsSSHProvisionBootstrapPowerShellConfiguresOpenSSHServer(t *t
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "DefaultShell") {
 		t.Fatal("expected ssh bootstrap script to set the default shell for OpenSSH")
 	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Starting or restarting the sshd service.") {
+		t.Fatal("expected ssh bootstrap script to restart sshd when configuration changes require it")
+	}
 }
 
 func TestLocalWindowsSSHProvisionCleanupPowerShellRestoresOpenSSHState(t *testing.T) {
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Restore-FileState") {
 		t.Fatal("expected ssh cleanup script to restore the administrator authorized_keys file")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "state.UserAuthorizedKeysPath") {
+		t.Fatal("expected ssh cleanup script to restore the per-user authorized_keys file")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "SshdConfigContentBase64") {
+		t.Fatal("expected ssh cleanup script to restore sshd_config after provisioning")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "takeown.exe") {
+		t.Fatal("expected ssh cleanup script to take ownership before restoring per-user SSH files")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Grant-AdministrativePathAccess") {
+		t.Fatal("expected ssh cleanup script to recover access to stale per-user SSH paths before restoring them")
+	}
+	if strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "'/D', 'Y'") {
+		t.Fatal("expected ssh cleanup script to avoid locale-sensitive takeown /D Y usage")
 	}
 	if strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Remove-WindowsCapability -Online") {
 		t.Fatal("expected ssh cleanup script to avoid uninstalling OpenSSH Server because that requires a reboot")
