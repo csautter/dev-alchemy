@@ -79,29 +79,38 @@ You can also use the built-in wrapper for host-local provisioning:
 
 ```bash
 alchemy provision local --check
+# switch to SSH transport on Windows if you want to avoid the temporary WinRM setup
+alchemy provision local --proto ssh --check
 alchemy provision local --playbook ./playbooks/bootstrap.yml
 # pass through extra ansible-playbook flags after `--`
 alchemy provision local -- --diff --tags java
 alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
 alchemy provision local --check --yes
 alchemy provision local --check --yes --force-winrm-uninstall
+alchemy provision local --proto ssh --check --yes --force-ssh-uninstall
 alchemy provision local
 ```
 
-On Windows this uses the documented localhost WinRM inventory. On macOS and
-Linux it uses the standard localhost inventory. On Windows the wrapper
-creates a temporary administrator account with a random password, configures a
-temporary loopback-only WinRM HTTPS listener for the run, and then disables the
-temporary account again during cleanup. Because those are significant host
-changes, the Windows local flow asks for confirmation by default; use `--yes`
-to skip those CLI confirmation prompts. On Windows, local provisioning is only
-fully non-interactive when you start `alchemy` from an already elevated shell.
-If the current shell is not elevated, the privileged bootstrap and cleanup
-steps still trigger a UAC prompt before they run. The bootstrap/cleanup logs
-are streamed back into the main terminal. Use `--force-winrm-uninstall` to
-force cleanup to disable WinRM and remove transient remoting setup after the
-run. The macOS/Linux local target is currently marked unstable until it has
-been validated end-to-end.
+On Windows the default local transport is WinRM with
+`inventory/localhost_windows_winrm.yml`, and `--proto ssh` switches to
+`inventory/localhost_windows_ssh.yml`. The WinRM wrapper creates a temporary
+administrator account with a random password and a temporary loopback-only
+WinRM HTTPS listener for the run. The SSH wrapper creates or updates a
+temporary administrator account with a temporary SSH key, enables or installs
+OpenSSH Server when needed, sets the default SSH shell to PowerShell for the
+run, and restores the prior SSH state afterwards. Because those are significant
+host changes, the Windows local flow asks for confirmation by default; use
+`--yes` to skip those CLI confirmation prompts. On Windows, local provisioning
+is only fully non-interactive when you start `alchemy` from an already
+elevated shell. If the current shell is not elevated, the privileged bootstrap
+and cleanup steps still trigger a UAC prompt before they run. The
+bootstrap/cleanup logs are streamed back into the main terminal.
+`--force-winrm-uninstall` is only for the default WinRM mode and forces cleanup
+to disable WinRM and remove transient remoting setup after the run. The
+`--force-ssh-uninstall` flag is only for `--proto ssh` and forces cleanup to
+uninstall OpenSSH Server and remove the transient Ansible user after the run.
+macOS/Linux local target is currently marked unstable until it has been
+validated end-to-end.
 
 ## 🚀 Getting Started
 
@@ -214,6 +223,7 @@ Use the built-in wrapper first when you want the shared command surface:
 
 ```bash
 alchemy provision local --check
+alchemy provision local --proto ssh --check
 alchemy provision local --playbook ./playbooks/bootstrap.yml
 alchemy provision local -- --diff
 alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass

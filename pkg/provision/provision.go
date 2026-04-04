@@ -82,6 +82,13 @@ const (
 	localUnixInventoryTarget = "localhost"
 )
 
+type LocalWindowsProvisionProtocol string
+
+const (
+	LocalWindowsProvisionProtocolWinRM LocalWindowsProvisionProtocol = "winrm"
+	LocalWindowsProvisionProtocolSSH   LocalWindowsProvisionProtocol = "ssh"
+)
+
 var (
 	windowsIPv4Regex   = regexp.MustCompile(`(?mi)IPv4 Address[^:]*:\s*((?:\d{1,3}\.){3}\d{1,3})`)
 	linuxIPv4Regex     = regexp.MustCompile(`(?m)\b((?:\d{1,3}\.){3}\d{1,3})\b`)
@@ -93,14 +100,15 @@ var (
 	}
 )
 
-var localWindowsForceWinRMUninstall bool
-
 type ProvisionOptions struct {
-	Check         bool
-	Verbosity     int
-	PlaybookPath  string
-	InventoryPath string
-	ExtraArgs     []string
+	Check                           bool
+	Verbosity                       int
+	PlaybookPath                    string
+	InventoryPath                   string
+	ExtraArgs                       []string
+	LocalWindowsProtocol            LocalWindowsProvisionProtocol
+	LocalWindowsForceWinRMUninstall bool
+	LocalWindowsForceSSHUninstall   bool
 }
 
 type windowsAnsibleConnectionConfig struct {
@@ -121,17 +129,20 @@ type windowsAnsibleConnectionEnvVars struct {
 	Port           string
 }
 
-type ubuntuAnsibleConnectionConfig struct {
-	User           string
-	Password       string
-	BecomePassword string
-	Connection     string
-	SshCommonArgs  string
-	SshTimeout     string
-	SshRetries     string
+type sshAnsibleConnectionConfig struct {
+	User            string
+	Password        string
+	BecomePassword  string
+	Connection      string
+	SshCommonArgs   string
+	SshTimeout      string
+	SshRetries      string
+	PrivateKeyFile  string
+	ShellType       string
+	ShellExecutable string
 }
 
-type ubuntuAnsibleConnectionEnvVars struct {
+type sshAnsibleConnectionEnvVars struct {
 	User           string
 	Password       string
 	BecomePassword string
@@ -168,24 +179,20 @@ var inspectProvisionTarget = alchemy_deploy.InspectStartTarget
 var runProvisionCommandWithCombinedOutputWithEnv = runCommandWithCombinedOutputWithEnv
 var runAnsibleProvisionCommandFunc = runAnsibleProvisionCommand
 
-func SetLocalWindowsForceWinRMUninstall(force bool) func() {
-	previous := localWindowsForceWinRMUninstall
-	localWindowsForceWinRMUninstall = force
-
-	return func() {
-		localWindowsForceWinRMUninstall = previous
-	}
-}
-
 func DefaultProvisionPlaybookPath() string {
 	return defaultProvisionPlaybook
 }
 
+func DefaultLocalWindowsProvisionProtocol() LocalWindowsProvisionProtocol {
+	return LocalWindowsProvisionProtocolWinRM
+}
+
 func RunProvision(vm alchemy_build.VirtualMachineConfig, check bool) error {
 	return RunProvisionWithOptions(vm, ProvisionOptions{
-		Check:        check,
-		Verbosity:    defaultAnsibleVerbosity,
-		PlaybookPath: defaultProvisionPlaybook,
+		Check:                check,
+		Verbosity:            defaultAnsibleVerbosity,
+		PlaybookPath:         defaultProvisionPlaybook,
+		LocalWindowsProtocol: DefaultLocalWindowsProvisionProtocol(),
 	})
 }
 
@@ -197,8 +204,22 @@ func ValidateProvisionVerbosity(verbosity int) error {
 	return nil
 }
 
+func ValidateLocalWindowsProvisionProtocol(protocol LocalWindowsProvisionProtocol) error {
+	switch normalizeLocalWindowsProvisionProtocol(protocol) {
+	case LocalWindowsProvisionProtocolWinRM, LocalWindowsProvisionProtocolSSH:
+		return nil
+	default:
+		return fmt.Errorf("local windows provision protocol must be one of %q or %q: %q", LocalWindowsProvisionProtocolWinRM, LocalWindowsProvisionProtocolSSH, protocol)
+	}
+}
+
 func RunProvisionWithOptions(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
+	options = normalizeProvisionOptions(options)
+
 	if err := ValidateProvisionVerbosity(options.Verbosity); err != nil {
+		return err
+	}
+	if err := ValidateLocalWindowsProvisionProtocol(options.LocalWindowsProtocol); err != nil {
 		return err
 	}
 
@@ -1035,16 +1056,8 @@ func buildWindowsProvisionExtraVars(connectionConfig windowsAnsibleConnectionCon
 	return json.Marshal(extraVars)
 }
 
-func buildSSHProvisionArgs(projectDir string, ip string, connectionConfig ubuntuAnsibleConnectionConfig, options ProvisionOptions) ([]string, func() error, error) {
-	extraVars, err := json.Marshal(map[string]string{
-		"ansible_user":            connectionConfig.User,
-		"ansible_password":        connectionConfig.Password,
-		"ansible_become_password": connectionConfig.BecomePassword,
-		"ansible_connection":      connectionConfig.Connection,
-		"ansible_ssh_common_args": connectionConfig.SshCommonArgs,
-		"ansible_ssh_timeout":     connectionConfig.SshTimeout,
-		"ansible_ssh_retries":     connectionConfig.SshRetries,
-	})
+func buildSSHProvisionArgs(projectDir string, ip string, connectionConfig sshAnsibleConnectionConfig, options ProvisionOptions) ([]string, func() error, error) {
+	extraVars, err := buildSSHProvisionExtraVars(connectionConfig)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1052,8 +1065,41 @@ func buildSSHProvisionArgs(projectDir string, ip string, connectionConfig ubuntu
 	return buildAnsibleProvisionArgs(projectDir, ip, extraVars, options)
 }
 
+func buildSSHProvisionExtraVars(connectionConfig sshAnsibleConnectionConfig) ([]byte, error) {
+	extraVars := map[string]string{
+		"ansible_user":       connectionConfig.User,
+		"ansible_connection": connectionConfig.Connection,
+	}
+	if connectionConfig.Password != "" {
+		extraVars["ansible_password"] = connectionConfig.Password
+	}
+	if connectionConfig.BecomePassword != "" {
+		extraVars["ansible_become_password"] = connectionConfig.BecomePassword
+	}
+	if connectionConfig.SshCommonArgs != "" {
+		extraVars["ansible_ssh_common_args"] = connectionConfig.SshCommonArgs
+	}
+	if connectionConfig.SshTimeout != "" {
+		extraVars["ansible_ssh_timeout"] = connectionConfig.SshTimeout
+	}
+	if connectionConfig.SshRetries != "" {
+		extraVars["ansible_ssh_retries"] = connectionConfig.SshRetries
+	}
+	if connectionConfig.PrivateKeyFile != "" {
+		extraVars["ansible_ssh_private_key_file"] = connectionConfig.PrivateKeyFile
+	}
+	if connectionConfig.ShellType != "" {
+		extraVars["ansible_shell_type"] = connectionConfig.ShellType
+	}
+	if connectionConfig.ShellExecutable != "" {
+		extraVars["ansible_shell_executable"] = connectionConfig.ShellExecutable
+	}
+
+	return json.Marshal(extraVars)
+}
+
 func buildLocalProvisionArgs(hostOs alchemy_build.HostOsType, options ProvisionOptions) ([]string, error) {
-	defaultInventoryPath, defaultInventoryTarget, err := localProvisionInventory(hostOs)
+	defaultInventoryPath, defaultInventoryTarget, err := localProvisionInventory(hostOs, options.LocalWindowsProtocol)
 	if err != nil {
 		return nil, err
 	}
@@ -1203,15 +1249,34 @@ func resolveProvisionPlaybookPath(options ProvisionOptions) string {
 	return defaultProvisionPlaybook
 }
 
-func localProvisionInventory(hostOs alchemy_build.HostOsType) (string, string, error) {
+func localProvisionInventory(hostOs alchemy_build.HostOsType, protocol LocalWindowsProvisionProtocol) (string, string, error) {
 	switch hostOs {
 	case alchemy_build.HostOsWindows:
-		return localWindowsWinRMInventoryPath, localWindowsWinRMInventoryTarget, nil
+		switch normalizeLocalWindowsProvisionProtocol(protocol) {
+		case LocalWindowsProvisionProtocolSSH:
+			return localWindowsSSHInventoryPath, localWindowsSSHInventoryTarget, nil
+		default:
+			return localWindowsWinRMInventoryPath, localWindowsWinRMInventoryTarget, nil
+		}
 	case alchemy_build.HostOsDarwin, alchemy_build.HostOsLinux:
 		return localUnixInventoryPath, localUnixInventoryTarget, nil
 	default:
 		return "", "", fmt.Errorf("local provision is not implemented for host OS %s", hostOs)
 	}
+}
+
+func normalizeProvisionOptions(options ProvisionOptions) ProvisionOptions {
+	options.LocalWindowsProtocol = normalizeLocalWindowsProvisionProtocol(options.LocalWindowsProtocol)
+	return options
+}
+
+func normalizeLocalWindowsProvisionProtocol(protocol LocalWindowsProvisionProtocol) LocalWindowsProvisionProtocol {
+	normalized := strings.ToLower(strings.TrimSpace(string(protocol)))
+	if normalized == "" {
+		return DefaultLocalWindowsProvisionProtocol()
+	}
+
+	return LocalWindowsProvisionProtocol(normalized)
 }
 
 func loadWindowsHypervAnsibleConnectionConfig(projectDir string) (windowsAnsibleConnectionConfig, error) {
@@ -1267,8 +1332,8 @@ func loadWindowsAnsibleConnectionConfig(projectDir string, envVars windowsAnsibl
 	return connectionConfig, nil
 }
 
-func loadUbuntuHypervAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConnectionConfig, error) {
-	return loadUbuntuAnsibleConnectionConfig(projectDir, ubuntuAnsibleConnectionEnvVars{
+func loadUbuntuHypervAnsibleConnectionConfig(projectDir string) (sshAnsibleConnectionConfig, error) {
+	return loadUbuntuAnsibleConnectionConfig(projectDir, sshAnsibleConnectionEnvVars{
 		User:           hypervUbuntuAnsibleUserEnvVar,
 		Password:       hypervUbuntuAnsiblePasswordEnvVar,
 		BecomePassword: hypervUbuntuAnsibleBecomePasswordEnvVar,
@@ -1279,8 +1344,8 @@ func loadUbuntuHypervAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleCo
 	})
 }
 
-func loadUbuntuUtmAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConnectionConfig, error) {
-	return loadUbuntuAnsibleConnectionConfig(projectDir, ubuntuAnsibleConnectionEnvVars{
+func loadUbuntuUtmAnsibleConnectionConfig(projectDir string) (sshAnsibleConnectionConfig, error) {
+	return loadUbuntuAnsibleConnectionConfig(projectDir, sshAnsibleConnectionEnvVars{
 		User:           utmUbuntuAnsibleUserEnvVar,
 		Password:       utmUbuntuAnsiblePasswordEnvVar,
 		BecomePassword: utmUbuntuAnsibleBecomePasswordEnvVar,
@@ -1291,15 +1356,15 @@ func loadUbuntuUtmAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConne
 	})
 }
 
-func loadUbuntuAnsibleConnectionConfig(projectDir string, envVars ubuntuAnsibleConnectionEnvVars) (ubuntuAnsibleConnectionConfig, error) {
+func loadUbuntuAnsibleConnectionConfig(projectDir string, envVars sshAnsibleConnectionEnvVars) (sshAnsibleConnectionConfig, error) {
 	envFilePath := filepath.Join(projectDir, ".env")
 	valuesFromFile, err := parseDotEnvFile(envFilePath)
 	if err != nil {
-		return ubuntuAnsibleConnectionConfig{}, err
+		return sshAnsibleConnectionConfig{}, err
 	}
 
 	password := defaultIfEmpty(resolveEnvValue(envVars.Password, valuesFromFile), defaultUbuntuGuestPassword)
-	connectionConfig := ubuntuAnsibleConnectionConfig{
+	connectionConfig := sshAnsibleConnectionConfig{
 		User:           defaultIfEmpty(resolveEnvValue(envVars.User, valuesFromFile), "packer"),
 		Password:       password,
 		BecomePassword: defaultIfEmpty(resolveEnvValue(envVars.BecomePassword, valuesFromFile), password),
@@ -1315,18 +1380,18 @@ func loadUbuntuAnsibleConnectionConfig(projectDir string, envVars ubuntuAnsibleC
 	return connectionConfig, nil
 }
 
-func loadMacOSTartAnsibleConnectionConfig(projectDir string) (ubuntuAnsibleConnectionConfig, error) {
+func loadMacOSTartAnsibleConnectionConfig(projectDir string) (sshAnsibleConnectionConfig, error) {
 	envFilePath := filepath.Join(projectDir, ".env")
 	valuesFromFile, err := parseDotEnvFile(envFilePath)
 	if err != nil {
-		return ubuntuAnsibleConnectionConfig{}, err
+		return sshAnsibleConnectionConfig{}, err
 	}
 
 	password := defaultIfEmpty(
 		resolveEnvValue(tartMacOSAnsiblePasswordEnvVar, valuesFromFile),
 		defaultTartGuestPassword,
 	)
-	connectionConfig := ubuntuAnsibleConnectionConfig{
+	connectionConfig := sshAnsibleConnectionConfig{
 		User: defaultIfEmpty(
 			resolveEnvValue(tartMacOSAnsibleUserEnvVar, valuesFromFile),
 			defaultTartGuestUser,

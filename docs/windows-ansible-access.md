@@ -24,11 +24,14 @@ Use only the option you actually need.
 ## Security note
 
 For localhost runs through `alchemy provision local`, Dev Alchemy now handles a
-temporary secure setup for you on Windows: it creates a dedicated local admin
-account with a random password, enables WinRM over HTTPS on the loopback
-address for the duration of the run, and disables the temporary account during
-cleanup. If WinRM was not enabled before the run, the wrapper disables it again
-afterwards.
+temporary secure setup for you on Windows. The default WinRM mode creates a
+dedicated local admin account with a random password, enables WinRM over HTTPS
+on the loopback address for the duration of the run, and restores the prior
+WinRM state during cleanup. The SSH alternative
+(`alchemy provision local --proto ssh`) creates or updates a temporary local
+admin account with a temporary SSH key, enables or installs OpenSSH Server when
+needed, sets the default SSH shell to PowerShell for the run, and then restores
+the prior SSH state during cleanup.
 
 Manual WinRM setup should also prefer encrypted transport. Avoid unencrypted
 WinRM unless you are in a tightly controlled test environment and understand
@@ -47,6 +50,16 @@ For manual `ansible-playbook` use, set up an encrypted WinRM listener and pass
 your own credentials and connection variables to Ansible.
 
 ## Option 2: Enable SSH Server
+
+For localhost provisioning through the wrapper, prefer:
+
+```powershell
+alchemy.exe provision local --proto ssh --check
+alchemy.exe provision local --proto ssh --check --yes --force-ssh-uninstall
+alchemy.exe provision local --proto ssh
+```
+
+For manual setup:
 
 ```powershell
 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; `

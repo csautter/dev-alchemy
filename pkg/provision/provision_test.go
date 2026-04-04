@@ -253,76 +253,76 @@ func TestGenerateSecureLocalWindowsProvisionPasswordMeetsComplexityRequirements(
 }
 
 func TestLocalWindowsProvisionBootstrapPowerShellHandlesMissingWSManPaths(t *testing.T) {
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "function Get-WsmanBoolState") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "function Get-WsmanBoolState") {
 		t.Fatal("expected bootstrap script to tolerate missing WSMan paths")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "function Get-WinRMServiceState") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "function Get-WinRMServiceState") {
 		t.Fatal("expected bootstrap script to capture the original WinRM service state")
 	}
-	if strings.Contains(localWindowsProvisionBootstrapPowerShell, "Enable-PSRemoting") {
+	if strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "Enable-PSRemoting") {
 		t.Fatal("expected bootstrap script to avoid Enable-PSRemoting so it does not create an HTTP listener")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Assert-WsmanPathExists 'WSMan:\\localhost\\Service\\Auth\\Basic'") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "Assert-WsmanPathExists 'WSMan:\\localhost\\Service\\Auth\\Basic'") {
 		t.Fatal("expected bootstrap script to validate WSMan auth path after preparing WinRM")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "BasicAuthPathExisted") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "BasicAuthPathExisted") {
 		t.Fatal("expected bootstrap state to capture whether WSMan auth already existed")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "WinRMServiceStartMode") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "WinRMServiceStartMode") {
 		t.Fatal("expected bootstrap state to capture the original WinRM startup mode")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "LocalAccountTokenFilterPolicy") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "LocalAccountTokenFilterPolicy") {
 		t.Fatal("expected bootstrap state to capture the LocalAccountTokenFilterPolicy setting")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Dev Alchemy Ansible acct") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "Dev Alchemy Ansible acct") {
 		t.Fatal("expected bootstrap script to use a Windows-safe local user description")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "S-1-5-32-544") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "S-1-5-32-544") {
 		t.Fatal("expected bootstrap script to resolve the built-in Administrators group by SID")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "-Address IP:127.0.0.1") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "-Address IP:127.0.0.1") {
 		t.Fatal("expected bootstrap script to bind the WinRM HTTPS listener to loopback only")
 	}
-	if strings.Contains(localWindowsProvisionBootstrapPowerShell, "-Address *") {
+	if strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "-Address *") {
 		t.Fatal("expected bootstrap script to avoid binding the WinRM HTTPS listener to every interface")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS'") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "New-NetFirewallRule -Name 'DevAlchemyLocalWinRMHTTPS'") {
 		t.Fatal("expected bootstrap script to create a dedicated HTTPS firewall rule")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "-LocalAddress 127.0.0.1 -LocalPort 5986") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "-LocalAddress 127.0.0.1 -LocalPort 5986") {
 		t.Fatal("expected bootstrap script to scope the WinRM HTTPS firewall rule to loopback")
 	}
-	if !strings.Contains(localWindowsProvisionBootstrapPowerShell, "Write-Output 'Local Windows provision bootstrap completed.'") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "Write-Output 'Local Windows provision bootstrap completed.'") {
 		t.Fatal("expected bootstrap script to emit explicit progress output")
 	}
 }
 
 func TestLocalWindowsProvisionCleanupPowerShellOnlyRestoresExistingWSManPaths(t *testing.T) {
-	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$state.BasicAuthPathExisted") {
+	if !strings.Contains(localWindowsWinRMProvisionCleanupPowerShell, "$state.BasicAuthPathExisted") {
 		t.Fatal("expected cleanup script to restore Basic auth only when the original path existed")
 	}
-	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$state.AllowUnencryptedPathExisted") {
+	if !strings.Contains(localWindowsWinRMProvisionCleanupPowerShell, "$state.AllowUnencryptedPathExisted") {
 		t.Fatal("expected cleanup script to restore AllowUnencrypted only when the original path existed")
 	}
-	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Restore-WinRMServiceState") {
+	if !strings.Contains(localWindowsWinRMProvisionCleanupPowerShell, "Restore-WinRMServiceState") {
 		t.Fatal("expected cleanup script to restore the original WinRM service state")
 	}
-	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$originalListenerKeys") {
+	if !strings.Contains(localWindowsWinRMProvisionCleanupPowerShell, "$originalListenerKeys") {
 		t.Fatal("expected cleanup script to remove listeners that were added during provisioning")
 	}
-	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "function Restore-WinRMServiceState") {
+	if !strings.Contains(localWindowsWinRMProvisionCleanupPowerShell, "function Restore-WinRMServiceState") {
 		t.Fatal("expected cleanup script to define its own WinRM restore helper")
 	}
-	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "$forceWinRMUninstall") {
+	if !strings.Contains(localWindowsWinRMProvisionCleanupPowerShell, "$forceWinRMUninstall") {
 		t.Fatal("expected cleanup script to honor force WinRM uninstall mode")
 	}
-	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Restore-RegistryDWORDState") {
+	if !strings.Contains(localWindowsWinRMProvisionCleanupPowerShell, "Restore-RegistryDWORDState") {
 		t.Fatal("expected cleanup script to restore LocalAccountTokenFilterPolicy")
 	}
-	if strings.Contains(localWindowsProvisionCleanupPowerShell, "Disable-PSRemoting") {
+	if strings.Contains(localWindowsWinRMProvisionCleanupPowerShell, "Disable-PSRemoting") {
 		t.Fatal("expected cleanup script to avoid Disable-PSRemoting and restore secure state directly")
 	}
-	if !strings.Contains(localWindowsProvisionCleanupPowerShell, "Write-Output 'Local Windows provision cleanup completed.'") {
+	if !strings.Contains(localWindowsWinRMProvisionCleanupPowerShell, "Write-Output 'Local Windows provision cleanup completed.'") {
 		t.Fatal("expected cleanup script to emit explicit progress output")
 	}
 }
@@ -373,11 +373,8 @@ func TestBuildLocalWindowsElevationLauncherPowerShellDetectsElevatedShellBeforeR
 	}
 }
 
-func TestBuildLocalWindowsProvisionScriptEnvIncludesForceFlag(t *testing.T) {
-	restore := SetLocalWindowsForceWinRMUninstall(true)
-	defer restore()
-
-	env := buildLocalWindowsProvisionScriptEnv("state.json", "P@ssw0rd!")
+func TestBuildLocalWindowsWinRMProvisionScriptEnvIncludesForceFlag(t *testing.T) {
+	env := buildLocalWindowsWinRMProvisionScriptEnv("state.json", "P@ssw0rd!", ProvisionOptions{LocalWindowsForceWinRMUninstall: true})
 	got := strings.Join(env, "\n")
 
 	if !strings.Contains(got, localWindowsForceWinRMUninstallEnvVar+"=true") {
@@ -388,6 +385,24 @@ func TestBuildLocalWindowsProvisionScriptEnvIncludesForceFlag(t *testing.T) {
 	}
 	if !strings.Contains(got, localWindowsProvisionPasswordEnvVar+"=P@ssw0rd!") {
 		t.Fatal("expected bootstrap env to include the generated password")
+	}
+}
+
+func TestBuildLocalWindowsSSHProvisionScriptEnvIncludesForceFlag(t *testing.T) {
+	env := buildLocalWindowsSSHProvisionScriptEnv("state.json", "P@ssw0rd!", "ssh-rsa AAAA", ProvisionOptions{LocalWindowsForceSSHUninstall: true})
+	got := strings.Join(env, "\n")
+
+	if !strings.Contains(got, localWindowsForceSSHUninstallEnvVar+"=true") {
+		t.Fatal("expected force ssh uninstall env var to be included")
+	}
+	if !strings.Contains(got, localWindowsProvisionUserEnvVar+"="+localWindowsProvisionUserName) {
+		t.Fatal("expected ssh bootstrap env to include the temporary ansible user")
+	}
+	if !strings.Contains(got, localWindowsProvisionPasswordEnvVar+"=P@ssw0rd!") {
+		t.Fatal("expected ssh bootstrap env to include the generated password")
+	}
+	if !strings.Contains(got, localWindowsProvisionSSHPublicKeyEnvVar+"=ssh-rsa AAAA") {
+		t.Fatal("expected ssh bootstrap env to include the generated public key")
 	}
 }
 
@@ -412,40 +427,40 @@ func TestLogLocalWindowsPowerShellOutputChunkLogsCompleteLinesWithPrefix(t *test
 		log.SetPrefix(previousPrefix)
 	})
 
-	pending := logLocalWindowsPowerShellOutputChunk(localWindowsBootstrapLogPrefix, "first line\r\nsecond", "", false)
+	pending := logLocalWindowsPowerShellOutputChunk(localWindowsWinRMBootstrapLogPrefix, "first line\r\nsecond", "", false)
 	if pending != "second" {
 		t.Fatalf("expected incomplete line to be buffered, got %q", pending)
 	}
 
-	pending = logLocalWindowsPowerShellOutputChunk(localWindowsBootstrapLogPrefix, " line\n\nthird line", pending, false)
+	pending = logLocalWindowsPowerShellOutputChunk(localWindowsWinRMBootstrapLogPrefix, " line\n\nthird line", pending, false)
 	if pending != "third line" {
 		t.Fatalf("expected trailing partial line to remain buffered, got %q", pending)
 	}
 
-	pending = logLocalWindowsPowerShellOutputChunk(localWindowsBootstrapLogPrefix, "", pending, true)
+	pending = logLocalWindowsPowerShellOutputChunk(localWindowsWinRMBootstrapLogPrefix, "", pending, true)
 	if pending != "" {
 		t.Fatalf("expected flush to clear the buffered line, got %q", pending)
 	}
 
 	logs := strings.TrimSpace(buffer.String())
-	if !strings.Contains(logs, localWindowsBootstrapLogPrefix+" powershell: first line") {
+	if !strings.Contains(logs, localWindowsWinRMBootstrapLogPrefix+" powershell: first line") {
 		t.Fatalf("expected first log line with prefix, got %q", logs)
 	}
-	if !strings.Contains(logs, localWindowsBootstrapLogPrefix+" powershell: second line") {
+	if !strings.Contains(logs, localWindowsWinRMBootstrapLogPrefix+" powershell: second line") {
 		t.Fatalf("expected second log line with prefix, got %q", logs)
 	}
-	if !strings.Contains(logs, localWindowsBootstrapLogPrefix+" powershell: third line") {
+	if !strings.Contains(logs, localWindowsWinRMBootstrapLogPrefix+" powershell: third line") {
 		t.Fatalf("expected flushed partial line with prefix, got %q", logs)
 	}
 }
 
 func TestRunLocalWindowsProvisionAlwaysCleansUpSecureSession(t *testing.T) {
-	previousSetup := setupLocalWindowsProvisionSessionFunc
-	previousCleanup := cleanupLocalWindowsProvisionSessionFunc
+	previousSetup := setupLocalWindowsWinRMProvisionSessionFunc
+	previousCleanup := cleanupLocalWindowsWinRMProvisionSessionFunc
 	previousRunner := runAnsibleProvisionCommandFunc
 	t.Cleanup(func() {
-		setupLocalWindowsProvisionSessionFunc = previousSetup
-		cleanupLocalWindowsProvisionSessionFunc = previousCleanup
+		setupLocalWindowsWinRMProvisionSessionFunc = previousSetup
+		cleanupLocalWindowsWinRMProvisionSessionFunc = previousCleanup
 		runAnsibleProvisionCommandFunc = previousRunner
 	})
 
@@ -453,8 +468,8 @@ func TestRunLocalWindowsProvisionAlwaysCleansUpSecureSession(t *testing.T) {
 	statePath := filepath.Join(projectDir, "session-state.json")
 	var cleanedUp bool
 
-	setupLocalWindowsProvisionSessionFunc = func(_ string) (localWindowsProvisionSession, error) {
-		return localWindowsProvisionSession{
+	setupLocalWindowsWinRMProvisionSessionFunc = func(_ string, _ ProvisionOptions) (localWindowsWinRMProvisionSession, error) {
+		return localWindowsWinRMProvisionSession{
 			ConnectionConfig: windowsAnsibleConnectionConfig{
 				User:                 localWindowsProvisionUserName,
 				Password:             "N3wP@ssw0rd!",
@@ -467,7 +482,7 @@ func TestRunLocalWindowsProvisionAlwaysCleansUpSecureSession(t *testing.T) {
 			StatePath: statePath,
 		}, nil
 	}
-	cleanupLocalWindowsProvisionSessionFunc = func(_ string, session localWindowsProvisionSession) error {
+	cleanupLocalWindowsWinRMProvisionSessionFunc = func(_ string, session localWindowsWinRMProvisionSession, _ ProvisionOptions) error {
 		if session.StatePath != statePath {
 			t.Fatalf("expected cleanup to receive state path %q, got %q", statePath, session.StatePath)
 		}
@@ -491,16 +506,16 @@ func TestRunLocalWindowsProvisionAlwaysCleansUpSecureSession(t *testing.T) {
 }
 
 func TestRunLocalWindowsProvisionCleansUpWhenArgumentBuildFails(t *testing.T) {
-	previousSetup := setupLocalWindowsProvisionSessionFunc
-	previousCleanup := cleanupLocalWindowsProvisionSessionFunc
+	previousSetup := setupLocalWindowsWinRMProvisionSessionFunc
+	previousCleanup := cleanupLocalWindowsWinRMProvisionSessionFunc
 	t.Cleanup(func() {
-		setupLocalWindowsProvisionSessionFunc = previousSetup
-		cleanupLocalWindowsProvisionSessionFunc = previousCleanup
+		setupLocalWindowsWinRMProvisionSessionFunc = previousSetup
+		cleanupLocalWindowsWinRMProvisionSessionFunc = previousCleanup
 	})
 
 	var cleanedUp bool
-	setupLocalWindowsProvisionSessionFunc = func(_ string) (localWindowsProvisionSession, error) {
-		return localWindowsProvisionSession{
+	setupLocalWindowsWinRMProvisionSessionFunc = func(_ string, _ ProvisionOptions) (localWindowsWinRMProvisionSession, error) {
+		return localWindowsWinRMProvisionSession{
 			ConnectionConfig: windowsAnsibleConnectionConfig{
 				User:       localWindowsProvisionUserName,
 				Connection: "winrm",
@@ -508,7 +523,7 @@ func TestRunLocalWindowsProvisionCleansUpWhenArgumentBuildFails(t *testing.T) {
 			StatePath: filepath.Join(t.TempDir(), "session-state.json"),
 		}, nil
 	}
-	cleanupLocalWindowsProvisionSessionFunc = func(_ string, _ localWindowsProvisionSession) error {
+	cleanupLocalWindowsWinRMProvisionSessionFunc = func(_ string, _ localWindowsWinRMProvisionSession, _ ProvisionOptions) error {
 		cleanedUp = true
 		return nil
 	}
@@ -533,6 +548,27 @@ func TestBuildLocalProvisionArgsForWindows(t *testing.T) {
 
 	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost_windows_winrm.yml") {
 		t.Fatalf("expected windows localhost winrm inventory, args: %v", args)
+	}
+	if got := strings.Join(args, " "); !strings.Contains(got, "-l windows_host") {
+		t.Fatalf("expected windows localhost limit, args: %v", args)
+	}
+	if args[len(args)-1] != "--check" {
+		t.Fatalf("expected --check to be passed through when requested, args: %v", args)
+	}
+}
+
+func TestBuildLocalProvisionArgsForWindowsSSH(t *testing.T) {
+	args, err := buildLocalProvisionArgs(alchemy_build.HostOsWindows, ProvisionOptions{
+		Check:                true,
+		Verbosity:            defaultAnsibleVerbosity,
+		LocalWindowsProtocol: LocalWindowsProvisionProtocolSSH,
+	})
+	if err != nil {
+		t.Fatalf("buildLocalProvisionArgs returned error: %v", err)
+	}
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost_windows_ssh.yml") {
+		t.Fatalf("expected windows localhost ssh inventory, args: %v", args)
 	}
 	if got := strings.Join(args, " "); !strings.Contains(got, "-l windows_host") {
 		t.Fatalf("expected windows localhost limit, args: %v", args)
@@ -1201,7 +1237,7 @@ func TestDiscoverUtmVMIPv4_RePrimesArpCacheUntilMacAddressAppears(t *testing.T) 
 
 func TestBuildSSHProvisionArgs(t *testing.T) {
 	projectDir := t.TempDir()
-	config := ubuntuAnsibleConnectionConfig{
+	config := sshAnsibleConnectionConfig{
 		User:           "packer",
 		Password:       "P@ssw0rd!",
 		BecomePassword: "P@ssw0rd!",
@@ -1271,6 +1307,110 @@ func TestBuildSSHProvisionArgs(t *testing.T) {
 		if extraVars[key] != expected {
 			t.Fatalf("expected %s=%q in extra vars, got: %v", key, expected, extraVars)
 		}
+	}
+}
+
+func TestBuildSSHStaticInventoryProvisionArgsIncludesWindowsShellSettings(t *testing.T) {
+	projectDir := t.TempDir()
+	config := sshAnsibleConnectionConfig{
+		User:            localWindowsProvisionUserName,
+		Connection:      "ssh",
+		SshCommonArgs:   localWindowsSSHCommonArgs,
+		SshTimeout:      "120",
+		SshRetries:      "3",
+		PrivateKeyFile:  ".local-windows-provision-key-test.pem",
+		ShellType:       "powershell",
+		ShellExecutable: "powershell.exe",
+	}
+
+	args, cleanup, err := buildSSHStaticInventoryProvisionArgs(projectDir, localWindowsSSHInventoryPath, localWindowsSSHInventoryTarget, config, ProvisionOptions{Verbosity: defaultAnsibleVerbosity})
+	if err != nil {
+		t.Fatalf("buildSSHStaticInventoryProvisionArgs returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			t.Fatalf("failed to clean up extra vars file: %v", cleanupErr)
+		}
+	})
+
+	if got := strings.Join(args, " "); !strings.Contains(got, "-i ./inventory/localhost_windows_ssh.yml") {
+		t.Fatalf("expected windows localhost ssh inventory, args: %v", args)
+	}
+
+	extraVarsIndex := -1
+	for index, arg := range args {
+		if arg == "--extra-vars" {
+			extraVarsIndex = index + 1
+			break
+		}
+	}
+	if extraVarsIndex <= 0 || extraVarsIndex >= len(args) {
+		t.Fatalf("expected --extra-vars with @temp file reference, args: %v", args)
+	}
+
+	extraVarsFilePath := filepath.Join(projectDir, strings.TrimPrefix(args[extraVarsIndex], "@"))
+	content, readErr := os.ReadFile(extraVarsFilePath)
+	if readErr != nil {
+		t.Fatalf("failed to read extra vars file %q: %v", extraVarsFilePath, readErr)
+	}
+
+	extraVars := map[string]string{}
+	if err := json.Unmarshal(content, &extraVars); err != nil {
+		t.Fatalf("expected extra vars file to contain valid JSON, got error: %v", err)
+	}
+
+	for key, expected := range map[string]string{
+		"ansible_user":                 localWindowsProvisionUserName,
+		"ansible_connection":           "ssh",
+		"ansible_ssh_common_args":      localWindowsSSHCommonArgs,
+		"ansible_ssh_timeout":          "120",
+		"ansible_ssh_retries":          "3",
+		"ansible_ssh_private_key_file": ".local-windows-provision-key-test.pem",
+		"ansible_shell_type":           "powershell",
+		"ansible_shell_executable":     "powershell.exe",
+	} {
+		if extraVars[key] != expected {
+			t.Fatalf("expected %s=%q in extra vars, got: %v", key, expected, extraVars)
+		}
+	}
+}
+
+func TestLocalWindowsSSHProvisionBootstrapPowerShellConfiguresOpenSSHServer(t *testing.T) {
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Installing the OpenSSH Server capability.") {
+		t.Fatal("expected ssh bootstrap script to install OpenSSH Server when needed")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Set-AdminAuthorizedKeysPermissions") {
+		t.Fatal("expected ssh bootstrap script to harden administrators_authorized_keys permissions")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "DevAlchemyLocalSSHDLoopback") {
+		t.Fatal("expected ssh bootstrap script to manage a dedicated loopback firewall rule")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "OpenSSH-Server-In-TCP") {
+		t.Fatal("expected ssh bootstrap script to manage the broad built-in firewall rule")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "DefaultShell") {
+		t.Fatal("expected ssh bootstrap script to set the default shell for OpenSSH")
+	}
+}
+
+func TestLocalWindowsSSHProvisionCleanupPowerShellRestoresOpenSSHState(t *testing.T) {
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Restore-FileState") {
+		t.Fatal("expected ssh cleanup script to restore the administrator authorized_keys file")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Remove-WindowsCapability -Online") {
+		t.Fatal("expected ssh cleanup script to remove OpenSSH when it was installed for provisioning")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Restore-ServiceState 'sshd'") {
+		t.Fatal("expected ssh cleanup script to restore the original sshd service state")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Remove-LocalUser -Name $userName") {
+		t.Fatal("expected ssh cleanup script to remove the temporary local user when it did not exist before")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "$forceSSHUninstall") {
+		t.Fatal("expected ssh cleanup script to honor force ssh uninstall mode")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Force SSH uninstall mode is enabled; uninstalling OpenSSH Server.") {
+		t.Fatal("expected ssh cleanup script to emit explicit force-uninstall progress output")
 	}
 }
 
