@@ -20,6 +20,7 @@ const (
 	localWindowsCleanupTimeout           = 2 * time.Minute
 	localWindowsProvisionStatePathEnvVar = "DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH"
 	localWindowsProvisionUserEnvVar      = "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_USER"
+	localWindowsManagedUserScriptPath    = "scripts/windows/local-windows-managed-user.ps1"
 )
 
 func mustLoadLocalWindowsPowerShellAsset(path string) string {
@@ -29,6 +30,15 @@ func mustLoadLocalWindowsPowerShellAsset(path string) string {
 	}
 
 	return string(content)
+}
+
+func mustLoadLocalWindowsPowerShellAssets(paths ...string) string {
+	parts := make([]string, 0, len(paths))
+	for _, path := range paths {
+		parts = append(parts, mustLoadLocalWindowsPowerShellAsset(path))
+	}
+
+	return strings.Join(parts, "\n\n")
 }
 
 func createLocalWindowsProvisionStateFile(projectDir string) (string, error) {

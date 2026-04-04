@@ -102,15 +102,6 @@ function Get-NetFirewallRuleState([string]$name) {
     }
 }
 
-function Get-LocalAdministratorsGroupName() {
-    $group = Get-LocalGroup | Where-Object { $null -ne $_.SID -and $_.SID.Value -eq 'S-1-5-32-544' } | Select-Object -First 1
-    if ($null -eq $group) {
-        throw 'The built-in local Administrators group was not found.'
-    }
-
-    return [string]$group.Name
-}
-
 function Restore-WinRMServiceState([bool]$wasRunning, [string]$startMode) {
     $service = Get-Service -Name 'WinRM' -ErrorAction SilentlyContinue
     if ($null -eq $service) {
@@ -155,9 +146,15 @@ $basicAuthState = Get-WsmanBoolState 'WSMan:\localhost\Service\Auth\Basic'
 $allowUnencryptedState = Get-WsmanBoolState 'WSMan:\localhost\Service\AllowUnencrypted'
 $localAccountTokenFilterPolicyState = Get-RegistryDWORDState 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'LocalAccountTokenFilterPolicy'
 $firewallRuleState = Get-NetFirewallRuleState 'DevAlchemyLocalWinRMHTTPS'
+$administratorsGroupName = Get-LocalAdministratorsGroupName
+$userState = Get-ManagedLocalUserState $userName $administratorsGroupName
 
 $state = @{
     UserName = $userName
+    UserExisted = [bool]$userState.Exists
+    UserWasEnabled = [bool]$userState.Enabled
+    UserDescription = [string]$userState.Description
+    UserWasAdministrator = [bool]$userState.WasAdministrator
     ForceWinRMUninstall = [bool]$forceWinRMUninstall
     ListenerKeys = @($listenerKeys)
     HadListeners = ($listenerKeys.Count -gt 0)
@@ -217,25 +214,7 @@ if (-not [bool]$state.FirewallRuleExisted) {
     Write-Output 'Keeping the existing local WinRM HTTPS firewall rule enabled.'
 }
 
-Write-Output 'Creating or updating the temporary local Ansible account.'
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force
-$localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
-if ($null -eq $localUser) {
-    $localUser = New-LocalUser -Name $userName -Password $securePassword -PasswordNeverExpires -Description 'Dev Alchemy Ansible acct'
-} else {
-    Set-LocalUser -Name $userName -Password $securePassword -Description 'Dev Alchemy Ansible acct'
-    Enable-LocalUser -Name $userName
-    $localUser = Get-LocalUser -Name $userName
-}
-
-$administratorsGroupName = Get-LocalAdministratorsGroupName
-Write-Output 'Ensuring the temporary local Ansible account is an administrator.'
-$isAdministrator = @(
-    Get-LocalGroupMember -Group $administratorsGroupName -ErrorAction SilentlyContinue |
-        Where-Object { $null -ne $_.SID -and $_.SID.Value -eq $localUser.SID.Value }
-).Count -gt 0
-if (-not $isAdministrator) {
-    Add-LocalGroupMember -Group $administratorsGroupName -Member $userName
-}
+$null = Ensure-ManagedLocalUserForProvisioning $userName $securePassword 'Dev Alchemy Ansible acct' $administratorsGroupName
 
 Write-Output 'Local Windows provision bootstrap completed.'

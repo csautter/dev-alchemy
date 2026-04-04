@@ -220,25 +220,6 @@ function Get-FileState([string]$path) {
     }
 }
 
-function Get-LocalUserState([string]$name) {
-    $localUser = Get-LocalUser -Name $name -ErrorAction SilentlyContinue
-    if ($null -eq $localUser) {
-        return @{
-            Exists = $false
-            Enabled = $false
-            Description = ''
-            Sid = ''
-        }
-    }
-
-    return @{
-        Exists = $true
-        Enabled = [bool]$localUser.Enabled
-        Description = [string]$localUser.Description
-        Sid = [string]$localUser.SID.Value
-    }
-}
-
 function Get-UserProfileBasePath() {
     $profilesDirectoryProperty = Get-ItemProperty -Path $profileListRegistryPath -Name 'ProfilesDirectory' -ErrorAction SilentlyContinue
     if ($null -ne $profilesDirectoryProperty -and -not [string]::IsNullOrWhiteSpace([string]$profilesDirectoryProperty.ProfilesDirectory)) {
@@ -278,22 +259,6 @@ function Ensure-LocalUserProfile([string]$name, [securestring]$password, [string
     if ($process.ExitCode -ne 0) {
         throw ('Failed to initialize a local Windows profile for "' + $name + '" (exit code ' + [string]$process.ExitCode + ').')
     }
-}
-
-function Get-LocalAdministratorsGroupName() {
-    $group = Get-LocalGroup | Where-Object { $null -ne $_.SID -and $_.SID.Value -eq 'S-1-5-32-544' } | Select-Object -First 1
-    if ($null -eq $group) {
-        throw 'The built-in local Administrators group was not found.'
-    }
-
-    return [string]$group.Name
-}
-
-function Test-IsLocalAdministrator([string]$groupName, [string]$name) {
-    return @(
-        Get-LocalGroupMember -Group $groupName -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -eq $name -or $_.Name -eq ('.\' + $name) -or $_.Name -match ('\\' + [regex]::Escape($name) + '$') }
-    ).Count -gt 0
 }
 
 function Set-AdminAuthorizedKeysPermissions([string]$path) {
@@ -432,12 +397,9 @@ $localFirewallRuleState = Get-NetFirewallRuleState $localFirewallRuleName
 $defaultShellState = Get-RegistryStringState $defaultShellRegistryPath $defaultShellRegistryName
 $sshdConfigState = Get-FileState $sshdConfigPath
 $authorizedKeysState = Get-FileState $administratorsAuthorizedKeysPath
-$userState = Get-LocalUserState $userName
 $administratorsGroupName = Get-LocalAdministratorsGroupName
-$userWasAdministrator = $false
-if ($userState.Exists) {
-    $userWasAdministrator = Test-IsLocalAdministrator $administratorsGroupName $userName
-}
+$userState = Get-ManagedLocalUserState $userName $administratorsGroupName
+$userWasAdministrator = [bool]$userState.WasAdministrator
 $userAuthorizedKeysPath = Get-LocalUserAuthorizedKeysPath $userName ([string]$userState.Sid)
 $userAuthorizedKeysState = Get-FileState $userAuthorizedKeysPath
 
@@ -529,26 +491,8 @@ New-ItemProperty -Path $defaultShellRegistryPath -Name $defaultShellRegistryName
 Write-TemporarySshdConfig $sshdConfigPath $sshPortString
 Write-Output ('Wrote a temporary loopback-only sshd_config for this provisioning run on port ' + $sshPortString + '.')
 
-Write-Output 'Creating or updating the temporary local Ansible account.'
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force
-$localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
-if ($null -eq $localUser) {
-    Write-Output ('Creating the temporary local user "' + $userName + '".')
-    $localUser = New-LocalUser -Name $userName -Password $securePassword -PasswordNeverExpires -Description 'Dev Alchemy Ansible acct'
-} else {
-    Write-Output ('Reusing the existing local user "' + $userName + '" (enabled=' + [string][bool]$localUser.Enabled + ', description=' + [string]$localUser.Description + ').')
-    Set-LocalUser -Name $userName -Password $securePassword -Description 'Dev Alchemy Ansible acct'
-    Enable-LocalUser -Name $userName
-    $localUser = Get-LocalUser -Name $userName
-}
-
-Write-Output 'Ensuring the temporary local Ansible account is an administrator.'
-if (-not (Test-IsLocalAdministrator $administratorsGroupName $userName)) {
-    Add-LocalGroupMember -Group $administratorsGroupName -Member $userName
-    Write-Output ('Added "' + $userName + '" to the local Administrators group "' + $administratorsGroupName + '".')
-} else {
-    Write-Output ('The local user "' + $userName + '" is already a member of "' + $administratorsGroupName + '".')
-}
+$localUser = Ensure-ManagedLocalUserForProvisioning $userName $securePassword 'Dev Alchemy Ansible acct' $administratorsGroupName
 Ensure-LocalUserProfile $userName $securePassword ([string]$localUser.SID.Value)
 
 Write-Output 'Installing the temporary SSH public key for Windows OpenSSH logins.'

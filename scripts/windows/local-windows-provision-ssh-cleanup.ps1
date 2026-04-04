@@ -174,96 +174,15 @@ function Grant-AdministrativePathAccess([string]$path) {
     $null = & icacls.exe @icaclsArgs 2>$null
 }
 
-function Get-LocalAdministratorsGroupName() {
-    $group = Get-LocalGroup | Where-Object { $null -ne $_.SID -and $_.SID.Value -eq 'S-1-5-32-544' } | Select-Object -First 1
-    if ($null -eq $group) {
-        throw 'The built-in local Administrators group was not found.'
-    }
-
-    return [string]$group.Name
-}
-
-function Test-IsLocalAdministrator([string]$groupName, [string]$name) {
-    return @(
-        Get-LocalGroupMember -Group $groupName -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -eq $name -or $_.Name -eq ('.\' + $name) -or $_.Name -match ('\\' + [regex]::Escape($name) + '$') }
-    ).Count -gt 0
-}
-
-function Remove-LocalUserIfPresent([string]$groupName, [string]$name) {
-    $localUser = Get-LocalUser -Name $name -ErrorAction SilentlyContinue
-    if ($null -eq $localUser) {
-        return
-    }
-
-    if (Test-IsLocalAdministrator $groupName $name) {
-        Remove-LocalGroupMember -Group $groupName -Member $name -ErrorAction SilentlyContinue
-    }
-    Remove-LocalUser -Name $name
-}
-
-function Restore-LocalUserState([string]$groupName, $savedState, [string]$name) {
-    $localUser = Get-LocalUser -Name $name -ErrorAction SilentlyContinue
-    if ($null -eq $localUser) {
-        return
-    }
-
-    if ([bool]$savedState.UserWasAdministrator) {
-        if (-not (Test-IsLocalAdministrator $groupName $name)) {
-            Add-LocalGroupMember -Group $groupName -Member $name -ErrorAction SilentlyContinue
-        }
-    } elseif (Test-IsLocalAdministrator $groupName $name) {
-        Remove-LocalGroupMember -Group $groupName -Member $name -ErrorAction SilentlyContinue
-    }
-
-    Set-LocalUser -Name $name -Description ([string]$savedState.UserDescription)
-    if ([bool]$savedState.UserWasEnabled) {
-        Enable-LocalUser -Name $name
-    } else {
-        Disable-LocalUser -Name $name
-    }
-}
-
-function Get-LocalUserCleanupPlan([bool]$userExisted, [bool]$forceSSHUninstall) {
-    # Force SSH uninstall only tears down the SSH access created for provisioning.
-    # A pre-existing local user is always restored; only the temporary user created
-    # for provisioning is removed during cleanup.
-    if ($userExisted) {
-        if ($forceSSHUninstall) {
-            return @{
-                RestoreUser = $true
-                Message = 'Force SSH uninstall mode is enabled; preserving the pre-existing local Ansible account and restoring its original state.'
-            }
-        }
-
-        return @{
-            RestoreUser = $true
-            Message = 'Restoring the original local Ansible account state.'
-        }
-    }
-
-    if ($forceSSHUninstall) {
-        return @{
-            RestoreUser = $false
-            Message = 'Force SSH uninstall mode is enabled; removing the temporary local Ansible account created for provisioning.'
-        }
-    }
-
-    return @{
-        RestoreUser = $false
-        Message = 'Removing the temporary local Ansible account.'
-    }
-}
-
 $userName = [string]$state.UserName
 $administratorsGroupName = Get-LocalAdministratorsGroupName
 if (-not [string]::IsNullOrWhiteSpace($userName)) {
-    $localUserCleanupPlan = Get-LocalUserCleanupPlan ([bool]$state.UserExisted) $forceSSHUninstall
+    $localUserCleanupPlan = Get-ManagedLocalUserCleanupPlan ([bool]$state.UserExisted) $forceSSHUninstall 'SSH'
     Write-Output ([string]$localUserCleanupPlan.Message)
     if ([bool]$localUserCleanupPlan.RestoreUser) {
-        Restore-LocalUserState $administratorsGroupName $state $userName
+        Restore-ManagedLocalUserState $administratorsGroupName $state $userName
     } else {
-        Remove-LocalUserIfPresent $administratorsGroupName $userName
+        Remove-ManagedLocalUserIfPresent $administratorsGroupName $userName
     }
 }
 

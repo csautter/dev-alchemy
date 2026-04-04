@@ -29,7 +29,9 @@ For localhost runs through `alchemy provision local`, Dev Alchemy now handles a
 temporary secure setup for you on Windows. The default WinRM mode creates a
 dedicated local admin account with a random password, enables WinRM over HTTPS
 on the loopback address for the duration of the run, and restores the prior
-WinRM state during cleanup. The SSH alternative
+WinRM state during cleanup. If the `devalchemy_ansible` account already exists,
+the WinRM flow reuses it, restores its original enabled/admin/description
+state during cleanup, and leaves the rotated password in place. The SSH alternative
 (`alchemy provision local --proto ssh`) creates or updates a temporary local
 admin account with a temporary SSH key, enables or installs OpenSSH Server when
 needed, sets the default SSH shell to PowerShell for the run, and then restores
