@@ -108,7 +108,8 @@ bootstrap/cleanup logs are streamed back into the main terminal.
 `--force-winrm-uninstall` is only for the default WinRM mode and forces cleanup
 to disable WinRM and remove transient remoting setup after the run. The
 `--force-ssh-uninstall` flag is only for `--proto ssh` and forces cleanup to
-uninstall OpenSSH Server and remove the transient Ansible user after the run.
+disable `sshd`, remove SSH firewall rules, and remove the transient Ansible
+user after the run without uninstalling OpenSSH Server.
 macOS/Linux local target is currently marked unstable until it has been
 validated end-to-end.
 
