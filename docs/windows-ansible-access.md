@@ -31,7 +31,11 @@ WinRM state during cleanup. The SSH alternative
 (`alchemy provision local --proto ssh`) creates or updates a temporary local
 admin account with a temporary SSH key, enables or installs OpenSSH Server when
 needed, sets the default SSH shell to PowerShell for the run, and then restores
-the prior SSH state during cleanup.
+the prior SSH service, firewall, authorized_keys, and shell state during
+cleanup. If the `devalchemy_ansible` account already exists, the SSH flow
+reuses it and rotates its password for the run; the previous password is not
+restored during cleanup, so reserve that account for automation rather than
+manual sign-in.
 
 Manual WinRM setup should also prefer encrypted transport. Avoid unencrypted
 WinRM unless you are in a tightly controlled test environment and understand
@@ -58,6 +62,10 @@ alchemy.exe provision local --proto ssh --check
 alchemy.exe provision local --proto ssh --check --yes --force-ssh-uninstall
 alchemy.exe provision local --proto ssh
 ```
+
+The wrapper-managed `devalchemy_ansible` account is intended for automation.
+If it already exists, the SSH bootstrap updates its password before the run and
+cleanup leaves that rotated password in place.
 
 For manual setup:
 
