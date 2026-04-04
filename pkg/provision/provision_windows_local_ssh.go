@@ -18,10 +18,12 @@ import (
 )
 
 const (
-	localWindowsSSHInventoryPath   = "./inventory/localhost_windows_ssh.yml"
-	localWindowsSSHInventoryTarget = "windows_host"
-	localWindowsSSHLoopbackIP      = "127.0.0.1"
-	localWindowsSSHDefaultShell    = `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`
+	localWindowsSSHInventoryPath    = "./inventory/localhost_windows_ssh.yml"
+	localWindowsSSHInventoryTarget  = "windows_host"
+	localWindowsSSHLoopbackIP       = "127.0.0.1"
+	localWindowsSSHDefaultShell     = `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`
+	localWindowsSSHBootstrapTimeout = 15 * time.Minute
+	localWindowsSSHCleanupTimeout   = 10 * time.Minute
 
 	localWindowsProvisionSSHPublicKeyEnvVar = "DEV_ALCHEMY_LOCAL_WINDOWS_ANSIBLE_SSH_PUBLIC_KEY"
 	localWindowsForceSSHUninstallEnvVar     = "DEV_ALCHEMY_LOCAL_WINDOWS_FORCE_SSH_UNINSTALL"
@@ -165,7 +167,7 @@ func setupLocalWindowsSSHProvisionSession(projectDir string, options ProvisionOp
 		projectDir,
 		localWindowsSSHProvisionBootstrapPowerShell,
 		buildLocalWindowsSSHProvisionScriptEnv(statePath, password, publicAuthorizedKey, options),
-		localWindowsBootstrapTimeout,
+		localWindowsSSHBootstrapTimeout,
 		localWindowsSSHBootstrapLogPrefix,
 	)
 	if runErr != nil {
@@ -195,7 +197,7 @@ func cleanupLocalWindowsSSHProvisionSession(projectDir string, session localWind
 			projectDir,
 			localWindowsSSHProvisionCleanupPowerShell,
 			buildLocalWindowsSSHProvisionScriptEnv(session.StatePath, "", "", options),
-			localWindowsCleanupTimeout,
+			localWindowsSSHCleanupTimeout,
 			localWindowsSSHCleanupLogPrefix,
 		)
 	}

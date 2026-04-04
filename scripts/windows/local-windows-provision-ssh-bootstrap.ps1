@@ -13,6 +13,8 @@ $defaultShellRegistryPath = 'HKLM:\SOFTWARE\OpenSSH'
 $defaultShellRegistryName = 'DefaultShell'
 $defaultShellPath = 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
 $administratorsAuthorizedKeysPath = Join-Path $env:ProgramData 'ssh\administrators_authorized_keys'
+$administratorsSid = '*S-1-5-32-544'
+$systemSid = '*S-1-5-18'
 
 if ([string]::IsNullOrWhiteSpace($statePath)) {
     throw 'DEV_ALCHEMY_LOCAL_WINDOWS_PROVISION_STATE_PATH is required.'
@@ -43,7 +45,38 @@ function Get-WindowsCapabilityState([string]$name) {
         Name = [string]$capability.Name
         State = [string]$capability.State
         Installed = ([string]$capability.State -eq 'Installed')
+        Pending = ([string]$capability.State -like '*Pending')
     }
+}
+
+function Test-OpenSSHCapabilityInstallNeeded($capabilityState, $sshdServiceState) {
+    if ([bool]$capabilityState.Installed) {
+        return $false
+    }
+    if ([bool]$sshdServiceState.Exists) {
+        return $false
+    }
+
+    return $true
+}
+
+function Assert-OpenSSHCapabilityStateIsUsable($capabilityState, $sshdServiceState) {
+    if ([bool]$capabilityState.Pending -and -not [bool]$sshdServiceState.Exists) {
+        throw ('OpenSSH Server capability is in state "' + [string]$capabilityState.State + '" and sshd is unavailable. Reboot Windows to finish the pending capability change, then retry provisioning.')
+    }
+}
+
+function Write-OpenSSHPendingStateGuidance($capabilityState, $sshdServiceState) {
+    if (-not [bool]$capabilityState.Pending) {
+        return
+    }
+
+    if ([bool]$sshdServiceState.Exists) {
+        Write-Output ('Windows reports the OpenSSH Server capability as "' + [string]$capabilityState.State + '" while sshd still exists. The current sshd installation will be reused for this run, but you should reboot Windows soon to finish the pending capability change and return the OS to a consistent state.')
+        return
+    }
+
+    Write-Output ('Windows reports the OpenSSH Server capability as "' + [string]$capabilityState.State + '" and sshd is unavailable. A Windows reboot is required before SSH provisioning can continue.')
 }
 
 function Get-ServiceState([string]$name) {
@@ -151,7 +184,25 @@ function Test-IsLocalAdministrator([string]$groupName, [string]$name) {
 }
 
 function Set-AdminAuthorizedKeysPermissions([string]$path) {
-    $null = & icacls.exe $path /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F'
+    Write-Output ('Setting OpenSSH administrators_authorized_keys ACLs with well-known SIDs on ' + $path)
+    $icaclsOutput = & icacls.exe $path /inheritance:r /grant ($administratorsSid + ':F') /grant ($systemSid + ':F') 2>&1
+    $exitCode = $LASTEXITCODE
+    if ($null -ne $icaclsOutput) {
+        $icaclsOutput | ForEach-Object { Write-Output ('icacls: ' + $_) }
+    }
+    if ($exitCode -ne 0) {
+        throw ('icacls.exe failed while securing administrators_authorized_keys with exit code ' + $exitCode)
+    }
+}
+
+function Write-StateSummary($state) {
+    Write-Output ('OpenSSH capability state: installed=' + [string][bool]$state.CapabilityInstalled + ', state=' + [string]$state.CapabilityState)
+    Write-Output ('sshd service state: existed=' + [string][bool]$state.SshdServiceExisted + ', running=' + [string][bool]$state.SshdServiceWasRunning + ', startMode=' + [string]$state.SshdServiceStartMode)
+    Write-Output ('Firewall state: builtInRule existed=' + [string][bool]$state.BuiltInFirewallRuleExisted + ', enabled=' + [string][bool]$state.BuiltInFirewallRuleEnabled + '; loopbackRule existed=' + [string][bool]$state.LocalFirewallRuleExisted + ', enabled=' + [string][bool]$state.LocalFirewallRuleEnabled)
+    Write-Output ('OpenSSH shell state: defaultShell existed=' + [string][bool]$state.DefaultShellExisted + ', value=' + [string]$state.DefaultShellValue)
+    Write-Output ('Authorized keys state: existed=' + [string][bool]$state.AuthorizedKeysExisted + ', path=' + $administratorsAuthorizedKeysPath)
+    Write-Output ('Local user state: existed=' + [string][bool]$state.UserExisted + ', enabled=' + [string][bool]$state.UserWasEnabled + ', wasAdministrator=' + [string][bool]$state.UserWasAdministrator + ', description=' + [string]$state.UserDescription)
+    Write-Output ('Force SSH uninstall requested: ' + [string][bool]$state.ForceSSHUninstall)
 }
 
 $capabilityState = Get-WindowsCapabilityState $openSSHCapabilityName
@@ -170,6 +221,8 @@ if ($userState.Exists) {
 $state = @{
     CapabilityInstalled = [bool]$capabilityState.Installed
     CapabilityState = [string]$capabilityState.State
+    CapabilityPending = [bool]$capabilityState.Pending
+    CapabilityInstallManaged = $false
     SshdServiceExisted = [bool]$sshdServiceState.Exists
     SshdServiceWasRunning = [bool]$sshdServiceState.WasRunning
     SshdServiceStartMode = [string]$sshdServiceState.StartMode
@@ -191,12 +244,22 @@ $state = @{
 }
 Save-State $state
 Write-Output 'Captured existing OpenSSH, firewall, shell, key, and local user state.'
+Write-StateSummary $state
+Write-OpenSSHPendingStateGuidance $capabilityState $sshdServiceState
+Assert-OpenSSHCapabilityStateIsUsable $capabilityState $sshdServiceState
 
-if (-not [bool]$state.CapabilityInstalled) {
+if (Test-OpenSSHCapabilityInstallNeeded $capabilityState $sshdServiceState) {
     Write-Output 'Installing the OpenSSH Server capability.'
-    Get-WindowsCapability -Online -Name $openSSHCapabilityName | Add-WindowsCapability -Online | Out-Null
+    Add-WindowsCapability -Online -Name $openSSHCapabilityName | Out-Null
+    $state.CapabilityInstallManaged = $true
+    Save-State $state
+    Write-Output 'OpenSSH Server capability install completed for this provisioning run.'
+} elseif ([bool]$state.CapabilityInstalled) {
+    Write-Output ('Reusing the existing OpenSSH Server capability in state "' + [string]$state.CapabilityState + '".')
+} elseif ([bool]$state.SshdServiceExisted) {
+    Write-Output ('OpenSSH capability is reported as "' + [string]$state.CapabilityState + '" but sshd already exists, so the current installation will be reused without reinstalling the capability.')
 } else {
-    Write-Output 'Reusing the existing OpenSSH Server capability.'
+    Write-Output ('OpenSSH capability is reported as "' + [string]$state.CapabilityState + '" and no install action was required.')
 }
 
 Write-Output 'Preparing the sshd service for loopback-only provisioning.'
@@ -236,8 +299,10 @@ Write-Output 'Creating or updating the temporary local Ansible account.'
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force
 $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
 if ($null -eq $localUser) {
+    Write-Output ('Creating the temporary local user "' + $userName + '".')
     $localUser = New-LocalUser -Name $userName -Password $securePassword -PasswordNeverExpires -Description 'Dev Alchemy Ansible acct'
 } else {
+    Write-Output ('Reusing the existing local user "' + $userName + '" (enabled=' + [string][bool]$localUser.Enabled + ', description=' + [string]$localUser.Description + ').')
     Set-LocalUser -Name $userName -Password $securePassword -Description 'Dev Alchemy Ansible acct'
     Enable-LocalUser -Name $userName
     $localUser = Get-LocalUser -Name $userName
@@ -246,15 +311,20 @@ if ($null -eq $localUser) {
 Write-Output 'Ensuring the temporary local Ansible account is an administrator.'
 if (-not (Test-IsLocalAdministrator $administratorsGroupName $userName)) {
     Add-LocalGroupMember -Group $administratorsGroupName -Member $userName
+    Write-Output ('Added "' + $userName + '" to the local Administrators group "' + $administratorsGroupName + '".')
+} else {
+    Write-Output ('The local user "' + $userName + '" is already a member of "' + $administratorsGroupName + '".')
 }
 
 Write-Output 'Installing the temporary SSH public key for administrator logins.'
 $sshDirectory = Split-Path -Parent $administratorsAuthorizedKeysPath
 if (-not (Test-Path -Path $sshDirectory)) {
+    Write-Output ('Creating the SSH directory "' + $sshDirectory + '".')
     New-Item -Path $sshDirectory -ItemType Directory -Force | Out-Null
 }
 $existingAuthorizedKeys = ''
 if (Test-Path -Path $administratorsAuthorizedKeysPath) {
+    Write-Output ('Reading the existing administrators_authorized_keys file from "' + $administratorsAuthorizedKeysPath + '".')
     $existingAuthorizedKeys = [System.IO.File]::ReadAllText($administratorsAuthorizedKeysPath)
 }
 $normalizedAuthorizedKeys = $existingAuthorizedKeys.TrimEnd("`r", "`n")

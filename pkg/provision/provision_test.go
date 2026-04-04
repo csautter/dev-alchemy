@@ -1379,8 +1379,41 @@ func TestLocalWindowsSSHProvisionBootstrapPowerShellConfiguresOpenSSHServer(t *t
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Installing the OpenSSH Server capability.") {
 		t.Fatal("expected ssh bootstrap script to install OpenSSH Server when needed")
 	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Add-WindowsCapability -Online -Name $openSSHCapabilityName") {
+		t.Fatal("expected ssh bootstrap script to install OpenSSH Server with an explicit capability name")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Test-OpenSSHCapabilityInstallNeeded") {
+		t.Fatal("expected ssh bootstrap script to decide capability install based on both capability and service state")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Assert-OpenSSHCapabilityStateIsUsable") {
+		t.Fatal("expected ssh bootstrap script to fail fast when OpenSSH is stuck in a pending unusable state")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Write-OpenSSHPendingStateGuidance") {
+		t.Fatal("expected ssh bootstrap script to emit explicit reboot guidance for pending OpenSSH capability states")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "reboot Windows soon") {
+		t.Fatal("expected ssh bootstrap script to recommend a reboot when a pending capability state can still be reused")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "A Windows reboot is required before SSH provisioning can continue.") {
+		t.Fatal("expected ssh bootstrap script to clearly require a reboot when pending capability state blocks sshd")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "OpenSSH capability is reported as \"") {
+		t.Fatal("expected ssh bootstrap script to log when it reuses an existing sshd installation despite a non-installed capability state")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "*S-1-5-32-544") {
+		t.Fatal("expected ssh bootstrap script to secure administrators_authorized_keys with the built-in administrators SID")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "*S-1-5-18") {
+		t.Fatal("expected ssh bootstrap script to secure administrators_authorized_keys with the local system SID")
+	}
+	if strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "'Administrators:F'") {
+		t.Fatal("expected ssh bootstrap script to avoid hardcoded English Administrators ACL entries")
+	}
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Set-AdminAuthorizedKeysPermissions") {
 		t.Fatal("expected ssh bootstrap script to harden administrators_authorized_keys permissions")
+	}
+	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "Write-StateSummary") {
+		t.Fatal("expected ssh bootstrap script to emit a captured state summary for debugging")
 	}
 	if !strings.Contains(localWindowsSSHProvisionBootstrapPowerShell, "DevAlchemyLocalSSHDLoopback") {
 		t.Fatal("expected ssh bootstrap script to manage a dedicated loopback firewall rule")
@@ -1411,6 +1444,27 @@ func TestLocalWindowsSSHProvisionCleanupPowerShellRestoresOpenSSHState(t *testin
 	}
 	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Force SSH uninstall mode is enabled; uninstalling OpenSSH Server.") {
 		t.Fatal("expected ssh cleanup script to emit explicit force-uninstall progress output")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Remove-WindowsCapability -Online -Name $openSSHCapabilityName") {
+		t.Fatal("expected ssh cleanup script to remove OpenSSH Server with an explicit capability name")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "CapabilityInstallManaged") {
+		t.Fatal("expected ssh cleanup script to remove OpenSSH only when this provisioning run installed it")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Leaving the OpenSSH Server capability state unchanged") {
+		t.Fatal("expected ssh cleanup script to log when it preserves a pre-existing pending capability state")
+	}
+	if !strings.Contains(localWindowsSSHProvisionCleanupPowerShell, "Reboot Windows to finish that pending change") {
+		t.Fatal("expected ssh cleanup script to remind the operator to reboot after preserving a pending capability state")
+	}
+}
+
+func TestLocalWindowsSSHProvisionUsesLongerBootstrapAndCleanupTimeouts(t *testing.T) {
+	if localWindowsSSHBootstrapTimeout <= localWindowsBootstrapTimeout {
+		t.Fatalf("expected ssh bootstrap timeout %s to exceed shared local windows bootstrap timeout %s", localWindowsSSHBootstrapTimeout, localWindowsBootstrapTimeout)
+	}
+	if localWindowsSSHCleanupTimeout <= localWindowsCleanupTimeout {
+		t.Fatalf("expected ssh cleanup timeout %s to exceed shared local windows cleanup timeout %s", localWindowsSSHCleanupTimeout, localWindowsCleanupTimeout)
 	}
 }
 

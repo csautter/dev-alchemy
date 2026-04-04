@@ -180,11 +180,11 @@ if ($forceSSHUninstall) {
     }
     Get-NetFirewallRule -Name $localFirewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
     Get-NetFirewallRule -Name $openSSHBuiltInFirewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
-    Get-WindowsCapability -Online -Name $openSSHCapabilityName | Remove-WindowsCapability -Online | Out-Null
+    Remove-WindowsCapability -Online -Name $openSSHCapabilityName | Out-Null
 } elseif ([bool]$state.CapabilityInstalled) {
     Write-Output 'Restoring the original sshd service state.'
     Restore-ServiceState 'sshd' ([bool]$state.SshdServiceWasRunning) ([string]$state.SshdServiceStartMode)
-} else {
+} elseif ([bool]$state.CapabilityInstallManaged) {
     Write-Output 'Removing the OpenSSH Server capability that was installed for provisioning.'
     $service = Get-Service -Name 'sshd' -ErrorAction SilentlyContinue
     if ($null -ne $service -and $service.Status -eq 'Running') {
@@ -192,7 +192,12 @@ if ($forceSSHUninstall) {
     }
     Get-NetFirewallRule -Name $localFirewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
     Get-NetFirewallRule -Name $openSSHBuiltInFirewallRuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule | Out-Null
-    Get-WindowsCapability -Online -Name $openSSHCapabilityName | Remove-WindowsCapability -Online | Out-Null
+    Remove-WindowsCapability -Online -Name $openSSHCapabilityName | Out-Null
+} else {
+    Write-Output ('Leaving the OpenSSH Server capability state unchanged because it started in state "' + [string]$state.CapabilityState + '" and was not installed by this provisioning run.')
+    if ([bool]$state.CapabilityPending) {
+        Write-Output ('Windows still reports a pending OpenSSH capability change (' + [string]$state.CapabilityState + '). Reboot Windows to finish that pending change before relying on future SSH setup behavior.')
+    }
 }
 
 Write-Output 'Local Windows SSH provision cleanup completed.'
