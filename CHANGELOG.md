@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0](https://github.com/csautter/dev-alchemy/compare/v0.10.0...v0.11.0) (2026-04-05)
+
+
+### Added
+
+* provision local windows ssh provisioning ([5115d6a](https://github.com/csautter/dev-alchemy/commit/5115d6ae30f7ae163f5922704360d54f906e1b69))
+* **provision:** add local Windows SSH provisioning with force uninstall cleanup ([f11ad4b](https://github.com/csautter/dev-alchemy/commit/f11ad4bb985f4cda02ca2ced5b76e610f4234346))
+
+
+### Fixed
+
+* **ci:** trigger PR workflows on cmd/main.go changes ([459c297](https://github.com/csautter/dev-alchemy/commit/459c2971d6da37e1e37e5fa0c0a844426ea52a0e))
+* **provision:** avoid reboot-only local Windows SSH cleanup and log OpenSSH install progress ([b480986](https://github.com/csautter/dev-alchemy/commit/b48098658d124ebde491759fe9b29685f9205b27))
+* **provision:** guard SSH wire length encoding against uint32 overflow ([ec9ef74](https://github.com/csautter/dev-alchemy/commit/ec9ef749d673c324177032d7685004ebdcb821e0))
+* **provision:** harden local Windows SSH bootstrap state handling ([e2e187e](https://github.com/csautter/dev-alchemy/commit/e2e187e6996b7f79e3ad5112c399e1fa00829cf1))
+* **provision:** harden local Windows SSH port selection and cleanup ([725b827](https://github.com/csautter/dev-alchemy/commit/725b827114748b41e04a675e44b172115a1a5f56))
+* **provision:** improve local Windows SSH auth setup, cleanup, and preflight diagnostics ([f2572a2](https://github.com/csautter/dev-alchemy/commit/f2572a2c690b1b6bace3391ba5340fd01ea83c08))
+* **provision:** use a dedicated local Windows SSH port and detect wrong SSH listeners ([db65e64](https://github.com/csautter/dev-alchemy/commit/db65e64f579ece5f6d94393721b967746517cefd))
+* **windows:** preserve existing ssh provision user on force uninstall ([e7a643c](https://github.com/csautter/dev-alchemy/commit/e7a643ccfa3270ba93d61a605fec19bfd6640154))
+
+
+### Changed
+
+* **provision:** deduplicate local windows session runner flow ([786e286](https://github.com/csautter/dev-alchemy/commit/786e286a36f5e71793e4fde2f7aca2980f6a8134))
+* **provision:** share managed Windows user lifecycle across ssh and winrm ([3a685d7](https://github.com/csautter/dev-alchemy/commit/3a685d704458aa1fae89964629eeac4ae0a161e1))
+
+
+### CI
+
+* exercise Windows local provision flows in ansible role tests ([95588e9](https://github.com/csautter/dev-alchemy/commit/95588e99e172e69be7dd41621da25237fef146a1))
+* remove Windows WinRM setup from ansible role test workflow ([0aef486](https://github.com/csautter/dev-alchemy/commit/0aef486c28d34b42bebc1d1fbdf21cebd04ff566))
+
 ## [0.10.0](https://github.com/csautter/dev-alchemy/compare/v0.9.2...v0.10.0) (2026-04-04)
 
 
