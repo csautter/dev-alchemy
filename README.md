@@ -273,6 +273,9 @@ Contributor License Agreement (CLA).
 
 Dev Alchemy uses a dual-licensing model.
 
+Copyright (c) 2026 Carl-Christian Sautter.
+Open source use is licensed under AGPLv3, and commercial licensing is offered separately.
+
 ### Open Source
 
 The community edition is licensed under the **GNU Affero General Public License
@@ -288,7 +291,7 @@ commercial license is available.
 
 See [LICENSE_COMMERCIAL.md](./LICENSE_COMMERCIAL.md).
 
-For commercial inquiries: `cc@sautter.cc`
+For commercial inquiries, visit [www.c-sautter.de](https://www.c-sautter.de) for contact details.
 
 ### Historical Note
 
