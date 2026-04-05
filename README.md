@@ -88,7 +88,9 @@ Use this when you want the same command surface on your real workstation that
 you use for managed test targets. For platform defaults, Windows transport
 behavior, cleanup flags, and rollback steps, see
 [Local Provisioning](./docs/local-provisioning.md) and
-[Windows Ansible Access](./docs/windows-ansible-access.md).
+[Windows Ansible Access](./docs/windows-ansible-access.md). For direct
+`ansible-playbook` examples, use
+[Running Playbooks](./docs/running-playbooks.md).
 
 ## 🚀 Getting Started
 
@@ -206,13 +208,6 @@ alchemy provision local --playbook ./playbooks/bootstrap.yml
 alchemy provision local
 ```
 
-For the underlying direct `ansible-playbook` commands from the repository root:
-
-```bash
-ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml --check
-ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml
-```
-
 For more wrapper examples and platform-specific local behavior, use
 [Local Provisioning](./docs/local-provisioning.md). For direct localhost or
 remote-target `ansible-playbook` examples, use
@@ -278,6 +273,9 @@ Contributor License Agreement (CLA).
 
 Dev Alchemy uses a dual-licensing model.
 
+Copyright (c) 2026 Carl-Christian Sautter.
+Open source use is licensed under AGPLv3, and commercial licensing is offered separately.
+
 ### Open Source
 
 The community edition is licensed under the **GNU Affero General Public License
@@ -293,7 +291,7 @@ commercial license is available.
 
 See [LICENSE_COMMERCIAL.md](./LICENSE_COMMERCIAL.md).
 
-For commercial inquiries: `cc@sautter.cc`
+For commercial inquiries, visit [www.c-sautter.de](https://www.c-sautter.de) for contact details.
 
 ### Historical Note
 
