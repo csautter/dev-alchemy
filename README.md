@@ -88,7 +88,9 @@ Use this when you want the same command surface on your real workstation that
 you use for managed test targets. For platform defaults, Windows transport
 behavior, cleanup flags, and rollback steps, see
 [Local Provisioning](./docs/local-provisioning.md) and
-[Windows Ansible Access](./docs/windows-ansible-access.md).
+[Windows Ansible Access](./docs/windows-ansible-access.md). For direct
+`ansible-playbook` examples, use
+[Running Playbooks](./docs/running-playbooks.md).
 
 ## 🚀 Getting Started
 
@@ -204,13 +206,6 @@ alchemy provision local --check
 alchemy provision local --proto ssh --check
 alchemy provision local --playbook ./playbooks/bootstrap.yml
 alchemy provision local
-```
-
-For the underlying direct `ansible-playbook` commands from the repository root:
-
-```bash
-ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml --check
-ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml
 ```
 
 For more wrapper examples and platform-specific local behavior, use
