@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -34,11 +35,13 @@ func TestProvisionCommandRejectsAllTarget(t *testing.T) {
 	previousOsType := osType
 	previousCheck := check
 	previousPlaybookPath := playbookPath
+	previousLocalProvisionProto := localProvisionProto
 	t.Cleanup(func() {
 		arch = previousArch
 		osType = previousOsType
 		check = previousCheck
 		playbookPath = previousPlaybookPath
+		localProvisionProto = previousLocalProvisionProto
 	})
 
 	arch = "amd64"
@@ -59,11 +62,13 @@ func TestProvisionCommandRejectsArchAndTypeForLocalTarget(t *testing.T) {
 	previousOsType := osType
 	previousCheck := check
 	previousPlaybookPath := playbookPath
+	previousLocalProvisionProto := localProvisionProto
 	t.Cleanup(func() {
 		arch = previousArch
 		osType = previousOsType
 		check = previousCheck
 		playbookPath = previousPlaybookPath
+		localProvisionProto = previousLocalProvisionProto
 	})
 
 	arch = "arm64"
@@ -114,6 +119,7 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 	previousPlaybookPath := playbookPath
 	previousInventoryPath := inventoryPath
 	previousAnsibleVerbosity := ansibleVerbosity
+	previousLocalProvisionProto := localProvisionProto
 	previousCurrentHostLocalProvisionVirtualMachineFunc := currentHostLocalProvisionVirtualMachineFunc
 	previousRunProvisionFunc := runProvisionFunc
 	previousRootOut := rootCmd.OutOrStdout()
@@ -125,13 +131,14 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 		playbookPath = previousPlaybookPath
 		inventoryPath = previousInventoryPath
 		ansibleVerbosity = previousAnsibleVerbosity
+		localProvisionProto = previousLocalProvisionProto
 		currentHostLocalProvisionVirtualMachineFunc = previousCurrentHostLocalProvisionVirtualMachineFunc
 		runProvisionFunc = previousRunProvisionFunc
 		provisionCmd.SetArgs(nil)
 		rootCmd.SetArgs(nil)
 		rootCmd.SetOut(previousRootOut)
 		rootCmd.SetErr(previousRootErr)
-		for _, flagName := range []string{"arch", "type", "check", "playbook", "inventory-path", "verbosity"} {
+		for _, flagName := range []string{"arch", "type", "check", "playbook", "inventory-path", "verbosity", "proto"} {
 			provisionCmd.Flags().Lookup(flagName).Changed = false
 		}
 	})
@@ -192,12 +199,14 @@ func TestProvisionCommandRejectsInventoryPathForVMTargets(t *testing.T) {
 	previousCheck := check
 	previousPlaybookPath := playbookPath
 	previousInventoryPath := inventoryPath
+	previousLocalProvisionProto := localProvisionProto
 	t.Cleanup(func() {
 		arch = previousArch
 		osType = previousOsType
 		check = previousCheck
 		playbookPath = previousPlaybookPath
 		inventoryPath = previousInventoryPath
+		localProvisionProto = previousLocalProvisionProto
 		provisionCmd.Flags().Lookup("inventory-path").Changed = false
 	})
 
@@ -389,7 +398,7 @@ func TestConfirmProvisionIntentRequiresYesForNonInteractiveWindowsLocal(t *testi
 	err = confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
 		OS:     "local",
 		HostOs: alchemy_build.HostOsWindows,
-	})
+	}, alchemy_provision.ProvisionOptions{LocalWindowsProtocol: alchemy_provision.LocalWindowsProvisionProtocolWinRM})
 	if err == nil {
 		t.Fatal("expected non-interactive windows local provisioning to require --yes")
 	}
@@ -413,7 +422,7 @@ func TestConfirmProvisionIntentPromptsForInteractiveWindowsLocal(t *testing.T) {
 	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
 		OS:     "local",
 		HostOs: alchemy_build.HostOsWindows,
-	}); err != nil {
+	}, alchemy_provision.ProvisionOptions{LocalWindowsProtocol: alchemy_provision.LocalWindowsProvisionProtocolWinRM}); err != nil {
 		t.Fatalf("expected interactive confirmation to succeed, got: %v", err)
 	}
 	if !strings.Contains(output.String(), "Continue? [y/N]:") {
@@ -442,20 +451,17 @@ func TestConfirmProvisionIntentSkipsPromptWhenYesFlagIsSet(t *testing.T) {
 	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
 		OS:     "local",
 		HostOs: alchemy_build.HostOsWindows,
-	}); err != nil {
+	}, alchemy_provision.ProvisionOptions{LocalWindowsProtocol: alchemy_provision.LocalWindowsProvisionProtocolWinRM}); err != nil {
 		t.Fatalf("expected --yes to skip confirmation, got: %v", err)
 	}
 }
 
 func TestConfirmProvisionIntentMentionsForceWinRMUninstall(t *testing.T) {
 	previousAssumeYes := assumeYes
-	previousForceWinRMUninstall := forceWinRMUninstall
 	t.Cleanup(func() {
 		assumeYes = previousAssumeYes
-		forceWinRMUninstall = previousForceWinRMUninstall
 	})
 	assumeYes = false
-	forceWinRMUninstall = true
 
 	var output bytes.Buffer
 	command := &cobra.Command{}
@@ -465,6 +471,9 @@ func TestConfirmProvisionIntentMentionsForceWinRMUninstall(t *testing.T) {
 	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
 		OS:     "local",
 		HostOs: alchemy_build.HostOsWindows,
+	}, alchemy_provision.ProvisionOptions{
+		LocalWindowsProtocol:            alchemy_provision.LocalWindowsProvisionProtocolWinRM,
+		LocalWindowsForceWinRMUninstall: true,
 	}); err != nil {
 		t.Fatalf("expected interactive confirmation to succeed, got: %v", err)
 	}
@@ -473,37 +482,86 @@ func TestConfirmProvisionIntentMentionsForceWinRMUninstall(t *testing.T) {
 	}
 }
 
-func TestRunProvisionConfiguresForceWinRMUninstall(t *testing.T) {
-	previousForceWinRMUninstall := forceWinRMUninstall
-	previousConfigure := configureLocalWindowsProvisionFunc
+func TestConfirmProvisionIntentMentionsSSHBootstrap(t *testing.T) {
+	previousAssumeYes := assumeYes
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+	})
+	assumeYes = false
+
+	var output bytes.Buffer
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBufferString("yes\n"))
+	command.SetOut(&output)
+
+	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	}, alchemy_provision.ProvisionOptions{
+		LocalWindowsProtocol: alchemy_provision.LocalWindowsProvisionProtocolSSH,
+	}); err != nil {
+		t.Fatalf("expected interactive ssh confirmation to succeed, got: %v", err)
+	}
+	if !strings.Contains(output.String(), "OpenSSH Server") {
+		t.Fatalf("expected ssh prompt to mention OpenSSH Server, got %q", output.String())
+	}
+	if !strings.Contains(output.String(), "leave that capability installed") {
+		t.Fatalf("expected ssh prompt to explain that cleanup leaves a newly installed OpenSSH capability in place, got %q", output.String())
+	}
+}
+
+func TestConfirmProvisionIntentMentionsForceSSHUninstall(t *testing.T) {
+	previousAssumeYes := assumeYes
+	t.Cleanup(func() {
+		assumeYes = previousAssumeYes
+	})
+	assumeYes = false
+
+	var output bytes.Buffer
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBufferString("yes\n"))
+	command.SetOut(&output)
+
+	if err := confirmProvisionIntent(command, alchemy_build.VirtualMachineConfig{
+		OS:     "local",
+		HostOs: alchemy_build.HostOsWindows,
+	}, alchemy_provision.ProvisionOptions{
+		LocalWindowsProtocol:          alchemy_provision.LocalWindowsProvisionProtocolSSH,
+		LocalWindowsForceSSHUninstall: true,
+	}); err != nil {
+		t.Fatalf("expected interactive ssh confirmation to succeed, got: %v", err)
+	}
+	if !strings.Contains(output.String(), "--force-ssh-uninstall") {
+		t.Fatalf("expected prompt to mention force ssh uninstall, got %q", output.String())
+	}
+	if !strings.Contains(output.String(), "remain installed") {
+		t.Fatalf("expected prompt to explain that OpenSSH Server remains installed to avoid a reboot, got %q", output.String())
+	}
+}
+
+func TestRunProvisionPassesOptionsThrough(t *testing.T) {
 	previousRunProvisionFunc := runProvisionFunc
 	t.Cleanup(func() {
-		forceWinRMUninstall = previousForceWinRMUninstall
-		configureLocalWindowsProvisionFunc = previousConfigure
 		runProvisionFunc = previousRunProvisionFunc
 	})
 
-	forceWinRMUninstall = true
-	var configured bool
-	var restored bool
-	configureLocalWindowsProvisionFunc = func(force bool) func() {
-		configured = force
-		return func() {
-			restored = true
-		}
+	expectedOptions := alchemy_provision.ProvisionOptions{
+		Check:                           true,
+		Verbosity:                       3,
+		LocalWindowsProtocol:            alchemy_provision.LocalWindowsProvisionProtocolSSH,
+		LocalWindowsForceWinRMUninstall: false,
 	}
+	var capturedOptions alchemy_provision.ProvisionOptions
 	runProvisionFunc = func(vm alchemy_build.VirtualMachineConfig, options alchemy_provision.ProvisionOptions) error {
+		capturedOptions = options
 		return nil
 	}
 
-	if err := runProvision(alchemy_build.VirtualMachineConfig{OS: "local", HostOs: alchemy_build.HostOsWindows}, alchemy_provision.ProvisionOptions{Check: true, Verbosity: 3}); err != nil {
+	if err := runProvision(alchemy_build.VirtualMachineConfig{OS: "local", HostOs: alchemy_build.HostOsWindows}, expectedOptions); err != nil {
 		t.Fatalf("expected runProvision to succeed, got: %v", err)
 	}
-	if !configured {
-		t.Fatal("expected runProvision to configure force winrm uninstall")
-	}
-	if !restored {
-		t.Fatal("expected runProvision to restore local windows provision configuration")
+	if !reflect.DeepEqual(capturedOptions, expectedOptions) {
+		t.Fatalf("expected runProvision to pass options through unchanged, got %+v", capturedOptions)
 	}
 }
 
@@ -531,5 +589,81 @@ func TestProvisionCommandRejectsForceWinRMUninstallForNonWindowsLocal(t *testing
 	}
 	if !strings.Contains(err.Error(), "--force-winrm-uninstall is only supported") {
 		t.Fatalf("expected explicit force-winrm-uninstall validation error, got: %v", err)
+	}
+}
+
+func TestProvisionCommandRejectsForceSSHUninstallForNonWindowsLocal(t *testing.T) {
+	previousForceSSHUninstall := forceSSHUninstall
+	previousCurrentHostLocalProvisionVirtualMachineFunc := currentHostLocalProvisionVirtualMachineFunc
+	t.Cleanup(func() {
+		forceSSHUninstall = previousForceSSHUninstall
+		currentHostLocalProvisionVirtualMachineFunc = previousCurrentHostLocalProvisionVirtualMachineFunc
+	})
+
+	forceSSHUninstall = true
+	currentHostLocalProvisionVirtualMachineFunc = func() (alchemy_build.VirtualMachineConfig, bool) {
+		return alchemy_build.VirtualMachineConfig{
+			OS:                   "local",
+			Arch:                 "-",
+			HostOs:               alchemy_build.HostOsLinux,
+			VirtualizationEngine: localProvisionVirtualizationEngine,
+		}, true
+	}
+
+	err := provisionCmd.RunE(provisionCmd, []string{"local"})
+	if err == nil {
+		t.Fatal("expected non-windows local run with force ssh uninstall to fail")
+	}
+	if !strings.Contains(err.Error(), "--force-ssh-uninstall is only supported") {
+		t.Fatalf("expected explicit force-ssh-uninstall validation error, got: %v", err)
+	}
+}
+
+func TestProvisionCommandRejectsForceSSHUninstallForWinRMProtocol(t *testing.T) {
+	previousForceSSHUninstall := forceSSHUninstall
+	previousLocalProvisionProto := localProvisionProto
+	previousCurrentHostLocalProvisionVirtualMachineFunc := currentHostLocalProvisionVirtualMachineFunc
+	t.Cleanup(func() {
+		forceSSHUninstall = previousForceSSHUninstall
+		localProvisionProto = previousLocalProvisionProto
+		currentHostLocalProvisionVirtualMachineFunc = previousCurrentHostLocalProvisionVirtualMachineFunc
+	})
+
+	forceSSHUninstall = true
+	localProvisionProto = "winrm"
+	currentHostLocalProvisionVirtualMachineFunc = func() (alchemy_build.VirtualMachineConfig, bool) {
+		return alchemy_build.VirtualMachineConfig{
+			OS:                   "local",
+			Arch:                 "-",
+			HostOs:               alchemy_build.HostOsWindows,
+			VirtualizationEngine: localProvisionVirtualizationEngine,
+		}, true
+	}
+
+	err := provisionCmd.RunE(provisionCmd, []string{"local"})
+	if err == nil {
+		t.Fatal("expected winrm local run with force ssh uninstall to fail")
+	}
+	if !strings.Contains(err.Error(), "--force-ssh-uninstall is only supported with local Windows --proto ssh") {
+		t.Fatalf("expected explicit force-ssh-uninstall protocol validation error, got: %v", err)
+	}
+}
+
+func TestProvisionCommandRejectsProtoForVMTargets(t *testing.T) {
+	previousLocalProvisionProto := localProvisionProto
+	t.Cleanup(func() {
+		localProvisionProto = previousLocalProvisionProto
+		provisionCmd.Flags().Lookup("proto").Changed = false
+	})
+
+	localProvisionProto = "ssh"
+	provisionCmd.Flags().Lookup("proto").Changed = true
+
+	err := provisionCmd.RunE(provisionCmd, []string{"windows11"})
+	if err == nil {
+		t.Fatal("expected VM provision to reject --proto")
+	}
+	if !strings.Contains(err.Error(), "--proto is only supported for local Windows provisioning") {
+		t.Fatalf("expected explicit proto validation error, got: %v", err)
 	}
 }

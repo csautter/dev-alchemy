@@ -17,6 +17,8 @@ var (
 	check               bool
 	assumeYes           bool
 	forceWinRMUninstall bool
+	forceSSHUninstall   bool
+	localProvisionProto string
 	playbookPath        string
 	inventoryPath       string
 	ansibleVerbosity    int
@@ -27,7 +29,6 @@ const localProvisionVirtualizationEngine = alchemy_build.VirtualizationEngine("l
 var (
 	currentHostLocalProvisionVirtualMachineFunc = currentHostLocalProvisionVirtualMachine
 	runProvisionFunc                            = alchemy_provision.RunProvisionWithOptions
-	configureLocalWindowsProvisionFunc          = alchemy_provision.SetLocalWindowsForceWinRMUninstall
 	promptForConfirmationFunc                   = promptForConfirmation
 )
 
@@ -114,6 +115,9 @@ var provisionCmd = &cobra.Command{
 
 Important Ansible options exposed directly:
   --check                 Run ansible-playbook with --check.
+  --proto PROTO          For local Windows provisioning, select winrm (default) or ssh.
+  --force-winrm-uninstall For local Windows WinRM provisioning, force cleanup to disable WinRM.
+  --force-ssh-uninstall   For local Windows SSH provisioning, force cleanup to disable sshd, remove SSH firewall rules, and remove the transient user without uninstalling OpenSSH Server.
   --verbosity N           Set Ansible verbosity. The default is 3, equivalent to -vvv.
   --playbook PATH         Override the playbook path. The default is ./playbooks/setup.yml.
   --inventory-path PATH   Override the default inventory file for local provisioning.
@@ -123,6 +127,8 @@ When --inventory-path is set, Alchemy stops forcing the default local --limit ta
 
 Examples:
   alchemy provision local --check
+  alchemy provision local --proto ssh --check
+  alchemy provision local --proto ssh --check --yes --force-ssh-uninstall
   alchemy provision local --playbook ./playbooks/bootstrap.yml
   alchemy provision local -- --diff
   alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
@@ -135,13 +141,19 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		osName, extraAnsibleArgs := splitProvisionArgs(cmd, args)
 		options := alchemy_provision.ProvisionOptions{
-			Check:         check,
-			Verbosity:     ansibleVerbosity,
-			PlaybookPath:  strings.TrimSpace(playbookPath),
-			InventoryPath: strings.TrimSpace(inventoryPath),
-			ExtraArgs:     extraAnsibleArgs,
+			Check:                           check,
+			Verbosity:                       ansibleVerbosity,
+			PlaybookPath:                    strings.TrimSpace(playbookPath),
+			InventoryPath:                   strings.TrimSpace(inventoryPath),
+			ExtraArgs:                       extraAnsibleArgs,
+			LocalWindowsProtocol:            alchemy_provision.LocalWindowsProvisionProtocol(strings.TrimSpace(localProvisionProto)),
+			LocalWindowsForceWinRMUninstall: forceWinRMUninstall,
+			LocalWindowsForceSSHUninstall:   forceSSHUninstall,
 		}
 		if err := alchemy_provision.ValidateProvisionVerbosity(options.Verbosity); err != nil {
+			return err
+		}
+		if err := alchemy_provision.ValidateLocalWindowsProvisionProtocol(options.LocalWindowsProtocol); err != nil {
 			return err
 		}
 
@@ -161,15 +173,31 @@ Examples:
 			if forceWinRMUninstall && selectedVM.HostOs != alchemy_build.HostOsWindows {
 				return fmt.Errorf("❌ --force-winrm-uninstall is only supported for local Windows provisioning")
 			}
+			if forceSSHUninstall && selectedVM.HostOs != alchemy_build.HostOsWindows {
+				return fmt.Errorf("❌ --force-ssh-uninstall is only supported for local Windows provisioning")
+			}
+			if cmd.Flags().Changed("proto") && selectedVM.HostOs != alchemy_build.HostOsWindows {
+				return fmt.Errorf("❌ --proto is only supported for local Windows provisioning")
+			}
+			if selectedVM.HostOs == alchemy_build.HostOsWindows &&
+				options.LocalWindowsProtocol == alchemy_provision.LocalWindowsProvisionProtocolSSH &&
+				forceWinRMUninstall {
+				return fmt.Errorf("❌ --force-winrm-uninstall is only supported with local Windows --proto winrm")
+			}
+			if selectedVM.HostOs == alchemy_build.HostOsWindows &&
+				options.LocalWindowsProtocol == alchemy_provision.LocalWindowsProvisionProtocolWinRM &&
+				forceSSHUninstall {
+				return fmt.Errorf("❌ --force-ssh-uninstall is only supported with local Windows --proto ssh")
+			}
 
 			if isLocalProvisionUnstable(selectedVM.HostOs) {
 				fmt.Printf("⚠️ Local provisioning on host OS %s is currently marked unstable and has not been validated end-to-end yet.\n", selectedVM.HostOs)
 			}
-			if err := confirmProvisionIntent(cmd, selectedVM); err != nil {
+			if err := confirmProvisionIntent(cmd, selectedVM, options); err != nil {
 				return err
 			}
 
-			fmt.Printf("🔧 Provisioning local host for OS: %s (check=%t)\n", selectedVM.HostOs, check)
+			fmt.Printf("🔧 Provisioning local host for OS: %s (proto=%s, check=%t)\n", selectedVM.HostOs, options.LocalWindowsProtocol, check)
 			if err := runProvision(selectedVM, options); err != nil {
 				return fmt.Errorf("failed provisioning local host for host_os=%s: %w", selectedVM.HostOs, err)
 			}
@@ -179,6 +207,15 @@ Examples:
 
 		if cmd.Flags().Changed("inventory-path") {
 			return fmt.Errorf("❌ --inventory-path is only supported for local provisioning; for VM targets, pass manual ansible inventory flags after `--` if needed")
+		}
+		if cmd.Flags().Changed("proto") {
+			return fmt.Errorf("❌ --proto is only supported for local Windows provisioning")
+		}
+		if forceWinRMUninstall {
+			return fmt.Errorf("❌ --force-winrm-uninstall is only supported for local Windows provisioning")
+		}
+		if forceSSHUninstall {
+			return fmt.Errorf("❌ --force-ssh-uninstall is only supported for local Windows provisioning")
 		}
 
 		if osName != "ubuntu" {
@@ -218,9 +255,6 @@ var provisionListCmd = &cobra.Command{
 }
 
 func runProvision(vm alchemy_build.VirtualMachineConfig, options alchemy_provision.ProvisionOptions) error {
-	restoreLocalWindowsProvision := configureLocalWindowsProvisionFunc(forceWinRMUninstall)
-	defer restoreLocalWindowsProvision()
-
 	return runProvisionFunc(vm, options)
 }
 
@@ -231,11 +265,13 @@ func init() {
 	provisionCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	provisionCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	provisionCmd.Flags().BoolVar(&check, "check", false, "Run ansible with --check (dry-run)")
+	provisionCmd.Flags().StringVar(&localProvisionProto, "proto", string(alchemy_provision.DefaultLocalWindowsProvisionProtocol()), "Local Windows provision transport: winrm or ssh")
 	provisionCmd.Flags().IntVar(&ansibleVerbosity, "verbosity", 3, "Ansible verbosity level (0-4). Default 3 is equivalent to -vvv")
 	provisionCmd.Flags().StringVar(&playbookPath, "playbook", alchemy_provision.DefaultProvisionPlaybookPath(), "Override the Ansible playbook path")
 	provisionCmd.Flags().StringVar(&inventoryPath, "inventory-path", "", "Override the default inventory file for local provisioning; pass -- --limit <host-pattern> if your custom inventory needs a target")
 	provisionCmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Skip confirmation prompts for operations that change local system state")
 	provisionCmd.Flags().BoolVar(&forceWinRMUninstall, "force-winrm-uninstall", false, "For local Windows provisioning, force cleanup to disable WinRM and remove transient setup after the run")
+	provisionCmd.Flags().BoolVar(&forceSSHUninstall, "force-ssh-uninstall", false, "For local Windows SSH provisioning, force cleanup to disable sshd, remove SSH firewall rules, and remove the transient Ansible user after the run without uninstalling OpenSSH Server")
 }
 
 func validateProvisionCommandArgs(cmd *cobra.Command, args []string) error {
@@ -264,15 +300,12 @@ func splitProvisionArgs(cmd *cobra.Command, args []string) (string, []string) {
 	return args[0], extraAnsibleArgs
 }
 
-func confirmProvisionIntent(cmd *cobra.Command, vm alchemy_build.VirtualMachineConfig) error {
+func confirmProvisionIntent(cmd *cobra.Command, vm alchemy_build.VirtualMachineConfig, options alchemy_provision.ProvisionOptions) error {
 	if assumeYes || !requiresProvisionConfirmation(vm) {
 		return nil
 	}
 
-	message := "Local Windows provisioning will temporarily enable or reconfigure WinRM, create or update a temporary local administrator account for Ansible, and create a self-signed HTTPS listener. Windows will also show a UAC elevation prompt for the setup and cleanup steps."
-	if forceWinRMUninstall {
-		message += " Because --force-winrm-uninstall is set, cleanup will aggressively disable WinRM and remove transient configuration even if the run fails."
-	}
+	message := localWindowsProvisionConfirmationMessage(options)
 
 	if !isInteractiveInput(cmd.InOrStdin()) {
 		return fmt.Errorf("%s Re-run with --yes to continue non-interactively", message)
@@ -291,6 +324,23 @@ func confirmProvisionIntent(cmd *cobra.Command, vm alchemy_build.VirtualMachineC
 	}
 
 	return nil
+}
+
+func localWindowsProvisionConfirmationMessage(options alchemy_provision.ProvisionOptions) string {
+	if options.LocalWindowsProtocol == alchemy_provision.LocalWindowsProvisionProtocolSSH {
+		message := "Local Windows provisioning over SSH will temporarily install or reconfigure OpenSSH Server, set the default SSH shell to PowerShell, create or update a temporary local administrator account for Ansible, and authorize a temporary SSH key. Cleanup restores the prior SSH service, firewall, authorized_keys, and shell state, but if this run had to install OpenSSH Server it will leave that capability installed and disable sshd so cleanup does not require a reboot. If the existing account is reused, its password will be rotated for the run and cleanup will not restore the previous password. Windows will also show a UAC elevation prompt for the setup and cleanup steps."
+		if options.LocalWindowsForceSSHUninstall {
+			message += " Because --force-ssh-uninstall is set, cleanup will aggressively disable sshd, remove SSH firewall rules, and remove the transient Ansible user even if the run fails. OpenSSH Server will remain installed so cleanup does not require a reboot."
+		}
+		return message
+	}
+
+	message := "Local Windows provisioning over WinRM will temporarily enable or reconfigure WinRM, create or update a temporary local administrator account for Ansible, and create a self-signed HTTPS listener. Windows will also show a UAC elevation prompt for the setup and cleanup steps."
+	if options.LocalWindowsForceWinRMUninstall {
+		message += " Because --force-winrm-uninstall is set, cleanup will aggressively disable WinRM and remove transient configuration even if the run fails."
+	}
+
+	return message
 }
 
 func requiresProvisionConfirmation(vm alchemy_build.VirtualMachineConfig) bool {

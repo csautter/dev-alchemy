@@ -88,11 +88,14 @@ function Restore-FirewallRuleState([string]$name, [bool]$existed, [bool]$enabled
 }
 
 $userName = [string]$state.UserName
+$administratorsGroupName = Get-LocalAdministratorsGroupName
 if (-not [string]::IsNullOrWhiteSpace($userName)) {
-    Write-Output 'Disabling the temporary local Ansible account.'
-    $localUser = Get-LocalUser -Name $userName -ErrorAction SilentlyContinue
-    if ($null -ne $localUser) {
-        Disable-LocalUser -Name $userName
+    $localUserCleanupPlan = Get-ManagedLocalUserCleanupPlan ([bool]$state.UserExisted) $forceWinRMUninstall 'WinRM'
+    Write-Output ([string]$localUserCleanupPlan.Message)
+    if ([bool]$localUserCleanupPlan.RestoreUser) {
+        Restore-ManagedLocalUserState $administratorsGroupName $state $userName
+    } else {
+        Remove-ManagedLocalUserIfPresent $administratorsGroupName $userName
     }
 }
 

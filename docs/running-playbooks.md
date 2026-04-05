@@ -14,25 +14,10 @@ below when you want to run `playbooks/setup.yml` directly from the repository.
 
 ## Run on localhost
 
-CLI wrapper:
+For the wrapper-based localhost flow, use
+[Local Provisioning](./local-provisioning.md).
 
-```bash
-alchemy provision local --check
-alchemy provision local --playbook ./playbooks/bootstrap.yml
-alchemy provision local -- --diff --tags java
-alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
-alchemy provision local
-```
-
-`alchemy provision local` uses `inventory/localhost.yaml` on macOS/Linux and
-`inventory/localhost_windows_winrm.yml` on Windows. On Windows the wrapper
-creates a temporary administrator account with a random password, enables
-encrypted WinRM over HTTPS on the loopback address for the run, and then
-restores the WinRM state while disabling the temporary account during cleanup.
-The macOS/Linux local target is currently marked unstable until it has been
-validated end-to-end. Extra `ansible-playbook` flags can be passed after `--`,
-`--inventory-path` overrides the default local inventory file, and `--playbook`
-overrides the default playbook path.
+On macOS or Linux, direct localhost commands look like this.
 
 Dry run:
 
@@ -72,23 +57,26 @@ ansible-playbook playbooks/setup.yml -i inventory/remote.yml -l "$HOST" --ask-pa
 If the Windows target does not already have remote access configured, start
 with [Windows Ansible Access](./windows-ansible-access.md).
 
-### Via WinRM
+If you want the wrapper-managed localhost flow instead of direct
+`ansible-playbook`, use [Local Provisioning](./local-provisioning.md).
 
-For localhost runs, prefer `alchemy provision local`. It bootstraps the secure
-temporary WinRM account automatically.
+### Via WinRM
 
 If you run `ansible-playbook` directly with
 `inventory/localhost_windows_winrm.yml`, you are responsible for supplying your
 own secure WinRM connection variables and credentials.
 
-```powershell
-alchemy.exe provision local --check
-alchemy.exe provision local
-```
-
 ### Via SSH
+
+If you run `ansible-playbook` directly with
+`inventory/localhost_windows_ssh.yml`, you are responsible for supplying your
+own secure SSH user, key, and shell variables. Make sure the Windows OpenSSH
+server is configured with `HKLM:\SOFTWARE\OpenSSH\DefaultShell` set to
+`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` as described in
+[Windows Ansible Access](./windows-ansible-access.md), or Ansible may connect
+through `cmd.exe` instead of PowerShell.
 
 ```powershell
 $DevAlchemyPath = "C:\path\to\dev-alchemy"
-C:\\cygwin64\\bin\\bash.exe -l -c "cd $DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_ssh.yml -l windows_host --ask-pass -vvv"
+C:\\cygwin64\\bin\\bash.exe -l -c "cd $DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_ssh.yml -l windows_host -e ansible_user=admin -e ansible_ssh_private_key_file=/path/to/key -e ansible_shell_type=powershell -e ansible_shell_executable=powershell.exe -vvv"
 ```

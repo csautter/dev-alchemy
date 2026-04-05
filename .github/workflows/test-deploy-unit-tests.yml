@@ -7,6 +7,7 @@ on:
     paths:
       - "pkg/deploy/**"
       - "pkg/provision/**"
+      - "cmd/main.go"
       - "cmd/cmd/provision.go"
       - "cmd/cmd/provision_test.go"
       - "Makefile"
@@ -17,6 +18,7 @@ on:
     paths:
       - "pkg/deploy/**"
       - "pkg/provision/**"
+      - "cmd/main.go"
       - "cmd/cmd/provision.go"
       - "cmd/cmd/provision_test.go"
       - "Makefile"

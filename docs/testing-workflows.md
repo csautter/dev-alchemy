@@ -55,18 +55,13 @@ machine instead of a managed VM:
 
 ```bash
 alchemy provision local --check
+alchemy provision local --proto ssh --check
 alchemy provision local --playbook ./playbooks/bootstrap.yml
-alchemy provision local -- --diff
-alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
 alchemy provision local
 ```
 
-- Windows uses `inventory/localhost_windows_winrm.yml`.
-- macOS and Linux use `inventory/localhost.yaml`.
-- Use `--playbook` to point provision runs at a different playbook file.
-- Pass additional `ansible-playbook` flags after `--` when needed.
-- The macOS/Linux local target is currently marked unstable until it has been
-  validated end-to-end.
+For platform defaults, advanced flags, and Windows cleanup behavior, use
+[Local Provisioning](./local-provisioning.md).
 
 ### Ubuntu role tests on Linux, WSL, Windows, or macOS
 

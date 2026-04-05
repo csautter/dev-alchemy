@@ -2,9 +2,11 @@ all:
   hosts:
     windows_host:
       ansible_host: 127.0.0.1
-      ansible_user: ansible
-      # passwords should not be hardcoded, this is just for testing
-      ansible_password: Secret123!@#
+      # `alchemy provision local --proto ssh` injects temporary SSH user, key,
+      # and shell settings at runtime. Direct ansible-playbook use should pass
+      # your own secure SSH variables explicitly. See
+      # docs/windows-ansible-access.md for the manual setup flow, or use
+      # `alchemy provision local --proto ssh` for localhost runs.
       ansible_connection: ssh
       ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
       ansible_ssh_timeout: 120 # timeout in seconds

@@ -13,11 +13,15 @@ const (
 )
 
 func waitForSSHPort(ip string) error {
+	return waitForSSHPortOnPort(ip, sshPort)
+}
+
+func waitForSSHPortOnPort(ip string, port int) error {
 	deadline := time.Now().Add(sshPortWaitWindow)
 	var lastErr error
 
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", sshPort)), 5*time.Second)
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprintf("%d", port)), 5*time.Second)
 		if err == nil {
 			_ = conn.Close()
 			return nil
@@ -26,5 +30,5 @@ func waitForSSHPort(ip string) error {
 		time.Sleep(sshPortWaitInterval)
 	}
 
-	return fmt.Errorf("SSH on %s:%d did not become reachable within %s: %w", ip, sshPort, sshPortWaitWindow, lastErr)
+	return fmt.Errorf("SSH on %s:%d did not become reachable within %s: %w", ip, port, sshPortWaitWindow, lastErr)
 }

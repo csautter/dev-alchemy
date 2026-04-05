@@ -79,29 +79,16 @@ You can also use the built-in wrapper for host-local provisioning:
 
 ```bash
 alchemy provision local --check
+alchemy provision local --proto ssh --check
 alchemy provision local --playbook ./playbooks/bootstrap.yml
-# pass through extra ansible-playbook flags after `--`
-alchemy provision local -- --diff --tags java
-alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
-alchemy provision local --check --yes
-alchemy provision local --check --yes --force-winrm-uninstall
 alchemy provision local
 ```
 
-On Windows this uses the documented localhost WinRM inventory. On macOS and
-Linux it uses the standard localhost inventory. On Windows the wrapper
-creates a temporary administrator account with a random password, configures a
-temporary loopback-only WinRM HTTPS listener for the run, and then disables the
-temporary account again during cleanup. Because those are significant host
-changes, the Windows local flow asks for confirmation by default; use `--yes`
-to skip those CLI confirmation prompts. On Windows, local provisioning is only
-fully non-interactive when you start `alchemy` from an already elevated shell.
-If the current shell is not elevated, the privileged bootstrap and cleanup
-steps still trigger a UAC prompt before they run. The bootstrap/cleanup logs
-are streamed back into the main terminal. Use `--force-winrm-uninstall` to
-force cleanup to disable WinRM and remove transient remoting setup after the
-run. The macOS/Linux local target is currently marked unstable until it has
-been validated end-to-end.
+Use this when you want the same command surface on your real workstation that
+you use for managed test targets. For platform defaults, Windows transport
+behavior, cleanup flags, and rollback steps, see
+[Local Provisioning](./docs/local-provisioning.md) and
+[Windows Ansible Access](./docs/windows-ansible-access.md).
 
 ## 🚀 Getting Started
 
@@ -214,9 +201,8 @@ Use the built-in wrapper first when you want the shared command surface:
 
 ```bash
 alchemy provision local --check
+alchemy provision local --proto ssh --check
 alchemy provision local --playbook ./playbooks/bootstrap.yml
-alchemy provision local -- --diff
-alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
 alchemy provision local
 ```
 
@@ -227,7 +213,9 @@ ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml --check
 ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml
 ```
 
-For Windows localhost or remote-target examples, use
+For more wrapper examples and platform-specific local behavior, use
+[Local Provisioning](./docs/local-provisioning.md). For direct localhost or
+remote-target `ansible-playbook` examples, use
 [Running Playbooks](./docs/running-playbooks.md).
 
 #### B. Test the setup in a disposable VM first
@@ -249,14 +237,17 @@ with [Windows Ansible Access](./docs/windows-ansible-access.md).
 The root README is the fast entry point. Use these guides when you want the
 next level of detail:
 
-- [Running Playbooks](./docs/running-playbooks.md) for localhost, remote-host,
-  VM, and Windows `ansible-playbook` examples
+- [Local Provisioning](./docs/local-provisioning.md) for the
+  `alchemy provision local` wrapper, platform defaults, and Windows cleanup
+  flags
+- [Running Playbooks](./docs/running-playbooks.md) for direct localhost,
+  remote-host, VM, and Windows `ansible-playbook` examples
 - [Testing Workflows](./docs/testing-workflows.md) for host-specific VM and
   Docker test flows
 - [Managed Application Data](./docs/managed-application-data.md) for cache,
   runtime, and app-data locations
-- [Windows Ansible Access](./docs/windows-ansible-access.md) for WinRM and SSH
-  setup on Windows targets
+- [Windows Ansible Access](./docs/windows-ansible-access.md) for manual WinRM
+  and SSH setup on Windows targets plus OpenSSH rollback notes
 - [Example Ansible Roles](./docs/example-roles.md) for the current sample role
   catalog and repository layout
 - [Troubleshooting Guide](./docs/troubleshooting.md) for rare host-specific

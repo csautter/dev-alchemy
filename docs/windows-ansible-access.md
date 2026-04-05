@@ -4,7 +4,9 @@ Use this guide only when you want to manage a Windows machine over Ansible and
 the target does not already expose a supported remote transport.
 
 For most Dev Alchemy onboarding flows, the main [README](../README.md) is the
-better starting point. The commands below are mainly for:
+better starting point. For the wrapper-managed localhost flow, start with
+[Local Provisioning](./local-provisioning.md). The commands below are mainly
+for:
 
 - local Ansible runs against the same Windows machine
 - existing Windows hosts that need manual remote-access setup
@@ -24,11 +26,22 @@ Use only the option you actually need.
 ## Security note
 
 For localhost runs through `alchemy provision local`, Dev Alchemy now handles a
-temporary secure setup for you on Windows: it creates a dedicated local admin
-account with a random password, enables WinRM over HTTPS on the loopback
-address for the duration of the run, and disables the temporary account during
-cleanup. If WinRM was not enabled before the run, the wrapper disables it again
-afterwards.
+temporary secure setup for you on Windows. The default WinRM mode creates a
+dedicated local admin account with a random password, enables WinRM over HTTPS
+on the loopback address for the duration of the run, and restores the prior
+WinRM state during cleanup. If the `devalchemy_ansible` account already exists,
+the WinRM flow reuses it, restores its original enabled/admin/description
+state during cleanup, and leaves the rotated password in place. The SSH alternative
+(`alchemy provision local --proto ssh`) creates or updates a temporary local
+admin account with a temporary SSH key, enables or installs OpenSSH Server when
+needed, sets the default SSH shell to PowerShell for the run, and then restores
+the prior SSH service, firewall, authorized_keys, and shell state during
+cleanup. If the wrapper had to install OpenSSH Server, cleanup disables `sshd`
+but leaves the OpenSSH Server capability installed so cleanup does not require
+a reboot. If the `devalchemy_ansible` account already exists, the SSH flow
+reuses it and rotates its password for the run; the previous password is not
+restored during cleanup, so reserve that account for automation rather than
+manual sign-in.
 
 Manual WinRM setup should also prefer encrypted transport. Avoid unencrypted
 WinRM unless you are in a tightly controlled test environment and understand
@@ -48,10 +61,48 @@ your own credentials and connection variables to Ansible.
 
 ## Option 2: Enable SSH Server
 
+For localhost provisioning through the wrapper, prefer:
+
+```powershell
+alchemy.exe provision local --proto ssh --check
+alchemy.exe provision local --proto ssh --check --yes --force-ssh-uninstall
+alchemy.exe provision local --proto ssh
+```
+
+The wrapper-managed `devalchemy_ansible` account is intended for automation.
+If it already exists, the SSH bootstrap updates its password before the run and
+cleanup leaves that rotated password in place. If the wrapper installed
+OpenSSH Server for the run, cleanup disables `sshd` but does not uninstall the
+OpenSSH Server capability.
+
+For manual setup, install OpenSSH Server, start `sshd`, and set the OpenSSH
+default shell to PowerShell so Ansible sessions do not fall back to `cmd.exe`:
+
 ```powershell
 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; `
-Start-Service sshd; Set-Service -Name sshd -StartupType 'Automatic';
+Start-Service sshd; Set-Service -Name sshd -StartupType 'Automatic'; `
+New-Item -Path 'HKLM:\SOFTWARE\OpenSSH' -Force | Out-Null; `
+New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -PropertyType String -Force | Out-Null
 ```
+
+If you skip the `DefaultShell` setting, OpenSSH can still launch `cmd.exe`,
+which commonly breaks Ansible-over-SSH runs on Windows.
+
+## Remove OpenSSH Server After a Wrapper Run
+
+If `alchemy provision local --proto ssh` had to install OpenSSH Server on a
+machine that did not already have it, cleanup leaves the capability installed.
+When you need to roll that back manually, remove the capability yourself after
+the provisioning run:
+
+```powershell
+Stop-Service sshd -ErrorAction SilentlyContinue
+Set-Service -Name sshd -StartupType Disabled -ErrorAction SilentlyContinue
+Remove-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+```
+
+Windows may report the capability removal as pending until the next reboot. If
+that happens, reboot before assuming OpenSSH Server is fully gone.
 
 ## Firewall and account requirements
 
