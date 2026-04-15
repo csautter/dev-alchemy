@@ -8,7 +8,7 @@
     	"GOTOOLCHAIN": "auto"
   	},
 	"mounts": [
-		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.codex/skills,target=/home/vscode/.agents/skills,type=bind,consistency=cached"
+		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.agents/skills,target=/home/vscode/.agents/skills,type=bind,consistency=cached"
 	],
 	"features": {
 		"ghcr.io/devcontainers/features/python:1": {},
@@ -18,10 +18,11 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"openai.chatgpt"
+				"openai.chatgpt",
+				"ms-azuretools.vscode-azurefunctions"
 			]
 		}
-	}
+	},
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
@@ -37,4 +38,8 @@
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"
+	// using user root is just recommended with rootless docker
+	"remoteUser": "root",
+	"containerUser": "root",
+ 	"updateRemoteUserUID": true
 }
