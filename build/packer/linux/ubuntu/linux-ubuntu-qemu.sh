@@ -193,7 +193,15 @@ export DEV_ALCHEMY_PACKER_CACHE_DIR="$packer_cache_dir"
 export PACKER_CACHE_DIR="$packer_cache_dir"
 
 if [[ "$arch" == "arm64" ]]; then
-	bash "$project_root/scripts/macos/download-arm64-uefi.sh"
+	if ! bash "$project_root/scripts/macos/download-arm64-uefi.sh"; then
+		echo "Failed to prepare ARM64 UEFI firmware." >&2
+		exit 1
+	fi
+	firmware_path="$cache_dir/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+	if [[ ! -f "$firmware_path" ]]; then
+		echo "ARM64 UEFI firmware is missing: $firmware_path" >&2
+		exit 1
+	fi
 fi
 
 iso_path="$cache_dir/linux/ubuntu-24.04.3-live-server-amd64.iso"
