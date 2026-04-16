@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+
+set +e
+set -x
+
+host_os=""
+arch="arm64"
+headless="false"
+ubuntu_type="server"
+vnc_port="5901"
+cpus="4"
+memory="4096"
+verbose="false"
+build_output_dir=""
+
+script_dir=$(
+	cd "$(dirname "$0")"
+	pwd -P
+)
+project_root=$(
+	cd "${script_dir}/../../../.."
+	pwd -P
+)
+
+detect_host_os() {
+	case "$(uname -s)" in
+	Darwin)
+		echo "darwin"
+		;;
+	Linux)
+		echo "linux"
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+detect_host_arch() {
+	case "$(uname -m)" in
+	x86_64 | amd64)
+		echo "amd64"
+		;;
+	aarch64 | arm64)
+		echo "arm64"
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+default_app_data_dir() {
+	case "$1" in
+	darwin)
+		printf '%s\n' "$HOME/Library/Application Support/dev-alchemy"
+		;;
+	linux)
+		printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}/dev-alchemy"
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+file_size_bytes() {
+	if [[ ! -f "$1" ]]; then
+		echo "0"
+		return 0
+	fi
+	if stat -c%s "$1" >/dev/null 2>&1; then
+		stat -c%s "$1"
+	else
+		stat -f%z "$1"
+	fi
+}
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	--host-os)
+		if [[ -n "$2" && ("$2" == "darwin" || "$2" == "linux") ]]; then
+			host_os="$2"
+			shift 2
+		else
+			echo "Invalid value for --host-os: $2. Allowed values are 'darwin' or 'linux'." >&2
+			exit 1
+		fi
+		;;
+	--arch)
+		if [[ -n "$2" && ("$2" == "amd64" || "$2" == "arm64") ]]; then
+			arch="$2"
+			shift 2
+		else
+			echo "Invalid value for --arch: $2. Allowed values are 'amd64' or 'arm64'." >&2
+			exit 1
+		fi
+		;;
+	--headless)
+		headless="true"
+		shift
+		;;
+	--cpus)
+		if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+			cpus="$2"
+			shift 2
+		else
+			echo "Invalid value for --cpus: $2. It must be a number." >&2
+			exit 1
+		fi
+		;;
+	--memory)
+		if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+			memory="$2"
+			shift 2
+		else
+			echo "Invalid value for --memory: $2. It must be a number." >&2
+			exit 1
+		fi
+		;;
+	--vnc-port)
+		if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+			vnc_port="$2"
+			shift 2
+		else
+			echo "Invalid value for --vnc-port: $2. It must be a number." >&2
+			exit 1
+		fi
+		;;
+	--ubuntu-type)
+		if [[ -n "$2" && ("$2" == "server" || "$2" == "desktop") ]]; then
+			ubuntu_type="$2"
+			shift 2
+		else
+			echo "Invalid value for --ubuntu-type: $2. Allowed values are 'server' or 'desktop'." >&2
+			exit 1
+		fi
+		;;
+	--project-root)
+		if [[ -n "$2" ]]; then
+			project_root="$2"
+			shift 2
+		else
+			echo "Invalid value for --project-root: $2." >&2
+			exit 1
+		fi
+		;;
+	--build-output-dir)
+		if [[ -n "$2" ]]; then
+			build_output_dir="$2"
+			shift 2
+		else
+			echo "Invalid value for --build-output-dir: $2." >&2
+			exit 1
+		fi
+		;;
+	--verbose)
+		set -x
+		verbose="true"
+		shift
+		;;
+	*)
+		echo "Unknown option: $1" >&2
+		exit 1
+		;;
+	esac
+done
+
+if [[ -z "$host_os" ]]; then
+	host_os="$(detect_host_os)" || {
+		echo "Unsupported host operating system: $(uname -s)" >&2
+		exit 1
+	}
+fi
+
+host_arch="$(detect_host_arch)" || {
+	echo "Unsupported host architecture: $(uname -m)" >&2
+	exit 1
+}
+
+if [[ -z "$build_output_dir" ]]; then
+	build_output_dir="/tmp/dev-alchemy/qemu-out-ubuntu-${ubuntu_type}-${arch}"
+fi
+
+app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$(default_app_data_dir "$host_os")}"
+cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
+packer_cache_dir="${DEV_ALCHEMY_PACKER_CACHE_DIR:-$app_data_dir/packer_cache}"
+
+mkdir -p "$cache_dir" "$packer_cache_dir"
+export DEV_ALCHEMY_APP_DATA_DIR="$app_data_dir"
+export DEV_ALCHEMY_CACHE_DIR="$cache_dir"
+export DEV_ALCHEMY_PACKER_CACHE_DIR="$packer_cache_dir"
+export PACKER_CACHE_DIR="$packer_cache_dir"
+
+if [[ "$arch" == "arm64" ]]; then
+	bash "$project_root/scripts/macos/download-arm64-uefi.sh"
+fi
+
+iso_path="$cache_dir/linux/ubuntu-24.04.3-live-server-amd64.iso"
+if [[ "$arch" == "arm64" ]]; then
+	iso_path="$cache_dir/linux/ubuntu-24.04.3-live-server-arm64.iso"
+	iso_url="https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso"
+	iso_checksum="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
+	mkdir -p "$(dirname "$iso_path")"
+
+	if [[ ! -f "$iso_path" || "$(file_size_bytes "$iso_path")" -lt 2500000000 ]]; then
+		echo "Downloading Ubuntu ISO (supports resume)..."
+		if ! curl --no-buffer --retry 10 --continue-at - -L -# -o "$iso_path" "$iso_url"; then
+			echo "Failed to download Ubuntu ISO." >&2
+			exit 1
+		fi
+	fi
+
+	echo "Verifying ISO checksum..."
+	downloaded_checksum=$(sha256sum "$iso_path" | awk '{print $1}')
+	if [[ "$downloaded_checksum" != "$iso_checksum" ]]; then
+		echo "Checksum mismatch for $iso_path" >&2
+		exit 1
+	fi
+fi
+
+if [[ "$arch" == "arm64" ]]; then
+	echo "Creating QCOW2 disk image..."
+	output_directory="$cache_dir/ubuntu"
+	mkdir -p "$output_directory"
+	echo "Removing existing QCOW2 disk image if it exists..."
+	rm -f "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2"
+	qemu-img create -f qcow2 -o compression_type=zstd "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2" 64G
+	qemu-img info "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2"
+fi
+
+if [[ "$arch" == "arm64" ]]; then
+	cd "$project_root/build/packer/linux/ubuntu/cloud-init/qemu-${ubuntu_type}" || exit 1
+	rm -f cidata.iso
+	xorriso -as mkisofs -V cidata -o cidata.iso user-data meta-data
+	cd "$project_root" || exit 1
+fi
+
+output_dir="$build_output_dir"
+if [[ -d "$output_dir" ]]; then
+	echo "Removing existing Packer output directory..."
+	rm -rf "$output_dir"
+fi
+mkdir -p "$(dirname "$output_dir")"
+
+packer_file="build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl"
+packer init "$packer_file"
+
+if [[ "$verbose" == "true" ]]; then
+	export PACKER_LOG=1
+fi
+
+packer build \
+	-var "host_os=$host_os" \
+	-var "host_arch=$host_arch" \
+	-var "cache_dir=$cache_dir" \
+	-var "build_output_dir=$build_output_dir" \
+	-var "iso_url=$iso_path" \
+	-var "ubuntu_type=$ubuntu_type" \
+	-var "headless=$headless" \
+	-var "vnc_port=$vnc_port" \
+	-var "arch=$arch" \
+	-var "cpus=$cpus" \
+	-var "memory=$memory" \
+	"$packer_file"

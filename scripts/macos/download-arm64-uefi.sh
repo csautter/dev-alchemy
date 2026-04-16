@@ -7,7 +7,14 @@ SCRIPT_DIR=$(
 	pwd
 )
 
-app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+host_os="$(uname -s)"
+if [ "$host_os" = "Darwin" ]; then
+	default_app_data_dir="$HOME/Library/Application Support/dev-alchemy"
+else
+	default_app_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/dev-alchemy"
+fi
+
+app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$default_app_data_dir}"
 cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
 export DEV_ALCHEMY_APP_DATA_DIR="$app_data_dir"
 export DEV_ALCHEMY_CACHE_DIR="$cache_dir"

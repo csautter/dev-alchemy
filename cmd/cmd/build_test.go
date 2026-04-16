@@ -54,6 +54,16 @@ func TestIsBuildSupported(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "linux qemu ubuntu supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "ubuntu",
+				Arch:                 "arm64",
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+			},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {

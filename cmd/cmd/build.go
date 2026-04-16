@@ -35,6 +35,9 @@ func isBuildSupported(vm alchemy_build.VirtualMachineConfig) bool {
 		default:
 			return false
 		}
+	case alchemy_build.HostOsLinux:
+		return vm.VirtualizationEngine == alchemy_build.VirtualizationEngineQemu &&
+			vm.OS == "ubuntu"
 	default:
 		return false
 	}
@@ -209,6 +212,13 @@ func runBuild(vm alchemy_build.VirtualMachineConfig) error {
 		case alchemy_build.VirtualizationEngineVirtualBox:
 			if vm.OS == "windows11" {
 				return alchemy_build.RunVirtualBoxWindowsBuildOnWindows(vm)
+			}
+		}
+	case alchemy_build.HostOsLinux:
+		switch vm.VirtualizationEngine {
+		case alchemy_build.VirtualizationEngineQemu:
+			if vm.OS == "ubuntu" {
+				return alchemy_build.RunQemuUbuntuBuildOnLinux(vm)
 			}
 		}
 	}

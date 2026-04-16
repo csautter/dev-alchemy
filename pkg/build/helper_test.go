@@ -5,14 +5,14 @@ import (
 	"testing"
 )
 
-func TestGetDarwinQemuBuildOutputDir(t *testing.T) {
+func TestGetQemuBuildOutputDir(t *testing.T) {
 	config := VirtualMachineConfig{
 		OS:         "ubuntu",
 		Arch:       "amd64",
 		UbuntuType: "server",
 	}
 
-	got := getDarwinQemuBuildOutputDir(config)
+	got := getQemuBuildOutputDir(config)
 	want := filepath.Join("/tmp", "dev-alchemy", "qemu-out-ubuntu-server-amd64")
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)

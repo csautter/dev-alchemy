@@ -17,13 +17,6 @@ func TestAvailableVirtualMachineConfigsForHostOS(t *testing.T) {
 
 func TestAvailableVirtualMachineConfigsForCurrentHostOSByVirtualizationEngine(t *testing.T) {
 	grouped := AvailableVirtualMachineConfigsForCurrentHostOSByVirtualizationEngine()
-	if GetCurrentHostOs() == HostOsLinux {
-		if len(grouped) != 0 {
-			t.Fatalf("expected no grouped configs on linux host, got %d", len(grouped))
-		}
-		return
-	}
-
 	if len(grouped) == 0 {
 		t.Fatal("expected grouped configs, got none")
 	}
@@ -45,13 +38,6 @@ func TestAvailableVirtualMachineConfigsForCurrentHostOSByVirtualizationEngine(t 
 
 func TestCurrentHostVirtualizationEngines(t *testing.T) {
 	engines := CurrentHostVirtualizationEngines()
-	if GetCurrentHostOs() == HostOsLinux {
-		if len(engines) != 0 {
-			t.Fatalf("expected no virtualization engines on linux host, got %v", engines)
-		}
-		return
-	}
-
 	if len(engines) == 0 {
 		t.Fatal("expected at least one virtualization engine")
 	}
@@ -59,6 +45,34 @@ func TestCurrentHostVirtualizationEngines(t *testing.T) {
 	for i := 1; i < len(engines); i++ {
 		if engines[i-1] > engines[i] {
 			t.Fatalf("expected sorted engines, got %v", engines)
+		}
+	}
+}
+
+func TestLinuxHostUbuntuQemuConfigs(t *testing.T) {
+	configs := AvailableVirtualMachineConfigsForHostOS(HostOsLinux)
+	if len(configs) != 4 {
+		t.Fatalf("expected 4 linux build configs, got %d", len(configs))
+	}
+
+	want := map[string]bool{
+		"ubuntu/server/amd64/qemu":  false,
+		"ubuntu/server/arm64/qemu":  false,
+		"ubuntu/desktop/amd64/qemu": false,
+		"ubuntu/desktop/arm64/qemu": false,
+	}
+
+	for _, config := range configs {
+		key := config.OS + "/" + config.UbuntuType + "/" + config.Arch + "/" + string(config.VirtualizationEngine)
+		if _, ok := want[key]; !ok {
+			t.Fatalf("unexpected linux config %q", key)
+		}
+		want[key] = true
+	}
+
+	for key, seen := range want {
+		if !seen {
+			t.Fatalf("missing linux config %q", key)
 		}
 	}
 }

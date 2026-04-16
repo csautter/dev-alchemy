@@ -123,6 +123,55 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			VirtualizationEngine: VirtualizationEngineUtm,
 			Cpus:                 4,
 		},
+		// Host OS Linux builds
+		{
+			OS:         "ubuntu",
+			Arch:       "arm64",
+			UbuntuType: "server",
+			VncPort:    5921,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-server-packer-arm64.qcow2"),
+			},
+			HostOs:               HostOsLinux,
+			VirtualizationEngine: VirtualizationEngineQemu,
+			Cpus:                 8,
+		},
+		{
+			OS:         "ubuntu",
+			Arch:       "amd64",
+			UbuntuType: "server",
+			VncPort:    5922,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-server-packer-amd64.qcow2"),
+			},
+			HostOs:               HostOsLinux,
+			VirtualizationEngine: VirtualizationEngineQemu,
+			Cpus:                 4,
+		},
+		{
+			OS:         "ubuntu",
+			Arch:       "arm64",
+			UbuntuType: "desktop",
+			VncPort:    5923,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-desktop-packer-arm64.qcow2"),
+			},
+			HostOs:               HostOsLinux,
+			VirtualizationEngine: VirtualizationEngineQemu,
+			Cpus:                 8,
+		},
+		{
+			OS:         "ubuntu",
+			Arch:       "amd64",
+			UbuntuType: "desktop",
+			VncPort:    5924,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-desktop-packer-amd64.qcow2"),
+			},
+			HostOs:               HostOsLinux,
+			VirtualizationEngine: VirtualizationEngineQemu,
+			Cpus:                 4,
+		},
 		// Host OS Windows builds
 		{
 			OS:      "windows11",
