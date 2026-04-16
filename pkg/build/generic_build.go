@@ -68,41 +68,41 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	}()
 
 	vnc_recording_config := VncRecordingConfig{Password: "packer"}
-	openVncViewerOnMacosDarwin(ctx, config, vnc_recording_config)
+	openVncViewerOnMacOSHost(ctx, config, vnc_recording_config)
 
 	// Start Screen Capture to record the VM build process
 	vnc_snapshot_done := make(chan struct{})
 	vnc_interrupt_retry_chan := make(chan bool)
 
-	startVncScreenCaptureOnMacosDarwin(ctx, config, timeout, vnc_interrupt_retry_chan, &vnc_recording_config, vnc_snapshot_done)
+	startVncScreenCaptureOnSupportedHost(ctx, config, timeout, vnc_interrupt_retry_chan, &vnc_recording_config, vnc_snapshot_done)
 
 	select {
 	case err := <-done:
-		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
+		stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan)
 
 		if err != nil {
-			runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
+			runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config)
 			log.Printf("Script failed: %v", err)
 			return err
 		}
 		buildSucceeded = true
-		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
+		runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script finished successfully.")
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
 		_ = cmd.Process.Kill()
 
-		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
+		stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan)
 
-		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
+		runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script terminated due to timeout or interruption: %v", ctx.Err())
 		return ctx.Err()
 	case sig := <-sigs:
 		_ = cmd.Process.Kill()
 
-		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
+		stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan)
 
-		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
+		runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config)
 		log.Printf("Script terminated due to signal: %v", sig)
 		return fmt.Errorf("script terminated due to signal: %v", sig)
 	}
@@ -124,8 +124,16 @@ func resolveExpectedBuildArtifacts(config VirtualMachineConfig) ([]string, error
 	return nil, errors.New("no build artifacts defined for the given configuration")
 }
 
-func stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan chan bool) {
-	if runtime.GOOS != "darwin" {
+func hostSupportsVncRecording(goos string) bool {
+	return goos != "windows"
+}
+
+func hostSupportsVncViewer(goos string) bool {
+	return goos == "darwin"
+}
+
+func stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan chan bool) {
+	if !hostSupportsVncRecording(runtime.GOOS) {
 		return
 	}
 	log.Printf("stopping VNC snapshot...")
@@ -141,17 +149,11 @@ func stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan chan bool) {
 
 // FFmpeg integration:
 // - FFmpeg is useful for generating a video from the VNC recording, allowing playback and sharing of the build process.
-func runFfmpegOnMacosDarwin(vnc_snapshot_done chan struct{}, config VirtualMachineConfig, vnc_recording_config *VncRecordingConfig) {
-	if runtime.GOOS != "darwin" {
+func runFfmpegOnSupportedHost(vnc_snapshot_done chan struct{}, config VirtualMachineConfig, vnc_recording_config *VncRecordingConfig) {
+	if !hostSupportsVncRecording(runtime.GOOS) {
 		return
 	}
-	_, ok := <-vnc_snapshot_done
-	if !ok {
-		// Channel is closed, proceed
-	} else {
-		// Channel not closed, wait for it
-		<-vnc_snapshot_done
-	}
+	<-vnc_snapshot_done
 	// Always run ffmpeg after vnc_snapshot is done
 	timeout := 10 * time.Minute
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -159,8 +161,8 @@ func runFfmpegOnMacosDarwin(vnc_snapshot_done chan struct{}, config VirtualMachi
 	RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: timeout}, vnc_recording_config)
 }
 
-func startVncScreenCaptureOnMacosDarwin(ctx context.Context, config VirtualMachineConfig, timeout time.Duration, vnc_interrupt_retry_chan chan bool, vnc_recording_config *VncRecordingConfig, vnc_snapshot_done chan struct{}) {
-	if runtime.GOOS != "darwin" {
+func startVncScreenCaptureOnSupportedHost(ctx context.Context, config VirtualMachineConfig, timeout time.Duration, vnc_interrupt_retry_chan chan bool, vnc_recording_config *VncRecordingConfig, vnc_snapshot_done chan struct{}) {
+	if !hostSupportsVncRecording(runtime.GOOS) {
 		return
 	}
 	go func() {
@@ -175,8 +177,8 @@ func startVncScreenCaptureOnMacosDarwin(ctx context.Context, config VirtualMachi
 // VNC integration:
 // - Opening a VNC viewer (Screen Sharing) is useful for observing the VM build process in real time.
 // - VNC recording enables capturing the build process for later review or debugging.
-func openVncViewerOnMacosDarwin(ctx context.Context, config VirtualMachineConfig, vnc_recording_config VncRecordingConfig) {
-	if runtime.GOOS != "darwin" {
+func openVncViewerOnMacOSHost(ctx context.Context, config VirtualMachineConfig, vnc_recording_config VncRecordingConfig) {
+	if !hostSupportsVncViewer(runtime.GOOS) {
 		return
 	}
 	go func() {
