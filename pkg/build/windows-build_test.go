@@ -62,7 +62,7 @@ func TestBuildVirtualBoxWindows11Amd64OnWindows(t *testing.T) {
 func TestInitializePackerPropagatesError(t *testing.T) {
 	// A non-existent HCL path guarantees packer init exits non-zero (either the packer
 	// binary is missing entirely, or it rejects the unknown file).
-	err := initializePacker("/nonexistent/path/that/does/not/exist.pkr.hcl")
+	err := initializePacker(VirtualMachineConfig{}, "/nonexistent/path/that/does/not/exist.pkr.hcl")
 	if err == nil {
 		t.Fatal("expected initializePacker to return an error for a non-existent packer file, got nil")
 	}

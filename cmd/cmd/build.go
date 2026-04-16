@@ -234,11 +234,12 @@ func runBuild(vm alchemy_build.VirtualMachineConfig) error {
 }
 
 var (
-	arch        string
-	parallel    int
-	headless    bool
-	noCache     bool
-	buildEngine string
+	arch         string
+	parallel     int
+	headless     bool
+	noCache      bool
+	buildVerbose bool
+	buildEngine  string
 )
 
 func printAvailableBuildCombinations() error {
@@ -303,6 +304,7 @@ Example:
 			fmt.Printf("🔧 Building all available stable VM configurations with %d parallel builds\n", parallel)
 			for i := range available_virtual_machines {
 				available_virtual_machines[i].NoCache = noCache
+				available_virtual_machines[i].Verbose = buildVerbose
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -355,6 +357,7 @@ Example:
 		VirtualMachineConfig.VncPort = port
 		VirtualMachineConfig.Headless = headless
 		VirtualMachineConfig.NoCache = noCache
+		VirtualMachineConfig.Verbose = buildVerbose
 
 		if err := runBuild(VirtualMachineConfig); err != nil {
 			fmt.Printf("❌ Build failed for OS: %s, Type: %s, Architecture: %s — %v\n", osName, osType, arch, err)
@@ -380,5 +383,6 @@ func init() {
 	buildCmd.Flags().StringVar(&buildEngine, "engine", "", "Virtualization engine to use when multiple build targets share the same OS/type/arch (e.g., hyperv, virtualbox)")
 	buildCmd.Flags().IntVarP(&parallel, "parallel", "p", 1, "Number of parallel builds to run when building all VMs")
 	buildCmd.Flags().BoolVar(&headless, "headless", false, "Run QEMU in headless mode (no GUI, VNC only)")
+	buildCmd.Flags().BoolVarP(&buildVerbose, "verbose", "v", false, "Enable verbose Packer logging (sets PACKER_LOG=1)")
 	buildCmd.Flags().BoolVar(&noCache, "no-cache", false, "Force a rebuild even when the build artifact already exists")
 }

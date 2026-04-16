@@ -187,6 +187,9 @@ func TestBuildHelpIncludesEngineFlag(t *testing.T) {
 	if !strings.Contains(output, "--engine string") {
 		t.Fatalf("expected --engine flag in help output, got %q", output)
 	}
+	if !strings.Contains(output, "--verbose") {
+		t.Fatalf("expected --verbose flag in help output, got %q", output)
+	}
 	if !strings.Contains(output, "build all stable VM configurations") {
 		t.Fatalf("expected help output to describe stable all builds, got %q", output)
 	}

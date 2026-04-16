@@ -20,6 +20,9 @@ func runQemuUbuntuBuild(config VirtualMachineConfig, relativeScriptPath string) 
 	if config.Headless {
 		args = append(args, "--headless")
 	}
+	if config.Verbose {
+		args = append(args, "--verbose")
+	}
 	return RunBuildScript(config, "bash", args)
 }
 

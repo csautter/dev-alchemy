@@ -63,7 +63,7 @@ func RunVirtualBoxWindowsBuildOnWindows(config VirtualMachineConfig) error {
 // runWindowsBuild executes the Packer build process for Windows VMs.
 func runWindowsBuild(config VirtualMachineConfig, packerFile string) error {
 	// Initialize Packer with the specified configuration file
-	if err := initializePacker(packerFile); err != nil {
+	if err := initializePacker(config, packerFile); err != nil {
 		return fmt.Errorf("failed to initialize packer: %w", err)
 	}
 
@@ -75,8 +75,12 @@ func runWindowsBuild(config VirtualMachineConfig, packerFile string) error {
 }
 
 // initializePacker runs the packer init command for the given file.
-func initializePacker(packerFile string) error {
-	_, err := RunCliCommand(GetDirectoriesInstance().ProjectDir, packerExecutable, []string{"init", packerFile})
+func initializePacker(config VirtualMachineConfig, packerFile string) error {
+	env := GetDirectoriesInstance().ManagedEnv()
+	if config.Verbose {
+		env = append(env, "PACKER_LOG=1")
+	}
+	_, err := RunCliCommandWithEnv(GetDirectoriesInstance().ProjectDir, packerExecutable, []string{"init", packerFile}, env)
 	if err != nil {
 		return fmt.Errorf("packer init failed for %s: %w", packerFile, err)
 	}

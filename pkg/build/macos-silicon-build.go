@@ -225,5 +225,8 @@ func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) error {
 	if config.Headless {
 		args = append(args, "--headless")
 	}
+	if config.Verbose {
+		args = append(args, "--verbose")
+	}
 	return RunBuildScript(config, "bash", args)
 }

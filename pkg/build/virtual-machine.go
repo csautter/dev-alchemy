@@ -41,6 +41,7 @@ type VirtualMachineConfig struct {
 	// max(4096, totalSystemMemoryMB - 4096).
 	MemoryMB int
 	Headless bool
+	Verbose  bool
 }
 
 func AvailableVirtualMachineConfigs() []VirtualMachineConfig {

@@ -10,7 +10,7 @@ const (
 
 // RunHypervUbuntuBuildOnWindows builds an Ubuntu VM using Hyper-V on Windows.
 func RunHypervUbuntuBuildOnWindows(config VirtualMachineConfig) error {
-	if err := initializePacker(ubuntuHypervPackerFile); err != nil {
+	if err := initializePacker(config, ubuntuHypervPackerFile); err != nil {
 		return fmt.Errorf("failed to initialize packer: %w", err)
 	}
 

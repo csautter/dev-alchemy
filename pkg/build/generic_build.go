@@ -49,6 +49,9 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
 	cmd.Env = append(os.Environ(), GetDirectoriesInstance().ManagedEnv()...)
+	if config.Verbose {
+		cmd.Env = append(cmd.Env, "PACKER_LOG=1")
+	}
 
 	readAndPrintStdoutStderr(cmd, config)
 

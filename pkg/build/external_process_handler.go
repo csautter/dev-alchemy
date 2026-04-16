@@ -226,9 +226,16 @@ func RunPowerShellScript(config RunProcessConfig) error {
 }
 
 func RunCliCommand(workdir string, command string, args []string) ([]byte, error) {
+	return RunCliCommandWithEnv(workdir, command, args, nil)
+}
+
+func RunCliCommandWithEnv(workdir string, command string, args []string, env []string) ([]byte, error) {
 	// #nosec G204 -- this helper executes known CLI tools with explicit argv slices, not shell strings.
 	cmd := exec.Command(command, args...)
 	cmd.Dir = workdir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	log.Printf("Running command: %s %s", command, strings.Join(sanitizeCommandArgs(args), " "))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
