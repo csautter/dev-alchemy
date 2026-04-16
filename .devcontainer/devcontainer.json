@@ -18,6 +18,8 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
+				"HashiCorp.HCL",
+				"HashiCorp.terraform",
 				"openai.chatgpt",
 				"ms-azuretools.vscode-azurefunctions"
 			]
