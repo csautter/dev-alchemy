@@ -64,3 +64,32 @@ export DEV_ALCHEMY_APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Appli
 build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch amd64 --ubuntu-type server
 build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
 ```
+
+## Build Ubuntu on Linux Hosts (QEMU)
+
+Install host dependencies first:
+
+```bash
+alchemy install
+```
+
+This runs
+[scripts/linux/dev-alchemy-install-dependencies.sh](../../../../scripts/linux/dev-alchemy-install-dependencies.sh)
+to install the Ubuntu/Debian packages needed by the Linux QEMU workflow.
+
+Use the CLI from repository root:
+
+```bash
+# amd64 or arm64
+arch=amd64
+alchemy build ubuntu --type server --arch "$arch"
+alchemy build ubuntu --type desktop --arch "$arch"
+```
+
+Manual script usage:
+
+```bash
+export DEV_ALCHEMY_APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/dev-alchemy}"
+build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch amd64 --ubuntu-type server
+build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
+```

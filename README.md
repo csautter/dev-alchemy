@@ -157,12 +157,12 @@ This runs
 
 #### Ubuntu / Debian
 
-The `install` command is currently intended for macOS and Windows hosts. On
-Linux, install Ansible manually:
-
 ```bash
-sudo apt update && sudo apt install ansible
+alchemy install
 ```
+
+This runs
+[scripts/linux/dev-alchemy-install-dependencies.sh](./scripts/linux/dev-alchemy-install-dependencies.sh).
 
 #### Windows
 

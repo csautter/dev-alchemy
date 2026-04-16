@@ -16,6 +16,10 @@ type installCommandSpec struct {
 	scriptPath string
 }
 
+type installCommandOptions struct {
+	withGo bool
+}
+
 var runInstallCommand = func(spec installCommandSpec) error {
 	if _, err := os.Stat(spec.scriptPath); err != nil {
 		return fmt.Errorf("install script not found at %q: %w", spec.scriptPath, err)
@@ -34,26 +38,46 @@ var runInstallCommand = func(spec installCommandSpec) error {
 	return nil
 }
 
-func installCommandForHost(hostOs alchemy_build.HostOsType, projectDir string) (installCommandSpec, error) {
+func installCommandForHost(hostOs alchemy_build.HostOsType, projectDir string, options installCommandOptions) (installCommandSpec, error) {
 	switch hostOs {
 	case alchemy_build.HostOsDarwin:
 		scriptPath := filepath.Join(projectDir, "scripts", "macos", "dev-alchemy-install-dependencies.sh")
+		args := []string{scriptPath}
+		if options.withGo {
+			args = append(args, "--with-go")
+		}
 		return installCommandSpec{
 			executable: "bash",
-			args:       []string{scriptPath},
+			args:       args,
 			scriptPath: scriptPath,
 		}, nil
 	case alchemy_build.HostOsWindows:
+		if options.withGo {
+			return installCommandSpec{}, fmt.Errorf("install --with-go is not supported for host OS: %s", hostOs)
+		}
 		scriptPath := filepath.Join(projectDir, "scripts", "windows", "dev-alchemy-self-setup.ps1")
 		return installCommandSpec{
 			executable: "powershell",
 			args:       []string{"-ExecutionPolicy", "Bypass", "-File", scriptPath},
 			scriptPath: scriptPath,
 		}, nil
+	case alchemy_build.HostOsLinux:
+		scriptPath := filepath.Join(projectDir, "scripts", "linux", "dev-alchemy-install-dependencies.sh")
+		args := []string{scriptPath}
+		if options.withGo {
+			args = append(args, "--with-go")
+		}
+		return installCommandSpec{
+			executable: "bash",
+			args:       args,
+			scriptPath: scriptPath,
+		}, nil
 	default:
 		return installCommandSpec{}, fmt.Errorf("install is not supported for host OS: %s", hostOs)
 	}
 }
+
+var installWithGo bool
 
 var installCmd = &cobra.Command{
 	Use:   "install",
@@ -63,7 +87,7 @@ var installCmd = &cobra.Command{
 		hostOs := alchemy_build.GetCurrentHostOs()
 		projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 
-		spec, err := installCommandForHost(hostOs, projectDir)
+		spec, err := installCommandForHost(hostOs, projectDir, installCommandOptions{withGo: installWithGo})
 		if err != nil {
 			return err
 		}
@@ -74,5 +98,6 @@ var installCmd = &cobra.Command{
 }
 
 func init() {
+	installCmd.Flags().BoolVar(&installWithGo, "with-go", false, "Also install the Go toolchain when supported on the current host OS")
 	rootCmd.AddCommand(installCmd)
 }
