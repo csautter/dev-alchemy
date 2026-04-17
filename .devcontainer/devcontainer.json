@@ -21,7 +21,8 @@
 				"HashiCorp.HCL",
 				"HashiCorp.terraform",
 				"openai.chatgpt",
-				"ms-azuretools.vscode-azurefunctions"
+				"ms-azuretools.vscode-azurefunctions",
+				"emeraldwalk.runonsave"
 			]
 		}
 	},
