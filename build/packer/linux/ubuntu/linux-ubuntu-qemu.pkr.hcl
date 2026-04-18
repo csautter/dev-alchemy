@@ -105,7 +105,7 @@ locals {
 
   arm64_accel     = local.arm64_can_use_native_acceleration ? "kvm" : local.arm64_software_accel
   arm64_cpu_model = local.arm64_can_use_native_acceleration ? "host" : local.arm64_fallback_cpu_model
-  arm64_cpus = local.arm64_cross_arch_emulation ? min(var.cpus, 2) : var.cpus
+  arm64_cpus      = local.arm64_cross_arch_emulation ? min(var.cpus, 2) : var.cpus
 
   boot_command = {
     "amd64" = [
@@ -239,8 +239,8 @@ build {
   provisioner "shell" {
     environment_vars = ["DEBIAN_FRONTEND=noninteractive", "SUDO_ASKPASS=/tmp/askpass.sh"]
     inline = var.ubuntu_type == "desktop" ? [
-      "echo 'Installing desktop environment...'",
-      "sudo -A apt-get install -y ubuntu-desktop-minimal",
+      "echo 'Installing desktop environment without recommended packages...'",
+      "sudo -A apt-get install -y --no-install-recommends ubuntu-desktop-minimal",
     ] : ["echo 'Server build - skipping desktop packages.'"]
     max_retries  = 2
     pause_before = "10s"

@@ -25,6 +25,3 @@ autoinstall:
   apt:
     fallback: offline-install
     geoip: false
-  packages:
-    - openssh-server
-    - qemu-guest-agent

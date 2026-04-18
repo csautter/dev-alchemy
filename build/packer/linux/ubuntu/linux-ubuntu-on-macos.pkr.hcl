@@ -222,8 +222,8 @@ build {
   provisioner "shell" {
     environment_vars = ["DEBIAN_FRONTEND=noninteractive", "SUDO_ASKPASS=/tmp/askpass.sh"]
     inline = var.ubuntu_type == "desktop" ? [
-      "echo 'Installing desktop environment...'",
-      "sudo -A apt-get install -y ubuntu-desktop-minimal",
+      "echo 'Installing desktop environment without recommended packages...'",
+      "sudo -A apt-get install -y --no-install-recommends ubuntu-desktop-minimal",
     ] : ["echo 'Server build - skipping desktop packages.'"]
     max_retries  = 2
     pause_before = "10s"
