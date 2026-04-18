@@ -106,16 +106,19 @@ locals {
   amd64_accel     = var.host_os == "linux" && local.host_same_arch ? "kvm" : "tcg,thread=multi,tb-size=1024"
   amd64_cpu_model = var.host_os == "linux" && local.host_same_arch ? "host" : "Skylake-Client"
 
+  arm64_cross_arch_emulation = var.host_os == "linux" && var.arch == "arm64" && !local.host_same_arch
+
   arm64_accel = var.host_os == "darwin" ? (
     var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"
   ) : (
-    local.host_same_arch ? "kvm" : "tcg,thread=multi,tb-size=512"
+    local.host_same_arch ? "kvm" : "tcg,thread=multi,tb-size=1024"
   )
   arm64_cpu_model = var.host_os == "darwin" ? (
     var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"
   ) : (
     local.host_same_arch ? "host" : "max"
   )
+  arm64_cpus = local.arm64_cross_arch_emulation ? min(var.cpus, 2) : var.cpus
 
   boot_command = {
     "amd64" = [
@@ -152,7 +155,7 @@ locals {
       ["-cpu", local.arm64_cpu_model],
       ["-bios", "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
       ["-device", "ramfb"],
-      ["-smp", "cpus=${var.cpus},cores=${var.cpus},sockets=1,threads=1"],
+      ["-smp", "cpus=${local.arm64_cpus},cores=${local.arm64_cpus},sockets=1,threads=1"],
       ["-global", "PIIX4_PM.disable_s3=1"],
       ["-global", "ICH-LPC.disable_s3=1"],
       ["-device", "qemu-xhci"],

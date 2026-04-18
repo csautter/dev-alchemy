@@ -135,7 +135,8 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsLinux,
 			VirtualizationEngine: VirtualizationEngineQemu,
-			Cpus:                 8,
+			Cpus:                 4,
+			MemoryMB:             8192,
 		},
 		{
 			OS:         "ubuntu",
@@ -148,6 +149,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			HostOs:               HostOsLinux,
 			VirtualizationEngine: VirtualizationEngineQemu,
 			Cpus:                 4,
+			MemoryMB:             8192,
 		},
 		{
 			OS:         "ubuntu",
@@ -159,7 +161,8 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			},
 			HostOs:               HostOsLinux,
 			VirtualizationEngine: VirtualizationEngineQemu,
-			Cpus:                 8,
+			Cpus:                 4,
+			MemoryMB:             8192,
 		},
 		{
 			OS:         "ubuntu",
@@ -172,6 +175,7 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			HostOs:               HostOsLinux,
 			VirtualizationEngine: VirtualizationEngineQemu,
 			Cpus:                 4,
+			MemoryMB:             8192,
 		},
 		// Host OS Windows builds
 		{
