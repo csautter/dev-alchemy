@@ -27,11 +27,4 @@ autoinstall:
     geoip: false
   packages:
     - openssh-server
-    - linux-virtual
-    - linux-tools-virtual
-    - linux-cloud-tools-common
-    - net-tools
     - qemu-guest-agent
-    - spice-vdagent
-  late-commands:
-    - curtin in-target -- apt-get install -y ubuntu-desktop-minimal

@@ -161,6 +161,14 @@ locals {
 
   left_list        = join("", [for i in range(0, 16) : "<left>"])
   output_directory = var.build_output_dir != "" ? var.build_output_dir : "${local.cache_directory}/ubuntu/qemu-out-ubuntu-${var.ubuntu_type}-${var.arch}"
+
+  # Packages are installed via Packer provisioners (instead of cloud-init) to
+  # improve reliability under cross-architecture TCG emulation where the
+  # autoinstall phase is extremely slow and has no retry mechanism.
+  base_packages = compact(concat(
+    ["openssh-server", "linux-virtual", "linux-tools-virtual", "linux-cloud-tools-common", "net-tools", "qemu-guest-agent", "spice-vdagent"],
+    var.ubuntu_type == "server" ? ["linux-tools-generic"] : []
+  ))
 }
 
 source "qemu" "ubuntu" {
@@ -203,6 +211,41 @@ source "qemu" "ubuntu" {
 
 build {
   sources = ["source.qemu.ubuntu"]
+
+  provisioner "shell" {
+    environment_vars = ["SUDO_ASKPASS=/tmp/askpass.sh"]
+    inline = [
+      "printf '#!/bin/sh\necho '\"'\"'P@ssw0rd!'\"'\"'\n' > /tmp/askpass.sh && chmod +x /tmp/askpass.sh",
+      "echo 'Waiting for cloud-init to finish...'",
+      "sudo -A cloud-init status --wait || true",
+    ]
+    pause_before = "10s"
+    timeout      = "30m"
+  }
+
+  provisioner "shell" {
+    environment_vars = ["DEBIAN_FRONTEND=noninteractive", "SUDO_ASKPASS=/tmp/askpass.sh"]
+    inline = [
+      "echo 'Updating package lists...'",
+      "sudo -A apt-get update -q",
+      "echo 'Installing base packages...'",
+      "sudo -A apt-get install -y ${join(" ", local.base_packages)}",
+    ]
+    max_retries  = 3
+    pause_before = "10s"
+    timeout      = "60m"
+  }
+
+  provisioner "shell" {
+    environment_vars = ["DEBIAN_FRONTEND=noninteractive", "SUDO_ASKPASS=/tmp/askpass.sh"]
+    inline = var.ubuntu_type == "desktop" ? [
+      "echo 'Installing desktop environment...'",
+      "sudo -A apt-get install -y ubuntu-desktop-minimal",
+    ] : ["echo 'Server build - skipping desktop packages.'"]
+    max_retries  = 2
+    pause_before = "10s"
+    timeout      = "120m"
+  }
 
   post-processor "shell-local" {
     inline = var.arch == "amd64" ? [
