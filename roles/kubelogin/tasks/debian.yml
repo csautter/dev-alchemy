@@ -10,25 +10,50 @@
 
 - name: Get latest kubelogin release info from GitHub
   uri:
-    url: https://api.github.com/repos/int128/kubelogin/releases/latest
+    url: "{{ kubelogin_release_api_url }}"
+    headers: >-
+      {{
+        {
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+        | combine(
+            kubelogin_github_token | length > 0
+            | ternary({'Authorization': 'Bearer ' ~ kubelogin_github_token}, {})
+          )
+      }}
     return_content: yes
   register: kubelogin_release
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - kubelogin_version | length == 0
 
 - name: Set kubelogin version fact
   set_fact:
-    kubelogin_version: "{{ kubelogin_release.json.tag_name }}"
+    kubelogin_resolved_version: >-
+      {{
+        kubelogin_version
+        if kubelogin_version | length > 0
+        else kubelogin_release.json.tag_name
+      }}
   when: not ansible_check_mode
 
-- name: Set kubelogin download URL (amd64)
+- name: Set kubelogin download URL
   set_fact:
-    kubelogin_url: "https://github.com/int128/kubelogin/releases/download/{{ kubelogin_version }}/kubelogin_linux_amd64.zip"
-  when: ansible_architecture == 'x86_64' and not ansible_check_mode
+    kubelogin_url: >-
+      {{
+        kubelogin_release_base_url
+      }}/{{ kubelogin_resolved_version }}/kubelogin_linux_{{ kubelogin_architecture_map[ansible_architecture] }}.zip
+  when:
+    - not ansible_check_mode
+    - ansible_architecture in kubelogin_architecture_map
 
-- name: Set kubelogin download URL (arm64)
-  set_fact:
-    kubelogin_url: "https://github.com/int128/kubelogin/releases/download/{{ kubelogin_version }}/kubelogin_linux_arm64.zip"
-  when: ansible_architecture == 'aarch64' and not ansible_check_mode
+- name: Fail for unsupported kubelogin architecture
+  fail:
+    msg: "Unsupported architecture for kubelogin: {{ ansible_architecture }}"
+  when:
+    - not ansible_check_mode
+    - ansible_architecture not in kubelogin_architecture_map
 
 - name: Create temporary directory for kubelogin
   tempfile:

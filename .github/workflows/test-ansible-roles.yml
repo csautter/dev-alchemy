@@ -41,6 +41,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test-ansible-roles:
     name: Ansible on ${{ matrix.os }} with protocol ${{ matrix.ansible_protocol }}
@@ -123,6 +126,7 @@ jobs:
           ansible-playbook -i inventory/localhost.yaml playbooks/setup.yml
         env:
           ANSIBLE_FORCE_COLOR: "true"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         if: runner.os != 'Windows'
 
       - name: Run all Ansible roles on Windows via local provision wrapper (with retries)

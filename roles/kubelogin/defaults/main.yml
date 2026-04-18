@@ -1,0 +1,8 @@
+---
+kubelogin_version: ""
+kubelogin_github_token: "{{ lookup('ansible.builtin.env', 'GITHUB_TOKEN') | default('', true) }}"
+kubelogin_release_api_url: "https://api.github.com/repos/int128/kubelogin/releases/latest"
+kubelogin_release_base_url: "https://github.com/int128/kubelogin/releases/download"
+kubelogin_architecture_map:
+  x86_64: amd64
+  aarch64: arm64
