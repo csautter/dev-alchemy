@@ -12,6 +12,7 @@ cpus="4"
 memory="4096"
 verbose="false"
 build_output_dir=""
+use_hardware_acceleration="true"
 
 script_dir=$(
 	cd "$(dirname "$0")"
@@ -74,6 +75,104 @@ file_size_bytes() {
 	else
 		stat -f%z "$1"
 	fi
+}
+
+is_truthy() {
+	case "$1" in
+	1 | true | TRUE | True | yes | YES | on | ON)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+qemu_binary_for_arch() {
+	case "$1" in
+	amd64)
+		echo "qemu-system-x86_64"
+		;;
+	arm64)
+		echo "qemu-system-aarch64"
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+detect_virtualization_type() {
+	if command -v systemd-detect-virt >/dev/null 2>&1; then
+		local detected
+		detected="$(systemd-detect-virt 2>/dev/null)"
+		if [[ $? -eq 0 && -n "$detected" ]]; then
+			printf '%s\n' "$detected"
+			return 0
+		fi
+	fi
+
+	if grep -qiE '(^flags|^Features).*(^| )hypervisor( |$)' /proc/cpuinfo 2>/dev/null; then
+		printf '%s\n' "generic-vm"
+		return 0
+	fi
+
+	if [[ -r /sys/class/dmi/id/product_name ]] &&
+		grep -qiE 'kvm|qemu|vmware|virtualbox|hyper-v|virtual machine|bochs|xen' /sys/class/dmi/id/product_name 2>/dev/null; then
+		cat /sys/class/dmi/id/product_name
+		return 0
+	fi
+
+	printf '%s\n' "none"
+}
+
+probe_kvm_with_qemu() {
+	local target_arch="$1"
+	local qemu_binary
+	local -a probe_args
+	local probe_rc
+
+	qemu_binary="$(qemu_binary_for_arch "$target_arch")" || return 1
+	if ! command -v "$qemu_binary" >/dev/null 2>&1; then
+		echo "Skipping KVM runtime probe because $qemu_binary is not available in PATH yet." >&2
+		return 0
+	fi
+
+	if [[ "$target_arch" == "amd64" ]]; then
+		probe_args=(-accel kvm -machine q35 -cpu host -display none -nodefaults -nographic -monitor none -serial none -S)
+	else
+		probe_args=(-accel kvm -machine virt -cpu host -display none -nodefaults -nographic -monitor none -serial none -S)
+	fi
+
+	if command -v timeout >/dev/null 2>&1; then
+		timeout 3s "$qemu_binary" "${probe_args[@]}" >/dev/null 2>&1
+		probe_rc=$?
+		[[ $probe_rc -eq 0 || $probe_rc -eq 124 ]]
+		return
+	fi
+
+	"$qemu_binary" -accel help 2>/dev/null | grep -qw kvm
+}
+
+linux_kvm_is_usable() {
+	local target_arch="$1"
+
+	if [[ ! -e /dev/kvm ]]; then
+		echo "KVM device /dev/kvm is missing." >&2
+		return 1
+	fi
+
+	if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
+		echo "KVM device /dev/kvm is not accessible for the current user." >&2
+		return 1
+	fi
+
+	if ! probe_kvm_with_qemu "$target_arch"; then
+		echo "QEMU could not initialize KVM for architecture $target_arch." >&2
+		return 1
+	fi
+
+	return 0
 }
 
 while [[ $# -gt 0 ]]; do
@@ -178,6 +277,23 @@ host_arch="$(detect_host_arch)" || {
 	exit 1
 }
 
+if is_truthy "${DEV_ALCHEMY_QEMU_FORCE_SOFTWARE_EMULATION:-}"; then
+	use_hardware_acceleration="false"
+	echo "DEV_ALCHEMY_QEMU_FORCE_SOFTWARE_EMULATION is set; forcing software emulation."
+elif [[ "$host_os" == "linux" && "$host_arch" == "$arch" ]]; then
+	virtualization_type="$(detect_virtualization_type)"
+	if [[ "$virtualization_type" != "none" ]]; then
+		echo "Detected virtualized host environment: $virtualization_type"
+	fi
+
+	if linux_kvm_is_usable "$arch"; then
+		echo "KVM acceleration probe succeeded; using hardware acceleration."
+	else
+		use_hardware_acceleration="false"
+		echo "KVM acceleration is unavailable or incomplete on this host; falling back to software emulation."
+	fi
+fi
+
 if [[ -z "$build_output_dir" ]]; then
 	build_output_dir="/tmp/dev-alchemy/qemu-out-ubuntu-${ubuntu_type}-${arch}"
 fi
@@ -261,6 +377,7 @@ fi
 packer build \
 	-var "host_os=$host_os" \
 	-var "host_arch=$host_arch" \
+	-var "use_hardware_acceleration=$use_hardware_acceleration" \
 	-var "cache_dir=$cache_dir" \
 	-var "build_output_dir=$build_output_dir" \
 	-var "iso_url=$iso_path" \

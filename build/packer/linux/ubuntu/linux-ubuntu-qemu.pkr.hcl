@@ -59,6 +59,12 @@ variable "is_ci" {
   default = env("CI") == "true"
 }
 
+variable "use_hardware_acceleration" {
+  type        = bool
+  default     = true
+  description = "Whether to use KVM/HVF acceleration when the host can support it."
+}
+
 variable "ubuntu_type" {
   type        = string
   default     = "server"
@@ -102,21 +108,23 @@ locals {
   cache_directory     = var.cache_dir
   host_same_arch      = var.host_arch == var.arch
   display_type        = var.host_os == "darwin" ? "cocoa" : "none"
+  linux_can_use_kvm   = var.host_os == "linux" && local.host_same_arch && var.use_hardware_acceleration
+  darwin_can_use_hvf  = var.host_os == "darwin" && !var.is_ci && var.use_hardware_acceleration
 
-  amd64_accel     = var.host_os == "linux" && local.host_same_arch ? "kvm" : "tcg,thread=multi,tb-size=1024"
-  amd64_cpu_model = var.host_os == "linux" && local.host_same_arch ? "host" : "Skylake-Client"
+  amd64_accel     = local.linux_can_use_kvm ? "kvm" : "tcg,thread=multi,tb-size=1024"
+  amd64_cpu_model = local.linux_can_use_kvm ? "host" : "Skylake-Client"
 
   arm64_cross_arch_emulation = var.host_os == "linux" && var.arch == "arm64" && !local.host_same_arch
 
   arm64_accel = var.host_os == "darwin" ? (
-    var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"
+    local.darwin_can_use_hvf ? "hvf" : "tcg,thread=multi,tb-size=512"
   ) : (
-    local.host_same_arch ? "kvm" : "tcg,thread=multi,tb-size=1024"
+    local.linux_can_use_kvm ? "kvm" : "tcg,thread=multi,tb-size=1024"
   )
   arm64_cpu_model = var.host_os == "darwin" ? (
-    var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"
+    local.darwin_can_use_hvf ? "host" : "max,sve=off,pauth-impdef=on"
   ) : (
-    local.host_same_arch ? "host" : "max"
+    local.linux_can_use_kvm ? "host" : "max"
   )
   arm64_cpus = local.arm64_cross_arch_emulation ? min(var.cpus, 2) : var.cpus
 
