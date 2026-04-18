@@ -7,4 +7,4 @@ script_dir=$(
 	pwd -P
 )
 
-exec bash "${script_dir}/linux-ubuntu-qemu.sh" --host-os linux "$@"
+exec bash "${script_dir}/linux-ubuntu-qemu.sh" "$@"

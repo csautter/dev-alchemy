@@ -12,15 +12,6 @@ variable "ubuntu_version" {
   default = "24.04.3"
 }
 
-variable "host_os" {
-  type        = string
-  description = "Host operating system running the QEMU build."
-  validation {
-    condition     = var.host_os == "darwin" || var.host_os == "linux"
-    error_message = "The variable host_os must be either 'darwin' or 'linux'."
-  }
-}
-
 variable "host_arch" {
   type        = string
   description = "Normalized host architecture: amd64 or arm64."
@@ -54,15 +45,10 @@ variable "iso_url" {
   type = string
 }
 
-variable "is_ci" {
-  type    = bool
-  default = env("CI") == "true"
-}
-
 variable "use_hardware_acceleration" {
   type        = bool
   default     = true
-  description = "Whether to use KVM/HVF acceleration when the host can support it."
+  description = "Whether to use KVM acceleration when the host can support it."
 }
 
 variable "ubuntu_type" {
@@ -107,25 +93,18 @@ locals {
   ubuntu_iso_checksum = var.arch == "amd64" ? "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b" : "none"
   cache_directory     = var.cache_dir
   host_same_arch      = var.host_arch == var.arch
-  display_type        = var.host_os == "darwin" ? "cocoa" : "none"
-  linux_can_use_kvm   = var.host_os == "linux" && local.host_same_arch && var.use_hardware_acceleration
-  darwin_can_use_hvf  = var.host_os == "darwin" && !var.is_ci && var.use_hardware_acceleration
 
-  amd64_accel     = local.linux_can_use_kvm ? "kvm" : "tcg,thread=multi,tb-size=1024"
-  amd64_cpu_model = local.linux_can_use_kvm ? "host" : "Skylake-Client"
+  amd64_can_use_native_acceleration = local.host_same_arch && var.use_hardware_acceleration
+  amd64_accel                       = local.amd64_can_use_native_acceleration ? "kvm" : "tcg,thread=multi,tb-size=1024"
+  amd64_cpu_model                   = local.amd64_can_use_native_acceleration ? "host" : "Skylake-Client"
 
-  arm64_cross_arch_emulation = var.host_os == "linux" && var.arch == "arm64" && !local.host_same_arch
+  arm64_cross_arch_emulation        = var.arch == "arm64" && !local.host_same_arch
+  arm64_can_use_native_acceleration = local.host_same_arch && var.use_hardware_acceleration
+  arm64_software_accel              = "tcg,thread=multi,tb-size=1024"
+  arm64_fallback_cpu_model          = "max,sve=off,pauth-impdef=on"
 
-  arm64_accel = var.host_os == "darwin" ? (
-    local.darwin_can_use_hvf ? "hvf" : "tcg,thread=multi,tb-size=512"
-  ) : (
-    local.linux_can_use_kvm ? "kvm" : "tcg,thread=multi,tb-size=1024"
-  )
-  arm64_cpu_model = var.host_os == "darwin" ? (
-    local.darwin_can_use_hvf ? "host" : "max,sve=off,pauth-impdef=on"
-  ) : (
-    local.linux_can_use_kvm ? "host" : "max"
-  )
+  arm64_accel     = local.arm64_can_use_native_acceleration ? "kvm" : local.arm64_software_accel
+  arm64_cpu_model = local.arm64_can_use_native_acceleration ? "host" : local.arm64_fallback_cpu_model
   arm64_cpus = local.arm64_cross_arch_emulation ? min(var.cpus, 2) : var.cpus
 
   boot_command = {
@@ -196,7 +175,7 @@ source "qemu" "ubuntu" {
   disk_size        = "64G"
   disk_interface   = "ide"
   format           = "qcow2"
-  display          = local.display_type
+  display          = "none"
   net_device       = var.arch == "amd64" ? "e1000" : "virtio-net-pci"
 
   cd_label = "cidata"

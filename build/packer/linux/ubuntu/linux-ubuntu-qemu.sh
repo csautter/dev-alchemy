@@ -3,7 +3,6 @@
 set +e
 set -x
 
-host_os=""
 arch="arm64"
 headless="false"
 ubuntu_type="server"
@@ -23,20 +22,6 @@ project_root=$(
 	pwd -P
 )
 
-detect_host_os() {
-	case "$(uname -s)" in
-	Darwin)
-		echo "darwin"
-		;;
-	Linux)
-		echo "linux"
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
 detect_host_arch() {
 	case "$(uname -m)" in
 	x86_64 | amd64)
@@ -52,17 +37,7 @@ detect_host_arch() {
 }
 
 default_app_data_dir() {
-	case "$1" in
-	darwin)
-		printf '%s\n' "$HOME/Library/Application Support/dev-alchemy"
-		;;
-	linux)
-		printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}/dev-alchemy"
-		;;
-	*)
-		return 1
-		;;
-	esac
+	printf '%s\n' "${XDG_DATA_HOME:-$HOME/.local/share}/dev-alchemy"
 }
 
 file_size_bytes() {
@@ -70,11 +45,7 @@ file_size_bytes() {
 		echo "0"
 		return 0
 	fi
-	if stat -c%s "$1" >/dev/null 2>&1; then
-		stat -c%s "$1"
-	else
-		stat -f%z "$1"
-	fi
+	stat -c%s "$1"
 }
 
 is_truthy() {
@@ -177,15 +148,6 @@ linux_kvm_is_usable() {
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
-	--host-os)
-		if [[ -n "$2" && ("$2" == "darwin" || "$2" == "linux") ]]; then
-			host_os="$2"
-			shift 2
-		else
-			echo "Invalid value for --host-os: $2. Allowed values are 'darwin' or 'linux'." >&2
-			exit 1
-		fi
-		;;
 	--arch)
 		if [[ -n "$2" && ("$2" == "amd64" || "$2" == "arm64") ]]; then
 			arch="$2"
@@ -265,11 +227,9 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-if [[ -z "$host_os" ]]; then
-	host_os="$(detect_host_os)" || {
-		echo "Unsupported host operating system: $(uname -s)" >&2
-		exit 1
-	}
+if [[ "$(uname -s)" != "Linux" ]]; then
+	echo "This script only supports Linux hosts. Use linux-ubuntu-on-macos.sh on macOS." >&2
+	exit 1
 fi
 
 host_arch="$(detect_host_arch)" || {
@@ -280,7 +240,7 @@ host_arch="$(detect_host_arch)" || {
 if is_truthy "${DEV_ALCHEMY_QEMU_FORCE_SOFTWARE_EMULATION:-}"; then
 	use_hardware_acceleration="false"
 	echo "DEV_ALCHEMY_QEMU_FORCE_SOFTWARE_EMULATION is set; forcing software emulation."
-elif [[ "$host_os" == "linux" && "$host_arch" == "$arch" ]]; then
+elif [[ "$host_arch" == "$arch" ]]; then
 	virtualization_type="$(detect_virtualization_type)"
 	if [[ "$virtualization_type" != "none" ]]; then
 		echo "Detected virtualized host environment: $virtualization_type"
@@ -298,7 +258,7 @@ if [[ -z "$build_output_dir" ]]; then
 	build_output_dir="/tmp/dev-alchemy/qemu-out-ubuntu-${ubuntu_type}-${arch}"
 fi
 
-app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$(default_app_data_dir "$host_os")}"
+app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$(default_app_data_dir)}"
 cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
 packer_cache_dir="${DEV_ALCHEMY_PACKER_CACHE_DIR:-$app_data_dir/packer_cache}"
 
@@ -375,7 +335,6 @@ if [[ "$verbose" == "true" ]]; then
 fi
 
 packer build \
-	-var "host_os=$host_os" \
 	-var "host_arch=$host_arch" \
 	-var "use_hardware_acceleration=$use_hardware_acceleration" \
 	-var "cache_dir=$cache_dir" \
