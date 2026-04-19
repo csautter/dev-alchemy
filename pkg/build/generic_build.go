@@ -359,7 +359,6 @@ func prepareBuildArtifactsForBuild(config VirtualMachineConfig) (bool, func(bool
 		if buildArtifactExists {
 			return true, func(bool) {}, nil
 		}
-		return false, func(bool) {}, nil
 	}
 
 	artifacts, err := resolveExpectedBuildArtifacts(config)
