@@ -194,3 +194,52 @@ func TestBuildHelpIncludesEngineFlag(t *testing.T) {
 		t.Fatalf("expected help output to describe stable all builds, got %q", output)
 	}
 }
+
+func TestBuildListRowIncludesArtifactStatus(t *testing.T) {
+	previousInspector := inspectBuildArtifactExists
+	t.Cleanup(func() {
+		inspectBuildArtifactExists = previousInspector
+	})
+
+	inspectBuildArtifactExists = func(vm alchemy_build.VirtualMachineConfig) (bool, error) {
+		return vm.OS == "windows11", nil
+	}
+
+	var buf bytes.Buffer
+	err := printVirtualMachineCombinationTable(
+		&buf,
+		"Available build combinations for host OS: windows",
+		"No build combinations are available for the current host OS.",
+		[]alchemy_build.VirtualMachineConfig{
+			{
+				OS:                   "windows11",
+				Arch:                 "amd64",
+				HostOs:               alchemy_build.HostOsWindows,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+			},
+			{
+				OS:                   "ubuntu",
+				UbuntuType:           "server",
+				Arch:                 "amd64",
+				HostOs:               alchemy_build.HostOsWindows,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineHyperv,
+			},
+		},
+		[]string{"OS", "Type", "Arch", "Build"},
+		buildListRow,
+	)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Build") {
+		t.Fatalf("expected build status header, got %q", output)
+	}
+	if !strings.Contains(output, "windows11") || !strings.Contains(output, "exists") {
+		t.Fatalf("expected existing windows build artifact row, got %q", output)
+	}
+	if !strings.Contains(output, "ubuntu") || !strings.Contains(output, "missing") {
+		t.Fatalf("expected missing ubuntu build artifact row, got %q", output)
+	}
+}

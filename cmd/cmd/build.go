@@ -20,6 +20,8 @@ import (
 // Implementations should honour ctx.Done() so they can abort early.
 type buildRunner func(ctx context.Context, vm alchemy_build.VirtualMachineConfig) error
 
+var inspectBuildArtifactExists = alchemy_build.BuildArtifactsExistQuiet
+
 func isBuildSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	switch vm.HostOs {
 	case alchemy_build.HostOsDarwin:
@@ -233,6 +235,25 @@ func runBuild(vm alchemy_build.VirtualMachineConfig) error {
 	)
 }
 
+func buildArtifactState(vm alchemy_build.VirtualMachineConfig) (string, error) {
+	artifactsExist, err := inspectBuildArtifactExists(vm)
+	if err != nil {
+		return "", fmt.Errorf("failed to check build artifacts for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+	}
+	if artifactsExist {
+		return "exists", nil
+	}
+	return "missing", nil
+}
+
+func buildListRow(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
+	artifactState, err := buildArtifactState(vm)
+	if err != nil {
+		return nil, err
+	}
+	return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, artifactState}, nil
+}
+
 var (
 	arch         string
 	parallel     int
@@ -251,10 +272,8 @@ func printAvailableBuildCombinations() error {
 		fmt.Sprintf("Available build combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
 		"No build combinations are available for the current host OS.",
 		vms,
-		[]string{"OS", "Type", "Arch"},
-		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
-			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch}, nil
-		},
+		[]string{"OS", "Type", "Arch", "Build"},
+		buildListRow,
 	); err != nil {
 		return err
 	}
