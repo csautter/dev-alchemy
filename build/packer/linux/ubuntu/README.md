@@ -52,7 +52,8 @@ Use the CLI from repository root:
 ```bash
 # amd64 or arm64
 arch=amd64
-alchemy install
+alchemy install # --with-go also bootstraps the Go toolchain on macOS
+alchemy build list # shows whether the Ubuntu build artifacts are already present in the local cache
 alchemy build ubuntu --type server --arch $arch
 alchemy build ubuntu --type desktop --arch $arch
 ```
