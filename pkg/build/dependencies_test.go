@@ -43,8 +43,8 @@ func TestBootstrapPythonEnv_PipInstallFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when venv Python/pip binaries are missing, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to install playwright") {
-		t.Errorf("expected error to mention playwright install failure, got: %v", err)
+	if !strings.Contains(err.Error(), "failed to install Windows 11 download script requirements") {
+		t.Errorf("expected error to mention requirements install failure, got: %v", err)
 	}
 }
 

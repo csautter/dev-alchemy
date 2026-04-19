@@ -124,10 +124,8 @@ if [ ! -f "$cache_dir/windows11/iso/win11_25h2_english_$arch.iso" ]; then
 	# shellcheck disable=SC1091
 	source .venv/bin/activate
 
-	if ! python -c "import playwright" &>/dev/null; then
-		pip install playwright
-		python -m playwright install chromium
-	fi
+	pip install -r requirements.txt
+	python -m playwright install chromium
 
 	if [ "$arch" = "amd64" ]; then
 		python playwright_win11_iso.py

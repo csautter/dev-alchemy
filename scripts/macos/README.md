@@ -14,10 +14,9 @@ This script uses Playwright to fetch the latest Windows 11 ISO download link fro
    python3 -m venv .venv
    source .venv/bin/activate
    ```
-3. **Install Playwright**:
+3. **Install the script requirements**:
    ```bash
-   pip install playwright
-   pip install playwright-stealth
+   pip install -r requirements.txt
    python -m playwright install
    ```
 ### Running the Script

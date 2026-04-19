@@ -186,17 +186,8 @@ func bootstrapPythonEnv(workdir, pythonExe string) error {
 	}
 
 	log.Printf("Installing required Python packages for Windows 11 download script")
-	if _, err := RunCliCommand(workdir, venvPython, []string{"-c", "import playwright"}); err != nil {
-		log.Printf("playwright not found, installing...")
-		if _, err = RunCliCommand(workdir, pipPath, []string{"install", "playwright"}); err != nil {
-			return fmt.Errorf("failed to install playwright: %w", err)
-		}
-	}
-	if _, err := RunCliCommand(workdir, venvPython, []string{"-c", "import playwright_stealth"}); err != nil {
-		log.Printf("playwright-stealth not found, installing...")
-		if _, err = RunCliCommand(workdir, pipPath, []string{"install", "playwright-stealth"}); err != nil {
-			return fmt.Errorf("failed to install playwright-stealth: %w", err)
-		}
+	if _, err := RunCliCommand(workdir, pipPath, []string{"install", "-r", "requirements.txt"}); err != nil {
+		return fmt.Errorf("failed to install Windows 11 download script requirements: %w", err)
 	}
 
 	log.Printf("Installing Playwright browsers for Windows 11 download script")

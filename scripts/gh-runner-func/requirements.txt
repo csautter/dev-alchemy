@@ -9,5 +9,5 @@ azure-mgmt-compute
 azure-mgmt-resource
 azure-mgmt-network
 requests
-playwright
-playwright-stealth
+playwright==1.58.0
+playwright-stealth==2.0.3
