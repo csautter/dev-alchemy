@@ -16,6 +16,12 @@ import (
 	"time"
 )
 
+type buildCompletionDecision struct {
+	err          error
+	runFfmpeg    bool
+	buildSuccess bool
+}
+
 func RunBuildScript(config VirtualMachineConfig, executable string, args []string) error {
 	skipBuild, cleanupArtifacts, err := prepareBuildArtifactsForBuild(config)
 	if err != nil {
@@ -26,6 +32,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	}
 	buildSucceeded := false
 	defer cleanupArtifacts(buildSucceeded)
+	defer restoreInteractiveTerminal()
 
 	// Ensure all required dependencies are present
 	DependencyReconciliation(config)
@@ -41,12 +48,17 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 	defer signal.Stop(sigs)
+	interruptedSignal := make(chan os.Signal, 1)
+	hardInterruptSignal := make(chan os.Signal, 1)
+	stopSignalRelay := make(chan struct{})
+	defer close(stopSignalRelay)
 
 	printCurrentWorkingDirectory()
 
 	fmt.Printf("Running Build with executable %s and args %v\n", executable, sanitizeCommandArgs(args))
 	// #nosec G204 -- executable and args are constructed by internal build flows; no shell is invoked.
 	cmd := exec.CommandContext(ctx, executable, args...)
+	configureCommandForCleanup(cmd)
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
 	cmd.Env = append(os.Environ(), GetDirectoriesInstance().ManagedEnv()...)
 	if config.Verbose {
@@ -58,6 +70,30 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Failed to start command: %v", err)
 	}
+	processGroupID := commandProcessGroupID(cmd)
+	go func() {
+		interrupted := false
+		for {
+			select {
+			case sig := <-sigs:
+				if !interrupted {
+					select {
+					case interruptedSignal <- sig:
+					default:
+					}
+					cancel()
+					interrupted = true
+					continue
+				}
+				select {
+				case hardInterruptSignal <- sig:
+				default:
+				}
+			case <-stopSignalRelay:
+				return
+			}
+		}
+	}()
 
 	done := make(chan error, 1)
 	go func() {
@@ -79,35 +115,82 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	select {
 	case err := <-done:
 		stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan)
-
-		if err != nil {
-			runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config)
-			log.Printf("Script failed: %v", err)
-			return err
+		sig := drainInterruptedSignal(interruptedSignal)
+		decision := determineBuildCompletionDecision(err, ctx.Err(), sig)
+		if decision.err != nil {
+			if ctx.Err() != nil {
+				terminateProcessGroup(processGroupID, processCleanupGracePeriod)
+			}
+			if decision.runFfmpeg {
+				runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config, hardInterruptSignal)
+			}
+			switch {
+			case sig != nil:
+				log.Printf("Script terminated due to signal: %v", sig)
+			case errors.Is(decision.err, context.Canceled), errors.Is(decision.err, context.DeadlineExceeded):
+				log.Printf("Script terminated due to timeout or interruption: %v", decision.err)
+			default:
+				log.Printf("Script failed: %v", decision.err)
+			}
+			return decision.err
 		}
-		buildSucceeded = true
-		runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config)
+		buildSucceeded = decision.buildSuccess
+		if decision.runFfmpeg {
+			runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config, nil)
+		}
 		log.Printf("Script finished successfully.")
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
-		_ = cmd.Process.Kill()
+		terminateProcessGroup(processGroupID, processCleanupGracePeriod)
 
 		stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan)
-
-		runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config)
+		sig := drainInterruptedSignal(interruptedSignal)
+		if sig != nil {
+			log.Printf("Build interrupted by signal %v; generating VNC video before exit. Press Ctrl+C again to skip remaining post-processing.", sig)
+			runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config, hardInterruptSignal)
+			err := fmt.Errorf("script terminated due to signal: %v", sig)
+			log.Printf("Script terminated due to signal: %v", sig)
+			return err
+		}
 		log.Printf("Script terminated due to timeout or interruption: %v", ctx.Err())
 		return ctx.Err()
-	case sig := <-sigs:
-		_ = cmd.Process.Kill()
-
-		stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan)
-
-		runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config)
-		log.Printf("Script terminated due to signal: %v", sig)
-		return fmt.Errorf("script terminated due to signal: %v", sig)
 	}
 
 	return nil
+}
+
+func determineBuildCompletionDecision(waitErr error, ctxErr error, sig os.Signal) buildCompletionDecision {
+	if sig != nil {
+		return buildCompletionDecision{
+			err:       fmt.Errorf("script terminated due to signal: %v", sig),
+			runFfmpeg: true,
+		}
+	}
+	if ctxErr != nil {
+		return buildCompletionDecision{
+			err:       ctxErr,
+			runFfmpeg: false,
+		}
+	}
+	if waitErr != nil {
+		return buildCompletionDecision{
+			err:       waitErr,
+			runFfmpeg: true,
+		}
+	}
+	return buildCompletionDecision{
+		runFfmpeg:    true,
+		buildSuccess: true,
+	}
+}
+
+func drainInterruptedSignal(interruptedSignal <-chan os.Signal) os.Signal {
+	select {
+	case sig := <-interruptedSignal:
+		return sig
+	default:
+		return nil
+	}
 }
 
 func resolveExpectedBuildArtifacts(config VirtualMachineConfig) ([]string, error) {
@@ -149,7 +232,7 @@ func stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan chan bool) {
 
 // FFmpeg integration:
 // - FFmpeg is useful for generating a video from the VNC recording, allowing playback and sharing of the build process.
-func runFfmpegOnSupportedHost(vnc_snapshot_done chan struct{}, config VirtualMachineConfig, vnc_recording_config *VncRecordingConfig) {
+func runFfmpegOnSupportedHost(vnc_snapshot_done chan struct{}, config VirtualMachineConfig, vnc_recording_config *VncRecordingConfig, hardInterruptSignal <-chan os.Signal) {
 	if !hostSupportsVncRecording(runtime.GOOS) {
 		return
 	}
@@ -158,6 +241,16 @@ func runFfmpegOnSupportedHost(vnc_snapshot_done chan struct{}, config VirtualMac
 	timeout := 10 * time.Minute
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	if hardInterruptSignal != nil {
+		go func() {
+			select {
+			case sig := <-hardInterruptSignal:
+				log.Printf("Received additional interrupt %v during VNC video post-processing; aborting remaining post-processing.", sig)
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
 	RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: timeout}, vnc_recording_config)
 }
 

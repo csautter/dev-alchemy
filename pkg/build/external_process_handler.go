@@ -64,6 +64,7 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 
 	// #nosec G204 -- callers pass explicit executables and argv slices; no shell parsing occurs here.
 	cmd := exec.CommandContext(ctx, config.ExecutablePath, config.Args...)
+	configureCommandForCleanup(cmd)
 	cmd.Dir = config.WorkingDir
 	if len(config.Env) > 0 {
 		cmd.Env = append(os.Environ(), config.Env...)
@@ -81,6 +82,7 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Failed to start command: %v", err)
 	}
+	processGroupID := commandProcessGroupID(cmd)
 
 	done := make(chan error, 1)
 
@@ -105,6 +107,7 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 	select {
 	case err := <-done:
 		if err != nil {
+			terminateProcessGroup(processGroupID, processCleanupGracePeriod)
 			if config.FailOnError {
 				log.Fatalf("Process %s failed: %v", config.ExecutablePath, err)
 			}
@@ -113,16 +116,16 @@ func RunExternalProcess(config RunProcessConfig) (context.Context, error) {
 		}
 		log.Printf("Process %s finished successfully.", config.ExecutablePath)
 	case <-config.InterruptRetryChan:
-		_ = cmd.Process.Kill()
+		terminateProcessGroup(processGroupID, processCleanupGracePeriod)
 		log.Printf("Process %s terminated due to retry interrupt channel", config.ExecutablePath)
 		return cancelledContext(), fmt.Errorf("process %q interrupted", config.ExecutablePath)
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
-		_ = cmd.Process.Kill()
+		terminateProcessGroup(processGroupID, processCleanupGracePeriod)
 		log.Printf("Process %s terminated due to timeout or interruption: %v", config.ExecutablePath, ctx.Err())
 		return ctx, fmt.Errorf("process %q terminated: %w", config.ExecutablePath, ctx.Err())
 	case sig := <-sigs:
-		_ = cmd.Process.Kill()
+		terminateProcessGroup(processGroupID, processCleanupGracePeriod)
 		log.Printf("Process %s terminated due to signal: %v", config.ExecutablePath, sig)
 		return ctx, fmt.Errorf("process %q terminated by signal: %v", config.ExecutablePath, sig)
 	}

@@ -1,6 +1,12 @@
 package build
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"os"
+	"syscall"
+	"testing"
+)
 
 func TestHostSupportsVncRecording(t *testing.T) {
 	testCases := []struct {
@@ -33,5 +39,68 @@ func TestHostSupportsVncViewer(t *testing.T) {
 		if got := hostSupportsVncViewer(tc.goos); got != tc.want {
 			t.Fatalf("hostSupportsVncViewer(%q) = %v, want %v", tc.goos, got, tc.want)
 		}
+	}
+}
+
+func TestDetermineBuildCompletionDecisionSuccess(t *testing.T) {
+	decision := determineBuildCompletionDecision(nil, nil, nil)
+	if decision.err != nil {
+		t.Fatalf("expected nil error, got %v", decision.err)
+	}
+	if !decision.runFfmpeg {
+		t.Fatal("expected ffmpeg post-processing to run on success")
+	}
+	if !decision.buildSuccess {
+		t.Fatal("expected build to be marked successful")
+	}
+}
+
+func TestDetermineBuildCompletionDecisionFailureKeepsFfmpeg(t *testing.T) {
+	waitErr := errors.New("build failed")
+	decision := determineBuildCompletionDecision(waitErr, nil, nil)
+	if !errors.Is(decision.err, waitErr) {
+		t.Fatalf("expected wait error to be returned, got %v", decision.err)
+	}
+	if !decision.runFfmpeg {
+		t.Fatal("expected ffmpeg post-processing to run on ordinary build failure")
+	}
+	if decision.buildSuccess {
+		t.Fatal("expected failed build to stay unsuccessful")
+	}
+}
+
+func TestDetermineBuildCompletionDecisionSkipsFfmpegOnContextCancellation(t *testing.T) {
+	decision := determineBuildCompletionDecision(nil, context.Canceled, nil)
+	if !errors.Is(decision.err, context.Canceled) {
+		t.Fatalf("expected context cancellation, got %v", decision.err)
+	}
+	if decision.runFfmpeg {
+		t.Fatal("expected ffmpeg post-processing to be skipped after cancellation")
+	}
+}
+
+func TestDetermineBuildCompletionDecisionSkipsFfmpegOnSignal(t *testing.T) {
+	decision := determineBuildCompletionDecision(nil, nil, syscall.SIGINT)
+	if decision.err == nil {
+		t.Fatal("expected signal error")
+	}
+	if !decision.runFfmpeg {
+		t.Fatal("expected ffmpeg post-processing to run after signal interruption")
+	}
+}
+
+func TestDrainInterruptedSignalReturnsSignalWhenAvailable(t *testing.T) {
+	interruptedSignal := make(chan os.Signal, 1)
+	interruptedSignal <- syscall.SIGTERM
+
+	got := drainInterruptedSignal(interruptedSignal)
+	if got != syscall.SIGTERM {
+		t.Fatalf("expected SIGTERM, got %v", got)
+	}
+}
+
+func TestDrainInterruptedSignalReturnsNilWhenEmpty(t *testing.T) {
+	if got := drainInterruptedSignal(make(chan os.Signal, 1)); got != nil {
+		t.Fatalf("expected nil signal, got %v", got)
 	}
 }

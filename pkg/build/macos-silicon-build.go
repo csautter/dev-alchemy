@@ -197,7 +197,12 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 	if err != nil {
 		log.Fatalf("Failed to glob snapshot images for removal: %v", err)
 	}
+	log.Printf("Removing %d vncsnapshot image(s)...", len(matches))
 	for _, path := range matches {
+		if ctx.Err() != nil {
+			log.Printf("Stopping vncsnapshot image cleanup early due to interruption: %v", ctx.Err())
+			return ctx
+		}
 		err := os.RemoveAll(path)
 		if err != nil {
 			log.Printf("Failed to remove snapshot image %v: %v", path, err)
