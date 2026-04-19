@@ -104,3 +104,20 @@ func TestDrainInterruptedSignalReturnsNilWhenEmpty(t *testing.T) {
 		t.Fatalf("expected nil signal, got %v", got)
 	}
 }
+
+func TestDeferBuildArtifactCleanupUsesFinalBuildSuccessValue(t *testing.T) {
+	got := false
+
+	func() {
+		buildSucceeded := false
+		defer deferBuildArtifactCleanup(func(success bool) {
+			got = success
+		}, &buildSucceeded)()
+
+		buildSucceeded = true
+	}()
+
+	if !got {
+		t.Fatal("expected deferred cleanup to observe final successful build state")
+	}
+}

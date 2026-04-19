@@ -31,7 +31,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 		return nil
 	}
 	buildSucceeded := false
-	defer cleanupArtifacts(buildSucceeded)
+	defer deferBuildArtifactCleanup(cleanupArtifacts, &buildSucceeded)()
 	defer restoreInteractiveTerminal()
 
 	// Ensure all required dependencies are present
@@ -348,6 +348,12 @@ func checkIfBuildArtifactsExist(config VirtualMachineConfig) (bool, error) {
 type buildArtifactBackup struct {
 	originalPath string
 	backupPath   string
+}
+
+func deferBuildArtifactCleanup(cleanup func(bool), buildSucceeded *bool) func() {
+	return func() {
+		cleanup(*buildSucceeded)
+	}
 }
 
 func prepareBuildArtifactsForBuild(config VirtualMachineConfig) (bool, func(bool), error) {

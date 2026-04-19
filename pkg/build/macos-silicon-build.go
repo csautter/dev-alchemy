@@ -182,9 +182,11 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 		config.RetryInterval = process_config.RetryInterval
 	}
 
-	var convErr error
-	ctx, convErr = RunExternalProcess(config)
+	processCtx, convErr := RunExternalProcess(config)
 	if convErr != nil {
+		if processCtx != nil {
+			ctx = processCtx
+		}
 		log.Printf("Video conversion for %s failed: %v", recording_config.OutputFile, convErr)
 	}
 
