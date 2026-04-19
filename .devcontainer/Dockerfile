@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/go:2-1.25-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV NODE_VERSION=24.15.0
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -8,11 +9,24 @@ RUN apt-get update \
         ca-certificates \
         curl \
         gpg \
-        nodejs \
-        npm \
         ruby-full \
+        xz-utils \
         yq \
     && rm -rf /var/lib/apt/lists/*
+
+RUN arch="$(dpkg --print-architecture)" \
+    && case "${arch}" in \
+        amd64) node_arch="x64" ;; \
+        arm64) node_arch="arm64" ;; \
+        *) echo "Unsupported Node.js architecture: ${arch}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" -o /tmp/node.tar.xz \
+    && rm -rf /usr/local/lib/node_modules /usr/local/include/node /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx \
+    && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+    && rm -f /tmp/node.tar.xz \
+    && node --version \
+    && npm --version \
+    && npx --version
 
 RUN . /etc/os-release \
     && curl -fsSL https://apt.releases.hashicorp.com/gpg | \
