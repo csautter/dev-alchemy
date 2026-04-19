@@ -8,6 +8,8 @@ RUN apt-get update \
         ca-certificates \
         curl \
         gpg \
+        nodejs \
+        npm \
         ruby-full \
         yq \
     && rm -rf /var/lib/apt/lists/*

@@ -80,6 +80,47 @@ type WebFileDependency struct {
 	BeforeHook func() (string, error)
 }
 
+const (
+	// renovate: datasource=custom.ubuntu-live-server-amd64 depName=ubuntu-live-server-amd64 versioning=loose
+	ubuntuLiveServerAMD64Version = "24.04.3"
+	ubuntuLiveServerAMD64SHA256  = "c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b"
+
+	// renovate: datasource=custom.ubuntu-live-server-arm64 depName=ubuntu-live-server-arm64 versioning=loose
+	ubuntuLiveServerArm64Version = "24.04.3"
+	ubuntuLiveServerArm64SHA256  = "2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
+
+	// renovate: datasource=custom.virtio-win depName=virtio-win versioning=loose
+	virtioWinVersion = "0.1.266-1"
+)
+
+func ubuntuLiveServerISOName(arch, version string) string {
+	return fmt.Sprintf("ubuntu-%s-live-server-%s.iso", version, arch)
+}
+
+func ubuntuLiveServerISOPath(arch, version string) string {
+	return GetDirectoriesInstance().CachePath("linux", ubuntuLiveServerISOName(arch, version))
+}
+
+func ubuntuLiveServerISOURL(arch, version string) string {
+	name := ubuntuLiveServerISOName(arch, version)
+	if arch == "amd64" {
+		return fmt.Sprintf("https://releases.ubuntu.com/%s/%s", version, name)
+	}
+	return fmt.Sprintf("https://cdimage.ubuntu.com/releases/%s/release/%s", version, name)
+}
+
+func virtioWinISOURL(version string) string {
+	fileVersion := version
+	if idx := strings.LastIndex(version, "-"); idx > 0 {
+		fileVersion = version[:idx]
+	}
+	return fmt.Sprintf(
+		"https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-%s/virtio-win-%s.iso",
+		version,
+		fileVersion,
+	)
+}
+
 // resolveDebianPackageURL fetches the current download URL for an architecture-independent
 // Debian package by querying the official Packages index for the given suite.
 // This avoids hardcoding version strings that change frequently and are purged quickly.
@@ -371,7 +412,7 @@ func getWebFileDependencies() []WebFileDependency {
 		{
 			LocalPath: GetDirectoriesInstance().CachePath("windows", "virtio-win.iso"),
 			Checksum:  "",
-			Source:    "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.266-1/virtio-win-0.1.266.iso",
+			Source:    virtioWinISOURL(virtioWinVersion),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "windows11",
@@ -382,9 +423,9 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: GetDirectoriesInstance().CachePath("linux", "ubuntu-24.04.3-live-server-arm64.iso"),
-			Checksum:  "sha256:2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555",
-			Source:    "https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso",
+			LocalPath: ubuntuLiveServerISOPath("arm64", ubuntuLiveServerArm64Version),
+			Checksum:  "sha256:" + ubuntuLiveServerArm64SHA256,
+			Source:    ubuntuLiveServerISOURL("arm64", ubuntuLiveServerArm64Version),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "ubuntu",
@@ -417,9 +458,9 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: GetDirectoriesInstance().CachePath("linux", "ubuntu-24.04.3-live-server-amd64.iso"),
-			Checksum:  "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b",
-			Source:    "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso",
+			LocalPath: ubuntuLiveServerISOPath("amd64", ubuntuLiveServerAMD64Version),
+			Checksum:  "sha256:" + ubuntuLiveServerAMD64SHA256,
+			Source:    ubuntuLiveServerISOURL("amd64", ubuntuLiveServerAMD64Version),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "ubuntu",

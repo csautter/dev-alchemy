@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update annotated custom dependency pins in Go and shell scripts",
+      "managerFilePatterns": [
+        "/(^|/)pkg/build/dependencies\\.go$/",
+        "/(^|/)build/packer/linux/ubuntu/linux-ubuntu-(on-macos|qemu)\\.sh$/",
+        "/(^|/)scripts/macos/download-virtio-win-iso\\.sh$/"
+      ],
+      "matchStrings": [
+        "(?:#|//)\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+versioning=(?<versioning>\\S+)\\s+[A-Za-z0-9_]+\\s*=\\s+\"(?<currentValue>[^\"]+)\"(?:\\s+[A-Za-z0-9_]+\\s*=\\s+\"(?<currentDigest>[a-f0-9]+)\")?"
+      ]
+    }
+  ],
+  "customDatasources": {
+    "ubuntu-live-server-amd64": {
+      "defaultRegistryUrlTemplate": "https://releases.ubuntu.com/24.04/SHA256SUMS",
+      "format": "plain",
+      "transformTemplates": [
+        "{ \"releases\": $map(releases[$match(version, /^[a-f0-9]{64} \\*ubuntu-24\\.04\\.\\d+-live-server-amd64\\.iso$/)], function($v) { { \"version\": $replace($split($v.version, \" *ubuntu-\")[1], /-live-server-amd64\\.iso$/, \"\"), \"digest\": $split($v.version, \" *ubuntu-\")[0] } }) }"
+      ]
+    },
+    "ubuntu-live-server-arm64": {
+      "defaultRegistryUrlTemplate": "https://cdimage.ubuntu.com/releases/24.04/release/SHA256SUMS",
+      "format": "plain",
+      "transformTemplates": [
+        "{ \"releases\": $map(releases[$match(version, /^[a-f0-9]{64} \\*ubuntu-24\\.04\\.\\d+-live-server-arm64\\.iso$/)], function($v) { { \"version\": $replace($split($v.version, \" *ubuntu-\")[1], /-live-server-arm64\\.iso$/, \"\"), \"digest\": $split($v.version, \" *ubuntu-\")[0] } }) }"
+      ]
+    },
+    "virtio-win": {
+      "defaultRegistryUrlTemplate": "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/",
+      "format": "html"
+    }
+  },
+  "packageRules": [
+    {
+      "matchDatasources": [
+        "custom.virtio-win"
+      ],
+      "extractVersion": "^virtio-win-(?<version>0\\.1\\.\\d+-\\d+)/$"
+    },
+    {
+      "matchPackageNames": [
+        "ubuntu-live-server-amd64",
+        "ubuntu-live-server-arm64"
+      ],
+      "groupName": "Ubuntu live server artifacts"
+    }
+  ]
+}

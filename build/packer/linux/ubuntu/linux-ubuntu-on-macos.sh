@@ -21,6 +21,12 @@ project_root=$(
 	pwd -P
 )
 
+# renovate: datasource=custom.ubuntu-live-server-amd64 depName=ubuntu-live-server-amd64 versioning=loose
+UBUNTU_LIVE_SERVER_AMD64_VERSION="24.04.3"
+# renovate: datasource=custom.ubuntu-live-server-arm64 depName=ubuntu-live-server-arm64 versioning=loose
+UBUNTU_LIVE_SERVER_ARM64_VERSION="24.04.3"
+UBUNTU_LIVE_SERVER_ARM64_SHA256="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
+
 file_size_bytes() {
 	if [[ ! -f "$1" ]]; then
 		echo "0"
@@ -141,11 +147,11 @@ if [[ "$arch" == "arm64" ]]; then
 	fi
 fi
 
-iso_path="$cache_dir/linux/ubuntu-24.04.3-live-server-amd64.iso"
+iso_path="$cache_dir/linux/ubuntu-${UBUNTU_LIVE_SERVER_AMD64_VERSION}-live-server-amd64.iso"
 if [[ "$arch" == "arm64" ]]; then
-	iso_path="$cache_dir/linux/ubuntu-24.04.3-live-server-arm64.iso"
-	iso_url="https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso"
-	iso_checksum="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
+	iso_path="$cache_dir/linux/ubuntu-${UBUNTU_LIVE_SERVER_ARM64_VERSION}-live-server-arm64.iso"
+	iso_url="https://cdimage.ubuntu.com/releases/${UBUNTU_LIVE_SERVER_ARM64_VERSION}/release/ubuntu-${UBUNTU_LIVE_SERVER_ARM64_VERSION}-live-server-arm64.iso"
+	iso_checksum="${UBUNTU_LIVE_SERVER_ARM64_SHA256}"
 	mkdir -p "$(dirname "$iso_path")"
 
 	if [[ ! -f "$iso_path" || "$(file_size_bytes "$iso_path")" -lt 2500000000 ]]; then
