@@ -2,18 +2,19 @@
 // README at: https://github.com/devcontainers/templates/tree/main/src/go .
 {
 	"name": "Go",
-	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/go:2-1.25-trixie",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
 	"containerEnv": {
     	"GOTOOLCHAIN": "auto"
   	},
 	"mounts": [
-		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.agents/skills,target=/home/vscode/.agents/skills,type=bind,consistency=cached"
+		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.agents/skills,target=/root/.agents/skills,type=bind,consistency=cached",
+		"source=devalchemy-vscode-server-data,target=/root/.vscode-server/data,type=volume"
 	],
 	"features": {
 		"ghcr.io/devcontainers/features/python:1": {}
 	},
-	"postCreateCommand": "bash .devcontainer/post-create.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
