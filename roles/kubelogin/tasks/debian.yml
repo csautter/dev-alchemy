@@ -18,7 +18,7 @@
           'X-GitHub-Api-Version': '2022-11-28'
         }
         | combine(
-            kubelogin_github_token | length > 0
+            (kubelogin_github_token | length > 0)
             | ternary({'Authorization': 'Bearer ' ~ kubelogin_github_token}, {})
           )
       }}

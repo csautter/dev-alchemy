@@ -5,7 +5,7 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-apt-get install -y ca-certificates curl gpg ruby-full yq
+apt-get install -y ansible ca-certificates curl gpg ruby-full yq
 
 . /etc/os-release
 
@@ -19,3 +19,5 @@ apt-get update
 apt-get install -y packer
 
 go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0
+
+ansible --version
