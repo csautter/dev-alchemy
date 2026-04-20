@@ -57,11 +57,11 @@ inputs:
   enable-ipv4:
     description: "Attach a public IPv4 address"
     required: false
-    default: "true"
+    default: "false"
   enable-ipv6:
     description: "Attach a public IPv6 address"
     required: false
-    default: "false"
+    default: "true"
   server-id:
     description: "Hetzner server ID used in delete mode"
     required: false
