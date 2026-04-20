@@ -6,8 +6,11 @@ inputs:
     description: "Runner lifecycle action: create or delete"
     required: true
   github-token:
-    description: "GitHub token with repository Administration permission"
-    required: true
+    description: "GitHub token with repository Administration permission; required in delete mode and optional in create mode"
+    required: false
+  runner-registration-token:
+    description: "Short-lived GitHub runner registration token used in create mode"
+    required: false
   hcloud-token:
     description: "Hetzner Cloud API token"
     required: true
@@ -88,6 +91,7 @@ runs:
         INPUT_ENABLE_IPV4: ${{ inputs.enable-ipv4 }}
         INPUT_ENABLE_IPV6: ${{ inputs.enable-ipv6 }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_RUNNER_REGISTRATION_TOKEN: ${{ inputs.runner-registration-token }}
         INPUT_HCLOUD_TOKEN: ${{ inputs.hcloud-token }}
         INPUT_IMAGE: ${{ inputs.image }}
         INPUT_LOCATION: ${{ inputs.location }}

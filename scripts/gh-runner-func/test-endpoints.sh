@@ -15,6 +15,7 @@ Optional:
   --admin-azure-profile-dir <path> Azure CLI config dir for admin lookups (default: ~/.azure)
   --terragrunt-output-dir <path>  Terragrunt dir for output discovery
   --request-runner         Call request_runner endpoint
+  --request-registration-token  Call request_runner_registration_token endpoint
   --delete-resource-group  Call delete_resource_group endpoint
   -h, --help               Show this help
 
@@ -43,6 +44,7 @@ RESOURCE_GROUP="${RESOURCE_GROUP:-}"
 RUNNER_NAME="${RUNNER_NAME:-}"
 VIRTUALIZATION_FLAVOR="${VIRTUALIZATION_FLAVOR:-hyperv}"
 REQUEST_RUNNER=false
+REQUEST_REGISTRATION_TOKEN=false
 DELETE_RESOURCE_GROUP=false
 AZURE_ADMIN_CONFIG_DIR="${AZURE_ADMIN_CONFIG_DIR:-$HOME/.azure}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -87,6 +89,10 @@ while [[ $# -gt 0 ]]; do
       REQUEST_RUNNER=true
       shift
       ;;
+    --request-registration-token)
+      REQUEST_REGISTRATION_TOKEN=true
+      shift
+      ;;
     --delete-resource-group)
       DELETE_RESOURCE_GROUP=true
       shift
@@ -103,13 +109,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$REQUEST_RUNNER" == "false" && "$DELETE_RESOURCE_GROUP" == "false" ]]; then
-  echo "You must provide exactly one operation flag: --request-runner or --delete-resource-group" >&2
+selected_operations=0
+[[ "$REQUEST_RUNNER" == "true" ]] && selected_operations=$((selected_operations + 1))
+[[ "$REQUEST_REGISTRATION_TOKEN" == "true" ]] && selected_operations=$((selected_operations + 1))
+[[ "$DELETE_RESOURCE_GROUP" == "true" ]] && selected_operations=$((selected_operations + 1))
+
+if [[ "$selected_operations" -eq 0 ]]; then
+  echo "You must provide exactly one operation flag: --request-runner, --request-registration-token, or --delete-resource-group" >&2
   exit 1
 fi
 
-if [[ "$REQUEST_RUNNER" == "true" && "$DELETE_RESOURCE_GROUP" == "true" ]]; then
-  echo "Use only one operation at a time: --request-runner OR --delete-resource-group" >&2
+if [[ "$selected_operations" -ne 1 ]]; then
+  echo "Use only one operation at a time: --request-runner, --request-registration-token, OR --delete-resource-group" >&2
   exit 1
 fi
 
@@ -185,6 +196,45 @@ if [[ "$REQUEST_RUNNER" == "true" ]]; then
     --output jsonc
 
   echo "request_runner succeeded."
+fi
+
+if [[ "$REQUEST_REGISTRATION_TOKEN" == "true" ]]; then
+  request_body=$(
+    printf '{"repo":"%s"}' "$REPO"
+  )
+
+  echo "Calling request_runner_registration_token..."
+  response_json="$(
+    az rest \
+      --only-show-errors \
+      --method post \
+      --uri "${BASE_URL}/request_runner_registration_token" \
+      --resource "$RESOURCE" \
+      --headers "Content-Type=application/json" \
+      --body "$request_body" \
+      --output json
+  )"
+
+  RESPONSE_JSON="$response_json" python3 - <<'PY'
+import json
+import os
+
+payload = json.loads(os.environ["RESPONSE_JSON"])
+token = payload.get("token", "")
+expires_at = payload.get("expires_at", "")
+print(
+    json.dumps(
+        {
+            "token_present": bool(token),
+            "token_length": len(token),
+            "expires_at": expires_at,
+        },
+        indent=2,
+    )
+)
+PY
+
+  echo "request_runner_registration_token succeeded."
 fi
 
 if [[ "$DELETE_RESOURCE_GROUP" == "true" ]]; then

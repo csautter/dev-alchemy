@@ -108,14 +108,18 @@ jobs:
       - name: Select runner mode
         id: mode
         env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          FUNCTION_APP_NAME: ${{ secrets.FUNCTION_APP_NAME }}
           GH_RUNNER_ADMIN_TOKEN: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          if [[ -n "${HCLOUD_TOKEN}" && -n "${GH_RUNNER_ADMIN_TOKEN}" ]]; then
+          if [[ -n "${AZURE_CLIENT_ID}" && -n "${AZURE_SUBSCRIPTION_ID}" && -n "${AZURE_TENANT_ID}" && -n "${FUNCTION_APP_NAME}" && -n "${GH_RUNNER_ADMIN_TOKEN}" && -n "${HCLOUD_TOKEN}" ]]; then
             echo "use-hetzner=true" >> "${GITHUB_OUTPUT}"
           else
             echo "use-hetzner=false" >> "${GITHUB_OUTPUT}"
-            echo "Hetzner runner secrets are unavailable; falling back to GitHub-hosted Linux runners." >> "${GITHUB_STEP_SUMMARY}"
+            echo "Hetzner runner broker or cleanup secrets are unavailable; falling back to GitHub-hosted Linux runners." >> "${GITHUB_STEP_SUMMARY}"
           fi
 
   test-packer-build-hosted:
@@ -269,16 +273,46 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Azure Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Request Hetzner runner registration token
+        shell: bash
+        run: |
+          runner_registration_token="$(
+            az rest \
+              --only-show-errors \
+              --method post \
+              --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/request_runner_registration_token" \
+              --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+              --headers "Content-Type=application/json" \
+              --body '{"repo":"${{ github.repository }}"}' \
+              --output json | \
+            python3 -c 'import json, sys; print(json.load(sys.stdin)["token"])'
+          )"
+
+          if [[ -z "${runner_registration_token}" ]]; then
+            echo "Failed to obtain runner registration token." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::${runner_registration_token}"
+          echo "HETZNER_RUNNER_REGISTRATION_TOKEN=${runner_registration_token}" >> "${GITHUB_ENV}"
+
       - name: Provision amd64 Hetzner runner
         id: provision
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: create
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: gh-linux-amd64-${{ github.run_id }}-${{ github.run_attempt }}
           image: ${{ inputs.hetzner_image || 'ubuntu-24.04' }}
           location: ${{ inputs.hetzner_location || 'nbg1' }}
+          runner-registration-token: ${{ env.HETZNER_RUNNER_REGISTRATION_TOKEN }}
           runner-version: ${{ inputs.hetzner_runner_version || 'latest' }}
           server-type: ${{ inputs.hetzner_amd64_server_type || 'cpx31' }}
 
@@ -293,16 +327,46 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Azure Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Request Hetzner runner registration token
+        shell: bash
+        run: |
+          runner_registration_token="$(
+            az rest \
+              --only-show-errors \
+              --method post \
+              --uri "https://${{ secrets.FUNCTION_APP_NAME }}.azurewebsites.net/api/request_runner_registration_token" \
+              --resource "api://${{ secrets.AZURE_CLIENT_ID }}" \
+              --headers "Content-Type=application/json" \
+              --body '{"repo":"${{ github.repository }}"}' \
+              --output json | \
+            python3 -c 'import json, sys; print(json.load(sys.stdin)["token"])'
+          )"
+
+          if [[ -z "${runner_registration_token}" ]]; then
+            echo "Failed to obtain runner registration token." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::${runner_registration_token}"
+          echo "HETZNER_RUNNER_REGISTRATION_TOKEN=${runner_registration_token}" >> "${GITHUB_ENV}"
+
       - name: Provision arm64 Hetzner runner
         id: provision
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: create
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: gh-linux-arm64-${{ github.run_id }}-${{ github.run_attempt }}
           image: ${{ inputs.hetzner_image || 'ubuntu-24.04' }}
           location: ${{ inputs.hetzner_location || 'nbg1' }}
+          runner-registration-token: ${{ env.HETZNER_RUNNER_REGISTRATION_TOKEN }}
           runner-version: ${{ inputs.hetzner_runner_version || 'latest' }}
           server-type: ${{ inputs.hetzner_arm64_server_type || 'cax21' }}
 

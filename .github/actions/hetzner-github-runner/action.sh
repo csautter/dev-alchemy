@@ -118,7 +118,7 @@ MY_MODE="${INPUT_MODE:-}"
 [[ "$MY_MODE" == "create" || "$MY_MODE" == "delete" ]] || fail "mode must be 'create' or 'delete'."
 
 MY_GITHUB_TOKEN="${INPUT_GITHUB_TOKEN:-}"
-[[ -n "$MY_GITHUB_TOKEN" ]] || fail "github-token is required."
+MY_GITHUB_RUNNER_REGISTRATION_TOKEN="${INPUT_RUNNER_REGISTRATION_TOKEN:-}"
 
 MY_HCLOUD_TOKEN="${INPUT_HCLOUD_TOKEN:-}"
 [[ -n "$MY_HCLOUD_TOKEN" ]] || fail "hcloud-token is required."
@@ -178,6 +178,7 @@ export MY_NAME
 export MY_SERVER_TYPE
 
 if [[ "$MY_MODE" == "delete" ]]; then
+	[[ -n "$MY_GITHUB_TOKEN" ]] || fail "github-token is required in delete mode."
 	[[ -n "$MY_SERVER_ID" ]] || fail "server-id is required in delete mode."
 	require_integer "$MY_SERVER_ID" "server-id"
 
@@ -222,16 +223,20 @@ if [[ "$MY_MODE" == "delete" ]]; then
 	done
 fi
 
-registration_file="${RUNNER_STATE_DIR}/registration-token.json"
-http_code="$(github_api "POST" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners/registration-token" "$registration_file")"
-if [[ "$http_code" != "201" ]]; then
-	echo "GitHub registration token response (${http_code}):" >&2
-	cat "$registration_file" >&2 || true
-	fail "Failed to create GitHub runner registration token."
-fi
+if [[ -z "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" ]]; then
+	[[ -n "$MY_GITHUB_TOKEN" ]] || fail "Either github-token or runner-registration-token is required in create mode."
 
-MY_GITHUB_RUNNER_REGISTRATION_TOKEN="$(jq -r '.token' "$registration_file")"
-[[ -n "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" && "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" != "null" ]] || fail "GitHub registration token response did not include a token."
+	registration_file="${RUNNER_STATE_DIR}/registration-token.json"
+	http_code="$(github_api "POST" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners/registration-token" "$registration_file")"
+	if [[ "$http_code" != "201" ]]; then
+		echo "GitHub registration token response (${http_code}):" >&2
+		cat "$registration_file" >&2 || true
+		fail "Failed to create GitHub runner registration token."
+	fi
+
+	MY_GITHUB_RUNNER_REGISTRATION_TOKEN="$(jq -r '.token' "$registration_file")"
+	[[ -n "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" && "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" != "null" ]] || fail "GitHub registration token response did not include a token."
+fi
 
 MY_INSTALL_SH_BASE64="$(base64 --wrap=0 < "$INSTALL_SCRIPT")"
 MY_PRE_RUNNER_SCRIPT_BASE64="$(printf '%s' "$MY_PRE_RUNNER_SCRIPT" | base64 --wrap=0)"
@@ -365,32 +370,36 @@ done
 
 runner_attempt=1
 runner_list_file="${RUNNER_STATE_DIR}/github-runners.json"
-while (( runner_attempt <= MY_RUNNER_WAIT )); do
-	http_code="$(github_api "GET" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners" "$runner_list_file")"
-	if [[ "$http_code" != "200" ]]; then
-		echo "GitHub list runners response (${http_code}):" >&2
-		cat "$runner_list_file" >&2 || true
-		delete_server_best_effort "$server_id" || true
-		fail "Failed to list GitHub runners."
-	fi
+if [[ -n "$MY_GITHUB_TOKEN" ]]; then
+	while (( runner_attempt <= MY_RUNNER_WAIT )); do
+		http_code="$(github_api "GET" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners" "$runner_list_file")"
+		if [[ "$http_code" != "200" ]]; then
+			echo "GitHub list runners response (${http_code}):" >&2
+			cat "$runner_list_file" >&2 || true
+			delete_server_best_effort "$server_id" || true
+			fail "Failed to list GitHub runners."
+		fi
 
-	runner_status="$(
-		jq -r --arg name "$MY_NAME" '.runners[]? | select(.name == $name) | .status' "$runner_list_file" | head -n 1
-	)"
+		runner_status="$(
+			jq -r --arg name "$MY_NAME" '.runners[]? | select(.name == $name) | .status' "$runner_list_file" | head -n 1
+		)"
 
-	if [[ "$runner_status" == "online" || "$runner_status" == "busy" ]]; then
-		break
-	fi
+		if [[ "$runner_status" == "online" || "$runner_status" == "busy" ]]; then
+			break
+		fi
 
-	if (( runner_attempt == MY_RUNNER_WAIT )); then
-		delete_server_best_effort "$server_id" || true
-		fail "Runner '${MY_NAME}' did not register with GitHub in time."
-	fi
+		if (( runner_attempt == MY_RUNNER_WAIT )); then
+			delete_server_best_effort "$server_id" || true
+			fail "Runner '${MY_NAME}' did not register with GitHub in time."
+		fi
 
-	echo "Runner '${MY_NAME}' is not online yet. Waiting ${WAIT_SECONDS}s..."
-	sleep "$WAIT_SECONDS"
-	runner_attempt=$((runner_attempt + 1))
-done
+		echo "Runner '${MY_NAME}' is not online yet. Waiting ${WAIT_SECONDS}s..."
+		sleep "$WAIT_SECONDS"
+		runner_attempt=$((runner_attempt + 1))
+	done
+else
+	echo "GitHub token not provided; skipping GitHub runner registration polling after server boot."
+fi
 
 echo "label=${MY_NAME}" >> "${GITHUB_OUTPUT}"
 echo "server_id=${server_id}" >> "${GITHUB_OUTPUT}"

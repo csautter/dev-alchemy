@@ -109,6 +109,45 @@ def load_powershell_script(
     return script
 
 
+def get_key_vault_secret_client() -> SecretClient:
+    credential = DefaultAzureCredential()
+    vault_url = os.environ["VAULT_URL"]
+    return SecretClient(vault_url=vault_url, credential=credential)
+
+
+def create_github_runner_registration_token(
+    repo: str,
+) -> tuple[str, str | None]:
+    kv_client = get_key_vault_secret_client()
+    pat = kv_client.get_secret("github-runner-pat").value
+
+    response = requests.post(
+        f"https://api.github.com/repos/{repo}/actions/runners/registration-token",
+        headers={
+            "Authorization": f"Bearer {pat}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        timeout=10,
+    )
+
+    if response.status_code != 201:
+        logging.error(
+            "GitHub registration token request failed for repo %s: %s %s",
+            repo,
+            response.status_code,
+            response.text,
+        )
+        raise RuntimeError("Failed to obtain runner registration token")
+
+    payload = response.json()
+    runner_token = payload.get("token", "")
+    if not runner_token:
+        raise RuntimeError("GitHub registration token response did not include a token")
+
+    return runner_token, payload.get("expires_at")
+
+
 @app.route(
     route="delete_resource_group",
     auth_level=func.AuthLevel.ANONYMOUS,
@@ -159,6 +198,55 @@ def request_runner(req: func.HttpRequest) -> func.HttpResponse:
     return handle_request_runner(req)
 
 
+@app.route(
+    route="request_runner_registration_token",
+    auth_level=func.AuthLevel.ANONYMOUS,
+    methods=["POST"],
+)
+def request_runner_registration_token(req: func.HttpRequest) -> func.HttpResponse:
+    authorized, reason = require_authenticated_caller(req)
+    if not authorized:
+        logging.warning(
+            "Unauthorized request_runner_registration_token request: %s", reason
+        )
+        return func.HttpResponse("Unauthorized", status_code=401)
+    return handle_request_runner_registration_token(req)
+
+
+def handle_request_runner_registration_token(
+    req: func.HttpRequest,
+) -> func.HttpResponse:
+    logging.info("Runner registration token request received")
+    try:
+        body = req.get_json()
+        repo = body["repo"]
+    except Exception:
+        return func.HttpResponse(
+            'Invalid JSON body. Expected: { "repo": "org/repo" }', status_code=400
+        )
+
+    if not _REPO_RE.match(repo):
+        return func.HttpResponse(
+            "Invalid repo format. Expected: owner/repo", status_code=400
+        )
+
+    try:
+        runner_token, expires_at = create_github_runner_registration_token(repo)
+    except Exception as e:
+        logging.error(
+            "Error creating runner registration token for repo %s: %s", repo, e
+        )
+        return func.HttpResponse(
+            "Failed to obtain runner registration token", status_code=500
+        )
+
+    return func.HttpResponse(
+        json.dumps({"token": runner_token, "expires_at": expires_at}),
+        mimetype="application/json",
+        status_code=201,
+    )
+
+
 def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("Request received")
     try:
@@ -183,33 +271,18 @@ def handle_request_runner(req: func.HttpRequest) -> func.HttpResponse:
             status_code=400,
         )
 
-    # 1. Get PAT from Key Vault
     credential = DefaultAzureCredential()
-    vault_url = os.environ["VAULT_URL"]
-    kv_client = SecretClient(vault_url=vault_url, credential=credential)
+    kv_client = get_key_vault_secret_client()
 
-    pat = kv_client.get_secret("github-runner-pat").value
-
-    # 2. Call GitHub API
-    url = f"https://api.github.com/repos/{repo}/actions/runners/registration-token"
-
-    response = requests.post(
-        url,
-        headers={
-            "Authorization": f"Bearer {pat}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-        timeout=10,
-    )
-
-    if response.status_code != 201:
-        logging.error("GitHub API error: %s %s", response.status_code, response.text)
+    try:
+        runner_token, _ = create_github_runner_registration_token(repo)
+    except Exception as e:
+        logging.error(
+            "Error creating runner registration token for repo %s: %s", repo, e
+        )
         return func.HttpResponse(
             "Failed to obtain runner registration token", status_code=500
         )
-
-    runner_token = response.json()["token"]
 
     # Load and prepare PowerShell script
     script = load_powershell_script(
