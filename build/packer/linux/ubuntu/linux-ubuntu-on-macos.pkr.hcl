@@ -233,8 +233,8 @@ build {
   post-processor "shell-local" {
     inline = var.arch == "amd64" ? [
       "echo 'Exporting QCOW2 image...'",
-      "mkdir -p ${local.cache_directory}/ubuntu/linux-ubuntu-${var.ubuntu_type}-qemu-${var.arch}",
-      "cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2",
+      "mkdir -p \"${local.cache_directory}/ubuntu\"",
+      "cp \"${local.output_directory}\"/linux-ubuntu-${var.ubuntu_type}-packer-* \"${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2\"",
       "echo 'Export completed.'"
       ] : [
       "echo 'No export needed for arm64 architecture.'"
