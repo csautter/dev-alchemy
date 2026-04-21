@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0](https://github.com/csautter/dev-alchemy/compare/v0.11.0...v0.12.0) (2026-04-21)
+
+
+### Added
+
+* add build features for linux ubuntu hosts ([911ed61](https://github.com/csautter/dev-alchemy/commit/911ed613421020d6ed28a920bf72bbf10e4cda0e))
+* **build:** add Linux-host QEMU builds for Ubuntu server and desktop ([364d308](https://github.com/csautter/dev-alchemy/commit/364d308b03423117b5488d434643036b74f7fcfa))
+* **build:** add verbose flag for packer builds ([c4a8c63](https://github.com/csautter/dev-alchemy/commit/c4a8c63f044d17baedcec533c777341e788b40ba))
+* **build:** enable VNC video capture for Linux host builds ([3d65997](https://github.com/csautter/dev-alchemy/commit/3d65997b6bd4b16a03af250f688d1a69bb0c3241))
+* **build:** show artifact status in build list ([64bb53a](https://github.com/csautter/dev-alchemy/commit/64bb53a2bf62760674f7dba97d9307c9c19a30dc))
+* **ci:** add in-repo Hetzner self-hosted runner workflow for Linux builds ([fc88683](https://github.com/csautter/dev-alchemy/commit/fc88683f31dec72a868b7410ba862deb7a5a8fe0))
+* **cli:** add optional Go install flag and Linux host installer ([44bebc0](https://github.com/csautter/dev-alchemy/commit/44bebc0b74059657d965b58dbaae338f114c43f2))
+
+
+### Fixed
+
+* **build:** clean failed artifacts and repair arm64 UEFI extraction ([7da46f8](https://github.com/csautter/dev-alchemy/commit/7da46f8c5372265889883a786339c7d9cd295c6f))
+* **build:** clean up incomplete artifacts after failed builds ([34988e7](https://github.com/csautter/dev-alchemy/commit/34988e74d28f10ae09c79dbbf3ae0ffa7462860c))
+* **build:** handle dependency downloads without progress bars ([d11a8e9](https://github.com/csautter/dev-alchemy/commit/d11a8e92e49958d83c32979afdceb3499a727493))
+* **build:** harden unix tty fd handling for gosec compliance ([5cfa18c](https://github.com/csautter/dev-alchemy/commit/5cfa18c4215b82d0bdc968334c27e538f695e059))
+* **build:** improve interrupt cleanup and preserve ffmpeg on graceful cancel ([57b254f](https://github.com/csautter/dev-alchemy/commit/57b254fe3a4b9c5751a516312c7bfe70b1f62fc4))
+* **build:** preserve successful artifacts after build cleanup ([26a1ec9](https://github.com/csautter/dev-alchemy/commit/26a1ec97fe11dca2815fcee232c8008e0e572e2b))
+* **build:** preserve sudo prompts while restoring helper process logs ([82155e9](https://github.com/csautter/dev-alchemy/commit/82155e988c0f62f854a8d36922a00686d4629754))
+* **build:** quote Ubuntu QCOW2 export paths in packer templates ([46fe595](https://github.com/csautter/dev-alchemy/commit/46fe5951877b9598518f7f017857f631b36ae801))
+* **build:** tune QEMU CPU and memory settings for Ubuntu VMs ([bd3913c](https://github.com/csautter/dev-alchemy/commit/bd3913c3a8c620ef2a36d232988a829eb88e80fb))
+* **github-action:** enable IPv6 and disable IPv4 by default for Hetzner runner ([de96703](https://github.com/csautter/dev-alchemy/commit/de967031609d2ab422c2b47093c275ad803286da))
+* **kubelogin:** authenticate GitHub release lookup in CI ([e2cd924](https://github.com/csautter/dev-alchemy/commit/e2cd9242cb08478a37e7777aca45aaf6c74fed85))
+* **make:** remove brittle pkill cleanup after build tests ([9c5c0da](https://github.com/csautter/dev-alchemy/commit/9c5c0dab03dc5268332b411ddb7adeddbca328e7))
+* **packer:** move qemu ubuntu package installs out of cloud-init ([66ee86b](https://github.com/csautter/dev-alchemy/commit/66ee86ba471a119dd1839d189d423841c6a1c116))
+* **packer:** simplify ubuntu desktop qemu provisioning ([cfbd97c](https://github.com/csautter/dev-alchemy/commit/cfbd97c7fa0e360ed00aaf21d5335d6ed44cbbcb))
+* **provisioning:** install ansible in devcontainer and fix kubelogin header templating ([4786109](https://github.com/csautter/dev-alchemy/commit/47861098309d6ea02f7e9690e8863b0a37592ea0))
+
+
+### Changed
+
+* **packer:** split linux and macos ubuntu qemu build paths ([6dbfc44](https://github.com/csautter/dev-alchemy/commit/6dbfc442b6a5d25bef6162782ab4fae094869c03))
+
+
+### CI
+
+* add cold-cache dependency bootstrap coverage to Linux workflow ([9511385](https://github.com/csautter/dev-alchemy/commit/9511385ffd5d66b18e6daec76c90ed31ccab164f))
+* add native Linux QEMU smoke builds for amd64 and arm64 ([fe056bb](https://github.com/csautter/dev-alchemy/commit/fe056bb3400dd96230c1d6b30b65751a9cae41eb))
+* broaden build workflow path filters for shared build inputs ([f6bf616](https://github.com/csautter/dev-alchemy/commit/f6bf616df1c6c4a2805182cc095b17b014cd2b0f))
+* **deps:** schedule Renovate in GitHub Actions ([86f5734](https://github.com/csautter/dev-alchemy/commit/86f5734a7d27d81cfc5a6d98801a1d6ae70e096f))
+
 ## [0.11.0](https://github.com/csautter/dev-alchemy/compare/v0.10.0...v0.11.0) (2026-04-05)
 
 
