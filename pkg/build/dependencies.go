@@ -27,6 +27,10 @@ type ProgressBarListener struct {
 }
 
 func (p *ProgressBarListener) TrackProgress(src string, current, total int64, r io.ReadCloser) io.ReadCloser {
+	if p == nil || p.progress == nil {
+		return r
+	}
+
 	name := filepath.Base(src)
 	p.bar = p.progress.AddBar(total,
 		mpb.PrependDecorators(
@@ -56,7 +60,7 @@ type progressReader struct {
 func (pr *progressReader) Read(p []byte) (int, error) {
 	now := time.Now()
 	n, err := pr.reader.Read(p)
-	if n > 0 {
+	if n > 0 && pr.bar != nil {
 		elapsed := now.Sub(pr.lastRead)
 		if pr.lastRead.IsZero() || elapsed <= 0 {
 			elapsed = time.Millisecond

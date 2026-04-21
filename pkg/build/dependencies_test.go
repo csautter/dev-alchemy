@@ -1,7 +1,9 @@
 package build
 
 import (
+	"bytes"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,4 +165,30 @@ func TestResolveAndDownloadQemuEfiAarch64(t *testing.T) {
 		t.Errorf("downloaded file is empty: %s", destPath)
 	}
 	t.Logf("Downloaded %s (%d bytes)", destPath, info.Size())
+}
+
+func TestDownloadWebFileDependencyWithoutProgressBar(t *testing.T) {
+	expected := []byte("test deb payload")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(expected)
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(t.TempDir(), "downloaded.deb")
+	dep := WebFileDependency{
+		LocalPath: destPath,
+		Source:    server.URL + "/qemu-efi-aarch64_all.deb",
+	}
+
+	if err := downloadWebFileDependency(nil, dep); err != nil {
+		t.Fatalf("downloadWebFileDependency failed without progress bar: %v", err)
+	}
+
+	got, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("failed to read downloaded file: %v", err)
+	}
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("downloaded file contents mismatch: got %q want %q", string(got), string(expected))
+	}
 }
