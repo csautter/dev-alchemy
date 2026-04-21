@@ -13,10 +13,11 @@
       "managerFilePatterns": [
         "/(^|/)pkg/build/dependencies\\.go$/",
         "/(^|/)build/packer/linux/ubuntu/linux-ubuntu-(on-macos|qemu)\\.sh$/",
-        "/(^|/)scripts/macos/download-virtio-win-iso\\.sh$/"
+        "/(^|/)scripts/macos/download-virtio-win-iso\\.sh$/",
+        "/(^|/)scripts/windows/dev-alchemy-self-setup\\.ps1$/"
       ],
       "matchStrings": [
-        "(?:#|//)\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+versioning=(?<versioning>\\S+)\\s+[A-Za-z0-9_]+\\s*=\\s+\"(?<currentValue>[^\"]+)\"(?:\\s+[A-Za-z0-9_]+\\s*=\\s+\"(?<currentDigest>[a-f0-9]+)\")?"
+        "(?:#|//)\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+versioning=(?<versioning>\\S+)(?:\\s+registryUrl=(?<registryUrl>\\S+))?\\s+\\$?[A-Za-z0-9_]+\\s*=\\s+\"(?<currentValue>[^\"]+)\"(?:\\s+\\$?[A-Za-z0-9_]+\\s*=\\s+\"(?<currentDigest>[a-f0-9]+)\")?"
       ]
     },
     {
@@ -93,19 +94,6 @@
       ],
       "depNameTemplate": "actions/runner",
       "datasourceTemplate": "github-releases"
-    },
-    {
-      "customType": "regex",
-      "description": "Update Python version in the Azure runner image",
-      "managerFilePatterns": [
-        "/(^|/)build/gh_actions/windows-azure-gh-runner\\.pkr\\.hcl$/"
-      ],
-      "matchStrings": [
-        "choco install -y python --version=(?<currentValue>[0-9.]+)"
-      ],
-      "depNameTemplate": "python",
-      "datasourceTemplate": "python-version",
-      "versioningTemplate": "python"
     }
   ],
   "customDatasources": {

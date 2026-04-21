@@ -45,7 +45,7 @@ variable "virtualization_flavor" {
 }
 
 locals {
-  bootstrap_script   = <<EOF
+  bootstrap_script      = <<EOF
 $bootstrap = @'
 Set-Content -Path 'C:\AzureData\provision_log.txt' -Value 'Starting custom data execution...'
 try {
@@ -63,7 +63,7 @@ try {
 '@
 Set-Content -Path 'C:\AzureData\bootstrap.ps1' -Value $bootstrap
 EOF
-  virtualbox_install = var.virtualization_flavor == "virtualbox" ? "choco install -y virtualbox" : ""
+  windows_setup_command = var.virtualization_flavor == "virtualbox" ? "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1 -VirtualBox" : "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1"
 
 }
 
@@ -106,6 +106,11 @@ build {
     destination = "C:\\AzureData\\scripts\\windows\\install_oscdimg.ps1"
   }
 
+  provisioner "file" {
+    source      = "../../scripts/windows/dev-alchemy-self-setup.ps1"
+    destination = "C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1"
+  }
+
   provisioner "powershell" {
     inline = [
       # Wait for the Azure Guest Agent to be running
@@ -120,32 +125,8 @@ build {
       "Expand-Archive \"C:\\actions-runner.zip\" -DestinationPath \"C:\\actions-runner\"",
       "Remove-Item \"C:\\actions-runner.zip\"",
 
-      # install chocolatey
-      "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))",
-
-      # install python3 with chocolatey
-      "choco install -y python --version=3.13.11",
-
-      # install golang with chocolatey
-      "choco install -y golang",
-
-      # install git for windows with chocolatey
-      # includes bash
-      "choco install -y git",
-      # add bash.exe to the path for use in build scripts
-      "[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';C:\\Program Files\\Git\\bin', 'Machine')",
-
-      # install make with chocolatey
-      "choco install -y make",
-
-      # install packer with chocolatey
-      "choco install -y packer",
-
-      # install azure cli with chocolatey
-      "choco install -y azure-cli",
-
-      # install virtualbox with chocolatey
-      local.virtualbox_install,
+      # install host build packages via the shared windows setup script
+      local.windows_setup_command,
       # loader script to execute custom data on first boot
       "New-Item -Path 'C:\\AzureData' -ItemType Directory -Force",
       local.bootstrap_script,
