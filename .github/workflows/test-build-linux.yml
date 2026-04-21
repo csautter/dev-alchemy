@@ -140,9 +140,22 @@ jobs:
             runs_on: ubuntu-24.04
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+          - arch: amd64
+            go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
+            runs_on: ubuntu-24.04
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
           - arch: arm64
             go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
+            runs_on: ubuntu-24.04-arm
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+               {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
+          - arch: arm64
+            go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
             runs_on: ubuntu-24.04-arm
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
@@ -296,7 +309,7 @@ jobs:
   test-packer-build-hetzner-amd64:
     needs: [determine-runner-mode, provision-hetzner-linux-amd64-runner]
     if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
-    name: build TestBuildQemuUbuntuServerAmd64OnLinux on Hetzner
+    name: build ${{ matrix.go_test_name }} on Hetzner
     runs-on:
       - self-hosted
       - Linux
@@ -309,6 +322,20 @@ jobs:
       DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
       PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
     timeout-minutes: 260
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            go_test_name: TestBuildQemuUbuntuServerAmd64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+          - arch: amd64
+            go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -329,8 +356,7 @@ jobs:
       - name: Download build cache files
         uses: ./.github/actions/download-build-cache
         with:
-          files: >-
-            [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+          files: ${{ matrix.cache_files }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
@@ -338,28 +364,28 @@ jobs:
         run: |
           go run cmd/main.go install
 
-      - name: Run dependency reconciliation smoke test TEST_NAME=TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
+      - name: Run dependency reconciliation smoke test TEST_NAME=${{ matrix.dependency_test_name }}
         id: dependency_reconciliation
         shell: bash
         continue-on-error: true
         env:
           RUN_INTEGRATION_TESTS: "1"
         run: |
-          go test -timeout 45m -v ./pkg/build -run "^TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux$"
+          go test -timeout 45m -v ./pkg/build -run "^${{ matrix.dependency_test_name }}$"
 
-      - name: Run build for arch=amd64 TEST_NAME=TestBuildQemuUbuntuServerAmd64OnLinux on Hetzner
+      - name: Run build for arch=${{ matrix.arch }} TEST_NAME=${{ matrix.go_test_name }} on Hetzner
         id: packer_build
         shell: bash
         continue-on-error: true
         env:
           RUN_INTEGRATION_TESTS: "1"
           PACKER_LOG: 1
-          PACKER_LOG_PATH: ${{ github.workspace }}/artifact/TestBuildQemuUbuntuServerAmd64OnLinux.packer.log
+          PACKER_LOG_PATH: ${{ github.workspace }}/artifact/${{ matrix.go_test_name }}.packer.log
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p artifact
           go mod vendor
-          make test-build-specific TEST_NAME=TestBuildQemuUbuntuServerAmd64OnLinux
+          make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
@@ -373,16 +399,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-log-TestBuildQemuUbuntuServerAmd64OnLinux
-          path: artifact/TestBuildQemuUbuntuServerAmd64OnLinux.packer.log
+          name: packer-log-${{ matrix.go_test_name }}
+          path: artifact/${{ matrix.go_test_name }}.packer.log
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload packer-qemu-ubuntu-TestBuildQemuUbuntuServerAmd64OnLinux.vnc.mp4 artifact (always)
+      - name: Upload packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-TestBuildQemuUbuntuServerAmd64OnLinux.vnc.mp4
+          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -397,8 +423,7 @@ jobs:
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
-          files: >-
-            [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+          files: ${{ matrix.cache_files }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
@@ -411,7 +436,7 @@ jobs:
   test-packer-build-hetzner-arm64:
     needs: [determine-runner-mode, provision-hetzner-linux-arm64-runner]
     if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
-    name: build TestBuildQemuUbuntuServerArm64OnLinux on Hetzner
+    name: build ${{ matrix.go_test_name }} on Hetzner
     runs-on:
       - self-hosted
       - Linux
@@ -424,6 +449,22 @@ jobs:
       DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
       PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
     timeout-minutes: 260
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+               {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
+          - arch: arm64
+            go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+               {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -444,9 +485,7 @@ jobs:
       - name: Download build cache files
         uses: ./.github/actions/download-build-cache
         with:
-          files: >-
-            [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
-             {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
+          files: ${{ matrix.cache_files }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
@@ -454,28 +493,28 @@ jobs:
         run: |
           go run cmd/main.go install
 
-      - name: Run dependency reconciliation smoke test TEST_NAME=TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
+      - name: Run dependency reconciliation smoke test TEST_NAME=${{ matrix.dependency_test_name }}
         id: dependency_reconciliation
         shell: bash
         continue-on-error: true
         env:
           RUN_INTEGRATION_TESTS: "1"
         run: |
-          go test -timeout 45m -v ./pkg/build -run "^TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux$"
+          go test -timeout 45m -v ./pkg/build -run "^${{ matrix.dependency_test_name }}$"
 
-      - name: Run build for arch=arm64 TEST_NAME=TestBuildQemuUbuntuServerArm64OnLinux on Hetzner
+      - name: Run build for arch=${{ matrix.arch }} TEST_NAME=${{ matrix.go_test_name }} on Hetzner
         id: packer_build
         shell: bash
         continue-on-error: true
         env:
           RUN_INTEGRATION_TESTS: "1"
           PACKER_LOG: 1
-          PACKER_LOG_PATH: ${{ github.workspace }}/artifact/TestBuildQemuUbuntuServerArm64OnLinux.packer.log
+          PACKER_LOG_PATH: ${{ github.workspace }}/artifact/${{ matrix.go_test_name }}.packer.log
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p artifact
           go mod vendor
-          make test-build-specific TEST_NAME=TestBuildQemuUbuntuServerArm64OnLinux
+          make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
@@ -489,16 +528,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-log-TestBuildQemuUbuntuServerArm64OnLinux
-          path: artifact/TestBuildQemuUbuntuServerArm64OnLinux.packer.log
+          name: packer-log-${{ matrix.go_test_name }}
+          path: artifact/${{ matrix.go_test_name }}.packer.log
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload packer-qemu-ubuntu-TestBuildQemuUbuntuServerArm64OnLinux.vnc.mp4 artifact (always)
+      - name: Upload packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-TestBuildQemuUbuntuServerArm64OnLinux.vnc.mp4
+          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -513,9 +552,7 @@ jobs:
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
-          files: >-
-            [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
-             {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
+          files: ${{ matrix.cache_files }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
@@ -544,7 +581,7 @@ jobs:
           POLL_INTERVAL_SECONDS: "30"
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
-          TARGET_JOB_NAME: "build TestBuildQemuUbuntuServerAmd64OnLinux on Hetzner"
+          TARGET_JOB_PATTERN: "^build TestBuildQemuUbuntu.*Amd64OnLinux on Hetzner$"
           WAIT_TIMEOUT_SECONDS: "900"
         run: |
           deadline=$(( $(date +%s) + WAIT_TIMEOUT_SECONDS ))
@@ -561,18 +598,18 @@ jobs:
                 "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100"
             )"
             job_state="$(
-              TARGET_JOB_NAME="${TARGET_JOB_NAME}" python3 -c 'import json, os, sys; target_name = os.environ["TARGET_JOB_NAME"]; match = next((job for job in json.load(sys.stdin).get("jobs", []) if job.get("name") == target_name), None); print((match.get("status", "") if match else "") + "\t" + ((match.get("conclusion") or "") if match else ""))' <<< "${jobs_json}"
+              TARGET_JOB_PATTERN="${TARGET_JOB_PATTERN}" python3 -c 'import json, os, re, sys; pattern = re.compile(os.environ["TARGET_JOB_PATTERN"]); jobs = json.load(sys.stdin).get("jobs", []); matches = [job for job in jobs if pattern.match(job.get("name", ""))]; active = next((job for job in matches if job.get("status") in ("in_progress", "completed")), None); selected = active or (matches[0] if matches else None); print((selected.get("name", "") if selected else "") + "\t" + (selected.get("status", "") if selected else "") + "\t" + ((selected.get("conclusion") or "") if selected else ""))' <<< "${jobs_json}"
             )"
-            IFS=$'\t' read -r job_status job_conclusion <<< "${job_state}"
+            IFS=$'\t' read -r matched_job_name job_status job_conclusion <<< "${job_state}"
 
             if [[ -n "${job_status}" ]]; then
-              echo "Observed ${TARGET_JOB_NAME}: status=${job_status} conclusion=${job_conclusion:-none}"
+              echo "Observed ${matched_job_name}: status=${job_status} conclusion=${job_conclusion:-none}"
             else
-              echo "Waiting for ${TARGET_JOB_NAME} to appear in workflow jobs list"
+              echo "Waiting for a matching amd64 Hetzner build job to appear in workflow jobs list"
             fi
 
             if [[ "${job_status}" == "in_progress" || "${job_status}" == "completed" ]]; then
-              echo "${TARGET_JOB_NAME} has left the queue"
+              echo "${matched_job_name} has left the queue"
               exit 0
             fi
 
@@ -636,7 +673,7 @@ jobs:
           POLL_INTERVAL_SECONDS: "30"
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
-          TARGET_JOB_NAME: "build TestBuildQemuUbuntuServerArm64OnLinux on Hetzner"
+          TARGET_JOB_PATTERN: "^build TestBuildQemuUbuntu.*Arm64OnLinux on Hetzner$"
           WAIT_TIMEOUT_SECONDS: "900"
         run: |
           deadline=$(( $(date +%s) + WAIT_TIMEOUT_SECONDS ))
@@ -653,18 +690,18 @@ jobs:
                 "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100"
             )"
             job_state="$(
-              TARGET_JOB_NAME="${TARGET_JOB_NAME}" python3 -c 'import json, os, sys; target_name = os.environ["TARGET_JOB_NAME"]; match = next((job for job in json.load(sys.stdin).get("jobs", []) if job.get("name") == target_name), None); print((match.get("status", "") if match else "") + "\t" + ((match.get("conclusion") or "") if match else ""))' <<< "${jobs_json}"
+              TARGET_JOB_PATTERN="${TARGET_JOB_PATTERN}" python3 -c 'import json, os, re, sys; pattern = re.compile(os.environ["TARGET_JOB_PATTERN"]); jobs = json.load(sys.stdin).get("jobs", []); matches = [job for job in jobs if pattern.match(job.get("name", ""))]; active = next((job for job in matches if job.get("status") in ("in_progress", "completed")), None); selected = active or (matches[0] if matches else None); print((selected.get("name", "") if selected else "") + "\t" + (selected.get("status", "") if selected else "") + "\t" + ((selected.get("conclusion") or "") if selected else ""))' <<< "${jobs_json}"
             )"
-            IFS=$'\t' read -r job_status job_conclusion <<< "${job_state}"
+            IFS=$'\t' read -r matched_job_name job_status job_conclusion <<< "${job_state}"
 
             if [[ -n "${job_status}" ]]; then
-              echo "Observed ${TARGET_JOB_NAME}: status=${job_status} conclusion=${job_conclusion:-none}"
+              echo "Observed ${matched_job_name}: status=${job_status} conclusion=${job_conclusion:-none}"
             else
-              echo "Waiting for ${TARGET_JOB_NAME} to appear in workflow jobs list"
+              echo "Waiting for a matching arm64 Hetzner build job to appear in workflow jobs list"
             fi
 
             if [[ "${job_status}" == "in_progress" || "${job_status}" == "completed" ]]; then
-              echo "${TARGET_JOB_NAME} has left the queue"
+              echo "${matched_job_name} has left the queue"
               exit 0
             fi
 
