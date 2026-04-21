@@ -89,6 +89,9 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	if process_config.DelayBeforeStart != 0 {
 		config.DelayBeforeStart = process_config.DelayBeforeStart
 	}
+	if process_config.Silent != nil {
+		config.Silent = process_config.Silent
+	}
 
 	// Write VNC password file
 	vnc_password := "packer"
@@ -180,6 +183,9 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 	}
 	if process_config.RetryInterval != 0 {
 		config.RetryInterval = process_config.RetryInterval
+	}
+	if process_config.Silent != nil {
+		config.Silent = process_config.Silent
 	}
 
 	processCtx, convErr := RunExternalProcess(config)

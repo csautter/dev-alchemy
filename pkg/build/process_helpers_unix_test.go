@@ -38,6 +38,39 @@ func TestTerminateProcessGroupKillsOrphanedChildren(t *testing.T) {
 	}
 }
 
+func TestConfigureCommandForInteractiveTerminalEnablesForegroundTTYAccess(t *testing.T) {
+	t.Parallel()
+
+	tty, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatalf("failed to open test tty surrogate: %v", err)
+	}
+	defer tty.Close()
+
+	cmd := exec.Command("bash", "-lc", "true")
+
+	restore := configureCommandForInteractiveTerminal(cmd, tty, syscall.Getpgrp())
+	if restore == nil {
+		t.Fatal("expected restore function")
+	}
+
+	if cmd.Stdin != tty {
+		t.Fatal("expected command stdin to be attached to the interactive terminal")
+	}
+	if cmd.SysProcAttr == nil {
+		t.Fatal("expected SysProcAttr to be initialized")
+	}
+	if !cmd.SysProcAttr.Setpgid {
+		t.Fatal("expected Setpgid to remain enabled for process-group cleanup")
+	}
+	if !cmd.SysProcAttr.Foreground {
+		t.Fatal("expected command to run in the foreground terminal process group")
+	}
+	if cmd.SysProcAttr.Ctty != int(tty.Fd()) {
+		t.Fatalf("expected Ctty=%d, got %d", tty.Fd(), cmd.SysProcAttr.Ctty)
+	}
+}
+
 func waitForPIDFile(t *testing.T, path string, timeout time.Duration) int {
 	t.Helper()
 

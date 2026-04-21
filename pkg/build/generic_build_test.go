@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync/atomic"
 	"syscall"
 	"testing"
 )
@@ -119,5 +120,30 @@ func TestDeferBuildArtifactCleanupUsesFinalBuildSuccessValue(t *testing.T) {
 
 	if !got {
 		t.Fatal("expected deferred cleanup to observe final successful build state")
+	}
+}
+
+func TestLogBuildOutputLineEnablesAuxiliaryProcessSilenceOnMarker(t *testing.T) {
+	t.Parallel()
+
+	auxiliaryProcessSilent := &atomic.Bool{}
+
+	logBuildOutputLine(auxiliaryLogSilenceStartMarker, "stdout", VirtualMachineConfig{}, auxiliaryProcessSilent)
+
+	if !auxiliaryProcessSilent.Load() {
+		t.Fatal("expected auxiliary process silence to be enabled")
+	}
+}
+
+func TestLogBuildOutputLineDisablesAuxiliaryProcessSilenceOnMarker(t *testing.T) {
+	t.Parallel()
+
+	auxiliaryProcessSilent := &atomic.Bool{}
+	auxiliaryProcessSilent.Store(true)
+
+	logBuildOutputLine(auxiliaryLogSilenceEndMarker, "stdout", VirtualMachineConfig{}, auxiliaryProcessSilent)
+
+	if auxiliaryProcessSilent.Load() {
+		t.Fatal("expected auxiliary process silence to be disabled")
 	}
 }

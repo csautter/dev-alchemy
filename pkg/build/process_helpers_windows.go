@@ -16,3 +16,7 @@ func commandProcessGroupID(cmd *exec.Cmd) int {
 func terminateProcessGroup(processGroupID int, gracePeriod time.Duration) {}
 
 func restoreInteractiveTerminal() {}
+
+func attachCommandToInteractiveTerminal(cmd *exec.Cmd) func() {
+	return func() {}
+}

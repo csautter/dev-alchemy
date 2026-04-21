@@ -37,8 +37,10 @@ echo "🔌 Mounting disk image..."
 hdiutil attach "$BASE_DIR$DISK_NAME.dmg" -mountpoint /Volumes/"$VOLUME_NAME" || exit 1
 
 echo "📦 Creating bootable installer..."
+echo "__DEV_ALCHEMY_SILENT_HELPERS_ON__"
 echo "Please enter your sudo password if prompted."
 sudo "$INSTALLER/Contents/Resources/createinstallmedia" --volume /Volumes/"$VOLUME_NAME" --nointeraction || exit 1
+echo "__DEV_ALCHEMY_SILENT_HELPERS_OFF__"
 
 echo "🔌 Detaching disk..."
 hdiutil detach /Volumes/"Install macOS $MACOS_VERSION" || exit 1

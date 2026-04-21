@@ -12,8 +12,14 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"syscall"
 	"time"
+)
+
+const (
+	auxiliaryLogSilenceStartMarker = "__DEV_ALCHEMY_SILENT_HELPERS_ON__"
+	auxiliaryLogSilenceEndMarker   = "__DEV_ALCHEMY_SILENT_HELPERS_OFF__"
 )
 
 type buildCompletionDecision struct {
@@ -52,6 +58,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	hardInterruptSignal := make(chan os.Signal, 1)
 	stopSignalRelay := make(chan struct{})
 	defer close(stopSignalRelay)
+	auxiliaryProcessSilent := &atomic.Bool{}
 
 	printCurrentWorkingDirectory()
 
@@ -59,13 +66,15 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	// #nosec G204 -- executable and args are constructed by internal build flows; no shell is invoked.
 	cmd := exec.CommandContext(ctx, executable, args...)
 	configureCommandForCleanup(cmd)
+	restoreCommandTerminal := attachCommandToInteractiveTerminal(cmd)
+	defer restoreCommandTerminal()
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
 	cmd.Env = append(os.Environ(), GetDirectoriesInstance().ManagedEnv()...)
 	if config.Verbose {
 		cmd.Env = append(cmd.Env, "PACKER_LOG=1")
 	}
 
-	readAndPrintStdoutStderr(cmd, config)
+	readAndPrintStdoutStderr(cmd, config, auxiliaryProcessSilent)
 
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Failed to start command: %v", err)
@@ -104,13 +113,13 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	}()
 
 	vnc_recording_config := VncRecordingConfig{Password: "packer"}
-	openVncViewerOnMacOSHost(ctx, config, vnc_recording_config)
+	openVncViewerOnMacOSHost(ctx, config, vnc_recording_config, auxiliaryProcessSilent)
 
 	// Start Screen Capture to record the VM build process
 	vnc_snapshot_done := make(chan struct{})
 	vnc_interrupt_retry_chan := make(chan bool)
 
-	startVncScreenCaptureOnSupportedHost(ctx, config, timeout, vnc_interrupt_retry_chan, &vnc_recording_config, vnc_snapshot_done)
+	startVncScreenCaptureOnSupportedHost(ctx, config, timeout, vnc_interrupt_retry_chan, &vnc_recording_config, vnc_snapshot_done, auxiliaryProcessSilent)
 
 	select {
 	case err := <-done:
@@ -254,12 +263,12 @@ func runFfmpegOnSupportedHost(vnc_snapshot_done chan struct{}, config VirtualMac
 	RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: timeout}, vnc_recording_config)
 }
 
-func startVncScreenCaptureOnSupportedHost(ctx context.Context, config VirtualMachineConfig, timeout time.Duration, vnc_interrupt_retry_chan chan bool, vnc_recording_config *VncRecordingConfig, vnc_snapshot_done chan struct{}) {
+func startVncScreenCaptureOnSupportedHost(ctx context.Context, config VirtualMachineConfig, timeout time.Duration, vnc_interrupt_retry_chan chan bool, vnc_recording_config *VncRecordingConfig, vnc_snapshot_done chan struct{}, auxiliaryProcessSilent *atomic.Bool) {
 	if !hostSupportsVncRecording(runtime.GOOS) {
 		return
 	}
 	go func() {
-		vnc_snapshot_ctx := RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, Retries: 30, InterruptRetryChan: vnc_interrupt_retry_chan, RetryInterval: 10 * time.Second}, vnc_recording_config)
+		vnc_snapshot_ctx := RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, Retries: 30, InterruptRetryChan: vnc_interrupt_retry_chan, RetryInterval: 10 * time.Second, Silent: auxiliaryProcessSilent}, vnc_recording_config)
 		if vnc_snapshot_ctx != nil {
 			<-vnc_snapshot_ctx.Done()
 		}
@@ -270,7 +279,7 @@ func startVncScreenCaptureOnSupportedHost(ctx context.Context, config VirtualMac
 // VNC integration:
 // - Opening a VNC viewer (Screen Sharing) is useful for observing the VM build process in real time.
 // - VNC recording enables capturing the build process for later review or debugging.
-func openVncViewerOnMacOSHost(ctx context.Context, config VirtualMachineConfig, vnc_recording_config VncRecordingConfig) {
+func openVncViewerOnMacOSHost(ctx context.Context, config VirtualMachineConfig, vnc_recording_config VncRecordingConfig, auxiliaryProcessSilent *atomic.Bool) {
 	if !hostSupportsVncViewer(runtime.GOOS) {
 		return
 	}
@@ -285,12 +294,13 @@ func openVncViewerOnMacOSHost(ctx context.Context, config VirtualMachineConfig, 
 			Retries:          5,
 			RetryInterval:    time.Minute,
 			DelayBeforeStart: time.Minute,
+			Silent:           auxiliaryProcessSilent,
 		}
 		RunExternalProcessWithRetries(config)
 	}()
 }
 
-func readAndPrintStdoutStderr(cmd *exec.Cmd, config VirtualMachineConfig) {
+func readAndPrintStdoutStderr(cmd *exec.Cmd, config VirtualMachineConfig, auxiliaryProcessSilent *atomic.Bool) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatalf("Failed to get stdout: %v", err)
@@ -303,16 +313,33 @@ func readAndPrintStdoutStderr(cmd *exec.Cmd, config VirtualMachineConfig) {
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			log.Printf("%s:%s:%s stdout:  %s", config.OS, config.UbuntuType, config.Arch, sanitizeSensitiveText(scanner.Text()))
+			logBuildOutputLine(scanner.Text(), "stdout", config, auxiliaryProcessSilent)
 		}
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log.Printf("%s:%s:%s stderr:  %s", config.OS, config.UbuntuType, config.Arch, sanitizeSensitiveText(scanner.Text()))
+			logBuildOutputLine(scanner.Text(), "stderr", config, auxiliaryProcessSilent)
 		}
 	}()
+}
+
+func logBuildOutputLine(line string, streamName string, config VirtualMachineConfig, auxiliaryProcessSilent *atomic.Bool) {
+	switch line {
+	case auxiliaryLogSilenceStartMarker:
+		if auxiliaryProcessSilent != nil {
+			auxiliaryProcessSilent.Store(true)
+		}
+		return
+	case auxiliaryLogSilenceEndMarker:
+		if auxiliaryProcessSilent != nil {
+			auxiliaryProcessSilent.Store(false)
+		}
+		return
+	}
+
+	log.Printf("%s:%s:%s %s:  %s", config.OS, config.UbuntuType, config.Arch, streamName, sanitizeSensitiveText(line))
 }
 
 func printCurrentWorkingDirectory() {

@@ -27,8 +27,10 @@ mkdir -p "$vendor_dir/win11_arm64_source_iso"
 hdiutil mount -mountpoint "$vendor_dir/win11_arm64_source_iso" "$windows_source_iso_path"
 
 mkdir -p "$vendor_dir/win11_arm64_iso_files"
+echo "__DEV_ALCHEMY_SILENT_HELPERS_ON__"
 echo "Enter sudo password if asked to copy ISO files..."
 sudo cp -a "$vendor_dir/win11_arm64_source_iso/"* "$vendor_dir/win11_arm64_iso_files/"
+echo "__DEV_ALCHEMY_SILENT_HELPERS_OFF__"
 hdiutil unmount "$vendor_dir/win11_arm64_source_iso"
 
 cp "$autounattend_xml_path" "$vendor_dir/win11_arm64_iso_files/autounattend.xml"
@@ -77,4 +79,6 @@ echo "--------------------------------"
 
 # clean up
 #sudo rm -rf "$vendor_dir/win11_arm64_source_iso"
+echo "__DEV_ALCHEMY_SILENT_HELPERS_ON__"
 sudo rm -rf "$vendor_dir/win11_arm64_iso_files"
+echo "__DEV_ALCHEMY_SILENT_HELPERS_OFF__"
