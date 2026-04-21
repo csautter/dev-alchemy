@@ -46,6 +46,8 @@ on:
       - "pkg/build/**"
       - "scripts/linux/*"
       - "scripts/linux/**/*"
+      - "scripts/macos/playwright_win11_iso.py"
+      - "scripts/macos/requirements.txt"
       - "scripts/macos/download-arm64-uefi.sh"
       - ".github/workflows/test-build-linux.yml"
       - ".github/actions/hetzner-github-runner/**"
@@ -55,6 +57,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test-cold-cache-dependency-bootstrap:
+    if: github.event_name == 'pull_request' || inputs.enable_linux_qemu
+    name: cold-cache dependency bootstrap
+    runs-on: ubuntu-24.04
+    env:
+      DEV_ALCHEMY_APP_DATA_DIR: ${{ github.workspace }}/.dev-alchemy
+      DEV_ALCHEMY_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/cache
+      DEV_ALCHEMY_VAGRANT_DIR: ${{ github.workspace }}/.dev-alchemy/.vagrant
+      DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
+      PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Clear managed cache and Playwright bootstrap state
+        run: |
+          rm -rf "${DEV_ALCHEMY_APP_DATA_DIR}" "${PLAYWRIGHT_BROWSERS_PATH}" "${HOME}/.cache/ms-playwright" scripts/macos/.venv
+
+      - name: Install dependencies linux
+        run: |
+          go run cmd/main.go install
+
+      - name: Run cold-cache dependency bootstrap tests
+        shell: bash
+        env:
+          RUN_INTEGRATION_TESTS: "1"
+        run: |
+          go test -timeout 45m -v ./pkg/build -run '^(TestGetWindows11DownloadAmd64|TestGetWindows11DownloadArm64|TestResolveDebianPackageURL|TestResolveAndDownloadQemuEfiAarch64)$'
+
   determine-runner-mode:
     if: github.event_name == 'pull_request' || inputs.enable_linux_qemu
     runs-on: ubuntu-latest
