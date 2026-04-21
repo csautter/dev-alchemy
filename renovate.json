@@ -3,6 +3,9 @@
   "extends": [
     "config:recommended"
   ],
+  "enabledManagers": [
+    "custom.regex"
+  ],
   "customManagers": [
     {
       "customType": "regex",
