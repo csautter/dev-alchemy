@@ -66,8 +66,12 @@ func TestConfigureCommandForInteractiveTerminalEnablesForegroundTTYAccess(t *tes
 	if !cmd.SysProcAttr.Foreground {
 		t.Fatal("expected command to run in the foreground terminal process group")
 	}
-	if cmd.SysProcAttr.Ctty != int(tty.Fd()) {
-		t.Fatalf("expected Ctty=%d, got %d", tty.Fd(), cmd.SysProcAttr.Ctty)
+	ttyFD, ok := fileDescriptorAsInt(tty)
+	if !ok {
+		t.Fatal("expected test tty file descriptor to fit in int")
+	}
+	if cmd.SysProcAttr.Ctty != ttyFD {
+		t.Fatalf("expected Ctty=%d, got %d", ttyFD, cmd.SysProcAttr.Ctty)
 	}
 }
 

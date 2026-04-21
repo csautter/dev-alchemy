@@ -8,7 +8,8 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
-	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 func configureCommandForCleanup(cmd *exec.Cmd) {
@@ -82,6 +83,12 @@ func configureCommandForInteractiveTerminal(cmd *exec.Cmd, tty *os.File, parentP
 		return func() {}
 	}
 
+	ttyFD, ok := fileDescriptorAsInt(tty)
+	if !ok {
+		_ = tty.Close()
+		return func() {}
+	}
+
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
@@ -89,7 +96,7 @@ func configureCommandForInteractiveTerminal(cmd *exec.Cmd, tty *os.File, parentP
 	cmd.Stdin = tty
 	cmd.SysProcAttr.Setpgid = true
 	cmd.SysProcAttr.Foreground = true
-	cmd.SysProcAttr.Ctty = int(tty.Fd())
+	cmd.SysProcAttr.Ctty = ttyFD
 
 	return func() {
 		if parentProcessGroupID > 0 {
@@ -104,15 +111,25 @@ func setTerminalForegroundProcessGroup(tty *os.File, processGroupID int) error {
 		return nil
 	}
 
-	_, _, errno := syscall.Syscall(
-		syscall.SYS_IOCTL,
-		tty.Fd(),
-		uintptr(syscall.TIOCSPGRP),
-		uintptr(unsafe.Pointer(&processGroupID)),
-	)
-	if errno != 0 {
-		return errno
+	ttyFD, ok := fileDescriptorAsInt(tty)
+	if !ok {
+		return errors.New("tty file descriptor exceeds int range")
 	}
 
-	return nil
+	return unix.IoctlSetPointerInt(ttyFD, unix.TIOCSPGRP, processGroupID)
+}
+
+func fileDescriptorAsInt(file *os.File) (int, bool) {
+	if file == nil {
+		return 0, false
+	}
+
+	fd := file.Fd()
+	maxInt := int(^uint(0) >> 1)
+	if fd > uintptr(maxInt) {
+		return 0, false
+	}
+
+	// #nosec G115 -- os.File.Fd returns the process' native file descriptor width; the bounds check above keeps the cast explicit.
+	return int(fd), true
 }
