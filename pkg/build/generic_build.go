@@ -12,9 +12,21 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
+
+const (
+	auxiliaryLogSilenceStartMarker = "__DEV_ALCHEMY_SILENT_HELPERS_ON__"
+	auxiliaryLogSilenceEndMarker   = "__DEV_ALCHEMY_SILENT_HELPERS_OFF__"
+)
+
+type buildCompletionDecision struct {
+	err          error
+	runFfmpeg    bool
+	buildSuccess bool
+}
 
 func RunBuildScript(config VirtualMachineConfig, executable string, args []string) error {
 	skipBuild, cleanupArtifacts, err := prepareBuildArtifactsForBuild(config)
@@ -25,7 +37,8 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 		return nil
 	}
 	buildSucceeded := false
-	defer cleanupArtifacts(buildSucceeded)
+	defer deferBuildArtifactCleanup(cleanupArtifacts, &buildSucceeded)()
+	defer restoreInteractiveTerminal()
 
 	// Ensure all required dependencies are present
 	DependencyReconciliation(config)
@@ -41,20 +54,55 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 	defer signal.Stop(sigs)
+	interruptedSignal := make(chan os.Signal, 1)
+	hardInterruptSignal := make(chan os.Signal, 1)
+	stopSignalRelay := make(chan struct{})
+	defer close(stopSignalRelay)
+	auxiliaryProcessSilent := &atomic.Bool{}
 
 	printCurrentWorkingDirectory()
 
 	fmt.Printf("Running Build with executable %s and args %v\n", executable, sanitizeCommandArgs(args))
 	// #nosec G204 -- executable and args are constructed by internal build flows; no shell is invoked.
 	cmd := exec.CommandContext(ctx, executable, args...)
+	configureCommandForCleanup(cmd)
+	restoreCommandTerminal := attachCommandToInteractiveTerminal(cmd)
+	defer restoreCommandTerminal()
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
 	cmd.Env = append(os.Environ(), GetDirectoriesInstance().ManagedEnv()...)
+	if config.Verbose {
+		cmd.Env = append(cmd.Env, "PACKER_LOG=1")
+	}
 
-	readAndPrintStdoutStderr(cmd, config)
+	readAndPrintStdoutStderr(cmd, config, auxiliaryProcessSilent)
 
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("Failed to start command: %v", err)
 	}
+	processGroupID := commandProcessGroupID(cmd)
+	go func() {
+		interrupted := false
+		for {
+			select {
+			case sig := <-sigs:
+				if !interrupted {
+					select {
+					case interruptedSignal <- sig:
+					default:
+					}
+					cancel()
+					interrupted = true
+					continue
+				}
+				select {
+				case hardInterruptSignal <- sig:
+				default:
+				}
+			case <-stopSignalRelay:
+				return
+			}
+		}
+	}()
 
 	done := make(chan error, 1)
 	go func() {
@@ -65,46 +113,93 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	}()
 
 	vnc_recording_config := VncRecordingConfig{Password: "packer"}
-	openVncViewerOnMacosDarwin(ctx, config, vnc_recording_config)
+	openVncViewerOnMacOSHost(ctx, config, vnc_recording_config, auxiliaryProcessSilent)
 
 	// Start Screen Capture to record the VM build process
 	vnc_snapshot_done := make(chan struct{})
 	vnc_interrupt_retry_chan := make(chan bool)
 
-	startVncScreenCaptureOnMacosDarwin(ctx, config, timeout, vnc_interrupt_retry_chan, &vnc_recording_config, vnc_snapshot_done)
+	startVncScreenCaptureOnSupportedHost(ctx, config, timeout, vnc_interrupt_retry_chan, &vnc_recording_config, vnc_snapshot_done, auxiliaryProcessSilent)
 
 	select {
 	case err := <-done:
-		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
-
-		if err != nil {
-			runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
-			log.Printf("Script failed: %v", err)
-			return err
+		stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan)
+		sig := drainInterruptedSignal(interruptedSignal)
+		decision := determineBuildCompletionDecision(err, ctx.Err(), sig)
+		if decision.err != nil {
+			if ctx.Err() != nil {
+				terminateProcessGroup(processGroupID, processCleanupGracePeriod)
+			}
+			if decision.runFfmpeg {
+				runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config, hardInterruptSignal)
+			}
+			switch {
+			case sig != nil:
+				log.Printf("Script terminated due to signal: %v", sig)
+			case errors.Is(decision.err, context.Canceled), errors.Is(decision.err, context.DeadlineExceeded):
+				log.Printf("Script terminated due to timeout or interruption: %v", decision.err)
+			default:
+				log.Printf("Script failed: %v", decision.err)
+			}
+			return decision.err
 		}
-		buildSucceeded = true
-		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
+		buildSucceeded = decision.buildSuccess
+		if decision.runFfmpeg {
+			runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config, nil)
+		}
 		log.Printf("Script finished successfully.")
 	case <-ctx.Done():
 		// Kill the process if context is done (timeout or cancellation)
-		_ = cmd.Process.Kill()
+		terminateProcessGroup(processGroupID, processCleanupGracePeriod)
 
-		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
-
-		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
+		stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan)
+		sig := drainInterruptedSignal(interruptedSignal)
+		if sig != nil {
+			log.Printf("Build interrupted by signal %v; generating VNC video before exit. Press Ctrl+C again to skip remaining post-processing.", sig)
+			runFfmpegOnSupportedHost(vnc_snapshot_done, config, &vnc_recording_config, hardInterruptSignal)
+			err := fmt.Errorf("script terminated due to signal: %v", sig)
+			log.Printf("Script terminated due to signal: %v", sig)
+			return err
+		}
 		log.Printf("Script terminated due to timeout or interruption: %v", ctx.Err())
 		return ctx.Err()
-	case sig := <-sigs:
-		_ = cmd.Process.Kill()
-
-		stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan)
-
-		runFfmpegOnMacosDarwin(vnc_snapshot_done, config, &vnc_recording_config)
-		log.Printf("Script terminated due to signal: %v", sig)
-		return fmt.Errorf("script terminated due to signal: %v", sig)
 	}
 
 	return nil
+}
+
+func determineBuildCompletionDecision(waitErr error, ctxErr error, sig os.Signal) buildCompletionDecision {
+	if sig != nil {
+		return buildCompletionDecision{
+			err:       fmt.Errorf("script terminated due to signal: %v", sig),
+			runFfmpeg: true,
+		}
+	}
+	if ctxErr != nil {
+		return buildCompletionDecision{
+			err:       ctxErr,
+			runFfmpeg: false,
+		}
+	}
+	if waitErr != nil {
+		return buildCompletionDecision{
+			err:       waitErr,
+			runFfmpeg: true,
+		}
+	}
+	return buildCompletionDecision{
+		runFfmpeg:    true,
+		buildSuccess: true,
+	}
+}
+
+func drainInterruptedSignal(interruptedSignal <-chan os.Signal) os.Signal {
+	select {
+	case sig := <-interruptedSignal:
+		return sig
+	default:
+		return nil
+	}
 }
 
 func resolveExpectedBuildArtifacts(config VirtualMachineConfig) ([]string, error) {
@@ -121,8 +216,16 @@ func resolveExpectedBuildArtifacts(config VirtualMachineConfig) ([]string, error
 	return nil, errors.New("no build artifacts defined for the given configuration")
 }
 
-func stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan chan bool) {
-	if runtime.GOOS != "darwin" {
+func hostSupportsVncRecording(goos string) bool {
+	return goos != "windows"
+}
+
+func hostSupportsVncViewer(goos string) bool {
+	return goos == "darwin"
+}
+
+func stopVncScreenCaptureOnSupportedHost(vnc_interrupt_retry_chan chan bool) {
+	if !hostSupportsVncRecording(runtime.GOOS) {
 		return
 	}
 	log.Printf("stopping VNC snapshot...")
@@ -138,30 +241,34 @@ func stopVncScreenCaptureOnMacosDarwin(vnc_interrupt_retry_chan chan bool) {
 
 // FFmpeg integration:
 // - FFmpeg is useful for generating a video from the VNC recording, allowing playback and sharing of the build process.
-func runFfmpegOnMacosDarwin(vnc_snapshot_done chan struct{}, config VirtualMachineConfig, vnc_recording_config *VncRecordingConfig) {
-	if runtime.GOOS != "darwin" {
+func runFfmpegOnSupportedHost(vnc_snapshot_done chan struct{}, config VirtualMachineConfig, vnc_recording_config *VncRecordingConfig, hardInterruptSignal <-chan os.Signal) {
+	if !hostSupportsVncRecording(runtime.GOOS) {
 		return
 	}
-	_, ok := <-vnc_snapshot_done
-	if !ok {
-		// Channel is closed, proceed
-	} else {
-		// Channel not closed, wait for it
-		<-vnc_snapshot_done
-	}
+	<-vnc_snapshot_done
 	// Always run ffmpeg after vnc_snapshot is done
 	timeout := 10 * time.Minute
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	if hardInterruptSignal != nil {
+		go func() {
+			select {
+			case sig := <-hardInterruptSignal:
+				log.Printf("Received additional interrupt %v during VNC video post-processing; aborting remaining post-processing.", sig)
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
 	RunFfmpegVideoGenerationProcess(config, ctx, RunProcessConfig{Timeout: timeout}, vnc_recording_config)
 }
 
-func startVncScreenCaptureOnMacosDarwin(ctx context.Context, config VirtualMachineConfig, timeout time.Duration, vnc_interrupt_retry_chan chan bool, vnc_recording_config *VncRecordingConfig, vnc_snapshot_done chan struct{}) {
-	if runtime.GOOS != "darwin" {
+func startVncScreenCaptureOnSupportedHost(ctx context.Context, config VirtualMachineConfig, timeout time.Duration, vnc_interrupt_retry_chan chan bool, vnc_recording_config *VncRecordingConfig, vnc_snapshot_done chan struct{}, auxiliaryProcessSilent *atomic.Bool) {
+	if !hostSupportsVncRecording(runtime.GOOS) {
 		return
 	}
 	go func() {
-		vnc_snapshot_ctx := RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, Retries: 30, InterruptRetryChan: vnc_interrupt_retry_chan, RetryInterval: 10 * time.Second}, vnc_recording_config)
+		vnc_snapshot_ctx := RunVncSnapshotProcess(config, ctx, RunProcessConfig{Timeout: timeout, Retries: 30, InterruptRetryChan: vnc_interrupt_retry_chan, RetryInterval: 10 * time.Second, Silent: auxiliaryProcessSilent}, vnc_recording_config)
 		if vnc_snapshot_ctx != nil {
 			<-vnc_snapshot_ctx.Done()
 		}
@@ -172,8 +279,8 @@ func startVncScreenCaptureOnMacosDarwin(ctx context.Context, config VirtualMachi
 // VNC integration:
 // - Opening a VNC viewer (Screen Sharing) is useful for observing the VM build process in real time.
 // - VNC recording enables capturing the build process for later review or debugging.
-func openVncViewerOnMacosDarwin(ctx context.Context, config VirtualMachineConfig, vnc_recording_config VncRecordingConfig) {
-	if runtime.GOOS != "darwin" {
+func openVncViewerOnMacOSHost(ctx context.Context, config VirtualMachineConfig, vnc_recording_config VncRecordingConfig, auxiliaryProcessSilent *atomic.Bool) {
+	if !hostSupportsVncViewer(runtime.GOOS) {
 		return
 	}
 	go func() {
@@ -187,12 +294,13 @@ func openVncViewerOnMacosDarwin(ctx context.Context, config VirtualMachineConfig
 			Retries:          5,
 			RetryInterval:    time.Minute,
 			DelayBeforeStart: time.Minute,
+			Silent:           auxiliaryProcessSilent,
 		}
 		RunExternalProcessWithRetries(config)
 	}()
 }
 
-func readAndPrintStdoutStderr(cmd *exec.Cmd, config VirtualMachineConfig) {
+func readAndPrintStdoutStderr(cmd *exec.Cmd, config VirtualMachineConfig, auxiliaryProcessSilent *atomic.Bool) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatalf("Failed to get stdout: %v", err)
@@ -205,16 +313,33 @@ func readAndPrintStdoutStderr(cmd *exec.Cmd, config VirtualMachineConfig) {
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			log.Printf("%s:%s:%s stdout:  %s", config.OS, config.UbuntuType, config.Arch, sanitizeSensitiveText(scanner.Text()))
+			logBuildOutputLine(scanner.Text(), "stdout", config, auxiliaryProcessSilent)
 		}
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			log.Printf("%s:%s:%s stderr:  %s", config.OS, config.UbuntuType, config.Arch, sanitizeSensitiveText(scanner.Text()))
+			logBuildOutputLine(scanner.Text(), "stderr", config, auxiliaryProcessSilent)
 		}
 	}()
+}
+
+func logBuildOutputLine(line string, streamName string, config VirtualMachineConfig, auxiliaryProcessSilent *atomic.Bool) {
+	switch line {
+	case auxiliaryLogSilenceStartMarker:
+		if auxiliaryProcessSilent != nil {
+			auxiliaryProcessSilent.Store(true)
+		}
+		return
+	case auxiliaryLogSilenceEndMarker:
+		if auxiliaryProcessSilent != nil {
+			auxiliaryProcessSilent.Store(false)
+		}
+		return
+	}
+
+	log.Printf("%s:%s:%s %s:  %s", config.OS, config.UbuntuType, config.Arch, streamName, sanitizeSensitiveText(line))
 }
 
 func printCurrentWorkingDirectory() {
@@ -252,6 +377,12 @@ type buildArtifactBackup struct {
 	backupPath   string
 }
 
+func deferBuildArtifactCleanup(cleanup func(bool), buildSucceeded *bool) func() {
+	return func() {
+		cleanup(*buildSucceeded)
+	}
+}
+
 func prepareBuildArtifactsForBuild(config VirtualMachineConfig) (bool, func(bool), error) {
 	if !config.NoCache {
 		buildArtifactExists, err := checkIfBuildArtifactsExist(config)
@@ -261,7 +392,6 @@ func prepareBuildArtifactsForBuild(config VirtualMachineConfig) (bool, func(bool
 		if buildArtifactExists {
 			return true, func(bool) {}, nil
 		}
-		return false, func(bool) {}, nil
 	}
 
 	artifacts, err := resolveExpectedBuildArtifacts(config)

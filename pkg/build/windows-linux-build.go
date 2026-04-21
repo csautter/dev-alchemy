@@ -10,13 +10,13 @@ const (
 
 // RunHypervUbuntuBuildOnWindows builds an Ubuntu VM using Hyper-V on Windows.
 func RunHypervUbuntuBuildOnWindows(config VirtualMachineConfig) error {
-	if err := initializePacker(ubuntuHypervPackerFile); err != nil {
+	if err := initializePacker(config, ubuntuHypervPackerFile); err != nil {
 		return fmt.Errorf("failed to initialize packer: %w", err)
 	}
 
 	args := []string{
 		"build",
-		"-var", fmt.Sprintf("iso_url=%s", GetDirectoriesInstance().CachePath("linux", "ubuntu-24.04.3-live-server-amd64.iso")),
+		"-var", fmt.Sprintf("iso_url=%s", ubuntuLiveServerISOPath("amd64", ubuntuLiveServerAMD64Version)),
 		"-var", fmt.Sprintf("cache_dir=%s", GetDirectoriesInstance().CacheDir),
 		"-var", fmt.Sprintf("ubuntu_type=%s", defaultUbuntuType(config.UbuntuType)),
 		"-var", fmt.Sprintf("cpus=%s", getVmCpuCountString(config)),

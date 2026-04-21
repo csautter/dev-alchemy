@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-set +e # we want to continue on errors
+set +e
 set -x
 
-# Manual argument parsing for portability
 arch="arm64"
 headless="false"
 ubuntu_type="server"
@@ -14,18 +13,27 @@ verbose="false"
 build_output_dir=""
 
 script_dir=$(
-	# shellcheck disable=SC2164
 	cd "$(dirname "$0")"
 	pwd -P
 )
 project_root=$(
-	# shellcheck disable=SC2164
 	cd "${script_dir}/../../../.."
 	pwd -P
 )
-app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
-cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
-packer_cache_dir="${DEV_ALCHEMY_PACKER_CACHE_DIR:-$app_data_dir/packer_cache}"
+
+# renovate: datasource=custom.ubuntu-live-server-amd64 depName=ubuntu-live-server-amd64 versioning=loose
+UBUNTU_LIVE_SERVER_AMD64_VERSION="24.04.3"
+# renovate: datasource=custom.ubuntu-live-server-arm64 depName=ubuntu-live-server-arm64 versioning=loose
+UBUNTU_LIVE_SERVER_ARM64_VERSION="24.04.3"
+UBUNTU_LIVE_SERVER_ARM64_SHA256="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
+
+file_size_bytes() {
+	if [[ ! -f "$1" ]]; then
+		echo "0"
+		return 0
+	fi
+	stat -f%z "$1"
+}
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -108,9 +116,18 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+if [[ "$(uname -s)" != "Darwin" ]]; then
+	echo "This script only supports macOS hosts. Use linux-ubuntu-on-linux.sh on Linux." >&2
+	exit 1
+fi
+
 if [[ -z "$build_output_dir" ]]; then
 	build_output_dir="/tmp/dev-alchemy/qemu-out-ubuntu-${ubuntu_type}-${arch}"
 fi
+
+app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
+packer_cache_dir="${DEV_ALCHEMY_PACKER_CACHE_DIR:-$app_data_dir/packer_cache}"
 
 mkdir -p "$cache_dir" "$packer_cache_dir"
 export DEV_ALCHEMY_APP_DATA_DIR="$app_data_dir"
@@ -118,20 +135,26 @@ export DEV_ALCHEMY_CACHE_DIR="$cache_dir"
 export DEV_ALCHEMY_PACKER_CACHE_DIR="$packer_cache_dir"
 export PACKER_CACHE_DIR="$packer_cache_dir"
 
-# Download uefi-firmware if it doesn't exist
-if [ "$arch" = "arm64" ]; then
-	bash "$project_root/scripts/macos/download-arm64-uefi.sh"
+if [[ "$arch" == "arm64" ]]; then
+	if ! bash "$project_root/scripts/macos/download-arm64-uefi.sh"; then
+		echo "Failed to prepare ARM64 UEFI firmware." >&2
+		exit 1
+	fi
+	firmware_path="$cache_dir/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+	if [[ ! -f "$firmware_path" ]]; then
+		echo "ARM64 UEFI firmware is missing: $firmware_path" >&2
+		exit 1
+	fi
 fi
 
-# Download the Ubuntu ISO if it doesn't exist
-iso_path="$cache_dir/linux/ubuntu-24.04.3-live-server-amd64.iso"
-if [ "$arch" = "arm64" ]; then
-	iso_path="$cache_dir/linux/ubuntu-24.04.3-live-server-arm64.iso"
-	iso_url="https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso"
-	iso_checksum="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
+iso_path="$cache_dir/linux/ubuntu-${UBUNTU_LIVE_SERVER_AMD64_VERSION}-live-server-amd64.iso"
+if [[ "$arch" == "arm64" ]]; then
+	iso_path="$cache_dir/linux/ubuntu-${UBUNTU_LIVE_SERVER_ARM64_VERSION}-live-server-arm64.iso"
+	iso_url="https://cdimage.ubuntu.com/releases/${UBUNTU_LIVE_SERVER_ARM64_VERSION}/release/ubuntu-${UBUNTU_LIVE_SERVER_ARM64_VERSION}-live-server-arm64.iso"
+	iso_checksum="${UBUNTU_LIVE_SERVER_ARM64_SHA256}"
 	mkdir -p "$(dirname "$iso_path")"
 
-	if [[ ! -f "$iso_path" || $(stat -c%s "$iso_path") -lt 2500000000 ]]; then
+	if [[ ! -f "$iso_path" || "$(file_size_bytes "$iso_path")" -lt 2500000000 ]]; then
 		echo "Downloading Ubuntu ISO (supports resume)..."
 		if ! curl --no-buffer --retry 10 --continue-at - -L -# -o "$iso_path" "$iso_url"; then
 			echo "Failed to download Ubuntu ISO." >&2
@@ -140,17 +163,14 @@ if [ "$arch" = "arm64" ]; then
 	fi
 
 	echo "Verifying ISO checksum..."
-	downloaded_checksum=$(sha256sum "$iso_path" | awk '{print $1}')
+	downloaded_checksum=$(shasum -a 256 "$iso_path" | awk '{print $1}')
 	if [[ "$downloaded_checksum" != "$iso_checksum" ]]; then
 		echo "Checksum mismatch for $iso_path" >&2
-		echo "Removing corrupted file..." >&2
-		#rm -f "$iso_path"
 		exit 1
 	fi
 fi
 
-# creates the qcow2 disk image and overwrites it if it already exists
-if [ "$arch" = "arm64" ]; then
+if [[ "$arch" == "arm64" ]]; then
 	echo "Creating QCOW2 disk image..."
 	output_directory="$cache_dir/ubuntu"
 	mkdir -p "$output_directory"
@@ -160,25 +180,35 @@ if [ "$arch" = "arm64" ]; then
 	qemu-img info "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2"
 fi
 
-# create cidata iso
-if [ "$arch" = "arm64" ]; then
+if [[ "$arch" == "arm64" ]]; then
 	cd "$project_root/build/packer/linux/ubuntu/cloud-init/qemu-${ubuntu_type}" || exit 1
 	rm -f cidata.iso
 	xorriso -as mkisofs -V cidata -o cidata.iso user-data meta-data
 	cd "$project_root" || exit 1
 fi
 
-# remove packer output directory if it exists
 output_dir="$build_output_dir"
-if [ -d "$output_dir" ]; then
+if [[ -d "$output_dir" ]]; then
 	echo "Removing existing Packer output directory..."
 	rm -rf "$output_dir"
 fi
 mkdir -p "$(dirname "$output_dir")"
 
-packer init "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
+packer_file="build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
+packer init "$packer_file"
 
-if [ "$verbose" = "true" ]; then
+if [[ "$verbose" == "true" ]]; then
 	export PACKER_LOG=1
 fi
-packer build -var "cache_dir=$cache_dir" -var "build_output_dir=$build_output_dir" -var "iso_url=$iso_path" -var "ubuntu_type=$ubuntu_type" -var "headless=$headless" -var "vnc_port=$vnc_port" -var "arch=$arch" -var "cpus=$cpus" -var "memory=$memory" "build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
+
+packer build \
+	-var "cache_dir=$cache_dir" \
+	-var "build_output_dir=$build_output_dir" \
+	-var "iso_url=$iso_path" \
+	-var "ubuntu_type=$ubuntu_type" \
+	-var "headless=$headless" \
+	-var "vnc_port=$vnc_port" \
+	-var "arch=$arch" \
+	-var "cpus=$cpus" \
+	-var "memory=$memory" \
+	"$packer_file"

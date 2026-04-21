@@ -2,24 +2,27 @@
 // README at: https://github.com/devcontainers/templates/tree/main/src/go .
 {
 	"name": "Go",
-	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/go:2-1.25-trixie",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
 	"containerEnv": {
     	"GOTOOLCHAIN": "auto"
   	},
 	"mounts": [
-		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.agents/skills,target=/home/vscode/.agents/skills,type=bind,consistency=cached"
+		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.agents/skills,target=/root/.agents/skills,type=bind,consistency=cached",
+		"source=devalchemy-vscode-server-data,target=/root/.vscode-server/data,type=volume"
 	],
 	"features": {
-		"ghcr.io/devcontainers/features/python:1": {},
-		"ghcr.io/devcontainers-extra/features/packer-asdf:2": {}
+		"ghcr.io/devcontainers/features/python:1": {}
 	},
-	"postCreateCommand": "sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ruby-full yq && go install github.com/securego/gosec/v2/cmd/gosec@v2.25.0",
 	"customizations": {
 		"vscode": {
 			"extensions": [
+				"HashiCorp.HCL",
+				"HashiCorp.terraform",
 				"openai.chatgpt",
-				"ms-azuretools.vscode-azurefunctions"
+				"ms-azuretools.vscode-azurefunctions",
+				"emeraldwalk.runonsave"
 			]
 		}
 	},

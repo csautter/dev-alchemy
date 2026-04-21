@@ -1,8 +1,12 @@
 package build
 
 import (
+	"bytes"
 	"context"
+	"log"
 	"os"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -45,6 +49,34 @@ func TestRunExternalProcessWithRetriesStopsOnInterrupt(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for retry loop to stop")
+	}
+}
+
+func TestStreamProcessOutputSuppressesLogsWhenSilent(t *testing.T) {
+	var logBuffer bytes.Buffer
+	previousWriter := log.Writer()
+	log.SetOutput(&logBuffer)
+	defer log.SetOutput(previousWriter)
+
+	silent := &atomic.Bool{}
+	silent.Store(true)
+	streamProcessOutput(strings.NewReader("line one\nline two\n"), "helper", "stderr", silent)
+
+	if logBuffer.Len() != 0 {
+		t.Fatalf("expected no logs in silent mode, got %q", logBuffer.String())
+	}
+}
+
+func TestStreamProcessOutputLogsWhenNotSilent(t *testing.T) {
+	var logBuffer bytes.Buffer
+	previousWriter := log.Writer()
+	log.SetOutput(&logBuffer)
+	defer log.SetOutput(previousWriter)
+
+	streamProcessOutput(strings.NewReader("line one\n"), "helper", "stderr", nil)
+
+	if !strings.Contains(logBuffer.String(), "stderr:helper:  line one") {
+		t.Fatalf("expected streamed log output, got %q", logBuffer.String())
 	}
 }
 

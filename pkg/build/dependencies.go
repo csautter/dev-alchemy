@@ -27,6 +27,10 @@ type ProgressBarListener struct {
 }
 
 func (p *ProgressBarListener) TrackProgress(src string, current, total int64, r io.ReadCloser) io.ReadCloser {
+	if p == nil || p.progress == nil {
+		return r
+	}
+
 	name := filepath.Base(src)
 	p.bar = p.progress.AddBar(total,
 		mpb.PrependDecorators(
@@ -56,7 +60,7 @@ type progressReader struct {
 func (pr *progressReader) Read(p []byte) (int, error) {
 	now := time.Now()
 	n, err := pr.reader.Read(p)
-	if n > 0 {
+	if n > 0 && pr.bar != nil {
 		elapsed := now.Sub(pr.lastRead)
 		if pr.lastRead.IsZero() || elapsed <= 0 {
 			elapsed = time.Millisecond
@@ -78,6 +82,47 @@ type WebFileDependency struct {
 	RelatedVmConfigs []VirtualMachineConfig
 	// BeforeHook is a function that is called before downloading the dependency. It can be used to modify the Source URL dynamically.
 	BeforeHook func() (string, error)
+}
+
+const (
+	// renovate: datasource=custom.ubuntu-live-server-amd64 depName=ubuntu-live-server-amd64 versioning=loose
+	ubuntuLiveServerAMD64Version = "24.04.3"
+	ubuntuLiveServerAMD64SHA256  = "c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b"
+
+	// renovate: datasource=custom.ubuntu-live-server-arm64 depName=ubuntu-live-server-arm64 versioning=loose
+	ubuntuLiveServerArm64Version = "24.04.3"
+	ubuntuLiveServerArm64SHA256  = "2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
+
+	// renovate: datasource=custom.virtio-win depName=virtio-win versioning=loose
+	virtioWinVersion = "0.1.266-1"
+)
+
+func ubuntuLiveServerISOName(arch, version string) string {
+	return fmt.Sprintf("ubuntu-%s-live-server-%s.iso", version, arch)
+}
+
+func ubuntuLiveServerISOPath(arch, version string) string {
+	return GetDirectoriesInstance().CachePath("linux", ubuntuLiveServerISOName(arch, version))
+}
+
+func ubuntuLiveServerISOURL(arch, version string) string {
+	name := ubuntuLiveServerISOName(arch, version)
+	if arch == "amd64" {
+		return fmt.Sprintf("https://releases.ubuntu.com/%s/%s", version, name)
+	}
+	return fmt.Sprintf("https://cdimage.ubuntu.com/releases/%s/release/%s", version, name)
+}
+
+func virtioWinISOURL(version string) string {
+	fileVersion := version
+	if idx := strings.LastIndex(version, "-"); idx > 0 {
+		fileVersion = version[:idx]
+	}
+	return fmt.Sprintf(
+		"https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-%s/virtio-win-%s.iso",
+		version,
+		fileVersion,
+	)
 }
 
 // resolveDebianPackageURL fetches the current download URL for an architecture-independent
@@ -186,17 +231,8 @@ func bootstrapPythonEnv(workdir, pythonExe string) error {
 	}
 
 	log.Printf("Installing required Python packages for Windows 11 download script")
-	if _, err := RunCliCommand(workdir, venvPython, []string{"-c", "import playwright"}); err != nil {
-		log.Printf("playwright not found, installing...")
-		if _, err = RunCliCommand(workdir, pipPath, []string{"install", "playwright"}); err != nil {
-			return fmt.Errorf("failed to install playwright: %w", err)
-		}
-	}
-	if _, err := RunCliCommand(workdir, venvPython, []string{"-c", "import playwright_stealth"}); err != nil {
-		log.Printf("playwright-stealth not found, installing...")
-		if _, err = RunCliCommand(workdir, pipPath, []string{"install", "playwright-stealth"}); err != nil {
-			return fmt.Errorf("failed to install playwright-stealth: %w", err)
-		}
+	if _, err := RunCliCommand(workdir, pipPath, []string{"install", "-r", "requirements.txt"}); err != nil {
+		return fmt.Errorf("failed to install Windows 11 download script requirements: %w", err)
 	}
 
 	log.Printf("Installing Playwright browsers for Windows 11 download script")
@@ -380,7 +416,7 @@ func getWebFileDependencies() []WebFileDependency {
 		{
 			LocalPath: GetDirectoriesInstance().CachePath("windows", "virtio-win.iso"),
 			Checksum:  "",
-			Source:    "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.266-1/virtio-win-0.1.266.iso",
+			Source:    virtioWinISOURL(virtioWinVersion),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "windows11",
@@ -391,9 +427,9 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: GetDirectoriesInstance().CachePath("linux", "ubuntu-24.04.3-live-server-arm64.iso"),
-			Checksum:  "sha256:2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555",
-			Source:    "https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso",
+			LocalPath: ubuntuLiveServerISOPath("arm64", ubuntuLiveServerArm64Version),
+			Checksum:  "sha256:" + ubuntuLiveServerArm64SHA256,
+			Source:    ubuntuLiveServerISOURL("arm64", ubuntuLiveServerArm64Version),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "ubuntu",
@@ -402,12 +438,33 @@ func getWebFileDependencies() []WebFileDependency {
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
 				},
+				{
+					OS:                   "ubuntu",
+					UbuntuType:           "server",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
+				{
+					OS:                   "ubuntu",
+					UbuntuType:           "desktop",
+					Arch:                 "arm64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "ubuntu",
+					UbuntuType:           "desktop",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
 			},
 		},
 		{
-			LocalPath: GetDirectoriesInstance().CachePath("linux", "ubuntu-24.04.3-live-server-amd64.iso"),
-			Checksum:  "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b",
-			Source:    "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso",
+			LocalPath: ubuntuLiveServerISOPath("amd64", ubuntuLiveServerAMD64Version),
+			Checksum:  "sha256:" + ubuntuLiveServerAMD64SHA256,
+			Source:    ubuntuLiveServerISOURL("amd64", ubuntuLiveServerAMD64Version),
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "ubuntu",
@@ -423,27 +480,13 @@ func getWebFileDependencies() []WebFileDependency {
 					HostOs:               HostOsWindows,
 					VirtualizationEngine: VirtualizationEngineHyperv,
 				},
-			},
-		},
-		{
-			LocalPath: GetDirectoriesInstance().CachePath("linux", "ubuntu-24.04.3-live-server-arm64.iso"),
-			Checksum:  "sha256:2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555",
-			Source:    "https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-live-server-arm64.iso",
-			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "ubuntu",
-					UbuntuType:           "desktop",
-					Arch:                 "arm64",
-					HostOs:               HostOsDarwin,
-					VirtualizationEngine: VirtualizationEngineUtm,
+					UbuntuType:           "server",
+					Arch:                 "amd64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
 				},
-			},
-		},
-		{
-			LocalPath: GetDirectoriesInstance().CachePath("linux", "ubuntu-24.04.3-live-server-amd64.iso"),
-			Checksum:  "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b",
-			Source:    "https://releases.ubuntu.com/24.04.3/ubuntu-24.04.3-live-server-amd64.iso",
-			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "ubuntu",
 					UbuntuType:           "desktop",
@@ -457,6 +500,13 @@ func getWebFileDependencies() []WebFileDependency {
 					Arch:                 "amd64",
 					HostOs:               HostOsWindows,
 					VirtualizationEngine: VirtualizationEngineHyperv,
+				},
+				{
+					OS:                   "ubuntu",
+					UbuntuType:           "desktop",
+					Arch:                 "amd64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
 				},
 			},
 		},
@@ -473,6 +523,20 @@ func getWebFileDependencies() []WebFileDependency {
 					Arch:                 "arm64",
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "ubuntu",
+					UbuntuType:           "server",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
+				{
+					OS:                   "ubuntu",
+					UbuntuType:           "desktop",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
 				},
 			},
 		},

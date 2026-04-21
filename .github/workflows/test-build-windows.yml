@@ -19,8 +19,16 @@ on:
         type: boolean
   pull_request:
     paths:
+      - "cmd/main.go"
+      - "cmd/cmd/**"
       - "build/packer/windows/*"
       - "build/packer/windows/**/*"
+      - "pkg/build/**"
+      - "pkg/deploy/**"
+      - "scripts/linux/*"
+      - "scripts/linux/**/*"
+      - "scripts/windows/*"
+      - "scripts/windows/**/*"
       - ".github/workflows/test-build-windows.yml"
 
 jobs:

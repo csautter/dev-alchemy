@@ -124,10 +124,8 @@ if [ ! -f "$cache_dir/windows11/iso/win11_25h2_english_$arch.iso" ]; then
 	# shellcheck disable=SC1091
 	source .venv/bin/activate
 
-	if ! python -c "import playwright" &>/dev/null; then
-		pip install playwright
-		python -m playwright install chromium
-	fi
+	pip install -r requirements.txt
+	python -m playwright install chromium
 
 	if [ "$arch" = "amd64" ]; then
 		python playwright_win11_iso.py
@@ -154,7 +152,15 @@ bash "${project_root}/scripts/macos/download-utm-guest-tools.sh"
 
 if [ "$arch" = "arm64" ]; then
 	# download the qemu-uefi files if not already present
-	bash "${project_root}/scripts/macos/download-arm64-uefi.sh"
+	if ! bash "${project_root}/scripts/macos/download-arm64-uefi.sh"; then
+		echo "Failed to prepare ARM64 UEFI firmware." >&2
+		exit 1
+	fi
+	firmware_path="${cache_dir}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+	if [ ! -f "${firmware_path}" ]; then
+		echo "ARM64 UEFI firmware is missing: ${firmware_path}" >&2
+		exit 1
+	fi
 
 	# builds the autounattend ISO with the current autounattend.xml file
 	echo "Creating Windows 11 ARM64 unattended ISO..."

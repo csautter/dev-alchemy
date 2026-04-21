@@ -9,3 +9,58 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/.devcontainer"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: devcontainers
+    directory: "/.devcontainer"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/build/docker/ansible"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/build/docker/ansible-windows-ssh"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/build/docker/ansible-windows-winrm"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose
+    directory: "/deployments/docker-compose/ansible"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose
+    directory: "/deployments/docker-compose/ansible-windows"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: terraform
+    directory: "/deployments/terraform/modules/azure_gh_runner"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: terraform
+    directory: "/deployments/terraform/modules/azure_state_backend"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: pip
+    directory: "/scripts/macos"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: pip
+    directory: "/scripts/gh-runner-func"
+    schedule:
+      interval: weekly

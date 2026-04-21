@@ -89,6 +89,9 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	if process_config.DelayBeforeStart != 0 {
 		config.DelayBeforeStart = process_config.DelayBeforeStart
 	}
+	if process_config.Silent != nil {
+		config.Silent = process_config.Silent
+	}
 
 	// Write VNC password file
 	vnc_password := "packer"
@@ -181,10 +184,15 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 	if process_config.RetryInterval != 0 {
 		config.RetryInterval = process_config.RetryInterval
 	}
+	if process_config.Silent != nil {
+		config.Silent = process_config.Silent
+	}
 
-	var convErr error
-	ctx, convErr = RunExternalProcess(config)
+	processCtx, convErr := RunExternalProcess(config)
 	if convErr != nil {
+		if processCtx != nil {
+			ctx = processCtx
+		}
 		log.Printf("Video conversion for %s failed: %v", recording_config.OutputFile, convErr)
 	}
 
@@ -197,7 +205,12 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 	if err != nil {
 		log.Fatalf("Failed to glob snapshot images for removal: %v", err)
 	}
+	log.Printf("Removing %d vncsnapshot image(s)...", len(matches))
 	for _, path := range matches {
+		if ctx.Err() != nil {
+			log.Printf("Stopping vncsnapshot image cleanup early due to interruption: %v", ctx.Err())
+			return ctx
+		}
 		err := os.RemoveAll(path)
 		if err != nil {
 			log.Printf("Failed to remove snapshot image %v: %v", path, err)
@@ -208,21 +221,7 @@ func RunFfmpegVideoGenerationProcess(vm_config VirtualMachineConfig, ctx context
 }
 
 func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) error {
-	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh")
-	args := []string{
-		scriptPath,
-		"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir,
-		"--build-output-dir", getDarwinQemuBuildOutputDir(config),
-		"--arch", config.Arch,
-		"--ubuntu-type", config.UbuntuType,
-		"--vnc-port", fmt.Sprintf("%d", config.VncPort),
-		"--cpus", getVmCpuCountString(config),
-		"--memory", fmt.Sprintf("%d", getVmMemoryMB(config)),
-	}
-	if config.Headless {
-		args = append(args, "--headless")
-	}
-	return RunBuildScript(config, "bash", args)
+	return runQemuUbuntuBuild(config, "build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh")
 }
 
 func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) error {
@@ -238,6 +237,9 @@ func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) error {
 	}
 	if config.Headless {
 		args = append(args, "--headless")
+	}
+	if config.Verbose {
+		args = append(args, "--verbose")
 	}
 	return RunBuildScript(config, "bash", args)
 }

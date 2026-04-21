@@ -33,12 +33,3 @@ autoinstall:
   apt:
     fallback: offline-install
     geoip: false
-  packages:
-    - openssh-server
-    - linux-virtual
-    - linux-tools-virtual
-    - linux-tools-generic
-    - linux-cloud-tools-common
-    - net-tools
-    - qemu-guest-agent
-    - spice-vdagent

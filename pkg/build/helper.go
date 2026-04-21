@@ -94,6 +94,10 @@ func createHypervTempDir(dirs *Directories) error {
 	return os.MkdirAll(tempPath, 0755)
 }
 
-func getDarwinQemuBuildOutputDir(config VirtualMachineConfig) string {
+func getQemuBuildOutputDir(config VirtualMachineConfig) string {
 	return filepath.Join("/tmp", "dev-alchemy", "qemu-out-"+GenerateVirtualMachineSlug(&config))
+}
+
+func getDarwinQemuBuildOutputDir(config VirtualMachineConfig) string {
+	return getQemuBuildOutputDir(config)
 }

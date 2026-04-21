@@ -20,6 +20,8 @@ import (
 // Implementations should honour ctx.Done() so they can abort early.
 type buildRunner func(ctx context.Context, vm alchemy_build.VirtualMachineConfig) error
 
+var inspectBuildArtifactExists = alchemy_build.BuildArtifactsExistQuiet
+
 func isBuildSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	switch vm.HostOs {
 	case alchemy_build.HostOsDarwin:
@@ -35,6 +37,9 @@ func isBuildSupported(vm alchemy_build.VirtualMachineConfig) bool {
 		default:
 			return false
 		}
+	case alchemy_build.HostOsLinux:
+		return vm.VirtualizationEngine == alchemy_build.VirtualizationEngineQemu &&
+			vm.OS == "ubuntu"
 	default:
 		return false
 	}
@@ -211,6 +216,13 @@ func runBuild(vm alchemy_build.VirtualMachineConfig) error {
 				return alchemy_build.RunVirtualBoxWindowsBuildOnWindows(vm)
 			}
 		}
+	case alchemy_build.HostOsLinux:
+		switch vm.VirtualizationEngine {
+		case alchemy_build.VirtualizationEngineQemu:
+			if vm.OS == "ubuntu" {
+				return alchemy_build.RunQemuUbuntuBuildOnLinux(vm)
+			}
+		}
 	}
 
 	return fmt.Errorf(
@@ -223,12 +235,32 @@ func runBuild(vm alchemy_build.VirtualMachineConfig) error {
 	)
 }
 
+func buildArtifactState(vm alchemy_build.VirtualMachineConfig) (string, error) {
+	artifactsExist, err := inspectBuildArtifactExists(vm)
+	if err != nil {
+		return "", fmt.Errorf("failed to check build artifacts for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+	}
+	if artifactsExist {
+		return "exists", nil
+	}
+	return "missing", nil
+}
+
+func buildListRow(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
+	artifactState, err := buildArtifactState(vm)
+	if err != nil {
+		return nil, err
+	}
+	return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, artifactState}, nil
+}
+
 var (
-	arch        string
-	parallel    int
-	headless    bool
-	noCache     bool
-	buildEngine string
+	arch         string
+	parallel     int
+	headless     bool
+	noCache      bool
+	buildVerbose bool
+	buildEngine  string
 )
 
 func printAvailableBuildCombinations() error {
@@ -240,10 +272,8 @@ func printAvailableBuildCombinations() error {
 		fmt.Sprintf("Available build combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
 		"No build combinations are available for the current host OS.",
 		vms,
-		[]string{"OS", "Type", "Arch"},
-		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
-			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch}, nil
-		},
+		[]string{"OS", "Type", "Arch", "Build"},
+		buildListRow,
 	); err != nil {
 		return err
 	}
@@ -293,6 +323,7 @@ Example:
 			fmt.Printf("🔧 Building all available stable VM configurations with %d parallel builds\n", parallel)
 			for i := range available_virtual_machines {
 				available_virtual_machines[i].NoCache = noCache
+				available_virtual_machines[i].Verbose = buildVerbose
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -345,6 +376,7 @@ Example:
 		VirtualMachineConfig.VncPort = port
 		VirtualMachineConfig.Headless = headless
 		VirtualMachineConfig.NoCache = noCache
+		VirtualMachineConfig.Verbose = buildVerbose
 
 		if err := runBuild(VirtualMachineConfig); err != nil {
 			fmt.Printf("❌ Build failed for OS: %s, Type: %s, Architecture: %s — %v\n", osName, osType, arch, err)
@@ -370,5 +402,6 @@ func init() {
 	buildCmd.Flags().StringVar(&buildEngine, "engine", "", "Virtualization engine to use when multiple build targets share the same OS/type/arch (e.g., hyperv, virtualbox)")
 	buildCmd.Flags().IntVarP(&parallel, "parallel", "p", 1, "Number of parallel builds to run when building all VMs")
 	buildCmd.Flags().BoolVar(&headless, "headless", false, "Run QEMU in headless mode (no GUI, VNC only)")
+	buildCmd.Flags().BoolVarP(&buildVerbose, "verbose", "v", false, "Enable verbose Packer logging (sets PACKER_LOG=1)")
 	buildCmd.Flags().BoolVar(&noCache, "no-cache", false, "Force a rebuild even when the build artifact already exists")
 }
