@@ -57,11 +57,11 @@ func installCommandForHost(hostOs alchemy_build.HostOsType, projectDir string, o
 			scriptPath: scriptPath,
 		}, nil
 	case alchemy_build.HostOsWindows:
-		if options.withGo {
-			return installCommandSpec{}, fmt.Errorf("install --with-go is not supported for host OS: %s", hostOs)
-		}
 		scriptPath := filepath.Join(projectDir, "scripts", "windows", "dev-alchemy-self-setup.ps1")
 		args := []string{"-ExecutionPolicy", "Bypass", "-File", scriptPath}
+		if options.withGo {
+			args = append(args, "-WithGo")
+		}
 		if options.virtualBox {
 			args = append(args, "-VirtualBox")
 		}

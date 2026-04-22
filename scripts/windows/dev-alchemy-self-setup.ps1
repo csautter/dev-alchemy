@@ -1,4 +1,5 @@
 param(
+    [switch]$WithGo,
     [switch]$VirtualBox
 )
 
@@ -36,7 +37,7 @@ $cygwinPackages = @(
     "gcc-core",
     "gcc-g++",
     "libffi-devel",
-    "openssl-devel",
+    "libssl-devel",
     "sshpass"
 )
 
@@ -44,6 +45,42 @@ function Test-IsAdministrator {
     return ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
         [Security.Principal.WindowsBuiltInRole] "Administrator"
     )
+}
+
+function Invoke-SelfElevated {
+    $scriptPath = $PSCommandPath
+    if (-not $scriptPath) {
+        $scriptPath = $MyInvocation.MyCommand.Path
+    }
+    if (-not $scriptPath) {
+        throw "Unable to determine the installer script path for elevation."
+    }
+
+    $argumentList = @(
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $scriptPath
+    )
+    if ($WithGo) {
+        $argumentList += "-WithGo"
+    }
+    if ($VirtualBox) {
+        $argumentList += "-VirtualBox"
+    }
+
+    Write-Output "Requesting administrator privileges through UAC..."
+
+    try {
+        $process = Start-Process -FilePath "powershell.exe" -ArgumentList $argumentList -Verb RunAs -WorkingDirectory (Get-Location).Path -Wait -PassThru
+    } catch [System.ComponentModel.Win32Exception] {
+        if ($_.Exception.NativeErrorCode -eq 1223) {
+            throw "Administrator privileges are required to continue. The UAC prompt was cancelled."
+        }
+        throw
+    }
+
+    exit $process.ExitCode
 }
 
 function Refresh-ProcessPath {
@@ -138,6 +175,62 @@ function Ensure-ChocolateyPackage {
     }
 
     Refresh-ProcessPath
+}
+
+function Ensure-GoInstallRootClean {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DesiredVersion
+    )
+
+    $goInstallRoot = "C:\Program Files\Go"
+    $goExePath = Join-Path $goInstallRoot "bin\go.exe"
+    $staleSwissMapPath = Join-Path $goInstallRoot "src\internal\abi\map_swiss.go"
+    $installedVersion = Get-ChocolateyInstalledVersion -PackageName "golang"
+
+    $shouldRemove = $false
+
+    if ($installedVersion -and $installedVersion -ne $DesiredVersion) {
+        Write-Output "Go $installedVersion detected. Removing the existing GOROOT before installing $DesiredVersion to avoid stale standard-library files."
+        $shouldRemove = $true
+    } elseif (Test-Path $staleSwissMapPath) {
+        Write-Output "A stale Go source file was detected at $staleSwissMapPath. Removing the existing GOROOT before reinstalling Go."
+        $shouldRemove = $true
+    } elseif ((-not $installedVersion) -and (Test-Path $goExePath)) {
+        Write-Output "An unmanaged Go installation was detected at $goInstallRoot. Removing it so the pinned Chocolatey install can start from a clean state."
+        $shouldRemove = $true
+    }
+
+    if (-not $shouldRemove) {
+        return
+    }
+
+    if (Test-Path $goInstallRoot) {
+        Remove-Item -Path $goInstallRoot -Recurse -Force
+    }
+
+    Refresh-ProcessPath
+}
+
+function Assert-GoToolchainLayout {
+    $goExe = Get-Command go -ErrorAction SilentlyContinue
+    if (-not $goExe) {
+        throw "Go was not found on PATH after installation."
+    }
+
+    $goRoot = (& go env GOROOT).Trim()
+    if (-not $goRoot) {
+        throw "Unable to determine GOROOT after installing Go."
+    }
+
+    $stalePaths = @(
+        (Join-Path $goRoot "src\internal\abi\map_swiss.go")
+    ) | Where-Object { Test-Path $_ }
+
+    if ($stalePaths.Count -gt 0) {
+        $staleList = $stalePaths -join ", "
+        throw "Detected stale Go standard-library source files after installation: $staleList. Remove $goRoot and reinstall Go."
+    }
 }
 
 function Get-CygwinRootDir {
@@ -269,12 +362,18 @@ function Ensure-CygwinPipPackage {
 }
 
 if (-not (Test-IsAdministrator)) {
-    throw "This script must be run as an Administrator."
+    Invoke-SelfElevated
 }
 
 Ensure-ChocolateyInstalled
 
-Ensure-ChocolateyPackage -PackageName "golang" -Version $golangVersion
+if ($WithGo) {
+    Ensure-GoInstallRootClean -DesiredVersion $golangVersion
+    Ensure-ChocolateyPackage -PackageName "golang" -Version $golangVersion
+    Assert-GoToolchainLayout
+} else {
+    Write-Output "Skipping Go installation because -WithGo was not specified."
+}
 Ensure-ChocolateyPackage -PackageName "git" -Version $gitVersion
 Ensure-ChocolateyPackage -PackageName "make" -Version $makeVersion
 Ensure-ChocolateyPackage -PackageName "packer" -Version $packerVersion
@@ -301,7 +400,9 @@ Ensure-CygwinPipPackage -PackageName "pywinrm" -Version $pywinrmVersion
 $bashExePath = Get-CygwinBashPath
 & $bashExePath -lc "python3 --version"
 & $bashExePath -lc "ansible --version"
-go version
+if ($WithGo) {
+    go version
+}
 git --version
 make --version
 packer version

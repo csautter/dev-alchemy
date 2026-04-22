@@ -70,6 +70,21 @@ func TestInstallCommandForHostWindowsWithVirtualBox(t *testing.T) {
 	}
 }
 
+func TestInstallCommandForHostWindowsWithGo(t *testing.T) {
+	projectDir := filepath.Join("tmp", "dev-alchemy")
+
+	spec, err := installCommandForHost(alchemy_build.HostOsWindows, projectDir, installCommandOptions{withGo: true})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	expectedScriptPath := filepath.Join(projectDir, "scripts", "windows", "dev-alchemy-self-setup.ps1")
+	expectedArgs := []string{"-ExecutionPolicy", "Bypass", "-File", expectedScriptPath, "-WithGo"}
+	if !reflect.DeepEqual(spec.args, expectedArgs) {
+		t.Fatalf("expected args %v, got %v", expectedArgs, spec.args)
+	}
+}
+
 func TestInstallCommandForHostLinux(t *testing.T) {
 	projectDir := filepath.Join("tmp", "dev-alchemy")
 
@@ -117,13 +132,6 @@ func TestInstallCommandForHostLinuxWithGo(t *testing.T) {
 	expectedArgs := []string{expectedScriptPath, "--with-go"}
 	if !reflect.DeepEqual(spec.args, expectedArgs) {
 		t.Fatalf("expected args %v, got %v", expectedArgs, spec.args)
-	}
-}
-
-func TestInstallCommandForHostWindowsWithGoUnsupported(t *testing.T) {
-	_, err := installCommandForHost(alchemy_build.HostOsWindows, "/tmp/dev-alchemy", installCommandOptions{withGo: true})
-	if err == nil {
-		t.Fatal("expected unsupported with-go error")
 	}
 }
 
