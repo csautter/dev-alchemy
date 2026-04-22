@@ -92,6 +92,7 @@ const (
 var (
 	windowsIPv4Regex   = regexp.MustCompile(`(?mi)IPv4 Address[^:]*:\s*((?:\d{1,3}\.){3}\d{1,3})`)
 	linuxIPv4Regex     = regexp.MustCompile(`(?m)\b((?:\d{1,3}\.){3}\d{1,3})\b`)
+	sshConfigHostRegex = regexp.MustCompile(`(?mi)^\s*HostName\s+([^\s#]+)\s*$`)
 	utmMacAddressRegex = regexp.MustCompile(`(?s)<key>MacAddress</key>\s*<string>([^<]+)</string>`)
 	arpEntryRegex      = regexp.MustCompile(`(?i)\((\d{1,3}(?:\.\d{1,3}){3})\)\s+at\s+([0-9a-f:-]+|<incomplete>)`)
 	loopbackAddressSet = map[string]struct{}{
@@ -625,6 +626,20 @@ func discoverWindowsVagrantIPv4(vagrantDir string, env []string) (string, error)
 }
 
 func discoverLinuxVagrantIPv4(vagrantDir string, env []string) (string, error) {
+	sshConfigOutput, sshConfigErr := runProvisionCommandWithCombinedOutputWithEnv(
+		vagrantDir,
+		3*time.Minute,
+		"vagrant",
+		[]string{"ssh-config"},
+		env,
+	)
+	if sshConfigErr == nil {
+		ip, parseErr := extractLinuxIPv4FromSSHConfig(sshConfigOutput)
+		if parseErr == nil {
+			return ip, nil
+		}
+	}
+
 	output, err := runProvisionCommandWithCombinedOutputWithEnv(
 		vagrantDir,
 		3*time.Minute,
@@ -661,6 +676,31 @@ func extractWindowsIPv4FromIPConfig(output string) (string, error) {
 	}
 
 	return "", errors.New("only loopback or invalid IPv4 candidates found in command output")
+}
+
+func extractLinuxIPv4FromSSHConfig(output string) (string, error) {
+	matches := sshConfigHostRegex.FindAllStringSubmatch(output, -1)
+	if len(matches) == 0 {
+		return "", errors.New("no HostName entry found in ssh-config output")
+	}
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		hostName := strings.TrimSpace(match[1])
+		parsedIP := net.ParseIP(hostName)
+		if parsedIP == nil {
+			continue
+		}
+		ip := parsedIP.String()
+		if _, isLoopback := loopbackAddressSet[ip]; isLoopback {
+			continue
+		}
+		return ip, nil
+	}
+
+	return "", errors.New("no non-loopback IPv4 address found in ssh-config HostName entries")
 }
 
 func extractLinuxIPv4FromHostOutput(output string) (string, error) {

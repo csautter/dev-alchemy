@@ -43,7 +43,9 @@ func TestDiscoverLinuxVagrantIPv4_UsesProvidedVagrantEnv(t *testing.T) {
 		runProvisionCommandWithCombinedOutputWithEnv = previousRunner
 	})
 
+	callCount := 0
 	runProvisionCommandWithCombinedOutputWithEnv = func(workingDir string, timeout time.Duration, executable string, args []string, extraEnv []string) (string, error) {
+		callCount++
 		if workingDir != "vagrant-dir" {
 			t.Fatalf("expected working directory to be passed through, got %q", workingDir)
 		}
@@ -53,13 +55,13 @@ func TestDiscoverLinuxVagrantIPv4_UsesProvidedVagrantEnv(t *testing.T) {
 		if timeout != 3*time.Minute {
 			t.Fatalf("expected 3 minute timeout, got %s", timeout)
 		}
-		if strings.Join(args, " ") != "ssh -c hostname -I" {
-			t.Fatalf("expected ssh hostname lookup args, got %v", args)
+		if strings.Join(args, " ") != "ssh-config" {
+			t.Fatalf("expected ssh-config lookup args, got %v", args)
 		}
 		if len(extraEnv) != 1 || extraEnv[0] != "VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer" {
 			t.Fatalf("expected Vagrant env to be forwarded, got %v", extraEnv)
 		}
-		return "127.0.0.1 172.25.125.159\n", nil
+		return "Host default\n  HostName 172.25.125.159\n", nil
 	}
 
 	ip, err := discoverLinuxVagrantIPv4("vagrant-dir", []string{"VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer"})
@@ -68,6 +70,41 @@ func TestDiscoverLinuxVagrantIPv4_UsesProvidedVagrantEnv(t *testing.T) {
 	}
 	if ip != "172.25.125.159" {
 		t.Fatalf("expected discovered IP 172.25.125.159, got %q", ip)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected ssh-config lookup to avoid fallback, got %d calls", callCount)
+	}
+}
+
+func TestDiscoverLinuxVagrantIPv4_FallsBackToSSHCommandWhenSSHConfigLacksIP(t *testing.T) {
+	previousRunner := runProvisionCommandWithCombinedOutputWithEnv
+	t.Cleanup(func() {
+		runProvisionCommandWithCombinedOutputWithEnv = previousRunner
+	})
+
+	var calls []string
+	runProvisionCommandWithCombinedOutputWithEnv = func(workingDir string, timeout time.Duration, executable string, args []string, extraEnv []string) (string, error) {
+		calls = append(calls, strings.Join(args, " "))
+		switch strings.Join(args, " ") {
+		case "ssh-config":
+			return "Host default\n  HostName localhost\n", nil
+		case "ssh -c hostname -I":
+			return "127.0.0.1 172.25.125.159\n", nil
+		default:
+			t.Fatalf("unexpected vagrant args: %v", args)
+			return "", nil
+		}
+	}
+
+	ip, err := discoverLinuxVagrantIPv4("vagrant-dir", []string{"VAGRANT_DOTFILE_PATH=.vagrant/linux-ubuntu-desktop-packer"})
+	if err != nil {
+		t.Fatalf("discoverLinuxVagrantIPv4 returned error: %v", err)
+	}
+	if ip != "172.25.125.159" {
+		t.Fatalf("expected discovered IP 172.25.125.159, got %q", ip)
+	}
+	if strings.Join(calls, " -> ") != "ssh-config -> ssh -c hostname -I" {
+		t.Fatalf("expected ssh-config fallback sequence, got %v", calls)
 	}
 }
 
@@ -1292,6 +1329,24 @@ default:
 	ip, err := extractLinuxIPv4FromHostOutput(output)
 	if err != nil {
 		t.Fatalf("expected IP extraction to succeed, got error: %v", err)
+	}
+	if ip != "172.24.78.254" {
+		t.Fatalf("expected 172.24.78.254, got %s", ip)
+	}
+}
+
+func TestExtractLinuxIPv4FromSSHConfig(t *testing.T) {
+	output := `
+Host default
+  HostName 127.0.0.1
+
+Host vm
+  HostName 172.24.78.254
+`
+
+	ip, err := extractLinuxIPv4FromSSHConfig(output)
+	if err != nil {
+		t.Fatalf("expected ssh-config IP extraction to succeed, got error: %v", err)
 	}
 	if ip != "172.24.78.254" {
 		t.Fatalf("expected 172.24.78.254, got %s", ip)
