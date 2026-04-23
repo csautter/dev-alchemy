@@ -94,7 +94,7 @@ const (
 	ubuntuLiveServerArm64SHA256  = "2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
 
 	// renovate: datasource=custom.virtio-win depName=virtio-win versioning=loose
-	virtioWinVersion = "0.1.266-1"
+	virtioWinVersion = "0.1.285-1"
 )
 
 func ubuntuLiveServerISOName(arch, version string) string {
