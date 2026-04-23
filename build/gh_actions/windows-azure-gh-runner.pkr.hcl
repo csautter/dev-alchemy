@@ -63,7 +63,7 @@ try {
 '@
 Set-Content -Path 'C:\AzureData\bootstrap.ps1' -Value $bootstrap
 EOF
-  windows_setup_command = var.virtualization_flavor == "virtualbox" ? "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1 -VirtualBox" : "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1"
+  windows_setup_command = var.virtualization_flavor == "virtualbox" ? "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1 -WithGo -VirtualBox" : "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1 -WithGo"
 
 }
 
@@ -127,6 +127,8 @@ build {
 
       # install host build packages via the shared windows setup script
       local.windows_setup_command,
+      "python --version",
+      "go version",
       # loader script to execute custom data on first boot
       "New-Item -Path 'C:\\AzureData' -ItemType Directory -Force",
       local.bootstrap_script,

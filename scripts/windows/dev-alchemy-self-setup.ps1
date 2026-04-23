@@ -15,6 +15,8 @@ $makeVersion = "4.4.1"
 $packerVersion = "1.15.0"
 # renovate: datasource=nuget depName=azure-cli versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $azureCliVersion = "2.85.0"
+# renovate: datasource=nuget depName=python314 versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
+$nativePythonVersion = "3.13.13"
 # renovate: datasource=nuget depName=cygwin versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $cygwinVersion = "3.6.7"
 # renovate: datasource=nuget depName=cyg-get versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
@@ -233,6 +235,13 @@ function Assert-GoToolchainLayout {
     }
 }
 
+function Assert-NativePythonAvailable {
+    $pythonExe = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $pythonExe) {
+        throw "Native Windows Python was not found on PATH after installation."
+    }
+}
+
 function Get-CygwinRootDir {
     $registryKeys = @(
         "HKLM:\SOFTWARE\Cygwin\setup",
@@ -378,6 +387,8 @@ Ensure-ChocolateyPackage -PackageName "git" -Version $gitVersion
 Ensure-ChocolateyPackage -PackageName "make" -Version $makeVersion
 Ensure-ChocolateyPackage -PackageName "packer" -Version $packerVersion
 Ensure-ChocolateyPackage -PackageName "azure-cli" -Version $azureCliVersion
+Ensure-ChocolateyPackage -PackageName "python314" -Version $nativePythonVersion
+Assert-NativePythonAvailable
 Ensure-ChocolateyPackage -PackageName "cygwin" -Version $cygwinVersion -ExtraArgs @("--params", "`"/InstallDir:$cygwinInstallRoot /NoStartMenu`"")
 Ensure-ChocolateyPackage -PackageName "cyg-get" -Version $cygGetVersion
 
@@ -398,6 +409,7 @@ Ensure-CygwinPipPackage -PackageName "ansible" -Version $ansibleVersion
 Ensure-CygwinPipPackage -PackageName "pywinrm" -Version $pywinrmVersion
 
 $bashExePath = Get-CygwinBashPath
+python --version
 & $bashExePath -lc "python3 --version"
 & $bashExePath -lc "ansible --version"
 if ($WithGo) {
