@@ -52,6 +52,41 @@ github_api() {
 	echo "$http_code"
 }
 
+request_runner_registration_token_via_broker() {
+	local output_file="$1"
+	local request_file="${RUNNER_STATE_DIR}/registration-token-request.json"
+	local access_token
+	local http_code
+
+	require_command az
+	[[ -n "$MY_FUNCTION_APP_NAME" ]] || fail "function-app-name is required to create a runner registration token via the broker."
+	[[ -n "$MY_AZURE_CLIENT_ID" ]] || fail "azure-client-id is required to create a runner registration token via the broker."
+
+	jq -n --arg repo "$MY_GITHUB_REPOSITORY" '{repo: $repo}' > "$request_file"
+
+	access_token="$(
+		az account get-access-token \
+			--resource "api://${MY_AZURE_CLIENT_ID}" \
+			--query accessToken \
+			--output tsv
+	)" || fail "Failed to obtain an Azure access token for the runner broker."
+
+	http_code="$(
+		curl \
+			-sS \
+			-L \
+			-X POST \
+			-o "$output_file" \
+			-w "%{http_code}" \
+			-H "Authorization: Bearer ${access_token}" \
+			-H "Content-Type: application/json" \
+			--data @"$request_file" \
+			"https://${MY_FUNCTION_APP_NAME}.azurewebsites.net/api/request_runner_registration_token"
+	)"
+
+	echo "$http_code"
+}
+
 hetzner_api() {
 	local method="$1"
 	local endpoint="$2"
@@ -117,6 +152,8 @@ trap cleanup_tmp EXIT
 MY_MODE="${INPUT_MODE:-}"
 [[ "$MY_MODE" == "create" || "$MY_MODE" == "delete" ]] || fail "mode must be 'create' or 'delete'."
 
+MY_AZURE_CLIENT_ID="${INPUT_AZURE_CLIENT_ID:-}"
+MY_FUNCTION_APP_NAME="${INPUT_FUNCTION_APP_NAME:-}"
 MY_GITHUB_TOKEN="${INPUT_GITHUB_TOKEN:-}"
 MY_GITHUB_RUNNER_REGISTRATION_TOKEN="${INPUT_RUNNER_REGISTRATION_TOKEN:-}"
 
@@ -224,19 +261,29 @@ if [[ "$MY_MODE" == "delete" ]]; then
 fi
 
 if [[ -z "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" ]]; then
-	[[ -n "$MY_GITHUB_TOKEN" ]] || fail "Either github-token or runner-registration-token is required in create mode."
-
 	registration_file="${RUNNER_STATE_DIR}/registration-token.json"
-	http_code="$(github_api "POST" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners/registration-token" "$registration_file")"
-	if [[ "$http_code" != "201" ]]; then
-		echo "GitHub registration token response (${http_code}):" >&2
-		cat "$registration_file" >&2 || true
-		fail "Failed to create GitHub runner registration token."
+	if [[ -n "$MY_FUNCTION_APP_NAME" || -n "$MY_AZURE_CLIENT_ID" ]]; then
+		http_code="$(request_runner_registration_token_via_broker "$registration_file")"
+		if [[ "$http_code" != "201" ]]; then
+			echo "Runner broker registration token response (${http_code}):" >&2
+			cat "$registration_file" >&2 || true
+			fail "Failed to create GitHub runner registration token via the runner broker."
+		fi
+	else
+		[[ -n "$MY_GITHUB_TOKEN" ]] || fail "Either runner-registration-token, function-app-name with azure-client-id, or github-token is required in create mode."
+
+		http_code="$(github_api "POST" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners/registration-token" "$registration_file")"
+		if [[ "$http_code" != "201" ]]; then
+			echo "GitHub registration token response (${http_code}):" >&2
+			cat "$registration_file" >&2 || true
+			fail "Failed to create GitHub runner registration token."
+		fi
 	fi
 
 	MY_GITHUB_RUNNER_REGISTRATION_TOKEN="$(jq -r '.token' "$registration_file")"
-	[[ -n "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" && "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" != "null" ]] || fail "GitHub registration token response did not include a token."
+	[[ -n "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" && "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" != "null" ]] || fail "Runner registration token response did not include a token."
 fi
+echo "::add-mask::${MY_GITHUB_RUNNER_REGISTRATION_TOKEN}"
 
 MY_INSTALL_SH_BASE64="$(base64 --wrap=0 < "$INSTALL_SCRIPT")"
 MY_PRE_RUNNER_SCRIPT_BASE64="$(printf '%s' "$MY_PRE_RUNNER_SCRIPT" | base64 --wrap=0)"

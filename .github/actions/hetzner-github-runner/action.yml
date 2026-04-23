@@ -11,6 +11,14 @@ inputs:
   runner-registration-token:
     description: "Short-lived GitHub runner registration token used in create mode"
     required: false
+  function-app-name:
+    description: "Azure Function App name used to mint a runner registration token on demand in create mode"
+    required: false
+    default: ""
+  azure-client-id:
+    description: "Azure application client ID used as the function app API audience in create mode"
+    required: false
+    default: ""
   hcloud-token:
     description: "Hetzner Cloud API token"
     required: true
@@ -90,9 +98,11 @@ runs:
         INPUT_DELETE_WAIT: ${{ inputs.delete-wait }}
         INPUT_ENABLE_IPV4: ${{ inputs.enable-ipv4 }}
         INPUT_ENABLE_IPV6: ${{ inputs.enable-ipv6 }}
+        INPUT_FUNCTION_APP_NAME: ${{ inputs.function-app-name }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
         INPUT_RUNNER_REGISTRATION_TOKEN: ${{ inputs.runner-registration-token }}
         INPUT_HCLOUD_TOKEN: ${{ inputs.hcloud-token }}
+        INPUT_AZURE_CLIENT_ID: ${{ inputs.azure-client-id }}
         INPUT_IMAGE: ${{ inputs.image }}
         INPUT_LOCATION: ${{ inputs.location }}
         INPUT_MODE: ${{ inputs.mode }}
