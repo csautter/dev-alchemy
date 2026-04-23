@@ -693,7 +693,11 @@ func extractLinuxIPv4FromSSHConfig(output string) (string, error) {
 		if parsedIP == nil {
 			continue
 		}
-		ip := parsedIP.String()
+		ipv4 := parsedIP.To4()
+		if ipv4 == nil {
+			continue
+		}
+		ip := ipv4.String()
 		if _, isLoopback := loopbackAddressSet[ip]; isLoopback {
 			continue
 		}

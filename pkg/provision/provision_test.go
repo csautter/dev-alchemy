@@ -87,7 +87,7 @@ func TestDiscoverLinuxVagrantIPv4_FallsBackToSSHCommandWhenSSHConfigLacksIP(t *t
 		calls = append(calls, strings.Join(args, " "))
 		switch strings.Join(args, " ") {
 		case "ssh-config":
-			return "Host default\n  HostName localhost\n", nil
+			return "Host default\n  HostName ::1\n", nil
 		case "ssh -c hostname -I":
 			return "127.0.0.1 172.25.125.159\n", nil
 		default:
@@ -1339,6 +1339,24 @@ func TestExtractLinuxIPv4FromSSHConfig(t *testing.T) {
 	output := `
 Host default
   HostName 127.0.0.1
+
+Host vm
+  HostName 172.24.78.254
+`
+
+	ip, err := extractLinuxIPv4FromSSHConfig(output)
+	if err != nil {
+		t.Fatalf("expected ssh-config IP extraction to succeed, got error: %v", err)
+	}
+	if ip != "172.24.78.254" {
+		t.Fatalf("expected 172.24.78.254, got %s", ip)
+	}
+}
+
+func TestExtractLinuxIPv4FromSSHConfig_IgnoresIPv6Entries(t *testing.T) {
+	output := `
+Host default
+  HostName ::1
 
 Host vm
   HostName 172.24.78.254
