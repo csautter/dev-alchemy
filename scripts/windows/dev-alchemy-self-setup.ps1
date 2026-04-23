@@ -15,7 +15,7 @@ $makeVersion = "4.4.1"
 $packerVersion = "1.15.0"
 # renovate: datasource=nuget depName=azure-cli versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $azureCliVersion = "2.85.0"
-# renovate: datasource=nuget depName=python314 versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
+# renovate: datasource=nuget depName=python313 versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $nativePythonVersion = "3.13.13"
 # renovate: datasource=nuget depName=cygwin versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $cygwinVersion = "3.6.7"
@@ -171,12 +171,29 @@ function Ensure-ChocolateyPackage {
         $args += $ExtraArgs
     }
 
-    & choco @args
-    if ($LASTEXITCODE -notin @(0, 1641, 3010)) {
-        throw "Chocolatey failed to $command $PackageName $Version with exit code $LASTEXITCODE."
-    }
+    $maxAttempts = 3
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $chocoOutput = & choco @args 2>&1
+        $exitCode = $LASTEXITCODE
 
-    Refresh-ProcessPath
+        foreach ($line in $chocoOutput) {
+            Write-Output $line
+        }
+
+        if ($exitCode -in @(0, 1641, 3010)) {
+            Refresh-ProcessPath
+            return
+        }
+
+        $shouldRetry = $attempt -lt $maxAttempts -and (Test-ShouldRetryChocolateyCommand -OutputLines $chocoOutput)
+        if (-not $shouldRetry) {
+            throw "Chocolatey failed to $command $PackageName $Version with exit code $exitCode."
+        }
+
+        $sleepSeconds = 5 * $attempt
+        Write-Warning "Chocolatey failed to $command $PackageName $Version with exit code $exitCode. Retrying in $sleepSeconds seconds (attempt $($attempt + 1) of $maxAttempts)..."
+        Start-Sleep -Seconds $sleepSeconds
+    }
 }
 
 function Ensure-GoInstallRootClean {
@@ -240,6 +257,38 @@ function Assert-NativePythonAvailable {
     if (-not $pythonExe) {
         throw "Native Windows Python was not found on PATH after installation."
     }
+}
+
+function Get-NativePythonChocolateyPackageName {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    $versionMatch = [regex]::Match($Version, "^(?<major>\d+)\.(?<minor>\d+)")
+    if (-not $versionMatch.Success) {
+        throw "Unable to derive the Chocolatey Python package name from version '$Version'."
+    }
+
+    return "python{0}{1}" -f $versionMatch.Groups["major"].Value, $versionMatch.Groups["minor"].Value
+}
+
+function Test-ShouldRetryChocolateyCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$OutputLines
+    )
+
+    $combinedOutput = ($OutputLines | Out-String)
+    return (
+        $combinedOutput -match "Response status code does not indicate success:\s+(408|429|5\d\d)" -or
+        $combinedOutput -match "Unable to connect to source" -or
+        $combinedOutput -match "The operation has timed out" -or
+        $combinedOutput -match "temporarily unavailable" -or
+        $combinedOutput -match "The remote name could not be resolved" -or
+        $combinedOutput -match "An error occurred while sending the request" -or
+        $combinedOutput -match "The request was aborted"
+    )
 }
 
 function Get-CygwinRootDir {
@@ -387,7 +436,8 @@ Ensure-ChocolateyPackage -PackageName "git" -Version $gitVersion
 Ensure-ChocolateyPackage -PackageName "make" -Version $makeVersion
 Ensure-ChocolateyPackage -PackageName "packer" -Version $packerVersion
 Ensure-ChocolateyPackage -PackageName "azure-cli" -Version $azureCliVersion
-Ensure-ChocolateyPackage -PackageName "python314" -Version $nativePythonVersion
+$nativePythonPackageName = Get-NativePythonChocolateyPackageName -Version $nativePythonVersion
+Ensure-ChocolateyPackage -PackageName $nativePythonPackageName -Version $nativePythonVersion
 Assert-NativePythonAvailable
 Ensure-ChocolateyPackage -PackageName "cygwin" -Version $cygwinVersion -ExtraArgs @("--params", "`"/InstallDir:$cygwinInstallRoot /NoStartMenu`"")
 Ensure-ChocolateyPackage -PackageName "cyg-get" -Version $cygGetVersion
