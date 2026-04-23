@@ -36,4 +36,5 @@ jobs:
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
         env:
+          RENOVATE_GIT_AUTHOR: ${{ secrets.RENOVATE_GIT_AUTHOR }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
