@@ -83,13 +83,6 @@ BACKSPACE="guess"
 EOF
 	fi
 
-	if command -v localectl >/dev/null 2>&1; then
-		localectl set-x11-keymap de pc105
-	fi
-
-	if command -v setupcon >/dev/null 2>&1; then
-		setupcon --force
-	fi
 }
 
 resolve_latest_runner_version() {
