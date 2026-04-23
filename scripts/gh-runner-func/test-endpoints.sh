@@ -37,6 +37,35 @@ require_cmd() {
   fi
 }
 
+PYTHON_CMD=()
+
+resolve_python3_cmd() {
+  local -a candidate=()
+
+  for candidate_name in python3 python python.exe python3.exe; do
+    if command -v "$candidate_name" >/dev/null 2>&1; then
+      candidate=("$candidate_name")
+      if "${candidate[@]}" -c 'import sys; raise SystemExit(0 if sys.version_info.major >= 3 else 1)' >/dev/null 2>&1; then
+        PYTHON_CMD=("${candidate[@]}")
+        return 0
+      fi
+    fi
+  done
+
+  for launcher_name in py py.exe; do
+    if command -v "$launcher_name" >/dev/null 2>&1; then
+      candidate=("$launcher_name" -3)
+      if "${candidate[@]}" -c 'import sys' >/dev/null 2>&1; then
+        PYTHON_CMD=("${candidate[@]}")
+        return 0
+      fi
+    fi
+  done
+
+  echo "Python 3 was not found. Ensure python3, python, or py -3 is available on PATH." >&2
+  exit 1
+}
+
 FUNCTION_APP_NAME="${FUNCTION_APP_NAME:-}"
 API_CLIENT_ID="${API_CLIENT_ID:-}"
 REPO="${REPO:-csautter/dev-alchemy}"
@@ -199,6 +228,8 @@ if [[ "$REQUEST_RUNNER" == "true" ]]; then
 fi
 
 if [[ "$REQUEST_REGISTRATION_TOKEN" == "true" ]]; then
+  resolve_python3_cmd
+
   request_body=$(
     printf '{"repo":"%s"}' "$REPO"
   )
@@ -215,7 +246,7 @@ if [[ "$REQUEST_REGISTRATION_TOKEN" == "true" ]]; then
       --output json
   )"
 
-  RESPONSE_JSON="$response_json" python3 - <<'PY'
+  RESPONSE_JSON="$response_json" "${PYTHON_CMD[@]}" - <<'PY'
 import json
 import os
 
