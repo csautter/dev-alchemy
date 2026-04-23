@@ -174,11 +174,12 @@ through UAC if needed:
 
 ```powershell
 alchemy.exe install
+# optionally with Go and VirtualBox support:
+alchemy.exe install --with-go --virtualbox
 ```
 
 This runs
 [scripts/windows/dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1).
-Add `--with-go` when you also want the installer to upgrade or install Go.
 
 ### 3. Discover what your host supports
 
