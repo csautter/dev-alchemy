@@ -294,32 +294,35 @@ export MY_NAME
 export MY_SERVER_TYPE
 
 if [[ "$MY_MODE" == "delete" ]]; then
-	[[ -n "$MY_GITHUB_TOKEN" ]] || fail "github-token is required in delete mode."
 	[[ -n "$MY_SERVER_ID" ]] || fail "server-id is required in delete mode."
 	require_integer "$MY_SERVER_ID" "server-id"
 
 	echo "Deleting runner '${MY_NAME}' and server '${MY_SERVER_ID}'..."
 
-	runner_list_file="${RUNNER_STATE_DIR}/github-runners.json"
-	http_code="$(github_api "GET" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners" "$runner_list_file")"
-	if [[ "$http_code" == "200" ]]; then
-		runner_id="$(
-			jq -r --arg name "$MY_NAME" '.runners[]? | select(.name == $name) | .id' "$runner_list_file" | head -n 1
-		)"
+	if [[ -n "$MY_GITHUB_TOKEN" ]]; then
+		runner_list_file="${RUNNER_STATE_DIR}/github-runners.json"
+		http_code="$(github_api "GET" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners" "$runner_list_file")"
+		if [[ "$http_code" == "200" ]]; then
+			runner_id="$(
+				jq -r --arg name "$MY_NAME" '.runners[]? | select(.name == $name) | .id' "$runner_list_file" | head -n 1
+			)"
 
-		if [[ -n "$runner_id" && "$runner_id" != "null" ]]; then
-			delete_runner_file="${RUNNER_STATE_DIR}/delete-runner.json"
-			http_code="$(github_api "DELETE" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners/${runner_id}" "$delete_runner_file")"
-			if [[ "$http_code" != "204" && "$http_code" != "404" ]]; then
-				echo "GitHub delete runner response (${http_code}):" >&2
-				cat "$delete_runner_file" >&2 || true
-				echo "Warning: failed to delete GitHub runner '${MY_NAME}'. Continuing with server cleanup." >&2
+			if [[ -n "$runner_id" && "$runner_id" != "null" ]]; then
+				delete_runner_file="${RUNNER_STATE_DIR}/delete-runner.json"
+				http_code="$(github_api "DELETE" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners/${runner_id}" "$delete_runner_file")"
+				if [[ "$http_code" != "204" && "$http_code" != "404" ]]; then
+					echo "GitHub delete runner response (${http_code}):" >&2
+					cat "$delete_runner_file" >&2 || true
+					echo "Warning: failed to delete GitHub runner '${MY_NAME}'. Continuing with server cleanup." >&2
+				fi
 			fi
+		else
+			echo "GitHub list runners response (${http_code}):" >&2
+			cat "$runner_list_file" >&2 || true
+			echo "Warning: failed to list GitHub runners. Continuing with server cleanup." >&2
 		fi
 	else
-		echo "GitHub list runners response (${http_code}):" >&2
-		cat "$runner_list_file" >&2 || true
-		echo "Warning: failed to list GitHub runners. Continuing with server cleanup." >&2
+		echo "GitHub token not provided; skipping GitHub runner deregistration and continuing with server cleanup." >&2
 	fi
 
 	delete_attempt=1

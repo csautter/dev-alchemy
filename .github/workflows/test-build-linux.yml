@@ -112,15 +112,14 @@ jobs:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           FUNCTION_APP_NAME: ${{ secrets.FUNCTION_APP_NAME }}
-          GH_RUNNER_ADMIN_TOKEN: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          if [[ -n "${AZURE_CLIENT_ID}" && -n "${AZURE_SUBSCRIPTION_ID}" && -n "${AZURE_TENANT_ID}" && -n "${FUNCTION_APP_NAME}" && -n "${GH_RUNNER_ADMIN_TOKEN}" && -n "${HCLOUD_TOKEN}" ]]; then
+          if [[ -n "${AZURE_CLIENT_ID}" && -n "${AZURE_SUBSCRIPTION_ID}" && -n "${AZURE_TENANT_ID}" && -n "${FUNCTION_APP_NAME}" && -n "${HCLOUD_TOKEN}" ]]; then
             echo "use-hetzner=true" >> "${GITHUB_OUTPUT}"
-            echo "Hetzner runner broker and cleanup secrets are available; using Hetzner self-hosted runners for Linux QEMU builds."
+            echo "Hetzner runner broker and cloud access are available; using Hetzner self-hosted runners for Linux QEMU builds."
           else
             echo "use-hetzner=false" >> "${GITHUB_OUTPUT}"
-            echo "Hetzner runner broker or cleanup secrets are unavailable; falling back to GitHub-hosted Linux runners."
+            echo "Hetzner runner broker or cloud access is unavailable; falling back to GitHub-hosted Linux runners."
           fi
 
   test-packer-build-hosted:
@@ -645,17 +644,17 @@ jobs:
           echo "cleanup_required=${cleanup_required}" >> "${GITHUB_OUTPUT}"
 
       - name: Delete timed out amd64 Hetzner runner
-        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        if: always() && steps.watch_queue.outputs.cleanup_required == 'true'
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: delete
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
+          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN || github.token }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: ${{ needs.provision-hetzner-linux-amd64-runner.outputs.runner-label }}
           server-id: ${{ needs.provision-hetzner-linux-amd64-runner.outputs.server-id }}
 
       - name: Cancel workflow after amd64 queue timeout
-        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        if: always() && steps.watch_queue.outputs.cleanup_required == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -737,17 +736,17 @@ jobs:
           echo "cleanup_required=${cleanup_required}" >> "${GITHUB_OUTPUT}"
 
       - name: Delete timed out arm64 Hetzner runner
-        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        if: always() && steps.watch_queue.outputs.cleanup_required == 'true'
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: delete
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
+          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN || github.token }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: ${{ needs.provision-hetzner-linux-arm64-runner.outputs.runner-label }}
           server-id: ${{ needs.provision-hetzner-linux-arm64-runner.outputs.server-id }}
 
       - name: Cancel workflow after arm64 queue timeout
-        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        if: always() && steps.watch_queue.outputs.cleanup_required == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -775,16 +774,19 @@ jobs:
       - watch-hetzner-linux-amd64-runner-queue
     if: always() && (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
       - name: Delete amd64 Hetzner runner
-        if: needs.provision-hetzner-linux-amd64-runner.outputs.server-id != ''
+        if: always() && needs.provision-hetzner-linux-amd64-runner.outputs.server-id != ''
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: delete
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
+          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN || github.token }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: ${{ needs.provision-hetzner-linux-amd64-runner.outputs.runner-label }}
           server-id: ${{ needs.provision-hetzner-linux-amd64-runner.outputs.server-id }}
@@ -797,16 +799,19 @@ jobs:
       - watch-hetzner-linux-arm64-runner-queue
     if: always() && (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
       - name: Delete arm64 Hetzner runner
-        if: needs.provision-hetzner-linux-arm64-runner.outputs.server-id != ''
+        if: always() && needs.provision-hetzner-linux-arm64-runner.outputs.server-id != ''
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: delete
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
+          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN || github.token }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: ${{ needs.provision-hetzner-linux-arm64-runner.outputs.runner-label }}
           server-id: ${{ needs.provision-hetzner-linux-arm64-runner.outputs.server-id }}
