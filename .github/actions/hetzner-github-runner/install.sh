@@ -33,6 +33,42 @@ for cmd in curl gzip jq sed tar; do
 	command -v "$cmd" >/dev/null 2>&1 || fail "Required command '$cmd' was not found."
 done
 
+install_azure_cli() {
+	if command -v az >/dev/null 2>&1; then
+		echo "Azure CLI already installed: $(az version --query '\"azure-cli\"' -o tsv)"
+		return 0
+	fi
+
+	echo "Installing Azure CLI from Microsoft apt repository"
+	export DEBIAN_FRONTEND=noninteractive
+
+	apt-get update
+	apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+
+	install -d -m 0755 /etc/apt/keyrings
+	curl -sLS https://packages.microsoft.com/keys/microsoft.asc |
+		gpg --dearmor |
+		tee /etc/apt/keyrings/microsoft.gpg >/dev/null
+	chmod go+r /etc/apt/keyrings/microsoft.gpg
+
+	local az_dist
+	az_dist="$(lsb_release -cs)"
+	cat >/etc/apt/sources.list.d/azure-cli.sources <<EOF
+Types: deb
+URIs: https://packages.microsoft.com/repos/azure-cli/
+Suites: ${az_dist}
+Components: main
+Architectures: $(dpkg --print-architecture)
+Signed-by: /etc/apt/keyrings/microsoft.gpg
+EOF
+
+	apt-get update
+	apt-get install -y azure-cli
+
+	command -v az >/dev/null 2>&1 || fail "Azure CLI installation completed, but 'az' is still not available on PATH."
+	echo "Azure CLI installed: $(az version --query '\"azure-cli\"' -o tsv)"
+}
+
 case "$(uname -m)" in
 	x86_64|amd64)
 		RUNNER_ARCH="x64"
@@ -44,6 +80,8 @@ case "$(uname -m)" in
 		fail "Unsupported architecture '$(uname -m)'."
 		;;
 esac
+
+install_azure_cli()
 
 if [[ "$RUNNER_VERSION" == "latest" ]]; then
 	RUNNER_VERSION="$(
