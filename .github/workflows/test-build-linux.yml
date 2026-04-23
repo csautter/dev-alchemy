@@ -291,6 +291,7 @@ jobs:
           name: gh-linux-amd64-${{ github.run_id }}-${{ github.run_attempt }}
           image: ${{ inputs.hetzner_image || 'ubuntu-24.04' }}
           location: ${{ inputs.hetzner_location || 'nbg1' }}
+          runner-count: "2"
           runner-version: ${{ inputs.hetzner_runner_version || 'latest' }}
           server-type: ${{ inputs.hetzner_amd64_server_type || 'cpx32' }}
 
@@ -323,6 +324,7 @@ jobs:
           name: gh-linux-arm64-${{ github.run_id }}-${{ github.run_attempt }}
           image: ${{ inputs.hetzner_image || 'ubuntu-24.04' }}
           location: ${{ inputs.hetzner_location || 'nbg1' }}
+          runner-count: "2"
           runner-version: ${{ inputs.hetzner_runner_version || 'latest' }}
           server-type: ${{ inputs.hetzner_arm64_server_type || 'cax21' }}
 

@@ -45,6 +45,10 @@ inputs:
     description: "Runner installation directory"
     required: false
     default: "/actions-runner"
+  runner-count:
+    description: "Number of ephemeral runner instances to start on the server"
+    required: false
+    default: "1"
   pre-runner-script:
     description: "Shell commands to run on the server before the runner starts"
     required: false
@@ -108,6 +112,7 @@ runs:
         INPUT_MODE: ${{ inputs.mode }}
         INPUT_NAME: ${{ inputs.name }}
         INPUT_PRE_RUNNER_SCRIPT: ${{ inputs.pre-runner-script }}
+        INPUT_RUNNER_COUNT: ${{ inputs.runner-count }}
         INPUT_RUNNER_DIR: ${{ inputs.runner-dir }}
         INPUT_RUNNER_VERSION: ${{ inputs.runner-version }}
         INPUT_RUNNER_WAIT: ${{ inputs.runner-wait }}

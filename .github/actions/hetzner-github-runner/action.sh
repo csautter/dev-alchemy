@@ -21,6 +21,13 @@ require_integer() {
 	[[ "$value" =~ ^[0-9]+$ ]] || fail "$name must be an integer."
 }
 
+require_positive_integer() {
+	local value="$1"
+	local name="$2"
+	require_integer "$value" "$name"
+	(( value > 0 )) || fail "$name must be greater than zero."
+}
+
 require_boolean() {
 	local value="$1"
 	local name="$2"
@@ -164,6 +171,18 @@ request_runner_registration_token_via_broker() {
 	echo "$http_code"
 }
 
+create_runner_registration_token() {
+	local output_file="$1"
+
+	if [[ -n "$MY_FUNCTION_APP_NAME" || -n "$MY_AZURE_CLIENT_ID" ]]; then
+		request_runner_registration_token_via_broker "$output_file"
+		return
+	fi
+
+	[[ -n "$MY_GITHUB_TOKEN" ]] || fail "Either runner-registration-token, function-app-name with azure-client-id, or github-token is required in create mode."
+	github_api "POST" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners/registration-token" "$output_file"
+}
+
 hetzner_api() {
 	local method="$1"
 	local endpoint="$2"
@@ -250,6 +269,9 @@ MY_NAME="${INPUT_NAME:-gh-runner-$RANDOM}"
 MY_RUNNER_DIR="${INPUT_RUNNER_DIR:-/actions-runner}"
 [[ "$MY_RUNNER_DIR" =~ ^/([^/]+/)*[^/]+$ ]] || fail "runner-dir must be an absolute path without a trailing slash."
 
+MY_RUNNER_COUNT="${INPUT_RUNNER_COUNT:-1}"
+require_positive_integer "$MY_RUNNER_COUNT" "runner-count"
+
 MY_RUNNER_VERSION="${INPUT_RUNNER_VERSION:-latest}"
 if [[ "$MY_RUNNER_VERSION" != "latest" && ! "$MY_RUNNER_VERSION" =~ ^[0-9.]+$ ]]; then
 	fail "runner-version must be 'latest' or a version number without the 'v' prefix."
@@ -297,25 +319,30 @@ if [[ "$MY_MODE" == "delete" ]]; then
 	[[ -n "$MY_SERVER_ID" ]] || fail "server-id is required in delete mode."
 	require_integer "$MY_SERVER_ID" "server-id"
 
-	echo "Deleting runner '${MY_NAME}' and server '${MY_SERVER_ID}'..."
+	echo "Deleting runner host '${MY_NAME}' and server '${MY_SERVER_ID}'..."
 
 	if [[ -n "$MY_GITHUB_TOKEN" ]]; then
 		runner_list_file="${RUNNER_STATE_DIR}/github-runners.json"
 		http_code="$(github_api "GET" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners" "$runner_list_file")"
 		if [[ "$http_code" == "200" ]]; then
-			runner_id="$(
-				jq -r --arg name "$MY_NAME" '.runners[]? | select(.name == $name) | .id' "$runner_list_file" | head -n 1
+			runner_ids="$(
+				jq -r --arg name "$MY_NAME" '
+					.runners[]?
+					| select(.name == $name or (.name | startswith($name + "-slot-")))
+					| .id
+				' "$runner_list_file"
 			)"
 
-			if [[ -n "$runner_id" && "$runner_id" != "null" ]]; then
+			while IFS= read -r runner_id; do
+				[[ -n "$runner_id" && "$runner_id" != "null" ]] || continue
 				delete_runner_file="${RUNNER_STATE_DIR}/delete-runner.json"
 				http_code="$(github_api "DELETE" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners/${runner_id}" "$delete_runner_file")"
 				if [[ "$http_code" != "204" && "$http_code" != "404" ]]; then
 					echo "GitHub delete runner response (${http_code}):" >&2
 					cat "$delete_runner_file" >&2 || true
-					echo "Warning: failed to delete GitHub runner '${MY_NAME}'. Continuing with server cleanup." >&2
+					echo "Warning: failed to delete GitHub runner id '${runner_id}' for host '${MY_NAME}'. Continuing with server cleanup." >&2
 				fi
-			fi
+			done <<< "$runner_ids"
 		else
 			echo "GitHub list runners response (${http_code}):" >&2
 			cat "$runner_list_file" >&2 || true
@@ -342,33 +369,95 @@ if [[ "$MY_MODE" == "delete" ]]; then
 	done
 fi
 
-if [[ -z "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" ]]; then
-	registration_file="${RUNNER_STATE_DIR}/registration-token.json"
-	if [[ -n "$MY_FUNCTION_APP_NAME" || -n "$MY_AZURE_CLIENT_ID" ]]; then
-		http_code="$(request_runner_registration_token_via_broker "$registration_file")"
-		if [[ "$http_code" != "201" ]]; then
-			echo "Runner broker registration token response (${http_code}):" >&2
-			cat "$registration_file" >&2 || true
-			fail "Failed to create GitHub runner registration token via the runner broker."
-		fi
-	else
-		[[ -n "$MY_GITHUB_TOKEN" ]] || fail "Either runner-registration-token, function-app-name with azure-client-id, or github-token is required in create mode."
+declare -a MY_RUNNER_NAMES=()
+declare -a MY_RUNNER_TOKENS=()
+for (( slot = 1; slot <= MY_RUNNER_COUNT; slot++ )); do
+	MY_RUNNER_NAMES+=("${MY_NAME}-slot-${slot}")
+done
 
-		http_code="$(github_api "POST" "/repos/${MY_GITHUB_REPOSITORY}/actions/runners/registration-token" "$registration_file")"
-		if [[ "$http_code" != "201" ]]; then
-			echo "GitHub registration token response (${http_code}):" >&2
-			cat "$registration_file" >&2 || true
-			fail "Failed to create GitHub runner registration token."
-		fi
+if [[ -n "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" ]]; then
+	if (( MY_RUNNER_COUNT > 1 )); then
+		echo "A single runner-registration-token was provided for ${MY_RUNNER_COUNT} runners; reusing it for every slot." >&2
 	fi
+	for (( slot = 1; slot <= MY_RUNNER_COUNT; slot++ )); do
+		MY_RUNNER_TOKENS+=("${MY_GITHUB_RUNNER_REGISTRATION_TOKEN}")
+	done
+else
+	for (( slot = 1; slot <= MY_RUNNER_COUNT; slot++ )); do
+		registration_file="${RUNNER_STATE_DIR}/registration-token-${slot}.json"
+		http_code="$(create_runner_registration_token "$registration_file")"
+		if [[ "$http_code" != "201" ]]; then
+			if [[ -n "$MY_FUNCTION_APP_NAME" || -n "$MY_AZURE_CLIENT_ID" ]]; then
+				echo "Runner broker registration token response (${http_code}):" >&2
+			else
+				echo "GitHub registration token response (${http_code}):" >&2
+			fi
+			cat "$registration_file" >&2 || true
+			fail "Failed to create GitHub runner registration token for slot ${slot}."
+		fi
 
-	MY_GITHUB_RUNNER_REGISTRATION_TOKEN="$(jq -r '.token' "$registration_file")"
-	[[ -n "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" && "$MY_GITHUB_RUNNER_REGISTRATION_TOKEN" != "null" ]] || fail "Runner registration token response did not include a token."
+		runner_token="$(jq -r '.token' "$registration_file")"
+		[[ -n "$runner_token" && "$runner_token" != "null" ]] || fail "Runner registration token response did not include a token for slot ${slot}."
+		MY_RUNNER_TOKENS+=("${runner_token}")
+	done
 fi
-echo "::add-mask::${MY_GITHUB_RUNNER_REGISTRATION_TOKEN}"
+
+for runner_token in "${MY_RUNNER_TOKENS[@]}"; do
+	echo "::add-mask::${runner_token}"
+done
 
 MY_INSTALL_SH_BASE64="$(base64 --wrap=0 < "$INSTALL_SCRIPT")"
 MY_PRE_RUNNER_SCRIPT_BASE64="$(printf '%s' "$MY_PRE_RUNNER_SCRIPT" | base64 --wrap=0)"
+RUNNER_BOOTSTRAP_FILE="${RUNNER_STATE_DIR}/runner-bootstrap.sh"
+{
+	echo "#!/usr/bin/env bash"
+	echo "set -euo pipefail"
+	printf 'RUNNER_VERSION=%q\n' "$MY_RUNNER_VERSION"
+	printf 'RUNNER_DIR_BASE=%q\n' "$MY_RUNNER_DIR"
+	printf 'RUNNER_COUNT=%q\n' "$MY_RUNNER_COUNT"
+	printf 'GITHUB_REPOSITORY=%q\n' "$MY_GITHUB_REPOSITORY"
+	printf 'SHARED_LABEL=%q\n' "$MY_NAME"
+	printf 'RUNNER_NAMES=('
+	for runner_name in "${MY_RUNNER_NAMES[@]}"; do
+		printf '%q ' "$runner_name"
+	done
+	echo ")"
+	printf 'RUNNER_TOKENS=('
+	for runner_token in "${MY_RUNNER_TOKENS[@]}"; do
+		printf '%q ' "$runner_token"
+	done
+	echo ")"
+	cat <<'EOF'
+runner_dir_for_slot() {
+	local slot="$1"
+	printf '%s-%s' "$RUNNER_DIR_BASE" "$slot"
+}
+
+if getent group kvm >/dev/null; then
+	usermod -aG kvm github-runner
+fi
+if getent group libvirt >/dev/null; then
+	usermod -aG libvirt github-runner
+fi
+
+for (( slot = 1; slot <= RUNNER_COUNT; slot++ )); do
+	slot_index=$((slot - 1))
+	slot_dir="$(runner_dir_for_slot "$slot")"
+	slot_name="${RUNNER_NAMES[$slot_index]}"
+	slot_token="${RUNNER_TOKENS[$slot_index]}"
+	slot_labels="hetzner,${SHARED_LABEL},${slot_name}"
+
+	bash "${RUNNER_DIR_BASE}/install.sh" -v "${RUNNER_VERSION}" -d "${slot_dir}"
+	chown -R github-runner:github-runner "${slot_dir}"
+
+	sudo -u github-runner \
+		env GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" RUNNER_DIR="${slot_dir}" RUNNER_LABELS="${slot_labels}" RUNNER_NAME="${slot_name}" RUNNER_TOKEN="${slot_token}" \
+		bash -lc 'cd "$RUNNER_DIR" && ./config.sh --url "https://github.com/${GITHUB_REPOSITORY}" --token "$RUNNER_TOKEN" --name "$RUNNER_NAME" --labels "$RUNNER_LABELS" --ephemeral --disableupdate --unattended'
+	sudo -u github-runner env RUNNER_DIR="${slot_dir}" bash -lc 'cd "$RUNNER_DIR" && nohup ./run.sh > runner.log 2>&1 &'
+done
+EOF
+} > "${RUNNER_BOOTSTRAP_FILE}"
+RUNNER_BOOTSTRAP_BASE64="$(base64 --wrap=0 < "${RUNNER_BOOTSTRAP_FILE}")"
 
 cloud_init_file="${RUNNER_STATE_DIR}/cloud-init.yml"
 cat >"$cloud_init_file" <<EOF
@@ -400,16 +489,15 @@ write_files:
     permissions: "0700"
     encoding: b64
     content: ${MY_PRE_RUNNER_SCRIPT_BASE64}
+  - path: ${MY_RUNNER_DIR}/runner-bootstrap.sh
+    permissions: "0755"
+    encoding: b64
+    content: ${RUNNER_BOOTSTRAP_BASE64}
 runcmd:
   - mkdir -p ${MY_RUNNER_DIR}
   - chmod 0755 ${MY_RUNNER_DIR}
   - bash ${MY_RUNNER_DIR}/pre-runner-script.sh
-  - bash ${MY_RUNNER_DIR}/install.sh -v ${MY_RUNNER_VERSION} -d ${MY_RUNNER_DIR}
-  - if getent group kvm >/dev/null; then usermod -aG kvm github-runner; fi
-  - if getent group libvirt >/dev/null; then usermod -aG libvirt github-runner; fi
-  - chown -R github-runner:github-runner ${MY_RUNNER_DIR}
-  - sudo -u github-runner bash -lc 'cd ${MY_RUNNER_DIR} && ./config.sh --url https://github.com/${MY_GITHUB_REPOSITORY} --token ${MY_GITHUB_RUNNER_REGISTRATION_TOKEN} --name ${MY_NAME} --labels hetzner,${MY_NAME} --ephemeral --disableupdate --unattended'
-  - sudo -u github-runner bash -lc 'cd ${MY_RUNNER_DIR} && ./run.sh'
+  - bash ${MY_RUNNER_DIR}/runner-bootstrap.sh
 EOF
 
 create_server_file="${RUNNER_STATE_DIR}/create-server.json"
@@ -510,20 +598,25 @@ if [[ -n "$MY_GITHUB_TOKEN" ]]; then
 			fail "Failed to list GitHub runners."
 		fi
 
-		runner_status="$(
-			jq -r --arg name "$MY_NAME" '.runners[]? | select(.name == $name) | .status' "$runner_list_file" | head -n 1
+		ready_runner_count="$(
+			jq -r --arg name "$MY_NAME" '
+				[
+					.runners[]?
+					| select((.name == $name or (.name | startswith($name + "-slot-"))) and (.status == "online" or .status == "busy"))
+				] | length
+			' "$runner_list_file"
 		)"
 
-		if [[ "$runner_status" == "online" || "$runner_status" == "busy" ]]; then
+		if (( ready_runner_count >= MY_RUNNER_COUNT )); then
 			break
 		fi
 
 		if (( runner_attempt == MY_RUNNER_WAIT )); then
 			delete_server_best_effort "$server_id" || true
-			fail "Runner '${MY_NAME}' did not register with GitHub in time."
+			fail "Runner host '${MY_NAME}' did not register ${MY_RUNNER_COUNT} runner slot(s) with GitHub in time."
 		fi
 
-		echo "Runner '${MY_NAME}' is not online yet. Waiting ${WAIT_SECONDS}s..."
+		echo "Runner host '${MY_NAME}' has ${ready_runner_count}/${MY_RUNNER_COUNT} runner slot(s) online. Waiting ${WAIT_SECONDS}s..."
 		sleep "$WAIT_SECONDS"
 		runner_attempt=$((runner_attempt + 1))
 	done
@@ -539,7 +632,8 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
 	{
 		echo "Hetzner runner ready"
 		echo
-		echo "- Runner name: \`${MY_NAME}\`"
+		echo "- Shared runner label: \`${MY_NAME}\`"
+		echo "- Runner slots: \`${MY_RUNNER_COUNT}\`"
 		echo "- Server ID: \`${server_id}\`"
 		echo "- Server type: \`${MY_SERVER_TYPE}\`"
 		echo "- Location: \`${MY_LOCATION}\`"
