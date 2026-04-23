@@ -30,7 +30,7 @@ on:
       hetzner_amd64_server_type:
         description: "Hetzner server type for amd64 Linux builds"
         required: false
-        default: "CPX32"
+        default: "cpx32"
         type: string
       hetzner_arm64_server_type:
         description: "Hetzner server type for arm64 Linux builds"
@@ -112,9 +112,10 @@ jobs:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           FUNCTION_APP_NAME: ${{ secrets.FUNCTION_APP_NAME }}
+          GH_RUNNER_ADMIN_TOKEN: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
         run: |
-          if [[ -n "${AZURE_CLIENT_ID}" && -n "${AZURE_SUBSCRIPTION_ID}" && -n "${AZURE_TENANT_ID}" && -n "${FUNCTION_APP_NAME}" && -n "${HCLOUD_TOKEN}" ]]; then
+          if [[ -n "${AZURE_CLIENT_ID}" && -n "${AZURE_SUBSCRIPTION_ID}" && -n "${AZURE_TENANT_ID}" && -n "${FUNCTION_APP_NAME}" && -n "${GH_RUNNER_ADMIN_TOKEN}" && -n "${HCLOUD_TOKEN}" ]]; then
             echo "use-hetzner=true" >> "${GITHUB_OUTPUT}"
             echo "Hetzner runner broker and cleanup secrets are available; using Hetzner self-hosted runners for Linux QEMU builds."
           else
@@ -292,7 +293,7 @@ jobs:
           image: ${{ inputs.hetzner_image || 'ubuntu-24.04' }}
           location: ${{ inputs.hetzner_location || 'nbg1' }}
           runner-version: ${{ inputs.hetzner_runner_version || 'latest' }}
-          server-type: ${{ inputs.hetzner_amd64_server_type || 'cpx31' }}
+          server-type: ${{ inputs.hetzner_amd64_server_type || 'cpx32' }}
 
   provision-hetzner-linux-arm64-runner:
     needs: [determine-runner-mode]

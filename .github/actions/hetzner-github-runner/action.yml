@@ -36,7 +36,7 @@ inputs:
   server-type:
     description: "Hetzner server type"
     required: false
-    default: "cpx31"
+    default: "cpx32"
   runner-version:
     description: "GitHub Actions runner version, or latest"
     required: false

@@ -27,6 +27,83 @@ require_boolean() {
 	[[ "$value" == "true" || "$value" == "false" ]] || fail "$name must be 'true' or 'false'."
 }
 
+validate_server_type_location() {
+	local metadata_file="${RUNNER_STATE_DIR}/server-types.json"
+	local http_code
+	local supported_locations
+	local available_locations
+	local recommended_locations
+
+	http_code="$(hetzner_api "GET" "/server_types?per_page=100" "$metadata_file")"
+	if [[ "$http_code" != "200" ]]; then
+		echo "Hetzner server types response (${http_code}):" >&2
+		cat "$metadata_file" >&2 || true
+		fail "Failed to validate the Hetzner server-type/location combination."
+	fi
+
+	if ! jq -e --arg server_type "$MY_SERVER_TYPE" '.server_types[]? | select((.name | ascii_downcase) == $server_type)' "$metadata_file" >/dev/null; then
+		fail "Hetzner server-type '${MY_SERVER_TYPE}' was not found in the current Cloud API response."
+	fi
+
+	if jq -e --arg server_type "$MY_SERVER_TYPE" --arg location "$MY_LOCATION" '
+		any(
+			.server_types[]?
+			| select((.name | ascii_downcase) == $server_type)
+			| .locations[]?;
+			((.name // .location.name // "") | ascii_downcase) == $location
+		)
+	' "$metadata_file" >/dev/null; then
+		return 0
+	fi
+
+	supported_locations="$(
+		jq -r --arg server_type "$MY_SERVER_TYPE" '
+			[
+				.server_types[]?
+				| select((.name | ascii_downcase) == $server_type)
+				| .locations[]?
+				| (.name // .location.name // empty)
+				| ascii_downcase
+			] | unique | join(", ")
+		' "$metadata_file"
+	)"
+
+	available_locations="$(
+		jq -r --arg server_type "$MY_SERVER_TYPE" '
+			[
+				.server_types[]?
+				| select((.name | ascii_downcase) == $server_type)
+				| .locations[]?
+				| select((.available // false) == true)
+				| (.name // .location.name // empty)
+				| ascii_downcase
+			] | unique | join(", ")
+		' "$metadata_file"
+	)"
+
+	recommended_locations="$(
+		jq -r --arg server_type "$MY_SERVER_TYPE" '
+			[
+				.server_types[]?
+				| select((.name | ascii_downcase) == $server_type)
+				| .locations[]?
+				| select((.recommended // false) == true)
+				| (.name // .location.name // empty)
+				| ascii_downcase
+			] | unique | join(", ")
+		' "$metadata_file"
+	)"
+
+	[[ -n "$supported_locations" ]] || supported_locations="none reported by Hetzner"
+	if [[ -n "$recommended_locations" ]]; then
+		fail "Hetzner server-type '${MY_SERVER_TYPE}' is not supported in location '${MY_LOCATION}'. Supported locations: ${supported_locations}. Recommended locations: ${recommended_locations}."
+	fi
+	if [[ -n "$available_locations" ]]; then
+		fail "Hetzner server-type '${MY_SERVER_TYPE}' is not supported in location '${MY_LOCATION}'. Supported locations: ${supported_locations}. Currently available locations: ${available_locations}."
+	fi
+	fail "Hetzner server-type '${MY_SERVER_TYPE}' is not supported in location '${MY_LOCATION}'. Supported locations: ${supported_locations}."
+}
+
 github_api() {
 	local method="$1"
 	local endpoint="$2"
@@ -164,6 +241,7 @@ MY_IMAGE="${INPUT_IMAGE:-ubuntu-24.04}"
 [[ "$MY_IMAGE" =~ ^[a-zA-Z0-9._-]{1,63}$ ]] || fail "Invalid image '${MY_IMAGE}'."
 
 MY_LOCATION="${INPUT_LOCATION:-nbg1}"
+MY_LOCATION="${MY_LOCATION,,}"
 [[ "$MY_LOCATION" =~ ^[a-zA-Z0-9._-]{1,32}$ ]] || fail "Invalid location '${MY_LOCATION}'."
 
 MY_NAME="${INPUT_NAME:-gh-runner-$RANDOM}"
@@ -177,7 +255,8 @@ if [[ "$MY_RUNNER_VERSION" != "latest" && ! "$MY_RUNNER_VERSION" =~ ^[0-9.]+$ ]]
 	fail "runner-version must be 'latest' or a version number without the 'v' prefix."
 fi
 
-MY_SERVER_TYPE="${INPUT_SERVER_TYPE:-cpx31}"
+MY_SERVER_TYPE="${INPUT_SERVER_TYPE:-cpx32}"
+MY_SERVER_TYPE="${MY_SERVER_TYPE,,}"
 [[ "$MY_SERVER_TYPE" =~ ^[a-zA-Z0-9]+$ ]] || fail "Invalid server-type '${MY_SERVER_TYPE}'."
 
 MY_SERVER_ID="${INPUT_SERVER_ID:-}"
@@ -331,6 +410,7 @@ runcmd:
 EOF
 
 create_server_file="${RUNNER_STATE_DIR}/create-server.json"
+validate_server_type_location
 python3 - "$cloud_init_file" "$create_server_file" <<'PY'
 import json
 import os
