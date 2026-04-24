@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0](https://github.com/csautter/dev-alchemy/compare/v0.12.0...v0.13.0) (2026-04-24)
+
+
+### Added
+
+* **windows:** unify runner dependency setup behind self-setup script ([e5aaa4a](https://github.com/csautter/dev-alchemy/commit/e5aaa4abc88796ebc1f33d3f499294cdf7bc4ccf))
+* **windows:** unify runner dependency setup behind self-setup script ([8b151a5](https://github.com/csautter/dev-alchemy/commit/8b151a55c7e72e6f7fb8bb51b03172e21fd5378f))
+
+
+### Fixed
+
+* **ci:** pass repository to self-hosted renovate action ([7e60475](https://github.com/csautter/dev-alchemy/commit/7e604754a64fdf08c27f52d0c6287f1cc54e3445))
+* **gha:** restore native go and python in Windows Azure runner images ([1a08df0](https://github.com/csautter/dev-alchemy/commit/1a08df021872e746b5a3bcd52ed8bd85d527009a))
+* **provision:** detect Hyper-V Ubuntu guest IP without key-based vagrant ssh ([0cba4c3](https://github.com/csautter/dev-alchemy/commit/0cba4c3c50713484ec9d4ba96083cf64073d4e8c))
+* **provision:** ignore IPv6 hostnames in linux vagrant IP discovery ([836fc02](https://github.com/csautter/dev-alchemy/commit/836fc02f84c8ac95e00decd9705e2caa5be23b98))
+* **renovate:** resolve packer plugin lookups and set git author ([626671c](https://github.com/csautter/dev-alchemy/commit/626671c4e12bd525f45b4a27240fd1cf211c98ad))
+* **stop:** use Hyper-V graceful shutdown for Ubuntu VMs before force halt ([89f99b9](https://github.com/csautter/dev-alchemy/commit/89f99b93f41d8d6e63ea8fab67d14018fb987784))
+* **windows:** install the correct Chocolatey Python package ([fde8260](https://github.com/csautter/dev-alchemy/commit/fde826047232f529ca0c4b4073c3bbf9500b43ca))
+* **windows:** make Go setup opt-in for dependency installs ([ccdb8f2](https://github.com/csautter/dev-alchemy/commit/ccdb8f20f03f6a4345a5ee0ef7f1221eb419a903))
+
+
+### CI
+
+* **renovate:** use branch config for workflow-dispatch runs ([11e6af7](https://github.com/csautter/dev-alchemy/commit/11e6af717e837269f21a06c1357e010472fd3993))
+
 ## [0.12.0](https://github.com/csautter/dev-alchemy/compare/v0.11.0...v0.12.0) (2026-04-21)
 
 
