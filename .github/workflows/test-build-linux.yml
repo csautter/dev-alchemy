@@ -104,6 +104,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       use-hetzner: ${{ steps.mode.outputs.use-hetzner }}
+      use-hosted: ${{ steps.mode.outputs.use-hosted }}
+      runner-mode: ${{ steps.mode.outputs.runner-mode }}
     steps:
       - name: Select runner mode
         id: mode
@@ -113,18 +115,40 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           FUNCTION_APP_NAME: ${{ secrets.FUNCTION_APP_NAME }}
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          RUN_LINUX_QEMU_ON_BOTH_RUNNERS: ${{ vars.RUN_LINUX_QEMU_ON_BOTH_RUNNERS }}
         run: |
+          run_both=false
+          case "${RUN_LINUX_QEMU_ON_BOTH_RUNNERS,,}" in
+            1|true|yes|on)
+              run_both=true
+              ;;
+          esac
+
           if [[ -n "${AZURE_CLIENT_ID}" && -n "${AZURE_SUBSCRIPTION_ID}" && -n "${AZURE_TENANT_ID}" && -n "${FUNCTION_APP_NAME}" && -n "${HCLOUD_TOKEN}" ]]; then
             echo "use-hetzner=true" >> "${GITHUB_OUTPUT}"
-            echo "Hetzner runner broker and cloud access are available; using Hetzner self-hosted runners for Linux QEMU builds."
+            if [[ "${run_both}" == "true" ]]; then
+              echo "use-hosted=true" >> "${GITHUB_OUTPUT}"
+              echo "runner-mode=both" >> "${GITHUB_OUTPUT}"
+              echo "Hetzner runner broker and cloud access are available, and RUN_LINUX_QEMU_ON_BOTH_RUNNERS is enabled; running both Hetzner and GitHub-hosted Linux QEMU builds in parallel."
+            else
+              echo "use-hosted=false" >> "${GITHUB_OUTPUT}"
+              echo "runner-mode=hetzner" >> "${GITHUB_OUTPUT}"
+              echo "Hetzner runner broker and cloud access are available; using Hetzner self-hosted runners for Linux QEMU builds."
+            fi
           else
             echo "use-hetzner=false" >> "${GITHUB_OUTPUT}"
-            echo "Hetzner runner broker or cloud access is unavailable; falling back to GitHub-hosted Linux runners."
+            echo "use-hosted=true" >> "${GITHUB_OUTPUT}"
+            echo "runner-mode=hosted" >> "${GITHUB_OUTPUT}"
+            if [[ "${run_both}" == "true" ]]; then
+              echo "RUN_LINUX_QEMU_ON_BOTH_RUNNERS is enabled, but Hetzner runner broker or cloud access is unavailable; running only GitHub-hosted Linux runners."
+            else
+              echo "Hetzner runner broker or cloud access is unavailable; falling back to GitHub-hosted Linux runners."
+            fi
           fi
 
   test-packer-build-hosted:
     needs: [determine-runner-mode]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner != 'true'
+    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hosted == 'true'
     name: build ${{ matrix.go_test_name }} runner_os ${{ matrix.runs_on }}
     runs-on: ${{ matrix.runs_on }}
     env:
@@ -228,7 +252,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-log-${{ matrix.go_test_name }}
+          name: packer-log-hosted-${{ matrix.go_test_name }}
           path: artifact/${{ matrix.go_test_name }}.packer.log
           if-no-files-found: ignore
           retention-days: 7
@@ -237,7 +261,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
+          name: packer-qemu-ubuntu-hosted-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -293,7 +317,7 @@ jobs:
           location: ${{ inputs.hetzner_location || 'nbg1' }}
           runner-count: "2"
           runner-version: ${{ inputs.hetzner_runner_version || 'latest' }}
-          server-type: ${{ inputs.hetzner_amd64_server_type || 'cx43' }}
+          server-type: ${{ inputs.hetzner_amd64_server_type || 'ccx23' }}
 
   provision-hetzner-linux-arm64-runner:
     needs: [determine-runner-mode]
@@ -421,7 +445,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-log-${{ matrix.go_test_name }}
+          name: packer-log-hetzner-${{ matrix.go_test_name }}
           path: artifact/${{ matrix.go_test_name }}.packer.log
           if-no-files-found: ignore
           retention-days: 7
@@ -430,7 +454,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
+          name: packer-qemu-ubuntu-hetzner-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -550,7 +574,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-log-${{ matrix.go_test_name }}
+          name: packer-log-hetzner-${{ matrix.go_test_name }}
           path: artifact/${{ matrix.go_test_name }}.packer.log
           if-no-files-found: ignore
           retention-days: 7
@@ -559,7 +583,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
+          name: packer-qemu-ubuntu-hetzner-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
