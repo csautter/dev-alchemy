@@ -63,6 +63,17 @@ func TestIsStartSupported(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "linux qemu supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "ubuntu",
+				Arch:                 "amd64",
+				UbuntuType:           "server",
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+			},
+			want: true,
+		},
+		{
 			name: "virtualbox unsupported",
 			vm: alchemy_build.VirtualMachineConfig{
 				OS:                   "windows11",

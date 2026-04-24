@@ -77,6 +77,47 @@ Clean up afterwards with:
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 ```
 
+## Linux Host Workflows
+
+### Ubuntu on Linux with QEMU/KVM and virt-manager
+
+Install host dependencies first:
+
+```bash
+alchemy install
+```
+
+Build and create the Ubuntu VM:
+
+```bash
+arch=amd64 # or arm64
+type=desktop # or server
+alchemy build ubuntu --arch "$arch" --type "$type"
+alchemy create ubuntu --arch "$arch" --type "$type"
+```
+
+By default the Linux create/start/stop/destroy workflow uses the libvirt user session (`qemu:///session`) so the VM is visible in `virt-manager` under the QEMU/KVM user session connection and can run without root-owned storage.
+
+If you prefer the system libvirt connection, set:
+
+```bash
+export DEV_ALCHEMY_LIBVIRT_URI=qemu:///system
+# Optional when you want a custom storage location:
+export DEV_ALCHEMY_LIBVIRT_IMAGE_DIR=/var/lib/libvirt/images/dev-alchemy
+```
+
+You can then boot the created VM either from `virt-manager` or from the CLI:
+
+```bash
+alchemy start ubuntu --arch "$arch" --type "$type"
+alchemy stop ubuntu --arch "$arch" --type "$type"
+alchemy destroy ubuntu --arch "$arch" --type "$type"
+```
+
+Related guide:
+
+- [Ubuntu Packer README](../build/packer/linux/ubuntu/README.md)
+
 ## Windows Host Workflows
 
 ### Ubuntu on Windows with Hyper-V

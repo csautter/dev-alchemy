@@ -23,6 +23,8 @@ func SupportsStart(config alchemy_build.VirtualMachineConfig) bool {
 		return true
 	case isHypervVagrantTarget(config):
 		return true
+	case isLinuxLibvirtTarget(config):
+		return true
 	default:
 		return false
 	}
@@ -36,6 +38,8 @@ func InspectStartTarget(config alchemy_build.VirtualMachineConfig) (VirtualMachi
 		return inspectTartStartTarget(config)
 	case isHypervVagrantTarget(config):
 		return inspectHypervVagrantStartTarget(config)
+	case isLinuxLibvirtTarget(config):
+		return inspectLinuxLibvirtStartTarget(config)
 	default:
 		return VirtualMachineState{}, fmt.Errorf(
 			"start target inspection is not implemented for OS=%s type=%s arch=%s host=%s engine=%s",
@@ -56,6 +60,8 @@ func RunStart(config alchemy_build.VirtualMachineConfig) error {
 		return RunTartStartOnMacOS(config)
 	case isHypervVagrantTarget(config):
 		return RunHypervVagrantStartOnWindows(config)
+	case isLinuxLibvirtTarget(config):
+		return RunLinuxQemuStartOnLinux(config)
 	default:
 		return fmt.Errorf(
 			"start is not implemented for OS=%s type=%s arch=%s host=%s engine=%s",

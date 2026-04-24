@@ -7,6 +7,19 @@ import (
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 )
 
+func SupportsCreate(config alchemy_build.VirtualMachineConfig) bool {
+	switch config.VirtualizationEngine {
+	case alchemy_build.VirtualizationEngineUtm,
+		alchemy_build.VirtualizationEngineTart,
+		alchemy_build.VirtualizationEngineHyperv:
+		return true
+	case alchemy_build.VirtualizationEngineQemu:
+		return isLinuxLibvirtTarget(config)
+	default:
+		return false
+	}
+}
+
 func CreateTargetExists(config alchemy_build.VirtualMachineConfig) (bool, error) {
 	switch {
 	case isUtmDeployTarget(config):
@@ -43,6 +56,12 @@ func CreateTargetExists(config alchemy_build.VirtualMachineConfig) (bool, error)
 		}
 
 		return exists, nil
+	case isLinuxLibvirtTarget(config):
+		state, err := inspectLinuxLibvirtStartTarget(config)
+		if err != nil {
+			return false, err
+		}
+		return state.Exists, nil
 	default:
 		return false, fmt.Errorf(
 			"create target inspection is not implemented for OS=%s type=%s arch=%s host=%s engine=%s",
