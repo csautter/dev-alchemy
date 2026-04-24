@@ -18,12 +18,7 @@ var inspectCreateTargetExists = alchemy_deploy.CreateTargetExists
 var inspectCreateArtifactExists = alchemy_build.BuildArtifactsExistQuiet
 
 func isCreateSupported(vm alchemy_build.VirtualMachineConfig) bool {
-	switch vm.VirtualizationEngine {
-	case alchemy_build.VirtualizationEngineUtm, alchemy_build.VirtualizationEngineHyperv, alchemy_build.VirtualizationEngineTart:
-		return true
-	default:
-		return false
-	}
+	return alchemy_deploy.SupportsCreate(vm)
 }
 
 func availableCreateVirtualMachines() []alchemy_build.VirtualMachineConfig {
@@ -164,6 +159,8 @@ func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
 		return alchemy_deploy.RunTartDeployOnMacOS(vm)
 	case alchemy_build.VirtualizationEngineHyperv:
 		return alchemy_deploy.RunHypervVagrantDeployOnWindows(vm)
+	case alchemy_build.VirtualizationEngineQemu:
+		return alchemy_deploy.RunLinuxQemuDeployOnLinux(vm)
 	default:
 		return fmt.Errorf("❌ deploy is not implemented for virtualization engine: %s", vm.VirtualizationEngine)
 	}

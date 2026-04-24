@@ -85,6 +85,8 @@ Use the CLI from repository root:
 arch=amd64
 alchemy build ubuntu --type server --arch "$arch"
 alchemy build ubuntu --type desktop --arch "$arch"
+alchemy create ubuntu --type server --arch "$arch"
+alchemy start ubuntu --type server --arch "$arch"
 ```
 
 Manual script usage:
@@ -94,3 +96,10 @@ export DEV_ALCHEMY_APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-${XDG_DATA_HOME:-$H
 build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch amd64 --ubuntu-type server
 build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
 ```
+
+The Linux `create`/`start`/`stop`/`destroy` flow uses libvirt so the VM appears
+in `virt-manager`.
+
+- Default libvirt connection: `qemu:///session`
+- Override connection: `DEV_ALCHEMY_LIBVIRT_URI=qemu:///system`
+- Optional managed disk directory override: `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR=/path/to/images`

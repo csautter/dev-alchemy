@@ -15,6 +15,8 @@ func SupportsDestroy(config alchemy_build.VirtualMachineConfig) bool {
 		return true
 	case isHypervVagrantTarget(config):
 		return true
+	case isLinuxLibvirtTarget(config):
+		return true
 	default:
 		return false
 	}
@@ -28,6 +30,8 @@ func RunDestroy(config alchemy_build.VirtualMachineConfig) error {
 		return RunTartDestroyOnMacOS(config)
 	case isHypervVagrantTarget(config):
 		return RunHypervVagrantDestroyOnWindows(config)
+	case isLinuxLibvirtTarget(config):
+		return RunLinuxQemuDestroyOnLinux(config)
 	default:
 		return fmt.Errorf(
 			"destroy is not implemented for OS=%s type=%s arch=%s host=%s engine=%s",
@@ -81,6 +85,24 @@ func DestroyTargetExists(config alchemy_build.VirtualMachineConfig) (bool, error
 		}
 
 		return machineExists || boxInstalled, nil
+	case isLinuxLibvirtTarget(config):
+		state, err := inspectLinuxLibvirtStartTarget(config)
+		if err != nil {
+			return false, err
+		}
+		if state.Exists {
+			return true, nil
+		}
+
+		_, err = os.Stat(linuxLibvirtDiskPath(config))
+		if err == nil {
+			return true, nil
+		}
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("failed to stat libvirt disk %q: %w", linuxLibvirtDiskPath(config), err)
 	default:
 		return false, fmt.Errorf(
 			"destroy target inspection is not implemented for OS=%s type=%s arch=%s host=%s engine=%s",
