@@ -164,15 +164,18 @@ alchemy install
 This runs
 [scripts/linux/dev-alchemy-install-dependencies.sh](./scripts/linux/dev-alchemy-install-dependencies.sh).
 
-On macOS and Linux, `alchemy install --with-go` also bootstraps the Go
-toolchain.
+On macOS, Linux, and Windows, `alchemy install --with-go` also bootstraps the
+Go toolchain.
 
 #### Windows
 
-Run the command in an elevated PowerShell session:
+Run the command from your normal shell. Windows will prompt for elevation
+through UAC if needed:
 
 ```powershell
 alchemy.exe install
+# optionally with Go and VirtualBox support:
+alchemy.exe install --with-go --virtualbox
 ```
 
 This runs

@@ -22,6 +22,7 @@ const (
 
 var (
 	runHypervVagrantCommandWithEnv     = runCommandWithStreamingLogsWithEnv
+	runHypervCommandWithCombinedOutput = runCommandWithCombinedOutput
 	inspectHypervVagrantStartCmdTarget = inspectHypervVagrantStartTarget
 	inspectHypervVagrantStopTarget     = inspectHypervVagrantStartTarget
 	hypervVagrantMachineExistsChecker  = hypervVagrantMachineExists
@@ -189,62 +190,98 @@ func RunHypervVagrantStopOnWindows(config alchemy_build.VirtualMachineConfig) er
 		return err
 	}
 
-	if err := runHypervVagrantCommandWithEnv(
+	gracefulErr := runHypervVagrantGracefulStop(config, settings)
+
+	stopped, waitErr := waitForHypervVagrantStop(config, hypervVagrantStopSettleTimeout)
+	if waitErr == nil && stopped {
+		return nil
+	}
+	if gracefulErr == nil {
+		gracefulErr = fmt.Errorf("graceful stop completed but VM is still running after %s", hypervVagrantStopSettleTimeout)
+	}
+
+	forceErr := runHypervVagrantCommandWithEnv(
+		settings.VagrantDir,
+		20*time.Minute,
+		"vagrant",
+		[]string{"halt", "--force"},
+		settings.VagrantEnv,
+		fmt.Sprintf("%s:%s:%s:vagrant-halt-force", config.OS, config.UbuntuType, config.Arch),
+	)
+	if forceErr == nil {
+		stopped, waitErr = waitForHypervVagrantStop(config, hypervVagrantStopSettleTimeout)
+		if waitErr == nil && stopped {
+			return nil
+		}
+	}
+
+	if waitErr != nil {
+		return fmt.Errorf(
+			"failed to stop Vagrant VM for %s:%s:%s: graceful stop failed: %v; forced halt failed: %v; failed verifying final state: %w",
+			config.OS,
+			config.UbuntuType,
+			config.Arch,
+			gracefulErr,
+			forceErr,
+			waitErr,
+		)
+	}
+	if forceErr != nil {
+		return fmt.Errorf(
+			"failed to stop Vagrant VM for %s:%s:%s: graceful stop failed: %v; forced halt failed: %w",
+			config.OS,
+			config.UbuntuType,
+			config.Arch,
+			gracefulErr,
+			forceErr,
+		)
+	}
+	return fmt.Errorf(
+		"failed to stop Vagrant VM for %s:%s:%s: graceful stop failed: %v; forced halt completed but VM is still running",
+		config.OS,
+		config.UbuntuType,
+		config.Arch,
+		gracefulErr,
+	)
+}
+
+func runHypervVagrantGracefulStop(config alchemy_build.VirtualMachineConfig, settings hypervVagrantDeploySettings) error {
+	if config.OS == "ubuntu" {
+		return runHypervUbuntuGuestShutdown(settings.VagrantDir, settings.VagrantEnv)
+	}
+
+	return runHypervVagrantCommandWithEnv(
 		settings.VagrantDir,
 		20*time.Minute,
 		"vagrant",
 		[]string{"halt"},
 		settings.VagrantEnv,
 		fmt.Sprintf("%s:%s:%s:vagrant-halt", config.OS, config.UbuntuType, config.Arch),
-	); err != nil {
-		stopped, waitErr := waitForHypervVagrantStop(config, hypervVagrantStopSettleTimeout)
-		if waitErr == nil && stopped {
-			return nil
-		}
+	)
+}
 
-		forceErr := runHypervVagrantCommandWithEnv(
-			settings.VagrantDir,
-			20*time.Minute,
-			"vagrant",
-			[]string{"halt", "--force"},
-			settings.VagrantEnv,
-			fmt.Sprintf("%s:%s:%s:vagrant-halt-force", config.OS, config.UbuntuType, config.Arch),
-		)
-		if forceErr == nil {
-			stopped, waitErr = waitForHypervVagrantStop(config, hypervVagrantStopSettleTimeout)
-			if waitErr == nil && stopped {
-				return nil
-			}
-		}
+func runHypervUbuntuGuestShutdown(workingDir string, env []string) error {
+	vmName, err := hypervVagrantVMName(env)
+	if err != nil {
+		return err
+	}
 
-		if waitErr != nil {
-			return fmt.Errorf(
-				"failed to stop Vagrant VM for %s:%s:%s: graceful halt failed: %v; forced halt failed: %v; failed verifying final state: %w",
-				config.OS,
-				config.UbuntuType,
-				config.Arch,
-				err,
-				forceErr,
-				waitErr,
-			)
-		}
-		if forceErr != nil {
-			return fmt.Errorf(
-				"failed to stop Vagrant VM for %s:%s:%s: graceful halt failed: %v; forced halt failed: %w",
-				config.OS,
-				config.UbuntuType,
-				config.Arch,
-				err,
-				forceErr,
-			)
-		}
-		return fmt.Errorf(
-			"failed to stop Vagrant VM for %s:%s:%s: graceful halt failed: %v; forced halt completed but VM is still running",
-			config.OS,
-			config.UbuntuType,
-			config.Arch,
-			err,
-		)
+	output, err := runHypervCommandWithCombinedOutput(
+		workingDir,
+		2*time.Minute,
+		"powershell",
+		[]string{
+			"-NoProfile",
+			"-NonInteractive",
+			"-Command",
+			fmt.Sprintf(
+				"Import-Module Hyper-V -ErrorAction Stop; Stop-VM -Name %s -Confirm:$false -ErrorAction Stop | Out-Null",
+				powershellSingleQuote(vmName),
+			),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to request graceful Hyper-V shutdown for VM %q: %w; output: %s", vmName, err, strings.TrimSpace(output))
 	}
 
 	return nil

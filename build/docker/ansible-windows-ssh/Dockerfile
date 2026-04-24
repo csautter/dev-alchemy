@@ -9,7 +9,7 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointMa
 RUN choco install -y cygwin --params \"/InstallDir:C:\cygwin64 /NoAdmin /NoStartMenu\"
 
 RUN choco install -y cyg-get
-RUN cyg-get python39 python39-pip python39-cryptography openssh git make gcc-core gcc-g++ libffi-devel openssl-devel sshpass
+RUN cyg-get python39 python39-pip python39-cryptography openssh git make gcc-core gcc-g++ libffi-devel libssl-devel sshpass
 
 # Install Ansible inside Cygwin
 RUN C:\\cygwin64\\bin\\python3.9.exe -m pip install ansible
