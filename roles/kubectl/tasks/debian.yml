@@ -1,28 +1,138 @@
+- name: Install Kubernetes apt repository dependencies
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+  become: true
+  when: not ansible_check_mode
+
 - name: Create keyrings directory for kubectl
-  file:
+  ansible.builtin.file:
     path: /etc/apt/keyrings
     state: directory
     mode: '0755'
   become: true
+  when: not ansible_check_mode
+
+- name: Create temporary directory for Kubernetes apt key
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: kubernetes-apt
+  register: kubectl_apt_tmp
+  when: not ansible_check_mode
+
+- name: Set primary Kubernetes apt repository URL
+  ansible.builtin.set_fact:
+    kubectl_apt_repository_effective_base_url: "{{ kubectl_apt_repository_base_url }}"
+  when: not ansible_check_mode
 
 - name: Download Kubernetes apt GPG key
-  ansible.builtin.apt_key:
-    url: https://pkgs.k8s.io/core:/stable:/v1.34/deb/Release.key
-    keyring: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-    state: present
+  block:
+    - name: Download Kubernetes apt GPG key from primary repository
+      ansible.builtin.command:
+        argv:
+          - curl
+          - -fsSL
+          - --retry
+          - "3"
+          - --retry-delay
+          - "2"
+          - --retry-connrefused
+          - -o
+          - "{{ kubectl_apt_tmp.path }}/Release.key"
+          - "{{ kubectl_apt_repository_effective_base_url }}/Release.key"
+      register: kubectl_apt_key_download
+      changed_when: false
+      until: kubectl_apt_key_download.rc == 0
+      retries: "{{ kubectl_apt_download_retries }}"
+      delay: "{{ kubectl_apt_download_retry_delay }}"
+      become: true
+  rescue:
+    - name: Set fallback Kubernetes apt repository URL
+      ansible.builtin.set_fact:
+        kubectl_apt_repository_effective_base_url: "{{ kubectl_apt_repository_fallback_base_url }}"
+
+    - name: Download Kubernetes apt GPG key from fallback repository
+      ansible.builtin.command:
+        argv:
+          - curl
+          - -fsSL
+          - --retry
+          - "3"
+          - --retry-delay
+          - "2"
+          - --retry-connrefused
+          - -o
+          - "{{ kubectl_apt_tmp.path }}/Release.key"
+          - "{{ kubectl_apt_repository_effective_base_url }}/Release.key"
+      register: kubectl_apt_key_download_fallback
+      changed_when: false
+      until: kubectl_apt_key_download_fallback.rc == 0
+      retries: "{{ kubectl_apt_download_retries }}"
+      delay: "{{ kubectl_apt_download_retry_delay }}"
+      become: true
+  when: not ansible_check_mode
+
+- name: Dearmor Kubernetes apt GPG key
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --dearmor
+      - --yes
+      - -o
+      - "{{ kubectl_apt_tmp.path }}/kubernetes-apt-keyring.gpg"
+      - "{{ kubectl_apt_tmp.path }}/Release.key"
+  changed_when: false
   become: true
+  when: not ansible_check_mode
+
+- name: Compare Kubernetes apt keyring
+  ansible.builtin.command:
+    argv:
+      - cmp
+      - -s
+      - "{{ kubectl_apt_tmp.path }}/kubernetes-apt-keyring.gpg"
+      - "{{ kubectl_apt_keyring_path }}"
+  register: kubectl_apt_keyring_cmp
+  failed_when: false
+  changed_when: kubectl_apt_keyring_cmp.rc != 0
+  become: true
+  when: not ansible_check_mode
+
+- name: Install Kubernetes apt keyring
+  ansible.builtin.copy:
+    src: "{{ kubectl_apt_tmp.path }}/kubernetes-apt-keyring.gpg"
+    dest: "{{ kubectl_apt_keyring_path }}"
+    mode: '0644'
+    remote_src: true
+  become: true
+  when:
+    - not ansible_check_mode
+    - kubectl_apt_keyring_cmp.rc != 0
+
+- name: Remove temporary Kubernetes apt key directory
+  ansible.builtin.file:
+    path: "{{ kubectl_apt_tmp.path }}"
+    state: absent
+  become: true
+  when: not ansible_check_mode
 
 - name: Add Kubernetes apt repository
   ansible.builtin.apt_repository:
-    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.34/deb/ /"
+    repo: "deb [signed-by={{ kubectl_apt_keyring_path }}] {{ kubectl_apt_repository_effective_base_url }}/ /"
     filename: kubernetes
     state: present
     update_cache: yes
     mode: '0644'
   become: true
+  when: not ansible_check_mode
 
 - name: Install kubectl on Debian/Ubuntu
-  apt:
+  ansible.builtin.apt:
     name: kubectl
     state: present
     update_cache: yes
@@ -30,6 +140,6 @@
   become: true
 
 - name: Skip kubectl install in check mode (Debian/Ubuntu)
-  debug:
-    msg: "Skipping kubectl package install in check mode."
+  ansible.builtin.debug:
+    msg: "Skipping kubectl apt repository setup and package install in check mode."
   when: ansible_facts['os_family'] == "Debian" and ansible_check_mode
