@@ -107,11 +107,8 @@ Linux libvirt runtime is intentionally native-architecture only:
 Ubuntu QEMU images include `qemu-guest-agent` and `spice-vdagent`, and the
 libvirt domain enables the SPICE agent channel so `virt-manager` can provide
 better clipboard, pointer, and dynamic display resize integration for desktop
+guests. The Linux libvirt runtime uses a `virtio` video device for Ubuntu
 guests.
-
-For `amd64` Ubuntu desktop guests, the image also includes
-`xserver-xorg-video-qxl` and the Linux libvirt runtime uses a `qxl` video
-device to improve SPICE auto-resize behavior in `virt-manager`.
 
 - Default libvirt connection: `qemu:///system`
 - Default managed disk directory for that connection: `/var/tmp/dev-alchemy/libvirt/images`

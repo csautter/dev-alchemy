@@ -337,6 +337,11 @@ func linuxLibvirtDomainName(config alchemy_build.VirtualMachineConfig) string {
 	return fmt.Sprintf("%s-%s-dev-alchemy", alchemy_build.GetVirtualMachineNameWithType(config), config.Arch)
 }
 
+// LinuxLibvirtDomainName returns the managed libvirt domain name for a VM config.
+func LinuxLibvirtDomainName(config alchemy_build.VirtualMachineConfig) string {
+	return linuxLibvirtDomainName(config)
+}
+
 func linuxQemuArtifactPath(config alchemy_build.VirtualMachineConfig) string {
 	if len(config.ExpectedBuildArtifacts) > 0 && strings.TrimSpace(config.ExpectedBuildArtifacts[0]) != "" {
 		return config.ExpectedBuildArtifacts[0]
@@ -357,6 +362,11 @@ func linuxLibvirtURI() string {
 		return override
 	}
 	return linuxLibvirtDefaultURI
+}
+
+// LinuxLibvirtURI returns the configured libvirt connection URI.
+func LinuxLibvirtURI() string {
+	return linuxLibvirtURI()
 }
 
 func linuxLibvirtImageDir() string {

@@ -117,8 +117,26 @@ You can then boot the created VM either from `virt-manager` or from the CLI:
 
 ```bash
 alchemy start ubuntu --arch "$arch" --type "$type"
+alchemy provision ubuntu --arch "$arch" --type "$type" --check
+alchemy provision ubuntu --arch "$arch" --type "$type"
 alchemy stop ubuntu --arch "$arch" --type "$type"
 alchemy destroy ubuntu --arch "$arch" --type "$type"
+```
+
+The provision wrapper discovers the libvirt guest IP with `virsh domifaddr`
+and runs `ansible-playbook` with an inline SSH inventory target. Optional
+Ubuntu provisioning overrides can be set in `.env` or the process environment
+using `LIBVIRT_UBUNTU_ANSIBLE_*`:
+
+```dotenv
+LIBVIRT_UBUNTU_ANSIBLE_USER=packer
+LIBVIRT_UBUNTU_ANSIBLE_PASSWORD=P@ssw0rd!
+LIBVIRT_UBUNTU_ANSIBLE_BECOME_PASSWORD=P@ssw0rd!
+# Optional (defaults shown):
+LIBVIRT_UBUNTU_ANSIBLE_CONNECTION=ssh
+LIBVIRT_UBUNTU_ANSIBLE_SSH_COMMON_ARGS=-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no
+LIBVIRT_UBUNTU_ANSIBLE_SSH_TIMEOUT=120
+LIBVIRT_UBUNTU_ANSIBLE_SSH_RETRIES=3
 ```
 
 Related guide:

@@ -211,7 +211,7 @@ func TestLinuxLibvirtVirtInstallArgsIncludeNativeCPUAndSpiceAgentDevices(t *test
 		"--cpu host-passthrough",
 		"--network user,model=e1000",
 		"--graphics spice,clipboard.copypaste=on",
-		"--video model.type=qxl",
+		"--video model.type=virtio",
 		"--controller type=usb,model=qemu-xhci",
 		"--input tablet,bus=usb",
 		"--input keyboard,bus=usb",
@@ -238,8 +238,8 @@ func TestLinuxLibvirtVideoArg(t *testing.T) {
 		OS:         "ubuntu",
 		UbuntuType: "desktop",
 		Arch:       "amd64",
-	}); got != "model.type=qxl" {
-		t.Fatalf("expected amd64 desktop guests to use qxl video, got %q", got)
+	}); got != "model.type=virtio" {
+		t.Fatalf("expected amd64 desktop guests to keep virtio video, got %q", got)
 	}
 
 	if got := linuxLibvirtVideoArg(alchemy_build.VirtualMachineConfig{

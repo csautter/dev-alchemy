@@ -108,6 +108,101 @@ func TestDiscoverLinuxVagrantIPv4_FallsBackToSSHCommandWhenSSHConfigLacksIP(t *t
 	}
 }
 
+func TestDiscoverLinuxLibvirtVMIPv4_UsesGuestAgentBeforeLease(t *testing.T) {
+	vm := alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "amd64",
+	}
+
+	var calls []string
+	ip, err := discoverLinuxLibvirtVMIPv4WithOptions("project-dir", vm, linuxLibvirtIPv4DiscoveryOptions{
+		runCommand: func(workingDir string, timeout time.Duration, executable string, args []string) (string, error) {
+			calls = append(calls, strings.Join(args, " "))
+			if workingDir != "project-dir" {
+				t.Fatalf("expected working directory to be passed through, got %q", workingDir)
+			}
+			if timeout != 7*time.Second {
+				t.Fatalf("expected command timeout to be passed through, got %s", timeout)
+			}
+			if executable != "virsh" {
+				t.Fatalf("expected virsh executable, got %q", executable)
+			}
+
+			return `
+ Name       MAC address          Protocol     Address
+-------------------------------------------------------------------------------
+ vnet0      52:54:00:12:34:56    ipv4         192.168.122.41/24
+`, nil
+		},
+		sleep: func(time.Duration) {
+			t.Fatal("did not expect retry sleep when guest-agent lookup succeeds")
+		},
+		maxAttempts:    1,
+		commandTimeout: 7 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("expected libvirt IPv4 discovery to succeed, got error: %v", err)
+	}
+	if ip != "192.168.122.41" {
+		t.Fatalf("expected discovered IP 192.168.122.41, got %q", ip)
+	}
+
+	wantCall := "--connect qemu:///system domifaddr ubuntu-server-amd64-dev-alchemy --source agent"
+	if strings.Join(calls, " -> ") != wantCall {
+		t.Fatalf("expected only guest-agent lookup %q, got %v", wantCall, calls)
+	}
+}
+
+func TestDiscoverLinuxLibvirtVMIPv4_FallsBackToLease(t *testing.T) {
+	vm := alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "desktop",
+		Arch:       "arm64",
+	}
+
+	var calls []string
+	ip, err := discoverLinuxLibvirtVMIPv4WithOptions("project-dir", vm, linuxLibvirtIPv4DiscoveryOptions{
+		runCommand: func(_ string, _ time.Duration, executable string, args []string) (string, error) {
+			if executable != "virsh" {
+				t.Fatalf("expected virsh executable, got %q", executable)
+			}
+			call := strings.Join(args, " ")
+			calls = append(calls, call)
+			switch {
+			case strings.Contains(call, "--source agent"):
+				return "error: QEMU guest agent is not connected", errors.New("agent unavailable")
+			case strings.Contains(call, "--source lease"):
+				return `
+ Name       MAC address          Protocol     Address
+-------------------------------------------------------------------------------
+ vnet0      52:54:00:aa:bb:cc    ipv4         192.168.122.74/24
+`, nil
+			default:
+				t.Fatalf("unexpected virsh args: %v", args)
+				return "", nil
+			}
+		},
+		maxAttempts: 1,
+	})
+	if err != nil {
+		t.Fatalf("expected libvirt IPv4 discovery to fall back to leases, got error: %v", err)
+	}
+	if ip != "192.168.122.74" {
+		t.Fatalf("expected discovered IP 192.168.122.74, got %q", ip)
+	}
+
+	gotCalls := strings.Join(calls, " -> ")
+	for _, want := range []string{
+		"--connect qemu:///system domifaddr ubuntu-desktop-arm64-dev-alchemy --source agent",
+		"--connect qemu:///system domifaddr ubuntu-desktop-arm64-dev-alchemy --source lease",
+	} {
+		if !strings.Contains(gotCalls, want) {
+			t.Fatalf("expected calls to contain %q, got %q", want, gotCalls)
+		}
+	}
+}
+
 func TestBuildWindowsProvisionArgs(t *testing.T) {
 	projectDir := t.TempDir()
 	config := windowsAnsibleConnectionConfig{
@@ -2061,6 +2156,62 @@ func TestLoadUbuntuUtmAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T) {
 	connectionConfig, err := loadUbuntuUtmAnsibleConnectionConfig(projectDir)
 	if err != nil {
 		t.Fatalf("loadUbuntuUtmAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "env-user" {
+		t.Fatalf("expected environment user to override .env, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "env-pass" {
+		t.Fatalf("expected environment password to override .env, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.BecomePassword != "env-become" {
+		t.Fatalf("expected environment become password to override .env, got %q", connectionConfig.BecomePassword)
+	}
+}
+
+func TestLoadUbuntuLibvirtAnsibleConnectionConfig_UsesDefaults(t *testing.T) {
+	projectDir := t.TempDir()
+
+	connectionConfig, err := loadUbuntuLibvirtAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadUbuntuLibvirtAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "packer" {
+		t.Fatalf("expected default user packer, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "P@ssw0rd!" {
+		t.Fatalf("expected default password, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.BecomePassword != "P@ssw0rd!" {
+		t.Fatalf("expected default become password, got %q", connectionConfig.BecomePassword)
+	}
+	if connectionConfig.Connection != "ssh" {
+		t.Fatalf("expected default connection ssh, got %q", connectionConfig.Connection)
+	}
+}
+
+func TestLoadUbuntuLibvirtAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T) {
+	projectDir := t.TempDir()
+	dotEnvPath := filepath.Join(projectDir, ".env")
+
+	content := strings.Join([]string{
+		libvirtUbuntuAnsibleUserEnvVar + "=file-user",
+		libvirtUbuntuAnsiblePasswordEnvVar + "=file-pass",
+		libvirtUbuntuAnsibleBecomePasswordEnvVar + "=file-become",
+		"",
+	}, "\n")
+	if err := os.WriteFile(dotEnvPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to create .env fixture: %v", err)
+	}
+
+	t.Setenv(libvirtUbuntuAnsibleUserEnvVar, "env-user")
+	t.Setenv(libvirtUbuntuAnsiblePasswordEnvVar, "env-pass")
+	t.Setenv(libvirtUbuntuAnsibleBecomePasswordEnvVar, "env-become")
+
+	connectionConfig, err := loadUbuntuLibvirtAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadUbuntuLibvirtAnsibleConnectionConfig returned error: %v", err)
 	}
 
 	if connectionConfig.User != "env-user" {
