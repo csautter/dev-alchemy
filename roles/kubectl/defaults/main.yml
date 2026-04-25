@@ -1,1 +1,7 @@
 kubectl_version: "1.36.0"
+kubectl_apt_repository_version: "{{ 'v' ~ (kubectl_version | regex_replace('^v', '')).split('.')[0] ~ '.' ~ (kubectl_version | regex_replace('^v', '')).split('.')[1] }}"
+kubectl_apt_repository_base_url: "https://pkgs.k8s.io/core:/stable:/{{ kubectl_apt_repository_version }}/deb"
+kubectl_apt_repository_fallback_base_url: "https://download.opensuse.org/repositories/isv:/kubernetes:/core:/stable:/{{ kubectl_apt_repository_version }}/deb"
+kubectl_apt_keyring_path: "/etc/apt/keyrings/kubernetes-apt-keyring.gpg"
+kubectl_apt_download_retries: 5
+kubectl_apt_download_retry_delay: 5
