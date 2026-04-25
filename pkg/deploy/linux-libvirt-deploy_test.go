@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"errors"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -66,7 +67,7 @@ func TestLinuxLibvirtImageDirDefaultsToManagedAppDataForSession(t *testing.T) {
 	dirs := alchemy_build.GetDirectoriesInstance()
 	originalAppDataDir := dirs.AppDataDir
 	dirs.AppDataDir = t.TempDir()
-	t.Setenv(linuxLibvirtURIEnvVar, "")
+	t.Setenv(linuxLibvirtURIEnvVar, "qemu:///session")
 	t.Setenv(linuxLibvirtImageDirEnvVar, "")
 	t.Cleanup(func() {
 		dirs.AppDataDir = originalAppDataDir
@@ -76,6 +77,39 @@ func TestLinuxLibvirtImageDirDefaultsToManagedAppDataForSession(t *testing.T) {
 	want := filepath.Join(dirs.AppDataDir, "libvirt", "images")
 	if got != want {
 		t.Fatalf("expected session image dir %q, got %q", want, got)
+	}
+}
+
+func TestLinuxLibvirtURIDefaultsToSystemConnection(t *testing.T) {
+	t.Setenv(linuxLibvirtURIEnvVar, "")
+
+	if got := linuxLibvirtURI(); got != linuxLibvirtDefaultURI {
+		t.Fatalf("expected default libvirt URI %q, got %q", linuxLibvirtDefaultURI, got)
+	}
+}
+
+func TestEnsureLinuxLibvirtCommandsAvailable(t *testing.T) {
+	originalLookPath := lookPathLinuxLibvirtCommand
+	t.Cleanup(func() {
+		lookPathLinuxLibvirtCommand = originalLookPath
+	})
+
+	lookPathLinuxLibvirtCommand = func(file string) (string, error) {
+		if file == "virsh" {
+			return "", errors.New("not found")
+		}
+		return "/usr/bin/" + file, nil
+	}
+
+	err := ensureLinuxLibvirtCommandsAvailable("qemu-img", "virsh")
+	if err == nil {
+		t.Fatal("expected missing command error")
+	}
+	if !strings.Contains(err.Error(), `"virsh"`) {
+		t.Fatalf("expected error to mention missing virsh, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "alchemy install") {
+		t.Fatalf("expected error to recommend alchemy install, got %v", err)
 	}
 }
 
@@ -89,11 +123,25 @@ func TestLinuxLibvirtImageDirUsesSystemDefaultWhenConfigured(t *testing.T) {
 }
 
 func TestLinuxLibvirtNetworkArg(t *testing.T) {
-	if got := linuxLibvirtNetworkArg("qemu:///system"); got != "network=default,model=virtio" {
+	amd64Config := alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "desktop",
+		Arch:       "amd64",
+	}
+	if got := linuxLibvirtNetworkArg(amd64Config, "qemu:///system"); got != "network=default,model=e1000" {
 		t.Fatalf("unexpected system network arg %q", got)
 	}
-	if got := linuxLibvirtNetworkArg("qemu:///session"); got != "user,model=virtio" {
+	if got := linuxLibvirtNetworkArg(amd64Config, "qemu:///session"); got != "user,model=e1000" {
 		t.Fatalf("unexpected session network arg %q", got)
+	}
+
+	arm64Config := alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "arm64",
+	}
+	if got := linuxLibvirtNetworkArg(arm64Config, "qemu:///system"); got != "network=default,model=virtio" {
+		t.Fatalf("unexpected arm64 system network arg %q", got)
 	}
 }
 
@@ -161,6 +209,7 @@ func TestLinuxLibvirtVirtInstallArgsIncludeNativeCPUAndSpiceAgentDevices(t *test
 	joined := strings.Join(args, " ")
 	for _, want := range []string{
 		"--cpu host-passthrough",
+		"--network user,model=e1000",
 		"--graphics spice,clipboard.copypaste=on",
 		"--video model.type=qxl",
 		"--controller type=usb,model=qemu-xhci",
@@ -172,6 +221,15 @@ func TestLinuxLibvirtVirtInstallArgsIncludeNativeCPUAndSpiceAgentDevices(t *test
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected virt-install args to contain %q, got %q", want, joined)
 		}
+	}
+}
+
+func TestLinuxLibvirtNetworkModel(t *testing.T) {
+	if got := linuxLibvirtNetworkModel(alchemy_build.VirtualMachineConfig{Arch: "amd64"}); got != "e1000" {
+		t.Fatalf("expected amd64 network model e1000, got %q", got)
+	}
+	if got := linuxLibvirtNetworkModel(alchemy_build.VirtualMachineConfig{Arch: "arm64"}); got != "virtio" {
+		t.Fatalf("expected arm64 network model virtio, got %q", got)
 	}
 }
 

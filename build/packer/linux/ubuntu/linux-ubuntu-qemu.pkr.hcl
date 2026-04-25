@@ -170,7 +170,7 @@ locals {
     var.ubuntu_type == "server" ? ["linux-tools-generic"] : []
   ))
   desktop_packages = compact(concat(
-    ["ubuntu-desktop-minimal"],
+    ["ubuntu-desktop-minimal", "gdm3", "network-manager"],
     var.arch == "amd64" ? ["xserver-xorg-video-qxl"] : []
   ))
 }
@@ -249,6 +249,18 @@ build {
     max_retries  = 2
     pause_before = "10s"
     timeout      = "120m"
+  }
+
+  provisioner "shell" {
+    environment_vars = ["SUDO_ASKPASS=/tmp/askpass.sh"]
+    inline = var.ubuntu_type == "desktop" ? [
+      "echo 'Configuring desktop netplan to use NetworkManager on future boots...'",
+      "printf 'network:\\n  version: 2\\n  renderer: NetworkManager\\n' > /tmp/90-dev-alchemy-networkmanager.yaml",
+      "sudo -A install -m 600 /tmp/90-dev-alchemy-networkmanager.yaml /etc/netplan/90-dev-alchemy-networkmanager.yaml",
+      "sudo -A systemctl enable NetworkManager.service",
+    ] : ["echo 'Server build - keeping default netplan renderer.'"]
+    pause_before = "5s"
+    timeout      = "10m"
   }
 
   post-processor "shell-local" {
