@@ -305,6 +305,28 @@ func TestIsProvisionSupported(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "linux qemu ubuntu amd64 supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "ubuntu",
+				Arch:                 "amd64",
+				UbuntuType:           "server",
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+			},
+			want: true,
+		},
+		{
+			name: "linux qemu ubuntu arm64 supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "ubuntu",
+				Arch:                 "arm64",
+				UbuntuType:           "desktop",
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+			},
+			want: true,
+		},
+		{
 			name: "darwin tart macos arm64 supported",
 			vm: alchemy_build.VirtualMachineConfig{
 				OS:                   "macos",

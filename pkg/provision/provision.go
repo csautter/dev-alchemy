@@ -48,6 +48,14 @@ const (
 	utmUbuntuAnsibleSshTimeoutEnvVar     = "UTM_UBUNTU_ANSIBLE_SSH_TIMEOUT"
 	utmUbuntuAnsibleSshRetriesEnvVar     = "UTM_UBUNTU_ANSIBLE_SSH_RETRIES"
 
+	libvirtUbuntuAnsibleUserEnvVar           = "LIBVIRT_UBUNTU_ANSIBLE_USER"
+	libvirtUbuntuAnsiblePasswordEnvVar       = "LIBVIRT_UBUNTU_ANSIBLE_PASSWORD"        // #nosec G101 -- environment variable name, not an embedded credential.
+	libvirtUbuntuAnsibleBecomePasswordEnvVar = "LIBVIRT_UBUNTU_ANSIBLE_BECOME_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
+	libvirtUbuntuAnsibleConnectionEnvVar     = "LIBVIRT_UBUNTU_ANSIBLE_CONNECTION"
+	libvirtUbuntuAnsibleSshCommonArgsEnvVar  = "LIBVIRT_UBUNTU_ANSIBLE_SSH_COMMON_ARGS"
+	libvirtUbuntuAnsibleSshTimeoutEnvVar     = "LIBVIRT_UBUNTU_ANSIBLE_SSH_TIMEOUT"
+	libvirtUbuntuAnsibleSshRetriesEnvVar     = "LIBVIRT_UBUNTU_ANSIBLE_SSH_RETRIES"
+
 	tartMacOSAnsibleUserEnvVar           = "TART_MACOS_ANSIBLE_USER"
 	tartMacOSAnsiblePasswordEnvVar       = "TART_MACOS_ANSIBLE_PASSWORD"        // #nosec G101 -- environment variable name, not an embedded credential.
 	tartMacOSAnsibleBecomePasswordEnvVar = "TART_MACOS_ANSIBLE_BECOME_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
@@ -69,6 +77,12 @@ const (
 	utmIPv4ProbePortHTTP            = 5985
 	utmIPv4ProbePortHTTPS           = 5986
 	utmIPv4ProbeSubnetPrefixMinimum = 24
+
+	linuxLibvirtIPv4DiscoveryRetryWindow   = 2 * time.Minute
+	linuxLibvirtIPv4DiscoveryRetryInterval = 3 * time.Second
+	linuxLibvirtIPv4CommandTimeout         = time.Minute
+	linuxLibvirtDomifaddrSourceAgent       = "agent"
+	linuxLibvirtDomifaddrSourceLease       = "lease"
 
 	defaultAnsibleSSHCommonArgs = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
 	defaultAnsibleVerbosity     = 3
@@ -172,6 +186,14 @@ type tartIPv4DiscoveryOptions struct {
 	commandTimeout time.Duration
 }
 
+type linuxLibvirtIPv4DiscoveryOptions struct {
+	runCommand     func(string, time.Duration, string, []string) (string, error)
+	sleep          func(time.Duration)
+	retryInterval  time.Duration
+	maxAttempts    int
+	commandTimeout time.Duration
+}
+
 type tartProvisionAvailabilityOptions struct {
 	localVMExists func(string, string) (bool, error)
 	discoverIPv4  func(string, string) (string, error)
@@ -237,6 +259,9 @@ func RunProvisionWithOptions(vm alchemy_build.VirtualMachineConfig, options Prov
 	if isUtmUbuntuProvisionTarget(vm) {
 		return runUtmUbuntuProvision(vm, options)
 	}
+	if isLinuxQemuUbuntuProvisionTarget(vm) {
+		return runLinuxQemuUbuntuProvision(vm, options)
+	}
 	if isTartMacOSProvisionTarget(vm) {
 		return runTartMacOSProvision(vm, options)
 	}
@@ -277,6 +302,14 @@ func isUtmUbuntuProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
 		(vm.Arch == "amd64" || vm.Arch == "arm64") &&
 		vm.HostOs == alchemy_build.HostOsDarwin &&
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineUtm
+}
+
+func isLinuxQemuUbuntuProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
+	return vm.OS == "ubuntu" &&
+		(vm.UbuntuType == "server" || vm.UbuntuType == "desktop") &&
+		(vm.Arch == "amd64" || vm.Arch == "arm64") &&
+		vm.HostOs == alchemy_build.HostOsLinux &&
+		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineQemu
 }
 
 func isUtmWindows11ProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
@@ -462,6 +495,49 @@ func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, options Provis
 	}
 
 	runErr := runAnsibleProvisionCommand(
+		projectDir,
+		args,
+		90*time.Minute,
+		fmt.Sprintf("%s:%s:%s:provision", vm.OS, vm.UbuntuType, vm.Arch),
+	)
+
+	cleanupErr := cleanupExtraVarsFile()
+	if runErr != nil {
+		if cleanupErr != nil {
+			return fmt.Errorf("ansible provisioning failed for %s:%s:%s: %w (also failed to remove ansible extra-vars temp file: %v)", vm.OS, vm.UbuntuType, vm.Arch, runErr, cleanupErr)
+		}
+		return fmt.Errorf("ansible provisioning failed for %s:%s:%s: %w", vm.OS, vm.UbuntuType, vm.Arch, runErr)
+	}
+	if cleanupErr != nil {
+		return fmt.Errorf("failed to remove ansible extra-vars temp file for %s:%s:%s: %w", vm.OS, vm.UbuntuType, vm.Arch, cleanupErr)
+	}
+
+	return nil
+}
+
+func runLinuxQemuUbuntuProvision(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
+	if err := ensureProvisionTargetRunning(vm); err != nil {
+		return err
+	}
+
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+
+	ip, err := discoverLinuxLibvirtVMIPv4(projectDir, vm)
+	if err != nil {
+		return fmt.Errorf("failed to determine libvirt VM IPv4 address: %w", err)
+	}
+
+	connectionConfig, err := loadUbuntuLibvirtAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to load libvirt ubuntu ansible configuration: %w", err)
+	}
+
+	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, options)
+	if err != nil {
+		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
+	}
+
+	runErr := runAnsibleProvisionCommandFunc(
 		projectDir,
 		args,
 		90*time.Minute,
@@ -729,6 +805,94 @@ func extractLinuxIPv4FromHostOutput(output string) (string, error) {
 
 func discoverUtmVMIPv4(projectDir string, vm alchemy_build.VirtualMachineConfig) (string, error) {
 	return discoverUtmVMIPv4WithOptions(projectDir, vm, utmIPv4DiscoveryOptions{})
+}
+
+func discoverLinuxLibvirtVMIPv4(projectDir string, vm alchemy_build.VirtualMachineConfig) (string, error) {
+	return discoverLinuxLibvirtVMIPv4WithOptions(projectDir, vm, linuxLibvirtIPv4DiscoveryOptions{})
+}
+
+func discoverLinuxLibvirtVMIPv4WithOptions(projectDir string, vm alchemy_build.VirtualMachineConfig, options linuxLibvirtIPv4DiscoveryOptions) (string, error) {
+	options = withDefaultLinuxLibvirtIPv4DiscoveryOptions(options)
+
+	domainName := alchemy_deploy.LinuxLibvirtDomainName(vm)
+	libvirtURI := alchemy_deploy.LinuxLibvirtURI()
+
+	var lastErr error
+	for attempt := 1; attempt <= options.maxAttempts; attempt++ {
+		ip, err := detectLinuxLibvirtVMIPv4(projectDir, domainName, libvirtURI, options.runCommand, options.commandTimeout)
+		if err == nil {
+			return ip, nil
+		}
+		lastErr = err
+
+		if attempt < options.maxAttempts {
+			options.sleep(options.retryInterval)
+		}
+	}
+
+	return "", fmt.Errorf(
+		"could not determine IPv4 address for libvirt VM %q after %d attempts over %s: %w",
+		domainName,
+		options.maxAttempts,
+		time.Duration(options.maxAttempts-1)*options.retryInterval,
+		lastErr,
+	)
+}
+
+func withDefaultLinuxLibvirtIPv4DiscoveryOptions(options linuxLibvirtIPv4DiscoveryOptions) linuxLibvirtIPv4DiscoveryOptions {
+	if options.runCommand == nil {
+		options.runCommand = runCommandWithCombinedOutput
+	}
+	if options.sleep == nil {
+		options.sleep = time.Sleep
+	}
+	if options.retryInterval <= 0 {
+		options.retryInterval = linuxLibvirtIPv4DiscoveryRetryInterval
+	}
+	if options.maxAttempts <= 0 {
+		options.maxAttempts = int(linuxLibvirtIPv4DiscoveryRetryWindow/options.retryInterval) + 1
+	}
+	if options.commandTimeout <= 0 {
+		options.commandTimeout = linuxLibvirtIPv4CommandTimeout
+	}
+
+	return options
+}
+
+func detectLinuxLibvirtVMIPv4(
+	projectDir string,
+	domainName string,
+	libvirtURI string,
+	runCommand func(string, time.Duration, string, []string) (string, error),
+	commandTimeout time.Duration,
+) (string, error) {
+	sources := []string{
+		linuxLibvirtDomifaddrSourceAgent,
+		linuxLibvirtDomifaddrSourceLease,
+	}
+
+	var failures []string
+	for _, source := range sources {
+		output, err := runCommand(
+			projectDir,
+			commandTimeout,
+			"virsh",
+			[]string{"--connect", libvirtURI, "domifaddr", domainName, "--source", source},
+		)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s lookup failed: %v; output: %s", source, err, strings.TrimSpace(output)))
+			continue
+		}
+
+		ip, parseErr := extractLinuxIPv4FromHostOutput(output)
+		if parseErr == nil {
+			return ip, nil
+		}
+
+		failures = append(failures, fmt.Sprintf("%s lookup returned no IPv4 address: %v; output: %s", source, parseErr, strings.TrimSpace(output)))
+	}
+
+	return "", errors.New(strings.Join(failures, "; "))
 }
 
 func discoverUtmVMIPv4WithOptions(projectDir string, vm alchemy_build.VirtualMachineConfig, options utmIPv4DiscoveryOptions) (string, error) {
@@ -1401,6 +1565,18 @@ func loadUbuntuUtmAnsibleConnectionConfig(projectDir string) (sshAnsibleConnecti
 		SshCommonArgs:  utmUbuntuAnsibleSshCommonArgsEnvVar,
 		SshTimeout:     utmUbuntuAnsibleSshTimeoutEnvVar,
 		SshRetries:     utmUbuntuAnsibleSshRetriesEnvVar,
+	})
+}
+
+func loadUbuntuLibvirtAnsibleConnectionConfig(projectDir string) (sshAnsibleConnectionConfig, error) {
+	return loadUbuntuAnsibleConnectionConfig(projectDir, sshAnsibleConnectionEnvVars{
+		User:           libvirtUbuntuAnsibleUserEnvVar,
+		Password:       libvirtUbuntuAnsiblePasswordEnvVar,
+		BecomePassword: libvirtUbuntuAnsibleBecomePasswordEnvVar,
+		Connection:     libvirtUbuntuAnsibleConnectionEnvVar,
+		SshCommonArgs:  libvirtUbuntuAnsibleSshCommonArgsEnvVar,
+		SshTimeout:     libvirtUbuntuAnsibleSshTimeoutEnvVar,
+		SshRetries:     libvirtUbuntuAnsibleSshRetriesEnvVar,
 	})
 }
 
