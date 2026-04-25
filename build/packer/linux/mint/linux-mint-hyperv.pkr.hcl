@@ -2,7 +2,7 @@ packer {
   required_version = ">= 1.12.0"
   required_plugins {
     hyperv = {
-      version = ">= 1.1.2"
+      version = ">= 1.1.5"
       source  = "github.com/hashicorp/hyperv"
     }
     vagrant = {
