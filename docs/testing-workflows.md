@@ -96,13 +96,20 @@ alchemy build ubuntu --arch "$arch" --type "$type"
 alchemy create ubuntu --arch "$arch" --type "$type"
 ```
 
-By default the Linux create/start/stop/destroy workflow uses the libvirt user session (`qemu:///session`) so the VM is visible in `virt-manager` under the QEMU/KVM user session connection and can run without root-owned storage.
+By default the Linux create/start/stop/destroy workflow uses the libvirt system connection (`qemu:///system`) so the VM attaches to libvirt's standard NAT network and gets outbound internet access in the common case. Managed QCOW2 disks default to `/var/tmp/dev-alchemy/libvirt/images`, which avoids requiring a pre-created root-owned image directory.
 
-If you prefer the system libvirt connection, set:
+If you prefer the rootless libvirt user session instead, set:
+
+```bash
+export DEV_ALCHEMY_LIBVIRT_URI=qemu:///session
+# Optional when you want a custom storage location for the session connection:
+export DEV_ALCHEMY_LIBVIRT_IMAGE_DIR="$HOME/.local/share/dev-alchemy/libvirt/images"
+```
+
+If you prefer the traditional system libvirt image location instead, set:
 
 ```bash
 export DEV_ALCHEMY_LIBVIRT_URI=qemu:///system
-# Optional when you want a custom storage location:
 export DEV_ALCHEMY_LIBVIRT_IMAGE_DIR=/var/lib/libvirt/images/dev-alchemy
 ```
 

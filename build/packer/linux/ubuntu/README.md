@@ -113,6 +113,7 @@ For `amd64` Ubuntu desktop guests, the image also includes
 `xserver-xorg-video-qxl` and the Linux libvirt runtime uses a `qxl` video
 device to improve SPICE auto-resize behavior in `virt-manager`.
 
-- Default libvirt connection: `qemu:///session`
-- Override connection: `DEV_ALCHEMY_LIBVIRT_URI=qemu:///system`
+- Default libvirt connection: `qemu:///system`
+- Default managed disk directory for that connection: `/var/tmp/dev-alchemy/libvirt/images`
+- Optional override for rootless libvirt user-session VMs: `DEV_ALCHEMY_LIBVIRT_URI=qemu:///session`
 - Optional managed disk directory override: `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR=/path/to/images`

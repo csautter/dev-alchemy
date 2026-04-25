@@ -3,6 +3,7 @@ package deploy
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -14,8 +15,8 @@ import (
 const (
 	linuxLibvirtURIEnvVar              = "DEV_ALCHEMY_LIBVIRT_URI"
 	linuxLibvirtImageDirEnvVar         = "DEV_ALCHEMY_LIBVIRT_IMAGE_DIR"
-	linuxLibvirtDefaultURI             = "qemu:///session"
-	linuxLibvirtSystemImageDir         = "/var/lib/libvirt/images/dev-alchemy"
+	linuxLibvirtDefaultURI             = "qemu:///system"
+	linuxLibvirtSystemImageDir         = "/var/tmp/dev-alchemy/libvirt/images"
 	linuxLibvirtCreateTimeout          = 20 * time.Minute
 	linuxLibvirtCommandTimeout         = 2 * time.Minute
 	linuxLibvirtStopSettleTimeout      = 45 * time.Second
@@ -29,6 +30,7 @@ var (
 	runLinuxLibvirtCommandWithCombinedOut   = runCommandWithCombinedOutput
 	linuxLibvirtStopTimeout                 = linuxLibvirtStopSettleTimeout
 	linuxLibvirtStopPollEvery               = linuxLibvirtStopPollInterval
+	lookPathLinuxLibvirtCommand             = exec.LookPath
 )
 
 func isLinuxLibvirtTarget(config alchemy_build.VirtualMachineConfig) bool {
@@ -42,6 +44,9 @@ func isLinuxLibvirtTarget(config alchemy_build.VirtualMachineConfig) bool {
 func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error {
 	if !isLinuxLibvirtTarget(config) {
 		return fmt.Errorf("linux libvirt deploy is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+	if err := ensureLinuxLibvirtCommandsAvailable("qemu-img", "virt-install", "virsh"); err != nil {
+		return err
 	}
 	if err := ensureLinuxLibvirtNativeArch(config); err != nil {
 		return err
@@ -135,6 +140,9 @@ func RunLinuxQemuStartOnLinux(config alchemy_build.VirtualMachineConfig) error {
 	if !isLinuxLibvirtTarget(config) {
 		return fmt.Errorf("linux libvirt start is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
 	}
+	if err := ensureLinuxLibvirtCommandsAvailable("virsh"); err != nil {
+		return err
+	}
 	if err := ensureLinuxLibvirtNativeArch(config); err != nil {
 		return err
 	}
@@ -166,6 +174,9 @@ func RunLinuxQemuStartOnLinux(config alchemy_build.VirtualMachineConfig) error {
 func RunLinuxQemuStopOnLinux(config alchemy_build.VirtualMachineConfig) error {
 	if !isLinuxLibvirtTarget(config) {
 		return fmt.Errorf("linux libvirt stop is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+	if err := ensureLinuxLibvirtCommandsAvailable("virsh"); err != nil {
+		return err
 	}
 
 	state, err := inspectLinuxLibvirtStartTarget(config)
@@ -216,6 +227,9 @@ func RunLinuxQemuDestroyOnLinux(config alchemy_build.VirtualMachineConfig) error
 	if !isLinuxLibvirtTarget(config) {
 		return fmt.Errorf("linux libvirt destroy is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
 	}
+	if err := ensureLinuxLibvirtCommandsAvailable("virsh"); err != nil {
+		return err
+	}
 
 	state, err := inspectLinuxLibvirtStartTarget(config)
 	if err != nil {
@@ -260,6 +274,9 @@ func RunLinuxQemuDestroyOnLinux(config alchemy_build.VirtualMachineConfig) error
 }
 
 func inspectLinuxLibvirtStartTarget(config alchemy_build.VirtualMachineConfig) (StartTargetState, error) {
+	if err := ensureLinuxLibvirtCommandsAvailable("virsh"); err != nil {
+		return StartTargetState{}, err
+	}
 	state, err := linuxLibvirtDomainState(config)
 	if err != nil {
 		return StartTargetState{}, err
@@ -356,6 +373,18 @@ func linuxLibvirtUsesSystemConnection(uri string) bool {
 	return strings.EqualFold(strings.TrimSpace(uri), "qemu:///system")
 }
 
+func ensureLinuxLibvirtCommandsAvailable(commands ...string) error {
+	for _, command := range commands {
+		if _, err := lookPathLinuxLibvirtCommand(command); err != nil {
+			return fmt.Errorf(
+				"required Linux libvirt command %q was not found in PATH; run `alchemy install` first or install the libvirt/QEMU host packages manually",
+				command,
+			)
+		}
+	}
+	return nil
+}
+
 func linuxLibvirtVirtInstallArgs(config alchemy_build.VirtualMachineConfig, uri string, diskPath string) []string {
 	args := []string{
 		"--connect", uri,
@@ -365,7 +394,7 @@ func linuxLibvirtVirtInstallArgs(config alchemy_build.VirtualMachineConfig, uri 
 		"--cpu", "host-passthrough",
 		"--import",
 		"--disk", fmt.Sprintf("path=%s,format=qcow2,bus=virtio", diskPath),
-		"--network", linuxLibvirtNetworkArg(uri),
+		"--network", linuxLibvirtNetworkArg(config, uri),
 		"--graphics", "spice,clipboard.copypaste=on",
 		"--video", linuxLibvirtVideoArg(config),
 		"--controller", "type=usb,model=qemu-xhci",
@@ -397,17 +426,22 @@ func linuxLibvirtVirtInstallArgs(config alchemy_build.VirtualMachineConfig, uri 
 	return args
 }
 
-func linuxLibvirtNetworkArg(uri string) string {
+func linuxLibvirtNetworkArg(config alchemy_build.VirtualMachineConfig, uri string) string {
+	model := linuxLibvirtNetworkModel(config)
 	if linuxLibvirtUsesSystemConnection(uri) {
-		return "network=default,model=virtio"
+		return fmt.Sprintf("network=default,model=%s", model)
 	}
-	return "user,model=virtio"
+	return fmt.Sprintf("user,model=%s", model)
+}
+
+func linuxLibvirtNetworkModel(config alchemy_build.VirtualMachineConfig) string {
+	if config.Arch == "amd64" {
+		return "e1000"
+	}
+	return "virtio"
 }
 
 func linuxLibvirtVideoArg(config alchemy_build.VirtualMachineConfig) string {
-	if config.OS == "ubuntu" && config.UbuntuType == "desktop" && config.Arch == "amd64" {
-		return "model.type=qxl"
-	}
 	return "model.type=virtio"
 }
 
