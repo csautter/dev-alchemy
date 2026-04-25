@@ -98,6 +98,7 @@ install_linux_packages() {
 		qemu-system-arm
 		qemu-system-x86
 		qemu-utils
+		sshpass
 		tar
 		virt-manager
 		virtinst

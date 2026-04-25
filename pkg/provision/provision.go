@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -202,6 +203,7 @@ type tartProvisionAvailabilityOptions struct {
 var inspectProvisionTarget = alchemy_deploy.InspectStartTarget
 var runProvisionCommandWithCombinedOutputWithEnv = runCommandWithCombinedOutputWithEnv
 var runAnsibleProvisionCommandFunc = runAnsibleProvisionCommand
+var lookPathProvisionCommand = exec.LookPath
 
 func DefaultProvisionPlaybookPath() string {
 	return defaultProvisionPlaybook
@@ -445,6 +447,9 @@ func runHypervUbuntuProvision(vm alchemy_build.VirtualMachineConfig, options Pro
 	if err != nil {
 		return fmt.Errorf("failed to load hyper-v ubuntu ansible configuration: %w", err)
 	}
+	if err := ensureSSHPasswordAuthDependencies(connectionConfig); err != nil {
+		return fmt.Errorf("failed to verify hyper-v ubuntu ansible dependencies: %w", err)
+	}
 
 	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, options)
 	if err != nil {
@@ -488,6 +493,9 @@ func runUtmUbuntuProvision(vm alchemy_build.VirtualMachineConfig, options Provis
 	if err != nil {
 		return fmt.Errorf("failed to load UTM ubuntu ansible configuration: %w", err)
 	}
+	if err := ensureSSHPasswordAuthDependencies(connectionConfig); err != nil {
+		return fmt.Errorf("failed to verify UTM ubuntu ansible dependencies: %w", err)
+	}
 
 	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, options)
 	if err != nil {
@@ -530,6 +538,9 @@ func runLinuxQemuUbuntuProvision(vm alchemy_build.VirtualMachineConfig, options 
 	connectionConfig, err := loadUbuntuLibvirtAnsibleConnectionConfig(projectDir)
 	if err != nil {
 		return fmt.Errorf("failed to load libvirt ubuntu ansible configuration: %w", err)
+	}
+	if err := ensureSSHPasswordAuthDependencies(connectionConfig); err != nil {
+		return fmt.Errorf("failed to verify libvirt ubuntu ansible dependencies: %w", err)
 	}
 
 	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, options)
@@ -578,6 +589,9 @@ func runTartMacOSProvision(vm alchemy_build.VirtualMachineConfig, options Provis
 	connectionConfig, err := loadMacOSTartAnsibleConnectionConfig(projectDir)
 	if err != nil {
 		return fmt.Errorf("failed to load Tart macOS ansible configuration: %w", err)
+	}
+	if err := ensureSSHPasswordAuthDependencies(connectionConfig); err != nil {
+		return fmt.Errorf("failed to verify Tart macOS ansible dependencies: %w", err)
 	}
 
 	args, cleanupExtraVarsFile, err := buildSSHProvisionArgs(projectDir, ip, connectionConfig, options)
@@ -1308,6 +1322,22 @@ func buildSSHProvisionExtraVars(connectionConfig sshAnsibleConnectionConfig) ([]
 	}
 
 	return json.Marshal(extraVars)
+}
+
+func ensureSSHPasswordAuthDependencies(connectionConfig sshAnsibleConnectionConfig) error {
+	connection := strings.ToLower(strings.TrimSpace(connectionConfig.Connection))
+	if connection != "ssh" || strings.TrimSpace(connectionConfig.Password) == "" {
+		return nil
+	}
+
+	if _, err := lookPathProvisionCommand("sshpass"); err != nil {
+		return fmt.Errorf(
+			"sshpass is required for Ansible SSH password authentication with ansible_connection=ssh; install it (Ubuntu/Debian: sudo apt install sshpass) or configure a non-password SSH connection: %w",
+			err,
+		)
+	}
+
+	return nil
 }
 
 func buildLocalProvisionArgs(hostOs alchemy_build.HostOsType, options ProvisionOptions) ([]string, error) {
