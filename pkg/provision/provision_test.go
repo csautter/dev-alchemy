@@ -1756,6 +1756,55 @@ func TestBuildSSHProvisionArgs(t *testing.T) {
 	}
 }
 
+func TestEnsureSSHPasswordAuthDependenciesRequiresSSHPass(t *testing.T) {
+	previousLookPath := lookPathProvisionCommand
+	t.Cleanup(func() {
+		lookPathProvisionCommand = previousLookPath
+	})
+
+	var lookedUp []string
+	lookPathProvisionCommand = func(file string) (string, error) {
+		lookedUp = append(lookedUp, file)
+		return "", errors.New("not found")
+	}
+
+	err := ensureSSHPasswordAuthDependencies(sshAnsibleConnectionConfig{
+		Connection: "ssh",
+		Password:   "P@ssw0rd!",
+	})
+	if err == nil {
+		t.Fatal("expected missing sshpass error")
+	}
+	if strings.Join(lookedUp, ",") != "sshpass" {
+		t.Fatalf("expected sshpass lookup, got %v", lookedUp)
+	}
+	if !strings.Contains(err.Error(), "sudo apt install sshpass") {
+		t.Fatalf("expected install hint in error, got %v", err)
+	}
+}
+
+func TestEnsureSSHPasswordAuthDependenciesSkipsNonOpenSSHPasswordAuth(t *testing.T) {
+	previousLookPath := lookPathProvisionCommand
+	t.Cleanup(func() {
+		lookPathProvisionCommand = previousLookPath
+	})
+
+	lookPathProvisionCommand = func(file string) (string, error) {
+		t.Fatalf("did not expect command lookup for %s", file)
+		return "", nil
+	}
+
+	for _, config := range []sshAnsibleConnectionConfig{
+		{Connection: "ssh"},
+		{Connection: "paramiko", Password: "P@ssw0rd!"},
+		{Connection: "winrm", Password: "P@ssw0rd!"},
+	} {
+		if err := ensureSSHPasswordAuthDependencies(config); err != nil {
+			t.Fatalf("did not expect dependency error for config %+v: %v", config, err)
+		}
+	}
+}
+
 func TestBuildSSHStaticInventoryProvisionArgsIncludesWindowsShellSettings(t *testing.T) {
 	projectDir := t.TempDir()
 	config := sshAnsibleConnectionConfig{
