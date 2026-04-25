@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -41,6 +42,9 @@ func isLinuxLibvirtTarget(config alchemy_build.VirtualMachineConfig) bool {
 func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error {
 	if !isLinuxLibvirtTarget(config) {
 		return fmt.Errorf("linux libvirt deploy is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+	if err := ensureLinuxLibvirtNativeArch(config); err != nil {
+		return err
 	}
 
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
@@ -130,6 +134,9 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 func RunLinuxQemuStartOnLinux(config alchemy_build.VirtualMachineConfig) error {
 	if !isLinuxLibvirtTarget(config) {
 		return fmt.Errorf("linux libvirt start is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
+	}
+	if err := ensureLinuxLibvirtNativeArch(config); err != nil {
+		return err
 	}
 
 	state, err := inspectLinuxLibvirtStartTarget(config)
@@ -355,12 +362,17 @@ func linuxLibvirtVirtInstallArgs(config alchemy_build.VirtualMachineConfig, uri 
 		"--name", linuxLibvirtDomainName(config),
 		"--memory", fmt.Sprintf("%d", alchemy_build.GetVmMemoryMB(config)),
 		"--vcpus", fmt.Sprintf("%d", alchemy_build.GetVmCpuCount(config)),
+		"--cpu", "host-passthrough",
 		"--import",
 		"--disk", fmt.Sprintf("path=%s,format=qcow2,bus=virtio", diskPath),
 		"--network", linuxLibvirtNetworkArg(uri),
-		"--graphics", "spice",
-		"--video", "virtio",
+		"--graphics", "spice,clipboard.copypaste=on",
+		"--video", linuxLibvirtVideoArg(config),
+		"--controller", "type=usb,model=qemu-xhci",
+		"--input", "tablet,bus=usb",
+		"--input", "keyboard,bus=usb",
 		"--channel", "unix,target.type=virtio,name=org.qemu.guest_agent.0",
+		"--channel", "spicevmc,target.type=virtio,target.name=com.redhat.spice.0",
 		"--rng", "/dev/urandom",
 		"--os-variant", "generic",
 		"--noautoconsole",
@@ -390,6 +402,42 @@ func linuxLibvirtNetworkArg(uri string) string {
 		return "network=default,model=virtio"
 	}
 	return "user,model=virtio"
+}
+
+func linuxLibvirtVideoArg(config alchemy_build.VirtualMachineConfig) string {
+	if config.OS == "ubuntu" && config.UbuntuType == "desktop" && config.Arch == "amd64" {
+		return "model.type=qxl"
+	}
+	return "model.type=virtio"
+}
+
+func ensureLinuxLibvirtNativeArch(config alchemy_build.VirtualMachineConfig) error {
+	hostArch, err := linuxLibvirtHostArch()
+	if err != nil {
+		return err
+	}
+	if config.Arch == hostArch {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"linux libvirt deploy requires native virtualization on matching host and guest architectures; host=%s guest=%s. Build or run the %s image on a %s host instead",
+		hostArch,
+		config.Arch,
+		config.Arch,
+		config.Arch,
+	)
+}
+
+func linuxLibvirtHostArch() (string, error) {
+	switch runtime.GOARCH {
+	case "amd64":
+		return "amd64", nil
+	case "arm64":
+		return "arm64", nil
+	default:
+		return "", fmt.Errorf("linux libvirt deploy does not support host architecture %q", runtime.GOARCH)
+	}
 }
 
 func linuxLibvirtStateIndicatesRunning(state string) bool {

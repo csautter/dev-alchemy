@@ -100,6 +100,19 @@ build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch 
 The Linux `create`/`start`/`stop`/`destroy` flow uses libvirt so the VM appears
 in `virt-manager`.
 
+Linux libvirt runtime is intentionally native-architecture only:
+- `amd64` guests must run on `amd64` Linux hosts
+- `arm64` guests must run on `arm64` Linux hosts
+
+Ubuntu QEMU images include `qemu-guest-agent` and `spice-vdagent`, and the
+libvirt domain enables the SPICE agent channel so `virt-manager` can provide
+better clipboard, pointer, and dynamic display resize integration for desktop
+guests.
+
+For `amd64` Ubuntu desktop guests, the image also includes
+`xserver-xorg-video-qxl` and the Linux libvirt runtime uses a `qxl` video
+device to improve SPICE auto-resize behavior in `virt-manager`.
+
 - Default libvirt connection: `qemu:///session`
 - Override connection: `DEV_ALCHEMY_LIBVIRT_URI=qemu:///system`
 - Optional managed disk directory override: `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR=/path/to/images`
