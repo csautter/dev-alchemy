@@ -81,8 +81,17 @@ func TestQemuAutoinstallUsesBootCommandWithoutSubiquityRestart(t *testing.T) {
 	}
 }
 
-func TestQemuCloudInitLeavesInstallerNetworkingToSubiquityDefaults(t *testing.T) {
+func TestQemuCloudInitConfiguresPersistentDHCPNetworking(t *testing.T) {
 	t.Parallel()
+
+	const explicitDHCPNetwork = `  network:
+    version: 2
+    ethernets:
+      default:
+        dhcp4: true
+        dhcp6: true
+        match:
+          name: e*`
 
 	for _, userDataPath := range []string{
 		"build/packer/linux/ubuntu/cloud-init/qemu-server/user-data",
@@ -96,8 +105,8 @@ func TestQemuCloudInitLeavesInstallerNetworkingToSubiquityDefaults(t *testing.T)
 			if err != nil {
 				t.Fatalf("failed to read %q: %v", userDataPath, err)
 			}
-			if strings.Contains(string(content), "\n  network:\n") {
-				t.Fatalf("expected %q to use Subiquity's default DHCP network config", userDataPath)
+			if !strings.Contains(string(content), explicitDHCPNetwork) {
+				t.Fatalf("expected %q to configure persistent DHCP networking for QEMU interfaces", userDataPath)
 			}
 		})
 	}
