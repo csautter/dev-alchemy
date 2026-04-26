@@ -454,7 +454,15 @@ func linuxLibvirtCPUArg(config alchemy_build.VirtualMachineConfig) string {
 	if linuxLibvirtUsesNativeArch(config) {
 		return "host-passthrough"
 	}
-	return "max"
+
+	switch config.Arch {
+	case "amd64":
+		return "Skylake-Client"
+	case "arm64":
+		return "max,sve=off,sme=off,pauth-impdef=on"
+	default:
+		return "max"
+	}
 }
 
 func linuxLibvirtUsesNativeArch(config alchemy_build.VirtualMachineConfig) bool {

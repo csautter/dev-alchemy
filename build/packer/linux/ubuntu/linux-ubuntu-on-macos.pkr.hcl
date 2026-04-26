@@ -115,7 +115,7 @@ locals {
     "arm64" = [
       ["-accel", var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"],
       ["-machine", "virt,highmem=on"],
-      ["-cpu", var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"],
+      ["-cpu", var.is_ci ? "max,sve=off,sme=off,pauth-impdef=on" : "host"],
       ["-bios", "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
       ["-device", "ramfb"],
       ["-smp", "cpus=${var.cpus},cores=${var.cpus},sockets=1,threads=1"],

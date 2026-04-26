@@ -100,9 +100,9 @@ build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch 
 The Linux `create`/`start`/`stop`/`destroy` flow uses libvirt so the VM appears
 in `virt-manager`.
 
-Linux libvirt runtime is intentionally native-architecture only:
-- `amd64` guests must run on `amd64` Linux hosts
-- `arm64` guests must run on `arm64` Linux hosts
+Linux libvirt runtime prefers native-architecture guests for `create all` and
+`start all`. Cross-architecture guests are available when selected explicitly,
+but they are marked unstable because QEMU TCG emulation is slow and less tested.
 
 Ubuntu QEMU images include `qemu-guest-agent` and `spice-vdagent`, and the
 libvirt domain enables the SPICE agent channel so `virt-manager` can provide
