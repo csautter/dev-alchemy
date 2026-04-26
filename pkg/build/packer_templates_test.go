@@ -103,6 +103,74 @@ func TestQemuCloudInitLeavesInstallerNetworkingToSubiquityDefaults(t *testing.T)
 	}
 }
 
+func TestQemuCloudInitExtendsInstallerBusctlTimeout(t *testing.T) {
+	t.Parallel()
+
+	for _, userDataPath := range []string{
+		"build/packer/linux/ubuntu/cloud-init/qemu-server/user-data",
+		"build/packer/linux/ubuntu/cloud-init/qemu-desktop/user-data",
+	} {
+		userDataPath := userDataPath
+		t.Run(filepath.Base(filepath.Dir(userDataPath)), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, userDataPath))
+			if err != nil {
+				t.Fatalf("failed to read %q: %v", userDataPath, err)
+			}
+
+			got := string(content)
+			for _, want := range []string{
+				"early-commands:",
+				"/usr/bin/busctl.dev-alchemy-original --timeout=120",
+			} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("expected %q to contain %q", userDataPath, want)
+				}
+			}
+		})
+	}
+}
+
+func TestArm64QemuBootOrderPrefersInstalledDiskAfterInstall(t *testing.T) {
+	t.Parallel()
+
+	for _, templatePath := range []string{
+		"build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl",
+		"build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl",
+	} {
+		templatePath := templatePath
+		t.Run(filepath.Base(templatePath), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, templatePath))
+			if err != nil {
+				t.Fatalf("failed to read template %q: %v", templatePath, err)
+			}
+
+			got := string(content)
+			if !strings.Contains(got, "drive=disk,serial=deadbeef,bootindex=0") {
+				t.Fatalf("expected template %q to prefer the installed ARM64 disk once it becomes bootable", templatePath)
+			}
+			if !strings.Contains(got, "drive=cdrom,bootindex=1") {
+				t.Fatalf("expected template %q to keep the ARM64 installer ISO as the blank-disk fallback", templatePath)
+			}
+			if !strings.Contains(got, "efi_boot") {
+				t.Fatalf("expected template %q to enable Packer EFI mode for ARM64 so the qemu builder does not inject -boot", templatePath)
+			}
+			if !strings.Contains(got, "AAVMF_CODE.no-secboot.fd") {
+				t.Fatalf("expected template %q to attach ARM64 AAVMF code firmware", templatePath)
+			}
+			if !strings.Contains(got, "file={{ .OutputDir }}/efivars.fd,if=pflash,unit=1,format=raw") {
+				t.Fatalf("expected template %q to attach Packer's writable ARM64 efivars copy", templatePath)
+			}
+			if strings.Contains(got, "[\"-boot\",") {
+				t.Fatalf("template %q uses unsupported ARM64 QEMU boot ordering through -boot", templatePath)
+			}
+		})
+	}
+}
+
 func repoPath(t *testing.T, relPath string) string {
 	t.Helper()
 

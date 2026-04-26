@@ -1,6 +1,18 @@
 #cloud-config
+
+
 autoinstall:
   version: 1
+  early-commands:
+    - |
+      if [ -x /usr/bin/busctl ] && [ ! -x /usr/bin/busctl.dev-alchemy-original ]; then
+        mv /usr/bin/busctl /usr/bin/busctl.dev-alchemy-original
+        cat >/usr/bin/busctl <<'EOF'
+      #!/bin/sh
+      exec /usr/bin/busctl.dev-alchemy-original --timeout=120 "$@"
+      EOF
+        chmod 0755 /usr/bin/busctl
+      fi
   identity:
     hostname: ubuntu-desktop
     username: packer
