@@ -173,31 +173,33 @@ func TestLinuxLibvirtHostArch(t *testing.T) {
 	}
 }
 
-func TestEnsureLinuxLibvirtNativeArch(t *testing.T) {
-	hostArch, err := linuxLibvirtHostArch()
-	if err != nil {
-		t.Fatalf("expected supported host arch for test runtime, got error: %v", err)
+func TestLinuxLibvirtCPUArgUsesGenericCPUForEmulatedArch(t *testing.T) {
+	previousLinuxLibvirtRuntimeGOARCH := linuxLibvirtRuntimeGOARCH
+	t.Cleanup(func() {
+		linuxLibvirtRuntimeGOARCH = previousLinuxLibvirtRuntimeGOARCH
+	})
+
+	linuxLibvirtRuntimeGOARCH = func() string {
+		return "amd64"
 	}
 
-	if err := ensureLinuxLibvirtNativeArch(alchemy_build.VirtualMachineConfig{Arch: hostArch}); err != nil {
-		t.Fatalf("expected matching arch to succeed, got error: %v", err)
+	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "amd64"}); got != "host-passthrough" {
+		t.Fatalf("expected native amd64 guest to use host-passthrough, got %q", got)
 	}
-
-	guestArch := "amd64"
-	if hostArch == "amd64" {
-		guestArch = "arm64"
-	}
-
-	err = ensureLinuxLibvirtNativeArch(alchemy_build.VirtualMachineConfig{Arch: guestArch})
-	if err == nil {
-		t.Fatal("expected mismatched host and guest architectures to fail")
-	}
-	if !strings.Contains(err.Error(), "native virtualization") {
-		t.Fatalf("expected native virtualization error, got: %v", err)
+	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "arm64"}); got != "max" {
+		t.Fatalf("expected emulated arm64 guest to use generic max CPU, got %q", got)
 	}
 }
 
 func TestLinuxLibvirtVirtInstallArgsIncludeNativeCPUAndSpiceAgentDevices(t *testing.T) {
+	previousLinuxLibvirtRuntimeGOARCH := linuxLibvirtRuntimeGOARCH
+	t.Cleanup(func() {
+		linuxLibvirtRuntimeGOARCH = previousLinuxLibvirtRuntimeGOARCH
+	})
+	linuxLibvirtRuntimeGOARCH = func() string {
+		return "amd64"
+	}
+
 	args := linuxLibvirtVirtInstallArgs(alchemy_build.VirtualMachineConfig{
 		OS:         "ubuntu",
 		UbuntuType: "desktop",

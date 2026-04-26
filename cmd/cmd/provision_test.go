@@ -361,6 +361,22 @@ func TestAvailableProvisionVirtualMachinesOnlyReturnsSupportedConfigs(t *testing
 	}
 }
 
+func TestAvailableProvisionVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstable(t *testing.T) {
+	withCurrentHostArchitecture(t, "amd64")
+
+	vms := availableProvisionVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireProvisionVMStatus(t, vms, "server", "amd64", "stable")
+	requireProvisionVMStatus(t, vms, "server", "arm64", "unstable")
+}
+
+func TestAvailableProvisionVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstableOnArm64(t *testing.T) {
+	withCurrentHostArchitecture(t, "arm64")
+
+	vms := availableProvisionVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireProvisionVMStatus(t, vms, "desktop", "arm64", "stable")
+	requireProvisionVMStatus(t, vms, "desktop", "amd64", "unstable")
+}
+
 func TestCurrentHostLocalProvisionVirtualMachineUsesLocalEngine(t *testing.T) {
 	vm, ok := currentHostLocalProvisionVirtualMachine()
 	if !ok {
