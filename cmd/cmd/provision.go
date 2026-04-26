@@ -57,8 +57,7 @@ func isProvisionSupported(vm alchemy_build.VirtualMachineConfig) bool {
 				vm.Arch == "arm64"))
 }
 
-func currentHostLocalProvisionVirtualMachine() (alchemy_build.VirtualMachineConfig, bool) {
-	hostOs := alchemy_build.GetCurrentHostOs()
+func localProvisionVirtualMachineForHostOS(hostOs alchemy_build.HostOsType) (alchemy_build.VirtualMachineConfig, bool) {
 	switch hostOs {
 	case alchemy_build.HostOsWindows, alchemy_build.HostOsDarwin, alchemy_build.HostOsLinux:
 		return alchemy_build.VirtualMachineConfig{
@@ -72,6 +71,10 @@ func currentHostLocalProvisionVirtualMachine() (alchemy_build.VirtualMachineConf
 	}
 }
 
+func currentHostLocalProvisionVirtualMachine() (alchemy_build.VirtualMachineConfig, bool) {
+	return localProvisionVirtualMachineForHostOS(alchemy_build.GetCurrentHostOs())
+}
+
 func isLocalProvisionUnstable(hostOs alchemy_build.HostOsType) bool {
 	return hostOs != alchemy_build.HostOsWindows
 }
@@ -83,23 +86,22 @@ func provisionStatus(vm alchemy_build.VirtualMachineConfig) string {
 		}
 		return "stable"
 	}
-	if alchemy_build.IsVirtualizationEngineUnstable(vm.VirtualizationEngine) {
+	if isVirtualMachineTargetUnstable(vm) {
 		return "unstable"
 	}
 	return "stable"
 }
 
-func availableProvisionVirtualMachines() []alchemy_build.VirtualMachineConfig {
-	var supported []alchemy_build.VirtualMachineConfig
-	for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
-		if isProvisionSupported(vm) {
-			supported = append(supported, vm)
-		}
-	}
-	if localVM, ok := currentHostLocalProvisionVirtualMachine(); ok {
+func availableProvisionVirtualMachinesForHostOS(hostOs alchemy_build.HostOsType) []alchemy_build.VirtualMachineConfig {
+	supported := availableVirtualMachinesForHostOS(hostOs, isProvisionSupported)
+	if localVM, ok := localProvisionVirtualMachineForHostOS(hostOs); ok {
 		supported = append(supported, localVM)
 	}
 	return supported
+}
+
+func availableProvisionVirtualMachines() []alchemy_build.VirtualMachineConfig {
+	return availableProvisionVirtualMachinesForHostOS(alchemy_build.GetCurrentHostOs())
 }
 
 func printAvailableProvisionCombinations() error {
@@ -245,6 +247,7 @@ Examples:
 		}
 
 		fmt.Printf("🔧 Provisioning VM for OS: %s, Type: %s, Architecture: %s (check=%t)\n", osName, osType, arch, check)
+		printUnstableTargetWarning(selectedVM)
 		if err := runProvision(selectedVM, options); err != nil {
 			return fmt.Errorf("failed provisioning for OS=%s, type=%s, arch=%s: %w", osName, osType, arch, err)
 		}

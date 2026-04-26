@@ -10,19 +10,22 @@ import (
 )
 
 var inspectStartTarget = alchemy_deploy.InspectStartTarget
+var runStartFunc = runStart
 
 func isStartSupported(vm alchemy_build.VirtualMachineConfig) bool {
 	return alchemy_deploy.SupportsStart(vm)
 }
 
+func availableStartVirtualMachinesForHostOS(hostOs alchemy_build.HostOsType) []alchemy_build.VirtualMachineConfig {
+	return availableVirtualMachinesForHostOS(hostOs, isStartSupported)
+}
+
 func availableStartVirtualMachines() []alchemy_build.VirtualMachineConfig {
-	var supported []alchemy_build.VirtualMachineConfig
-	for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
-		if isStartSupported(vm) {
-			supported = append(supported, vm)
-		}
-	}
-	return supported
+	return availableStartVirtualMachinesForHostOS(alchemy_build.GetCurrentHostOs())
+}
+
+func defaultStartVirtualMachinesForHostOS(hostOs alchemy_build.HostOsType) []alchemy_build.VirtualMachineConfig {
+	return stableVirtualMachines(availableStartVirtualMachinesForHostOS(hostOs))
 }
 
 func printAvailableStartCombinations() error {
@@ -32,7 +35,7 @@ func printAvailableStartCombinations() error {
 		fmt.Sprintf("Available start combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
 		"No start combinations are available for the current host OS.",
 		vms,
-		[]string{"OS", "Type", "Arch", "State", "Start"},
+		[]string{"OS", "Type", "Arch", "Status", "State", "Start"},
 		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
 			state, err := inspectStartTarget(vm)
 			if err != nil {
@@ -51,16 +54,26 @@ func printAvailableStartCombinations() error {
 				displayState = "stopped"
 			}
 
-			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, displayState, startState}, nil
+			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, virtualMachineTargetStatus(vm), displayState, startState}, nil
 		},
 	)
+}
+
+func runStartAll(vms []alchemy_build.VirtualMachineConfig) error {
+	for _, vm := range vms {
+		fmt.Printf("➡️ Starting VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
+		if err := runStartFunc(vm); err != nil {
+			return fmt.Errorf("failed starting VM for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+		}
+	}
+	return nil
 }
 
 var startCmd = &cobra.Command{
 	Use:   "start <osname>",
 	Short: "Start an existing VM on your system",
 	Long: `Starts an existing VM on your system.
-Use "all" to start all available VM configurations for the current host OS.
+Use "all" to start all stable VM configurations for the current host OS.
 
 Examples:
   alchemy start ubuntu --type server --arch amd64
@@ -77,14 +90,10 @@ Examples:
 		}
 
 		if osName == "all" {
-			fmt.Println("🔧 Starting all available VM configurations")
-			for _, vm := range availableStartVirtualMachines() {
-				fmt.Printf("➡️ Starting VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
-				if err := runStart(vm); err != nil {
-					return fmt.Errorf("failed starting VM for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
-				}
-			}
-			return nil
+			availableVMs := availableStartVirtualMachines()
+			fmt.Println("🔧 Starting all stable VM configurations")
+			printSkippedUnstableTargets("start", availableVMs)
+			return runStartAll(stableVirtualMachines(availableVMs))
 		}
 
 		availableVirtualMachines := availableStartVirtualMachines()
@@ -102,7 +111,8 @@ Examples:
 		}
 
 		fmt.Printf("🔧 Starting VM for OS: %s, Type: %s, Architecture: %s\n", osName, osType, arch)
-		if err := runStart(selectedVM); err != nil {
+		printUnstableTargetWarning(selectedVM)
+		if err := runStartFunc(selectedVM); err != nil {
 			return fmt.Errorf("failed starting VM for OS=%s, type=%s, arch=%s: %w", osName, osType, arch, err)
 		}
 

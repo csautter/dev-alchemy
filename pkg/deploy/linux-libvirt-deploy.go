@@ -31,6 +31,7 @@ var (
 	linuxLibvirtStopTimeout                 = linuxLibvirtStopSettleTimeout
 	linuxLibvirtStopPollEvery               = linuxLibvirtStopPollInterval
 	lookPathLinuxLibvirtCommand             = exec.LookPath
+	linuxLibvirtRuntimeGOARCH               = func() string { return runtime.GOARCH }
 )
 
 func isLinuxLibvirtTarget(config alchemy_build.VirtualMachineConfig) bool {
@@ -46,9 +47,6 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 		return fmt.Errorf("linux libvirt deploy is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
 	}
 	if err := ensureLinuxLibvirtCommandsAvailable("qemu-img", "virt-install", "virsh"); err != nil {
-		return err
-	}
-	if err := ensureLinuxLibvirtNativeArch(config); err != nil {
 		return err
 	}
 
@@ -141,9 +139,6 @@ func RunLinuxQemuStartOnLinux(config alchemy_build.VirtualMachineConfig) error {
 		return fmt.Errorf("linux libvirt start is not implemented for OS=%s type=%s arch=%s", config.OS, config.UbuntuType, config.Arch)
 	}
 	if err := ensureLinuxLibvirtCommandsAvailable("virsh"); err != nil {
-		return err
-	}
-	if err := ensureLinuxLibvirtNativeArch(config); err != nil {
 		return err
 	}
 
@@ -401,7 +396,7 @@ func linuxLibvirtVirtInstallArgs(config alchemy_build.VirtualMachineConfig, uri 
 		"--name", linuxLibvirtDomainName(config),
 		"--memory", fmt.Sprintf("%d", alchemy_build.GetVmMemoryMB(config)),
 		"--vcpus", fmt.Sprintf("%d", alchemy_build.GetVmCpuCount(config)),
-		"--cpu", "host-passthrough",
+		"--cpu", linuxLibvirtCPUArg(config),
 		"--import",
 		"--disk", fmt.Sprintf("path=%s,format=qcow2,bus=virtio", diskPath),
 		"--network", linuxLibvirtNetworkArg(config, uri),
@@ -455,32 +450,30 @@ func linuxLibvirtVideoArg(config alchemy_build.VirtualMachineConfig) string {
 	return "model.type=virtio"
 }
 
-func ensureLinuxLibvirtNativeArch(config alchemy_build.VirtualMachineConfig) error {
+func linuxLibvirtCPUArg(config alchemy_build.VirtualMachineConfig) string {
+	if linuxLibvirtUsesNativeArch(config) {
+		return "host-passthrough"
+	}
+	return "max"
+}
+
+func linuxLibvirtUsesNativeArch(config alchemy_build.VirtualMachineConfig) bool {
 	hostArch, err := linuxLibvirtHostArch()
 	if err != nil {
-		return err
+		return false
 	}
-	if config.Arch == hostArch {
-		return nil
-	}
-
-	return fmt.Errorf(
-		"linux libvirt deploy requires native virtualization on matching host and guest architectures; host=%s guest=%s. Build or run the %s image on a %s host instead",
-		hostArch,
-		config.Arch,
-		config.Arch,
-		config.Arch,
-	)
+	return config.Arch == hostArch
 }
 
 func linuxLibvirtHostArch() (string, error) {
-	switch runtime.GOARCH {
+	hostArch := linuxLibvirtRuntimeGOARCH()
+	switch hostArch {
 	case "amd64":
 		return "amd64", nil
 	case "arm64":
 		return "arm64", nil
 	default:
-		return "", fmt.Errorf("linux libvirt deploy does not support host architecture %q", runtime.GOARCH)
+		return "", fmt.Errorf("linux libvirt deploy does not support host architecture %q", hostArch)
 	}
 }
 

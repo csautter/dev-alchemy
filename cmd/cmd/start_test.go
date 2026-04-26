@@ -100,6 +100,24 @@ func TestAvailableStartVirtualMachinesOnlyReturnsSupportedConfigs(t *testing.T) 
 	}
 }
 
+func TestAvailableStartVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstable(t *testing.T) {
+	withCurrentHostArchitecture(t, "amd64")
+
+	vms := availableStartVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireVMStatus(t, vms, "server", "amd64", "stable")
+	requireVMStatus(t, vms, "server", "arm64", "unstable")
+	requireOnlyArch(t, defaultStartVirtualMachinesForHostOS(alchemy_build.HostOsLinux), "amd64")
+}
+
+func TestAvailableStartVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstableOnArm64(t *testing.T) {
+	withCurrentHostArchitecture(t, "arm64")
+
+	vms := availableStartVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireVMStatus(t, vms, "desktop", "arm64", "stable")
+	requireVMStatus(t, vms, "desktop", "amd64", "unstable")
+	requireOnlyArch(t, defaultStartVirtualMachinesForHostOS(alchemy_build.HostOsLinux), "arm64")
+}
+
 func TestPrintAvailableStartCombinationsIncludesStartReadiness(t *testing.T) {
 	previousInspector := inspectStartTarget
 	t.Cleanup(func() {
