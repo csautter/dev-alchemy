@@ -84,6 +84,8 @@ locals {
   iso_url             = var.iso_url
   ubuntu_iso_checksum = var.arch == "amd64" ? "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b" : "none"
   cache_directory     = var.cache_dir
+  arm64_efi_code      = "${local.cache_directory}/qemu-uefi/usr/share/AAVMF/AAVMF_CODE.no-secboot.fd"
+  arm64_efi_vars      = "${local.cache_directory}/qemu-uefi/usr/share/AAVMF/AAVMF_VARS.fd"
   boot_command = {
     "amd64" = [
       "e<wait2>",
@@ -116,11 +118,10 @@ locals {
       ["-accel", var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"],
       ["-machine", "virt,highmem=on"],
       ["-cpu", var.is_ci ? "max,sve=off,sme=off,pauth-impdef=on" : "host"],
-      ["-bios", "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
+      ["-drive", "file=${local.arm64_efi_code},if=pflash,unit=0,format=raw,readonly=on"],
+      ["-drive", "file={{ .OutputDir }}/efivars.fd,if=pflash,unit=1,format=raw"],
       ["-device", "ramfb"],
       ["-smp", "cpus=${var.cpus},cores=${var.cpus},sockets=1,threads=1"],
-      ["-global", "PIIX4_PM.disable_s3=1"],
-      ["-global", "ICH-LPC.disable_s3=1"],
       ["-device", "qemu-xhci"],
       ["-device", "usb-kbd"],
       ["-device", "usb-tablet"],
@@ -134,7 +135,6 @@ locals {
       # Cloud-init seed ISO
       ["-drive", "if=none,id=cidata,format=raw,file=${path.root}/cloud-init/qemu-${var.ubuntu_type}/cidata.iso,readonly=true"],
       ["-device", "virtio-blk-pci,drive=cidata"],
-      ["-boot", "order=d,menu=on"],
     ]
   }
   left_list        = join("", [for i in range(0, 16) : "<left>"])
@@ -154,19 +154,23 @@ locals {
 }
 
 source "qemu" "ubuntu" {
-  qemu_binary      = var.arch == "amd64" ? "qemu-system-x86_64" : "qemu-system-aarch64"
-  vm_name          = "linux-ubuntu-${var.ubuntu_type}-packer-${var.arch}"
-  headless         = var.headless
-  output_directory = local.output_directory
-  iso_url          = local.iso_url
-  iso_checksum     = local.ubuntu_iso_checksum
-  memory           = var.memory
-  cpu_model        = var.arch == "amd64" ? "Skylake-Client" : "max" # overwritten by qemu arg for arm64
-  disk_size        = "64G"                                          # overwritten by qemu arg for arm64
-  disk_interface   = "ide"                                          # overwritten by qemu arg for arm64
-  format           = "qcow2"                                        # overwritten by qemu arg for arm64
-  display          = "cocoa"
-  net_device       = var.arch == "amd64" ? "e1000" : "virtio-net-pci"
+  qemu_binary       = var.arch == "amd64" ? "qemu-system-x86_64" : "qemu-system-aarch64"
+  vm_name           = "linux-ubuntu-${var.ubuntu_type}-packer-${var.arch}"
+  headless          = var.headless
+  output_directory  = local.output_directory
+  iso_url           = local.iso_url
+  iso_checksum      = local.ubuntu_iso_checksum
+  memory            = var.memory
+  cpu_model         = var.arch == "amd64" ? "Skylake-Client" : "max" # overwritten by qemu arg for arm64
+  disk_size         = "64G"                                          # overwritten by qemu arg for arm64
+  disk_interface    = "ide"                                          # overwritten by qemu arg for arm64
+  format            = "qcow2"                                        # overwritten by qemu arg for arm64
+  display           = "cocoa"
+  net_device        = var.arch == "amd64" ? "e1000" : "virtio-net-pci"
+  efi_boot          = var.arch == "arm64"
+  efi_firmware_code = var.arch == "arm64" ? local.arm64_efi_code : ""
+  efi_firmware_vars = var.arch == "arm64" ? local.arm64_efi_vars : ""
+  efi_drop_efivars  = var.arch == "arm64"
 
   # Cloud-init seed ISO
   # overwritten by qemu arg for arm64

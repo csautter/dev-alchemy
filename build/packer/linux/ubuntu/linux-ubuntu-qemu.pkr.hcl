@@ -101,6 +101,8 @@ locals {
   arm64_can_use_native_acceleration = local.host_same_arch && var.use_hardware_acceleration
   arm64_software_accel              = "tcg,thread=multi,tb-size=1024"
   arm64_fallback_cpu_model          = "max,sve=off,sme=off,pauth-impdef=on"
+  arm64_efi_code                    = "${local.cache_directory}/qemu-uefi/usr/share/AAVMF/AAVMF_CODE.no-secboot.fd"
+  arm64_efi_vars                    = "${local.cache_directory}/qemu-uefi/usr/share/AAVMF/AAVMF_VARS.fd"
 
   arm64_accel     = local.arm64_can_use_native_acceleration ? "kvm" : local.arm64_software_accel
   arm64_cpu_model = local.arm64_can_use_native_acceleration ? "host" : local.arm64_fallback_cpu_model
@@ -138,11 +140,10 @@ locals {
       ["-accel", local.arm64_accel],
       ["-machine", "virt,highmem=on"],
       ["-cpu", local.arm64_cpu_model],
-      ["-bios", "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
+      ["-drive", "file=${local.arm64_efi_code},if=pflash,unit=0,format=raw,readonly=on"],
+      ["-drive", "file={{ .OutputDir }}/efivars.fd,if=pflash,unit=1,format=raw"],
       ["-device", "ramfb"],
       ["-smp", "cpus=${var.cpus},cores=${var.cpus},sockets=1,threads=1"],
-      ["-global", "PIIX4_PM.disable_s3=1"],
-      ["-global", "ICH-LPC.disable_s3=1"],
       ["-device", "qemu-xhci"],
       ["-device", "usb-kbd"],
       ["-device", "usb-tablet"],
@@ -153,7 +154,6 @@ locals {
       ["-drive", "if=none,media=disk,id=disk,format=qcow2,file.filename=${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2,discard=unmap,detect-zeroes=unmap"],
       ["-drive", "if=none,id=cidata,format=raw,file=${path.root}/cloud-init/qemu-${var.ubuntu_type}/cidata.iso,readonly=true"],
       ["-device", "virtio-blk-pci,drive=cidata"],
-      ["-boot", "order=d,menu=on"],
     ]
   }
 
@@ -174,19 +174,23 @@ locals {
 }
 
 source "qemu" "ubuntu" {
-  qemu_binary      = var.arch == "amd64" ? "qemu-system-x86_64" : "qemu-system-aarch64"
-  vm_name          = "linux-ubuntu-${var.ubuntu_type}-packer-${var.arch}"
-  headless         = var.headless
-  output_directory = local.output_directory
-  iso_url          = local.iso_url
-  iso_checksum     = local.ubuntu_iso_checksum
-  memory           = var.memory
-  cpu_model        = var.arch == "amd64" ? local.amd64_cpu_model : local.arm64_cpu_model
-  disk_size        = "64G"
-  disk_interface   = "ide"
-  format           = "qcow2"
-  display          = "none"
-  net_device       = var.arch == "amd64" ? "e1000" : "virtio-net-pci"
+  qemu_binary       = var.arch == "amd64" ? "qemu-system-x86_64" : "qemu-system-aarch64"
+  vm_name           = "linux-ubuntu-${var.ubuntu_type}-packer-${var.arch}"
+  headless          = var.headless
+  output_directory  = local.output_directory
+  iso_url           = local.iso_url
+  iso_checksum      = local.ubuntu_iso_checksum
+  memory            = var.memory
+  cpu_model         = var.arch == "amd64" ? local.amd64_cpu_model : local.arm64_cpu_model
+  disk_size         = "64G"
+  disk_interface    = "ide"
+  format            = "qcow2"
+  display           = "none"
+  net_device        = var.arch == "amd64" ? "e1000" : "virtio-net-pci"
+  efi_boot          = var.arch == "arm64"
+  efi_firmware_code = var.arch == "arm64" ? local.arm64_efi_code : ""
+  efi_firmware_vars = var.arch == "arm64" ? local.arm64_efi_vars : ""
+  efi_drop_efivars  = var.arch == "arm64"
 
   cd_label = "cidata"
   cd_files = [

@@ -100,7 +100,10 @@ build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch 
 QEMU autoinstall uses the attached `cidata` seed plus the Packer boot command's
 `autoinstall ds=nocloud` kernel argument. The QEMU cloud-init seed intentionally
 leaves networking to Subiquity's default DHCP handling for `eth*`/`en*`
-interfaces, avoiding an extra netplan apply during the installer phase.
+interfaces. During ARM64 software emulation the installer can take longer than
+systemd's default D-Bus method timeout while applying netplan, so the QEMU seed
+extends the live installer's `busctl` timeout before Subiquity applies network
+configuration.
 
 The Linux `create`/`start`/`stop`/`destroy` flow uses libvirt so the VM appears
 in `virt-manager`.
