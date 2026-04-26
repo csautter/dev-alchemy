@@ -173,7 +173,7 @@ func TestLinuxLibvirtHostArch(t *testing.T) {
 	}
 }
 
-func TestLinuxLibvirtCPUArgUsesGenericCPUForEmulatedArch(t *testing.T) {
+func TestLinuxLibvirtCPUArgUsesPackerAlignedCPUForEmulatedArch(t *testing.T) {
 	previousLinuxLibvirtRuntimeGOARCH := linuxLibvirtRuntimeGOARCH
 	t.Cleanup(func() {
 		linuxLibvirtRuntimeGOARCH = previousLinuxLibvirtRuntimeGOARCH
@@ -186,8 +186,15 @@ func TestLinuxLibvirtCPUArgUsesGenericCPUForEmulatedArch(t *testing.T) {
 	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "amd64"}); got != "host-passthrough" {
 		t.Fatalf("expected native amd64 guest to use host-passthrough, got %q", got)
 	}
-	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "arm64"}); got != "max" {
-		t.Fatalf("expected emulated arm64 guest to use generic max CPU, got %q", got)
+	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "arm64"}); got != "max,sve=off,sme=off,pauth-impdef=on" {
+		t.Fatalf("expected emulated arm64 guest to use tuned max CPU, got %q", got)
+	}
+
+	linuxLibvirtRuntimeGOARCH = func() string {
+		return "arm64"
+	}
+	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "amd64"}); got != "Skylake-Client" {
+		t.Fatalf("expected emulated amd64 guest to use Skylake-Client, got %q", got)
 	}
 }
 
@@ -219,6 +226,36 @@ func TestLinuxLibvirtVirtInstallArgsIncludeNativeCPUAndSpiceAgentDevices(t *test
 		"--input keyboard,bus=usb",
 		"--channel spicevmc,target.type=virtio,target.name=com.redhat.spice.0",
 		"--channel unix,target.type=virtio,name=org.qemu.guest_agent.0",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected virt-install args to contain %q, got %q", want, joined)
+		}
+	}
+}
+
+func TestLinuxLibvirtVirtInstallArgsUseEmulatedArm64Settings(t *testing.T) {
+	previousLinuxLibvirtRuntimeGOARCH := linuxLibvirtRuntimeGOARCH
+	t.Cleanup(func() {
+		linuxLibvirtRuntimeGOARCH = previousLinuxLibvirtRuntimeGOARCH
+	})
+	linuxLibvirtRuntimeGOARCH = func() string {
+		return "amd64"
+	}
+
+	args := linuxLibvirtVirtInstallArgs(alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "arm64",
+		Cpus:       4,
+		MemoryMB:   4096,
+	}, "qemu:///session", "/tmp/test.qcow2")
+
+	joined := strings.Join(args, " ")
+	for _, want := range []string{
+		"--cpu max,sve=off,sme=off,pauth-impdef=on",
+		"--vcpus 4",
+		"--arch aarch64",
+		"--machine virt",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected virt-install args to contain %q, got %q", want, joined)

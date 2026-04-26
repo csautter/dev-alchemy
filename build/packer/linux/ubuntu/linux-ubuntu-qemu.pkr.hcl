@@ -98,14 +98,12 @@ locals {
   amd64_accel                       = local.amd64_can_use_native_acceleration ? "kvm" : "tcg,thread=multi,tb-size=1024"
   amd64_cpu_model                   = local.amd64_can_use_native_acceleration ? "host" : "Skylake-Client"
 
-  arm64_cross_arch_emulation        = var.arch == "arm64" && !local.host_same_arch
   arm64_can_use_native_acceleration = local.host_same_arch && var.use_hardware_acceleration
   arm64_software_accel              = "tcg,thread=multi,tb-size=1024"
-  arm64_fallback_cpu_model          = "max,sve=off,pauth-impdef=on"
+  arm64_fallback_cpu_model          = "max,sve=off,sme=off,pauth-impdef=on"
 
   arm64_accel     = local.arm64_can_use_native_acceleration ? "kvm" : local.arm64_software_accel
   arm64_cpu_model = local.arm64_can_use_native_acceleration ? "host" : local.arm64_fallback_cpu_model
-  arm64_cpus      = local.arm64_cross_arch_emulation ? min(var.cpus, 2) : var.cpus
 
   boot_command = {
     "amd64" = [
@@ -142,7 +140,7 @@ locals {
       ["-cpu", local.arm64_cpu_model],
       ["-bios", "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"],
       ["-device", "ramfb"],
-      ["-smp", "cpus=${local.arm64_cpus},cores=${local.arm64_cpus},sockets=1,threads=1"],
+      ["-smp", "cpus=${var.cpus},cores=${var.cpus},sockets=1,threads=1"],
       ["-global", "PIIX4_PM.disable_s3=1"],
       ["-global", "ICH-LPC.disable_s3=1"],
       ["-device", "qemu-xhci"],
