@@ -1,12 +1,4 @@
 #cloud-config
-
-# removes interactive prompt during autoinstall
-runcmd:
-  - [eval, 'echo $(cat /proc/cmdline) "autoinstall" > /root/cmdline']
-  - [eval, "mount -n --bind -o ro /root/cmdline /proc/cmdline"]
-  - [eval, "snap restart subiquity.subiquity-server"]
-  - [eval, "snap restart subiquity.subiquity-service"]
-
 autoinstall:
   version: 1
   identity:
@@ -18,14 +10,6 @@ autoinstall:
   storage:
     layout:
       name: direct
-  network:
-    version: 2
-    ethernets:
-      default:
-        dhcp4: true
-        dhcp6: true
-        match:
-          name: e*
   language: de
   locale: de_DE.UTF-8
   keyboard:
