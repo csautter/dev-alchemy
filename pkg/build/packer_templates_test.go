@@ -8,13 +8,14 @@ import (
 	"testing"
 )
 
+var ubuntuQemuTemplatePaths = []string{
+	"build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl",
+}
+
 func TestUbuntuPackerTemplatesQuoteShellLocalExportPaths(t *testing.T) {
 	t.Parallel()
 
-	for _, templatePath := range []string{
-		"build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl",
-		"build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl",
-	} {
+	for _, templatePath := range ubuntuQemuTemplatePaths {
 		templatePath := templatePath
 		t.Run(filepath.Base(templatePath), func(t *testing.T) {
 			t.Parallel()
@@ -62,10 +63,7 @@ func TestQemuAutoinstallUsesBootCommandWithoutSubiquityRestart(t *testing.T) {
 		}
 	}
 
-	for _, templatePath := range []string{
-		"build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl",
-		"build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl",
-	} {
+	for _, templatePath := range ubuntuQemuTemplatePaths {
 		templatePath := templatePath
 		t.Run(filepath.Base(templatePath), func(t *testing.T) {
 			t.Parallel()
@@ -144,10 +142,7 @@ func TestQemuCloudInitExtendsInstallerBusctlTimeout(t *testing.T) {
 func TestArm64QemuBootOrderPrefersInstalledDiskAfterInstall(t *testing.T) {
 	t.Parallel()
 
-	for _, templatePath := range []string{
-		"build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl",
-		"build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl",
-	} {
+	for _, templatePath := range ubuntuQemuTemplatePaths {
 		templatePath := templatePath
 		t.Run(filepath.Base(templatePath), func(t *testing.T) {
 			t.Parallel()
@@ -175,6 +170,45 @@ func TestArm64QemuBootOrderPrefersInstalledDiskAfterInstall(t *testing.T) {
 			}
 			if strings.Contains(got, "[\"-boot\",") {
 				t.Fatalf("template %q uses unsupported ARM64 QEMU boot ordering through -boot", templatePath)
+			}
+		})
+	}
+}
+
+func TestQemuWrapperScriptsUseSharedTemplate(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		scriptPath string
+		hostOS     string
+	}{
+		{
+			scriptPath: "build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh",
+			hostOS:     "darwin",
+		},
+		{
+			scriptPath: "build/packer/linux/ubuntu/linux-ubuntu-qemu.sh",
+			hostOS:     "linux",
+		},
+	} {
+		tc := tc
+		t.Run(filepath.Base(tc.scriptPath), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, tc.scriptPath))
+			if err != nil {
+				t.Fatalf("failed to read script %q: %v", tc.scriptPath, err)
+			}
+
+			got := string(content)
+			if !strings.Contains(got, `packer_file="build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl"`) {
+				t.Fatalf("expected script %q to use the shared QEMU Packer template", tc.scriptPath)
+			}
+			if !strings.Contains(got, `-var "host_os=`+tc.hostOS+`"`) {
+				t.Fatalf("expected script %q to pass host_os=%s", tc.scriptPath, tc.hostOS)
+			}
+			if !strings.Contains(got, `-var "host_arch=$host_arch"`) {
+				t.Fatalf("expected script %q to pass the detected host architecture", tc.scriptPath)
 			}
 		})
 	}
