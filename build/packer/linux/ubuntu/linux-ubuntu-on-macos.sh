@@ -27,6 +27,20 @@ UBUNTU_LIVE_SERVER_AMD64_VERSION="24.04.3"
 UBUNTU_LIVE_SERVER_ARM64_VERSION="24.04.3"
 UBUNTU_LIVE_SERVER_ARM64_SHA256="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
 
+detect_host_arch() {
+	case "$(uname -m)" in
+	x86_64 | amd64)
+		echo "amd64"
+		;;
+	aarch64 | arm64)
+		echo "arm64"
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 file_size_bytes() {
 	if [[ ! -f "$1" ]]; then
 		echo "0"
@@ -121,6 +135,11 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 	exit 1
 fi
 
+host_arch="$(detect_host_arch)" || {
+	echo "Unsupported host architecture: $(uname -m)" >&2
+	exit 1
+}
+
 if [[ -z "$build_output_dir" ]]; then
 	build_output_dir="/tmp/dev-alchemy/qemu-out-ubuntu-${ubuntu_type}-${arch}"
 fi
@@ -197,7 +216,7 @@ if [[ -d "$output_dir" ]]; then
 fi
 mkdir -p "$(dirname "$output_dir")"
 
-packer_file="build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
+packer_file="build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl"
 packer init "$packer_file"
 
 if [[ "$verbose" == "true" ]]; then
@@ -205,6 +224,9 @@ if [[ "$verbose" == "true" ]]; then
 fi
 
 packer build \
+	-var "host_os=darwin" \
+	-var "host_arch=$host_arch" \
+	-var "use_hardware_acceleration=true" \
 	-var "cache_dir=$cache_dir" \
 	-var "build_output_dir=$build_output_dir" \
 	-var "iso_url=$iso_path" \

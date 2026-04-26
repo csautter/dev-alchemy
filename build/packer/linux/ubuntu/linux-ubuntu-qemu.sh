@@ -344,6 +344,7 @@ if [[ "$verbose" == "true" ]]; then
 fi
 
 packer build \
+	-var "host_os=linux" \
 	-var "host_arch=$host_arch" \
 	-var "use_hardware_acceleration=$use_hardware_acceleration" \
 	-var "cache_dir=$cache_dir" \

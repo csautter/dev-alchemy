@@ -66,6 +66,10 @@ build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch 
 build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
 ```
 
+The macOS wrapper uses the shared QEMU template,
+[linux-ubuntu-qemu.pkr.hcl](linux-ubuntu-qemu.pkr.hcl), with macOS-specific
+display and acceleration settings.
+
 ## Build Ubuntu on Linux Hosts (QEMU)
 
 Install host dependencies first:
@@ -96,6 +100,10 @@ export DEV_ALCHEMY_APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-${XDG_DATA_HOME:-$H
 build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch amd64 --ubuntu-type server
 build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
 ```
+
+The Linux wrapper also uses the shared QEMU template,
+[linux-ubuntu-qemu.pkr.hcl](linux-ubuntu-qemu.pkr.hcl), after probing whether
+KVM acceleration is usable on the host.
 
 QEMU autoinstall uses the attached `cidata` seed plus the Packer boot command's
 `autoinstall ds=nocloud` kernel argument. The QEMU cloud-init seed intentionally
