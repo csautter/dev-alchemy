@@ -97,6 +97,11 @@ build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch 
 build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
 ```
 
+QEMU autoinstall uses the attached `cidata` seed plus the Packer boot command's
+`autoinstall ds=nocloud` kernel argument. The QEMU cloud-init seed intentionally
+leaves networking to Subiquity's default DHCP handling for `eth*`/`en*`
+interfaces, avoiding an extra netplan apply during the installer phase.
+
 The Linux `create`/`start`/`stop`/`destroy` flow uses libvirt so the VM appears
 in `virt-manager`.
 

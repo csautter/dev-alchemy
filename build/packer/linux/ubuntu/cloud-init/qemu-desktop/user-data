@@ -10,14 +10,6 @@ autoinstall:
   storage:
     layout:
       name: direct
-  network:
-    version: 2
-    ethernets:
-      default:
-        dhcp4: true
-        dhcp6: true
-        match:
-          name: e*
   language: de
   locale: de_DE.UTF-8
   keyboard:
