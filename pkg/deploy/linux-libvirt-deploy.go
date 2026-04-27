@@ -54,6 +54,7 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 		return err
 	}
 
+	uri := linuxLibvirtURI()
 	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
 	artifactPath := linuxQemuArtifactPath(config)
 	if _, err := os.Stat(artifactPath); err != nil {
@@ -81,6 +82,10 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 		return fmt.Errorf("failed to inspect managed libvirt disk %q: %w", diskPath, err)
 	}
 
+	if err := ensureLinuxLibvirtConfiguredNetworkReady(config, uri); err != nil {
+		return err
+	}
+
 	if err := runLinuxLibvirtCommandWithStreamingLogs(
 		projectDir,
 		linuxLibvirtDiskCloneTimeout,
@@ -95,7 +100,7 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 		projectDir,
 		linuxLibvirtCommandTimeout,
 		"virt-install",
-		linuxLibvirtVirtInstallArgs(config, linuxLibvirtURI(), diskPath),
+		linuxLibvirtVirtInstallArgs(config, uri, diskPath),
 	)
 	if err != nil {
 		_ = os.Remove(diskPath)
@@ -131,7 +136,7 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 		projectDir,
 		linuxLibvirtCreateTimeout,
 		"virsh",
-		[]string{"--connect", linuxLibvirtURI(), "define", xmlPath},
+		[]string{"--connect", uri, "define", xmlPath},
 		fmt.Sprintf("%s:%s:%s:virsh-define", config.OS, config.UbuntuType, config.Arch),
 	); err != nil {
 		_ = os.Remove(diskPath)
@@ -149,6 +154,7 @@ func RunLinuxQemuStartOnLinux(config alchemy_build.VirtualMachineConfig) error {
 		return err
 	}
 
+	uri := linuxLibvirtURI()
 	state, err := inspectLinuxLibvirtStartTarget(config)
 	if err != nil {
 		return err
@@ -160,11 +166,15 @@ func RunLinuxQemuStartOnLinux(config alchemy_build.VirtualMachineConfig) error {
 		return nil
 	}
 
+	if err := ensureLinuxLibvirtConfiguredNetworkReady(config, uri); err != nil {
+		return err
+	}
+
 	output, err := runLinuxLibvirtCommandWithCombinedOut(
 		alchemy_build.GetDirectoriesInstance().ProjectDir,
 		linuxLibvirtCommandTimeout,
 		"virsh",
-		[]string{"--connect", linuxLibvirtURI(), "start", linuxLibvirtDomainName(config)},
+		[]string{"--connect", uri, "start", linuxLibvirtDomainName(config)},
 	)
 	if err != nil {
 		if trimmedOutput := strings.TrimSpace(output); trimmedOutput != "" {
@@ -554,6 +564,84 @@ func linuxLibvirtNetworkArg(config alchemy_build.VirtualMachineConfig, uri strin
 		return fmt.Sprintf("network=default,model=%s", model)
 	}
 	return fmt.Sprintf("user,model=%s", model)
+}
+
+func ensureLinuxLibvirtConfiguredNetworkReady(config alchemy_build.VirtualMachineConfig, uri string) error {
+	networkName, ok := linuxLibvirtNamedNetwork(config, uri)
+	if !ok {
+		return nil
+	}
+	return ensureLinuxLibvirtNetworkReady(uri, networkName)
+}
+
+func linuxLibvirtNamedNetwork(config alchemy_build.VirtualMachineConfig, uri string) (string, bool) {
+	networkArg := linuxLibvirtNetworkArg(config, uri)
+	for _, part := range strings.Split(networkArg, ",") {
+		name, ok := strings.CutPrefix(strings.TrimSpace(part), "network=")
+		if ok && strings.TrimSpace(name) != "" {
+			return strings.TrimSpace(name), true
+		}
+	}
+	return "", false
+}
+
+func ensureLinuxLibvirtNetworkReady(uri string, networkName string) error {
+	output, err := runLinuxLibvirtCommandWithCombinedOut(
+		alchemy_build.GetDirectoriesInstance().ProjectDir,
+		linuxLibvirtCommandTimeout,
+		"virsh",
+		[]string{"--connect", uri, "net-info", networkName},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to inspect libvirt network %q on %s: %w; output: %s; ensure the network exists, then enable it with `%s`",
+			networkName,
+			uri,
+			err,
+			strings.TrimSpace(output),
+			linuxLibvirtNetworkStartCommand(uri, networkName),
+		)
+	}
+	if !linuxLibvirtNetworkInfoIndicatesActive(output) {
+		return fmt.Errorf(
+			"libvirt network %q on %s is inactive; enable it with `%s`",
+			networkName,
+			uri,
+			linuxLibvirtNetworkStartCommand(uri, networkName),
+		)
+	}
+	return nil
+}
+
+func linuxLibvirtNetworkInfoIndicatesActive(output string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(key), "Active") {
+			return strings.EqualFold(strings.TrimSpace(value), "yes")
+		}
+	}
+	return false
+}
+
+func linuxLibvirtNetworkStartCommand(uri string, networkName string) string {
+	virsh := "virsh"
+	if linuxLibvirtUsesSystemConnection(uri) {
+		virsh = "sudo virsh"
+	}
+	quotedURI := linuxLibvirtShellQuote(uri)
+	quotedNetworkName := linuxLibvirtShellQuote(networkName)
+	return fmt.Sprintf(
+		"%s --connect %s net-start %s && %s --connect %s net-autostart %s",
+		virsh,
+		quotedURI,
+		quotedNetworkName,
+		virsh,
+		quotedURI,
+		quotedNetworkName,
+	)
 }
 
 func linuxLibvirtNetworkModel(config alchemy_build.VirtualMachineConfig) string {

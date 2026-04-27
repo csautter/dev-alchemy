@@ -106,6 +106,20 @@ different user, grant access explicitly with a libvirt storage pool, group
 ownership/ACLs on `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR`, or use the session connection
 below.
 
+When a VM uses a named libvirt network, Alchemy preflights it before defining or
+starting the domain. With the default system URI this checks:
+
+```bash
+virsh --connect qemu:///system net-info default
+```
+
+If the `default` network exists but is inactive, enable it with:
+
+```bash
+sudo virsh --connect qemu:///system net-start default
+sudo virsh --connect qemu:///system net-autostart default
+```
+
 If you prefer the rootless libvirt user session instead, set:
 
 ```bash
@@ -113,6 +127,10 @@ export DEV_ALCHEMY_LIBVIRT_URI=qemu:///session
 # Optional when you want a custom storage location for the session connection:
 export DEV_ALCHEMY_LIBVIRT_IMAGE_DIR="$HOME/.local/share/dev-alchemy/libvirt/images"
 ```
+
+The built-in session path uses libvirt user-mode networking, so it does not
+require the `default` NAT network. If a named network is configured for a session
+URI later, the same preflight is run against `qemu:///session`.
 
 If you prefer the traditional system libvirt image location instead, set:
 
