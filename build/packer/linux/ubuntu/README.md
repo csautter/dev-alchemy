@@ -128,5 +128,8 @@ guests.
 
 - Default libvirt connection: `qemu:///system`
 - Default managed disk directory for that connection: `/var/tmp/dev-alchemy/libvirt/images`
+- Managed disk directories are created with mode `0750`; grant system libvirt
+  access explicitly with a storage pool, group ownership/ACLs, or a custom
+  `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR` when needed.
 - Optional override for rootless libvirt user-session VMs: `DEV_ALCHEMY_LIBVIRT_URI=qemu:///session`
 - Optional managed disk directory override: `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR=/path/to/images`

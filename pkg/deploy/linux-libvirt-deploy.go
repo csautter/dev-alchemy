@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ const (
 	linuxLibvirtStopSettleTimeout      = 45 * time.Second
 	linuxLibvirtStopPollInterval       = 2 * time.Second
 	linuxLibvirtDiskCloneTimeout       = 30 * time.Minute
+	linuxLibvirtImageDirPermission     = 0o750
 	linuxLibvirtManagedDomainDirectory = "libvirt/images"
 )
 
@@ -32,6 +34,8 @@ var (
 	linuxLibvirtStopPollEvery               = linuxLibvirtStopPollInterval
 	lookPathLinuxLibvirtCommand             = exec.LookPath
 	linuxLibvirtRuntimeGOARCH               = func() string { return runtime.GOARCH }
+	linuxLibvirtStorageAccessErrorPattern   = regexp.MustCompile(`(?i)cannot access storage file '([^']+)' \(as uid:\s*([0-9]+),\s*gid:\s*([0-9]+)\)`)
+	linuxLibvirtShellSafePattern            = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
 )
 
 func isLinuxLibvirtTarget(config alchemy_build.VirtualMachineConfig) bool {
@@ -60,9 +64,9 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 	}
 
 	imageDir := linuxLibvirtImageDir()
-	if err := os.MkdirAll(imageDir, 0o755); err != nil {
+	if err := ensureLinuxLibvirtImageDir(imageDir); err != nil {
 		return fmt.Errorf(
-			"failed to create libvirt image directory %q: %w; override with %s or use a writable libvirt URI via %s",
+			"failed to prepare libvirt image directory %q: %w; override with %s or use a writable libvirt URI via %s",
 			imageDir,
 			err,
 			linuxLibvirtImageDirEnvVar,
@@ -114,7 +118,7 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 	defer os.Remove(xmlPath)
 
 	if _, err := xmlFile.WriteString(xml); err != nil {
-		xmlFile.Close()
+		_ = xmlFile.Close()
 		_ = os.Remove(diskPath)
 		return fmt.Errorf("failed to write libvirt domain XML to %q: %w", xmlPath, err)
 	}
@@ -156,13 +160,16 @@ func RunLinuxQemuStartOnLinux(config alchemy_build.VirtualMachineConfig) error {
 		return nil
 	}
 
-	if err := runLinuxLibvirtCommandWithStreamingLogs(
+	output, err := runLinuxLibvirtCommandWithCombinedOut(
 		alchemy_build.GetDirectoriesInstance().ProjectDir,
 		linuxLibvirtCommandTimeout,
 		"virsh",
 		[]string{"--connect", linuxLibvirtURI(), "start", linuxLibvirtDomainName(config)},
-		fmt.Sprintf("%s:%s:%s:virsh-start", config.OS, config.UbuntuType, config.Arch),
-	); err != nil {
+	)
+	if err != nil {
+		if trimmedOutput := strings.TrimSpace(output); trimmedOutput != "" {
+			return fmt.Errorf("failed to start libvirt VM %q: %w; output: %s%s", linuxLibvirtDomainName(config), err, trimmedOutput, linuxLibvirtStorageAccessRepairHint(output))
+		}
 		return fmt.Errorf("failed to start libvirt VM %q: %w", linuxLibvirtDomainName(config), err)
 	}
 
@@ -368,13 +375,116 @@ func LinuxLibvirtURI() string {
 }
 
 func linuxLibvirtImageDir() string {
-	if override := strings.TrimSpace(os.Getenv(linuxLibvirtImageDirEnvVar)); override != "" {
+	if override := linuxLibvirtImageDirOverride(); override != "" {
 		return filepath.Clean(override)
 	}
 	if linuxLibvirtUsesSystemConnection(linuxLibvirtURI()) {
 		return linuxLibvirtSystemImageDir
 	}
 	return filepath.Join(alchemy_build.GetDirectoriesInstance().AppDataDir, linuxLibvirtManagedDomainDirectory)
+}
+
+func linuxLibvirtImageDirOverride() string {
+	return strings.TrimSpace(os.Getenv(linuxLibvirtImageDirEnvVar))
+}
+
+func ensureLinuxLibvirtImageDir(imageDir string) error {
+	if err := os.MkdirAll(imageDir, linuxLibvirtImageDirPermission); err != nil {
+		return err
+	}
+	if linuxLibvirtImageDirOverride() != "" {
+		return nil
+	}
+	if err := os.Chmod(imageDir, linuxLibvirtImageDirPermission); err != nil {
+		return fmt.Errorf("failed to set managed libvirt image directory permissions to %04o: %w", linuxLibvirtImageDirPermission, err)
+	}
+	return nil
+}
+
+type linuxLibvirtStorageAccessError struct {
+	storagePath string
+	uid         string
+	gid         string
+}
+
+func linuxLibvirtStorageAccessRepairHint(output string) string {
+	accessErr, ok := parseLinuxLibvirtStorageAccessError(output)
+	if !ok {
+		return ""
+	}
+
+	imageDir := filepath.Dir(accessErr.storagePath)
+	traversalDirs := linuxLibvirtManagedImageTraversalDirs(imageDir)
+	quotedImageDir := linuxLibvirtShellQuote(imageDir)
+
+	lines := []string{
+		"",
+		"",
+		fmt.Sprintf("Libvirt cannot access the managed QCOW2 disk as uid:%s, gid:%s.", accessErr.uid, accessErr.gid),
+		"Grant that libvirt group access without making the disk directory world-readable:",
+		"",
+	}
+	if len(traversalDirs) > 0 {
+		quotedTraversalDirs := make([]string, 0, len(traversalDirs))
+		for _, dir := range traversalDirs {
+			quotedTraversalDirs = append(quotedTraversalDirs, linuxLibvirtShellQuote(dir))
+		}
+		lines = append(lines, fmt.Sprintf("  sudo setfacl -m g:%s:x %s", accessErr.gid, strings.Join(quotedTraversalDirs, " ")))
+	}
+	lines = append(lines,
+		fmt.Sprintf("  sudo setfacl -R -m g:%s:rwX %s", accessErr.gid, quotedImageDir),
+		fmt.Sprintf("  sudo setfacl -d -m g:%s:rwX %s", accessErr.gid, quotedImageDir),
+		"",
+		"If setfacl is not installed:",
+		"",
+		"  sudo apt-get install acl",
+	)
+
+	return strings.Join(lines, "\n")
+}
+
+func parseLinuxLibvirtStorageAccessError(output string) (linuxLibvirtStorageAccessError, bool) {
+	matches := linuxLibvirtStorageAccessErrorPattern.FindStringSubmatch(output)
+	if len(matches) != 4 {
+		return linuxLibvirtStorageAccessError{}, false
+	}
+	return linuxLibvirtStorageAccessError{
+		storagePath: matches[1],
+		uid:         matches[2],
+		gid:         matches[3],
+	}, true
+}
+
+func linuxLibvirtManagedImageTraversalDirs(imageDir string) []string {
+	baseDir, ok := linuxLibvirtManagedImageBaseDir(imageDir)
+	if !ok {
+		return nil
+	}
+	return []string{
+		baseDir,
+		filepath.Join(baseDir, "libvirt"),
+	}
+}
+
+func linuxLibvirtManagedImageBaseDir(imageDir string) (string, bool) {
+	cleanImageDir := filepath.Clean(imageDir)
+	managedSuffix := string(filepath.Separator) + filepath.FromSlash(linuxLibvirtManagedDomainDirectory)
+	if !strings.HasSuffix(cleanImageDir, managedSuffix) {
+		return "", false
+	}
+
+	baseDir := strings.TrimSuffix(cleanImageDir, managedSuffix)
+	if baseDir == "" {
+		return "", false
+	}
+	return baseDir, true
+}
+
+func linuxLibvirtShellQuote(value string) string {
+	if linuxLibvirtShellSafePattern.MatchString(value) {
+		return value
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 func linuxLibvirtUsesSystemConnection(uri string) bool {

@@ -96,7 +96,15 @@ alchemy build ubuntu --arch "$arch" --type "$type"
 alchemy create ubuntu --arch "$arch" --type "$type"
 ```
 
-By default the Linux create/start/stop/destroy workflow uses the libvirt system connection (`qemu:///system`) so the VM attaches to libvirt's standard NAT network and gets outbound internet access in the common case. Managed QCOW2 disks default to `/var/tmp/dev-alchemy/libvirt/images`, which avoids requiring a pre-created root-owned image directory.
+By default the Linux create/start/stop/destroy workflow uses the libvirt system
+connection (`qemu:///system`) so the VM attaches to libvirt's standard NAT
+network and gets outbound internet access in the common case. Managed QCOW2
+disks default to `/var/tmp/dev-alchemy/libvirt/images`, which avoids requiring a
+pre-created root-owned image directory. Alchemy creates managed image
+directories with mode `0750`; if your system libvirt daemon runs guests as a
+different user, grant access explicitly with a libvirt storage pool, group
+ownership/ACLs on `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR`, or use the session connection
+below.
 
 If you prefer the rootless libvirt user session instead, set:
 
