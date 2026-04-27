@@ -14,6 +14,8 @@ func SupportsStop(config alchemy_build.VirtualMachineConfig) bool {
 		return true
 	case isHypervVagrantTarget(config):
 		return true
+	case isLinuxLibvirtTarget(config):
+		return true
 	default:
 		return false
 	}
@@ -31,6 +33,8 @@ func RunStop(config alchemy_build.VirtualMachineConfig) error {
 		return RunTartStopOnMacOS(config)
 	case isHypervVagrantTarget(config):
 		return RunHypervVagrantStopOnWindows(config)
+	case isLinuxLibvirtTarget(config):
+		return RunLinuxQemuStopOnLinux(config)
 	default:
 		return fmt.Errorf(
 			"stop is not implemented for OS=%s type=%s arch=%s host=%s engine=%s",

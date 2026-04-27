@@ -305,6 +305,28 @@ func TestIsProvisionSupported(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "linux qemu ubuntu amd64 supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "ubuntu",
+				Arch:                 "amd64",
+				UbuntuType:           "server",
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+			},
+			want: true,
+		},
+		{
+			name: "linux qemu ubuntu arm64 supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "ubuntu",
+				Arch:                 "arm64",
+				UbuntuType:           "desktop",
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+			},
+			want: true,
+		},
+		{
 			name: "darwin tart macos arm64 supported",
 			vm: alchemy_build.VirtualMachineConfig{
 				OS:                   "macos",
@@ -337,6 +359,22 @@ func TestAvailableProvisionVirtualMachinesOnlyReturnsSupportedConfigs(t *testing
 	if !foundLocal {
 		t.Fatal("expected local provision target to be included for the current host")
 	}
+}
+
+func TestAvailableProvisionVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstable(t *testing.T) {
+	withCurrentHostArchitecture(t, "amd64")
+
+	vms := availableProvisionVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireProvisionVMStatus(t, vms, "server", "amd64", "stable")
+	requireProvisionVMStatus(t, vms, "server", "arm64", "unstable")
+}
+
+func TestAvailableProvisionVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstableOnArm64(t *testing.T) {
+	withCurrentHostArchitecture(t, "arm64")
+
+	vms := availableProvisionVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireProvisionVMStatus(t, vms, "desktop", "arm64", "stable")
+	requireProvisionVMStatus(t, vms, "desktop", "amd64", "unstable")
 }
 
 func TestCurrentHostLocalProvisionVirtualMachineUsesLocalEngine(t *testing.T) {

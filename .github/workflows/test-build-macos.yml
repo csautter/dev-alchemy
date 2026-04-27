@@ -50,6 +50,8 @@ jobs:
             go_test_name: TestBuildQemuWindows11Arm64OnMacos
             deploy_test_name: TestDeployUtmWindows11Arm64OnMacos
             runs_on: macos-26-tart
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_arm64.iso","container":"build-cache"},
                {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
@@ -59,6 +61,8 @@ jobs:
             go_test_name: TestBuildQemuWindows11Amd64OnMacos
             deploy_test_name: TestDeployUtmWindows11Amd64OnMacos
             runs_on: macos-26-tart
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},
                {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"}]
@@ -66,6 +70,8 @@ jobs:
             go_test_name: TestBuildQemuUbuntuServerArm64OnMacos
             deploy_test_name: TestDeployUtmUbuntuServerArm64OnMacos
             runs_on: macos-26-tart
+            packer_start_only: "true"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
@@ -73,12 +79,16 @@ jobs:
             go_test_name: TestBuildQemuUbuntuServerAmd64OnMacos
             deploy_test_name: TestDeployUtmUbuntuServerAmd64OnMacos
             runs_on: macos-26-tart
+            packer_start_only: "true"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
           - vm_os: ubuntu
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnMacos
             deploy_test_name: TestDeployUtmUbuntuDesktopArm64OnMacos
             runs_on: macos-26-tart
+            packer_start_only: "true"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
@@ -86,6 +96,8 @@ jobs:
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnMacos
             deploy_test_name: TestDeployUtmUbuntuDesktopAmd64OnMacos
             runs_on: macos-26-tart
+            packer_start_only: "true"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
     steps:
@@ -122,6 +134,8 @@ jobs:
         continue-on-error: true
         env:
           RUN_INTEGRATION_TESTS: "1"
+          DEV_ALCHEMY_PACKER_START_ONLY: ${{ matrix.packer_start_only }}
+          DEV_ALCHEMY_PACKER_START_TIMEOUT: ${{ matrix.packer_start_timeout }}
           PACKER_LOG: 1
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -136,7 +150,7 @@ jobs:
           fi
 
       - name: Run deploy smoke test TEST_NAME=${{ matrix.deploy_test_name }}
-        if: steps.packer_build.outcome == 'success'
+        if: steps.packer_build.outcome == 'success' && matrix.packer_start_only != 'true'
         id: deploy_smoke
         shell: bash
         continue-on-error: true

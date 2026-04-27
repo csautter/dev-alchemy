@@ -44,6 +44,8 @@ on:
       - "build/packer/linux/*"
       - "build/packer/linux/**/*"
       - "pkg/build/**"
+      - "pkg/deploy/**"
+      - "pkg/provision/**"
       - "scripts/linux/*"
       - "scripts/linux/**/*"
       - "scripts/macos/playwright_win11_iso.py"
