@@ -1,7 +1,7 @@
 # GitHub Actions Runner Broker — Azure Function
 
 This Azure Function App acts as the **control-plane broker** for on-demand Windows GitHub Actions runner VMs on Azure.
-It exposes two HTTP endpoints that CI workflows call to create and destroy ephemeral runner VMs.
+It exposes HTTP endpoints that CI workflows call to create and destroy ephemeral runner VMs, and to mint short-lived runner registration tokens for external provisioning flows.
 
 ---
 
@@ -10,6 +10,7 @@ It exposes two HTTP endpoints that CI workflows call to create and destroy ephem
 1. [Architecture overview](#architecture-overview)
 2. [API endpoints](#api-endpoints)
    - [POST /api/request_runner](#post-apirequest_runner)
+   - [POST /api/request_runner_registration_token](#post-apirequest_runner_registration_token)
    - [POST /api/delete_resource_group](#post-apidelete_resource_group)
 3. [Authentication and security model](#authentication-and-security-model)
 4. [Required app settings](#required-app-settings)
@@ -38,10 +39,11 @@ Azure Function App  (EasyAuth v2 → Return401 for unauthenticated)
         │    • aud  == ALLOWED_AUDIENCE
         │    • azp/oid in ALLOWED_CLIENT_IDS or ALLOWED_USER_OBJECT_IDS
         │
-        ├─▶ request_runner       → Key Vault ──▶ GitHub API ──▶ Azure Compute API
-        │                                         (register token)   (create VM)
+        ├─▶ request_runner                  → Key Vault ──▶ GitHub API ──▶ Azure Compute API
+        │                                                    (register token)   (create VM)
+        ├─▶ request_runner_registration_token → Key Vault ──▶ GitHub API
         │
-        └─▶ delete_resource_group → Azure Resource Manager API
+        └─▶ delete_resource_group          → Azure Resource Manager API
 ```
 
 The Function App uses a **system-assigned managed identity** to access Key Vault and the Azure subscription.
@@ -100,6 +102,41 @@ Registers a GitHub Actions runner token, creates a resource group, and provision
 9. The VM boots, runs `runner-setup.ps1` via `custom_data`, installs Hyper-V or VirtualBox, and registers itself as a GitHub Actions runner.
 
 > **Security note:** The NSG currently opens RDP (TCP 3389) from `*`. Restrict `source_address_prefix` to known operator CIDRs or remove public RDP once runner bootstrapping is verified.
+
+---
+
+### POST /api/request_runner_registration_token
+
+Returns a short-lived GitHub self-hosted runner registration token for a repository. This is intended for external provisioning flows, such as ephemeral Hetzner runners, that should not hold the long-lived GitHub admin credential directly.
+
+**Request body (JSON)**
+
+| Field  | Type   | Required | Description |
+|--------|--------|----------|-------------|
+| `repo` | string | ✅        | GitHub repository in `owner/repo` format |
+
+**Example**
+
+```json
+{
+  "repo": "owner/repo"
+}
+```
+
+**Responses**
+
+| Status | Meaning |
+|--------|---------|
+| `201`  | Token issued. Body includes `token` and `expires_at`. |
+| `400`  | Invalid request body or repo format. |
+| `401`  | Authentication/authorization check failed. |
+| `500`  | Internal error (GitHub API failure or Key Vault access). |
+
+**Security notes**
+
+1. The endpoint is protected by the same EasyAuth and `require_authenticated_caller()` checks as the other broker endpoints.
+2. The function app does not log the token value.
+3. CI callers should immediately mask the token and avoid echoing it to stdout/stderr.
 
 ---
 

@@ -30,7 +30,7 @@ on:
       hetzner_amd64_server_type:
         description: "Hetzner server type for amd64 Linux builds"
         required: false
-        default: "CPX32"
+        default: "cpx32"
         type: string
       hetzner_arm64_server_type:
         description: "Hetzner server type for arm64 Linux builds"
@@ -104,23 +104,51 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       use-hetzner: ${{ steps.mode.outputs.use-hetzner }}
+      use-hosted: ${{ steps.mode.outputs.use-hosted }}
+      runner-mode: ${{ steps.mode.outputs.runner-mode }}
     steps:
       - name: Select runner mode
         id: mode
         env:
-          GH_RUNNER_ADMIN_TOKEN: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          FUNCTION_APP_NAME: ${{ secrets.FUNCTION_APP_NAME }}
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          RUN_LINUX_QEMU_ON_BOTH_RUNNERS: ${{ vars.RUN_LINUX_QEMU_ON_BOTH_RUNNERS }}
         run: |
-          if [[ -n "${HCLOUD_TOKEN}" && -n "${GH_RUNNER_ADMIN_TOKEN}" ]]; then
+          run_both=false
+          case "${RUN_LINUX_QEMU_ON_BOTH_RUNNERS,,}" in
+            1|true|yes|on)
+              run_both=true
+              ;;
+          esac
+
+          if [[ -n "${AZURE_CLIENT_ID}" && -n "${AZURE_SUBSCRIPTION_ID}" && -n "${AZURE_TENANT_ID}" && -n "${FUNCTION_APP_NAME}" && -n "${HCLOUD_TOKEN}" ]]; then
             echo "use-hetzner=true" >> "${GITHUB_OUTPUT}"
+            if [[ "${run_both}" == "true" ]]; then
+              echo "use-hosted=true" >> "${GITHUB_OUTPUT}"
+              echo "runner-mode=both" >> "${GITHUB_OUTPUT}"
+              echo "Hetzner runner broker and cloud access are available, and RUN_LINUX_QEMU_ON_BOTH_RUNNERS is enabled; running both Hetzner and GitHub-hosted Linux QEMU builds in parallel."
+            else
+              echo "use-hosted=false" >> "${GITHUB_OUTPUT}"
+              echo "runner-mode=hetzner" >> "${GITHUB_OUTPUT}"
+              echo "Hetzner runner broker and cloud access are available; using Hetzner self-hosted runners for Linux QEMU builds."
+            fi
           else
             echo "use-hetzner=false" >> "${GITHUB_OUTPUT}"
-            echo "Hetzner runner secrets are unavailable; falling back to GitHub-hosted Linux runners." >> "${GITHUB_STEP_SUMMARY}"
+            echo "use-hosted=true" >> "${GITHUB_OUTPUT}"
+            echo "runner-mode=hosted" >> "${GITHUB_OUTPUT}"
+            if [[ "${run_both}" == "true" ]]; then
+              echo "RUN_LINUX_QEMU_ON_BOTH_RUNNERS is enabled, but Hetzner runner broker or cloud access is unavailable; running only GitHub-hosted Linux runners."
+            else
+              echo "Hetzner runner broker or cloud access is unavailable; falling back to GitHub-hosted Linux runners."
+            fi
           fi
 
   test-packer-build-hosted:
     needs: [determine-runner-mode]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner != 'true'
+    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hosted == 'true'
     name: build ${{ matrix.go_test_name }} runner_os ${{ matrix.runs_on }}
     runs-on: ${{ matrix.runs_on }}
     env:
@@ -224,7 +252,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-log-${{ matrix.go_test_name }}
+          name: packer-log-hosted-${{ matrix.go_test_name }}
           path: artifact/${{ matrix.go_test_name }}.packer.log
           if-no-files-found: ignore
           retention-days: 7
@@ -233,7 +261,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
+          name: packer-qemu-ubuntu-hosted-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -269,18 +297,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Azure Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Provision amd64 Hetzner runner
         id: provision
         uses: ./.github/actions/hetzner-github-runner
         with:
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          function-app-name: ${{ secrets.FUNCTION_APP_NAME }}
           mode: create
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: gh-linux-amd64-${{ github.run_id }}-${{ github.run_attempt }}
           image: ${{ inputs.hetzner_image || 'ubuntu-24.04' }}
           location: ${{ inputs.hetzner_location || 'nbg1' }}
+          runner-count: "2"
           runner-version: ${{ inputs.hetzner_runner_version || 'latest' }}
-          server-type: ${{ inputs.hetzner_amd64_server_type || 'cpx31' }}
+          server-type: ${{ inputs.hetzner_amd64_server_type || 'ccx23' }}
 
   provision-hetzner-linux-arm64-runner:
     needs: [determine-runner-mode]
@@ -293,18 +330,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Azure Login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Provision arm64 Hetzner runner
         id: provision
         uses: ./.github/actions/hetzner-github-runner
         with:
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          function-app-name: ${{ secrets.FUNCTION_APP_NAME }}
           mode: create
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: gh-linux-arm64-${{ github.run_id }}-${{ github.run_attempt }}
           image: ${{ inputs.hetzner_image || 'ubuntu-24.04' }}
           location: ${{ inputs.hetzner_location || 'nbg1' }}
+          runner-count: "2"
           runner-version: ${{ inputs.hetzner_runner_version || 'latest' }}
-          server-type: ${{ inputs.hetzner_arm64_server_type || 'cax21' }}
+          server-type: ${{ inputs.hetzner_arm64_server_type || 'cax31' }}
 
   test-packer-build-hetzner-amd64:
     needs: [determine-runner-mode, provision-hetzner-linux-amd64-runner]
@@ -399,7 +445,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-log-${{ matrix.go_test_name }}
+          name: packer-log-hetzner-${{ matrix.go_test_name }}
           path: artifact/${{ matrix.go_test_name }}.packer.log
           if-no-files-found: ignore
           retention-days: 7
@@ -408,7 +454,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
+          name: packer-qemu-ubuntu-hetzner-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -528,7 +574,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-log-${{ matrix.go_test_name }}
+          name: packer-log-hetzner-${{ matrix.go_test_name }}
           path: artifact/${{ matrix.go_test_name }}.packer.log
           if-no-files-found: ignore
           retention-days: 7
@@ -537,7 +583,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
+          name: packer-qemu-ubuntu-hetzner-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -624,17 +670,17 @@ jobs:
           echo "cleanup_required=${cleanup_required}" >> "${GITHUB_OUTPUT}"
 
       - name: Delete timed out amd64 Hetzner runner
-        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        if: always() && steps.watch_queue.outputs.cleanup_required == 'true'
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: delete
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
+          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN || github.token }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: ${{ needs.provision-hetzner-linux-amd64-runner.outputs.runner-label }}
           server-id: ${{ needs.provision-hetzner-linux-amd64-runner.outputs.server-id }}
 
       - name: Cancel workflow after amd64 queue timeout
-        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        if: always() && steps.watch_queue.outputs.cleanup_required == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -716,17 +762,17 @@ jobs:
           echo "cleanup_required=${cleanup_required}" >> "${GITHUB_OUTPUT}"
 
       - name: Delete timed out arm64 Hetzner runner
-        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        if: always() && steps.watch_queue.outputs.cleanup_required == 'true'
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: delete
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
+          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN || github.token }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: ${{ needs.provision-hetzner-linux-arm64-runner.outputs.runner-label }}
           server-id: ${{ needs.provision-hetzner-linux-arm64-runner.outputs.server-id }}
 
       - name: Cancel workflow after arm64 queue timeout
-        if: steps.watch_queue.outputs.cleanup_required == 'true'
+        if: always() && steps.watch_queue.outputs.cleanup_required == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -754,16 +800,19 @@ jobs:
       - watch-hetzner-linux-amd64-runner-queue
     if: always() && (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
       - name: Delete amd64 Hetzner runner
-        if: needs.provision-hetzner-linux-amd64-runner.outputs.server-id != ''
+        if: always() && needs.provision-hetzner-linux-amd64-runner.outputs.server-id != ''
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: delete
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
+          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN || github.token }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: ${{ needs.provision-hetzner-linux-amd64-runner.outputs.runner-label }}
           server-id: ${{ needs.provision-hetzner-linux-amd64-runner.outputs.server-id }}
@@ -776,16 +825,19 @@ jobs:
       - watch-hetzner-linux-arm64-runner-queue
     if: always() && (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
       - name: Delete arm64 Hetzner runner
-        if: needs.provision-hetzner-linux-arm64-runner.outputs.server-id != ''
+        if: always() && needs.provision-hetzner-linux-arm64-runner.outputs.server-id != ''
         uses: ./.github/actions/hetzner-github-runner
         with:
           mode: delete
-          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN }}
+          github-token: ${{ secrets.GH_RUNNER_ADMIN_TOKEN || github.token }}
           hcloud-token: ${{ secrets.HCLOUD_TOKEN }}
           name: ${{ needs.provision-hetzner-linux-arm64-runner.outputs.runner-label }}
           server-id: ${{ needs.provision-hetzner-linux-arm64-runner.outputs.server-id }}

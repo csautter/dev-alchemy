@@ -6,8 +6,19 @@ inputs:
     description: "Runner lifecycle action: create or delete"
     required: true
   github-token:
-    description: "GitHub token with repository Administration permission"
-    required: true
+    description: "GitHub token with repository Administration permission; optional in delete mode for runner deregistration and optional in create mode"
+    required: false
+  runner-registration-token:
+    description: "Short-lived GitHub runner registration token used in create mode"
+    required: false
+  function-app-name:
+    description: "Azure Function App name used to mint a runner registration token on demand in create mode"
+    required: false
+    default: ""
+  azure-client-id:
+    description: "Azure application client ID used as the function app API audience in create mode"
+    required: false
+    default: ""
   hcloud-token:
     description: "Hetzner Cloud API token"
     required: true
@@ -25,7 +36,7 @@ inputs:
   server-type:
     description: "Hetzner server type"
     required: false
-    default: "cpx31"
+    default: "cpx32"
   runner-version:
     description: "GitHub Actions runner version, or latest"
     required: false
@@ -34,6 +45,10 @@ inputs:
     description: "Runner installation directory"
     required: false
     default: "/actions-runner"
+  runner-count:
+    description: "Number of ephemeral runner instances to start on the server"
+    required: false
+    default: "1"
   pre-runner-script:
     description: "Shell commands to run on the server before the runner starts"
     required: false
@@ -57,7 +72,7 @@ inputs:
   enable-ipv4:
     description: "Attach a public IPv4 address"
     required: false
-    default: "false"
+    default: "true"
   enable-ipv6:
     description: "Attach a public IPv6 address"
     required: false
@@ -87,13 +102,17 @@ runs:
         INPUT_DELETE_WAIT: ${{ inputs.delete-wait }}
         INPUT_ENABLE_IPV4: ${{ inputs.enable-ipv4 }}
         INPUT_ENABLE_IPV6: ${{ inputs.enable-ipv6 }}
+        INPUT_FUNCTION_APP_NAME: ${{ inputs.function-app-name }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_RUNNER_REGISTRATION_TOKEN: ${{ inputs.runner-registration-token }}
         INPUT_HCLOUD_TOKEN: ${{ inputs.hcloud-token }}
+        INPUT_AZURE_CLIENT_ID: ${{ inputs.azure-client-id }}
         INPUT_IMAGE: ${{ inputs.image }}
         INPUT_LOCATION: ${{ inputs.location }}
         INPUT_MODE: ${{ inputs.mode }}
         INPUT_NAME: ${{ inputs.name }}
         INPUT_PRE_RUNNER_SCRIPT: ${{ inputs.pre-runner-script }}
+        INPUT_RUNNER_COUNT: ${{ inputs.runner-count }}
         INPUT_RUNNER_DIR: ${{ inputs.runner-dir }}
         INPUT_RUNNER_VERSION: ${{ inputs.runner-version }}
         INPUT_RUNNER_WAIT: ${{ inputs.runner-wait }}

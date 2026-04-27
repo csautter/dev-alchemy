@@ -27,6 +27,11 @@ if ! command -v apt-get >/dev/null 2>&1; then
 	exit 1
 fi
 
+if ! command -v flock >/dev/null 2>&1; then
+	echo "flock is required to serialize Linux dependency installation on shared hosts." >&2
+	exit 1
+fi
+
 if [[ "${EUID}" -eq 0 ]]; then
 	SUDO=""
 else
@@ -63,6 +68,8 @@ fi
 
 hashicorp_keyring_path="/usr/share/keyrings/hashicorp-archive-keyring.gpg"
 hashicorp_sources_path="/etc/apt/sources.list.d/hashicorp.list"
+install_lock_file="${DEV_ALCHEMY_INSTALL_LOCK_FILE:-/tmp/dev-alchemy-install-dependencies.lock}"
+install_lock_timeout_seconds="${DEV_ALCHEMY_INSTALL_LOCK_TIMEOUT_SECONDS:-1800}"
 script_dir=$(
 	cd "$(dirname "$0")"
 	pwd -P
@@ -71,6 +78,24 @@ project_root=$(
 	cd "${script_dir}/../.."
 	pwd -P
 )
+
+acquire_install_lock() {
+	if [[ ! "${install_lock_timeout_seconds}" =~ ^[0-9]+$ ]]; then
+		echo "DEV_ALCHEMY_INSTALL_LOCK_TIMEOUT_SECONDS must be a non-negative integer." >&2
+		exit 1
+	fi
+
+	mkdir -p "$(dirname "${install_lock_file}")"
+	touch "${install_lock_file}"
+	exec 9>"${install_lock_file}"
+
+	echo "Waiting for exclusive dependency install lock: ${install_lock_file}"
+	if ! flock -w "${install_lock_timeout_seconds}" 9; then
+		echo "Timed out waiting for dependency install lock after ${install_lock_timeout_seconds} seconds: ${install_lock_file}" >&2
+		exit 1
+	fi
+	echo "Acquired exclusive dependency install lock."
+}
 
 install_hashicorp_apt_repo() {
 	${SUDO} apt-get update
@@ -91,6 +116,7 @@ install_linux_packages() {
 		curl
 		ffmpeg
 		gpg
+		make
 		packer
 		python3
 		qemu-system-arm
@@ -106,6 +132,7 @@ install_linux_packages() {
 	${SUDO} apt-get install -y "${packages[@]}"
 }
 
+acquire_install_lock
 install_hashicorp_apt_repo
 install_linux_packages
 if [[ "${install_go}" == "true" ]]; then
