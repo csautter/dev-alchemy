@@ -103,7 +103,7 @@ func TestQemuCloudInitConfiguresPersistentDHCPNetworking(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to read %q: %v", userDataPath, err)
 			}
-			if !strings.Contains(string(content), explicitDHCPNetwork) {
+			if !strings.Contains(normalizeLineEndings(string(content)), explicitDHCPNetwork) {
 				t.Fatalf("expected %q to configure persistent DHCP networking for QEMU interfaces", userDataPath)
 			}
 		})
@@ -287,6 +287,10 @@ func workflowMatrixEntryForTest(t *testing.T, workflow string, testName string) 
 		return workflow[entryStart:]
 	}
 	return workflow[entryStart : start+nextEntry]
+}
+
+func normalizeLineEndings(content string) string {
+	return strings.ReplaceAll(content, "\r\n", "\n")
 }
 
 func repoPath(t *testing.T, relPath string) string {
