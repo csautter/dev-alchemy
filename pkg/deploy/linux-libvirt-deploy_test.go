@@ -337,6 +337,150 @@ func TestRunLinuxQemuDeployIncludesVirtInstallOutputOnXMLFailure(t *testing.T) {
 	}
 }
 
+func TestRunLinuxQemuDeployEnsuresDefaultImageDirHasRestrictivePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping POSIX permission assertion on Windows")
+	}
+
+	previousRunStreaming := runLinuxLibvirtCommandWithStreamingLogs
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	previousLookPath := lookPathLinuxLibvirtCommand
+	dirs := alchemy_build.GetDirectoriesInstance()
+	previousProjectDir := dirs.ProjectDir
+	previousAppDataDir := dirs.AppDataDir
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithStreamingLogs = previousRunStreaming
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+		lookPathLinuxLibvirtCommand = previousLookPath
+		dirs.ProjectDir = previousProjectDir
+		dirs.AppDataDir = previousAppDataDir
+	})
+
+	tempDir := t.TempDir()
+	dirs.ProjectDir = filepath.Join(tempDir, "project")
+	dirs.AppDataDir = filepath.Join(tempDir, "app-data")
+	imageDir := filepath.Join(dirs.AppDataDir, linuxLibvirtManagedDomainDirectory)
+	artifactPath := filepath.Join(tempDir, "artifact.qcow2")
+	t.Setenv(linuxLibvirtURIEnvVar, "qemu:///session")
+	t.Setenv(linuxLibvirtImageDirEnvVar, "")
+
+	if err := os.MkdirAll(imageDir, 0o755); err != nil {
+		t.Fatalf("failed to seed permissive image dir: %v", err)
+	}
+	if err := os.Chmod(imageDir, 0o755); err != nil {
+		t.Fatalf("failed to set permissive image dir mode: %v", err)
+	}
+	if err := os.WriteFile(artifactPath, []byte("artifact"), 0o644); err != nil {
+		t.Fatalf("failed to seed test artifact: %v", err)
+	}
+
+	lookPathLinuxLibvirtCommand = func(file string) (string, error) {
+		return "/usr/bin/" + file, nil
+	}
+	runLinuxLibvirtCommandWithStreamingLogs = func(_ string, _ time.Duration, executable string, args []string, _ string) error {
+		switch executable {
+		case "qemu-img":
+			if len(args) == 0 {
+				t.Fatal("expected qemu-img args")
+			}
+			return os.WriteFile(args[len(args)-1], []byte("disk"), 0o644)
+		case "virsh":
+			return nil
+		default:
+			t.Fatalf("unexpected streaming command %q", executable)
+			return nil
+		}
+	}
+	runLinuxLibvirtCommandWithCombinedOut = func(_ string, _ time.Duration, executable string, _ []string) (string, error) {
+		if executable != "virt-install" {
+			t.Fatalf("expected virt-install, got %q", executable)
+		}
+		return "<domain type='qemu'></domain>\n", nil
+	}
+
+	config := alchemy_build.VirtualMachineConfig{
+		OS:                     "ubuntu",
+		UbuntuType:             "server",
+		Arch:                   "amd64",
+		HostOs:                 alchemy_build.HostOsLinux,
+		VirtualizationEngine:   alchemy_build.VirtualizationEngineQemu,
+		ExpectedBuildArtifacts: []string{artifactPath},
+	}
+
+	if err := RunLinuxQemuDeployOnLinux(config); err != nil {
+		t.Fatalf("expected deploy to succeed: %v", err)
+	}
+
+	info, err := os.Stat(imageDir)
+	if err != nil {
+		t.Fatalf("expected image dir to exist: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != linuxLibvirtImageDirPermission {
+		t.Fatalf("expected image dir mode %04o, got %04o", linuxLibvirtImageDirPermission, mode)
+	}
+}
+
+func TestRunLinuxQemuStartSuggestsLibvirtStorageACLRepair(t *testing.T) {
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	previousLookPath := lookPathLinuxLibvirtCommand
+	dirs := alchemy_build.GetDirectoriesInstance()
+	previousProjectDir := dirs.ProjectDir
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+		lookPathLinuxLibvirtCommand = previousLookPath
+		dirs.ProjectDir = previousProjectDir
+	})
+
+	dirs.ProjectDir = t.TempDir()
+	t.Setenv(linuxLibvirtURIEnvVar, "qemu:///system")
+	t.Setenv(linuxLibvirtImageDirEnvVar, "")
+
+	lookPathLinuxLibvirtCommand = func(file string) (string, error) {
+		return "/usr/bin/" + file, nil
+	}
+	runLinuxLibvirtCommandWithCombinedOut = func(_ string, _ time.Duration, executable string, args []string) (string, error) {
+		if executable != "virsh" {
+			t.Fatalf("expected virsh, got %q", executable)
+		}
+		joined := strings.Join(args, " ")
+		switch {
+		case strings.Contains(joined, " domstate "):
+			return "shut off\n", nil
+		case strings.Contains(joined, " start "):
+			return "error: Failed to start domain 'ubuntu-desktop-amd64-dev-alchemy'\n" +
+					"error: Cannot access storage file '/var/tmp/dev-alchemy/libvirt/images/ubuntu-desktop-amd64-dev-alchemy.qcow2' (as uid:64055, gid:993): Keine Berechtigung\n",
+				errors.New("exit status 1")
+		default:
+			t.Fatalf("unexpected virsh args %q", joined)
+			return "", nil
+		}
+	}
+
+	err := RunLinuxQemuStartOnLinux(alchemy_build.VirtualMachineConfig{
+		OS:                   "ubuntu",
+		UbuntuType:           "desktop",
+		Arch:                 "amd64",
+		HostOs:               alchemy_build.HostOsLinux,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+	})
+	if err == nil {
+		t.Fatal("expected start failure")
+	}
+
+	errText := err.Error()
+	for _, want := range []string{
+		"Libvirt cannot access the managed QCOW2 disk as uid:64055, gid:993.",
+		"sudo setfacl -m g:993:x /var/tmp/dev-alchemy /var/tmp/dev-alchemy/libvirt",
+		"sudo setfacl -R -m g:993:rwX /var/tmp/dev-alchemy/libvirt/images",
+		"sudo setfacl -d -m g:993:rwX /var/tmp/dev-alchemy/libvirt/images",
+		"sudo apt-get install acl",
+	} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("expected start error to contain %q, got:\n%s", want, errText)
+		}
+	}
+}
+
 func TestLinuxLibvirtNetworkModel(t *testing.T) {
 	if got := linuxLibvirtNetworkModel(alchemy_build.VirtualMachineConfig{Arch: "amd64"}); got != "e1000" {
 		t.Fatalf("expected amd64 network model e1000, got %q", got)
