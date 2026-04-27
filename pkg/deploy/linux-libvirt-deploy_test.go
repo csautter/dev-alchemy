@@ -2,10 +2,12 @@ package deploy
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 )
@@ -173,7 +175,7 @@ func TestLinuxLibvirtHostArch(t *testing.T) {
 	}
 }
 
-func TestLinuxLibvirtCPUArgUsesPackerAlignedCPUForEmulatedArch(t *testing.T) {
+func TestLinuxLibvirtCPUArgUsesVirtInstallCPUForEmulatedArch(t *testing.T) {
 	previousLinuxLibvirtRuntimeGOARCH := linuxLibvirtRuntimeGOARCH
 	t.Cleanup(func() {
 		linuxLibvirtRuntimeGOARCH = previousLinuxLibvirtRuntimeGOARCH
@@ -186,8 +188,8 @@ func TestLinuxLibvirtCPUArgUsesPackerAlignedCPUForEmulatedArch(t *testing.T) {
 	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "amd64"}); got != "host-passthrough" {
 		t.Fatalf("expected native amd64 guest to use host-passthrough, got %q", got)
 	}
-	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "arm64"}); got != "max,sve=off,sme=off,pauth-impdef=on" {
-		t.Fatalf("expected emulated arm64 guest to use tuned max CPU, got %q", got)
+	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "arm64"}); got != "cortex-a57" {
+		t.Fatalf("expected emulated arm64 guest to use portable cortex-a57 CPU, got %q", got)
 	}
 
 	linuxLibvirtRuntimeGOARCH = func() string {
@@ -231,6 +233,9 @@ func TestLinuxLibvirtVirtInstallArgsIncludeNativeCPUAndSpiceAgentDevices(t *test
 			t.Fatalf("expected virt-install args to contain %q, got %q", want, joined)
 		}
 	}
+	if strings.Contains(joined, "--virt-type qemu") {
+		t.Fatalf("did not expect native guest virt-install args to force TCG, got %q", joined)
+	}
 }
 
 func TestLinuxLibvirtVirtInstallArgsUseEmulatedArm64Settings(t *testing.T) {
@@ -252,14 +257,83 @@ func TestLinuxLibvirtVirtInstallArgsUseEmulatedArm64Settings(t *testing.T) {
 
 	joined := strings.Join(args, " ")
 	for _, want := range []string{
-		"--cpu max,sve=off,sme=off,pauth-impdef=on",
+		"--cpu cortex-a57",
 		"--vcpus 4",
+		"--virt-type qemu",
 		"--arch aarch64",
 		"--machine virt",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected virt-install args to contain %q, got %q", want, joined)
 		}
+	}
+}
+
+func TestRunLinuxQemuDeployIncludesVirtInstallOutputOnXMLFailure(t *testing.T) {
+	previousRunStreaming := runLinuxLibvirtCommandWithStreamingLogs
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	previousLookPath := lookPathLinuxLibvirtCommand
+	dirs := alchemy_build.GetDirectoriesInstance()
+	previousProjectDir := dirs.ProjectDir
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithStreamingLogs = previousRunStreaming
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+		lookPathLinuxLibvirtCommand = previousLookPath
+		dirs.ProjectDir = previousProjectDir
+	})
+
+	tempDir := t.TempDir()
+	dirs.ProjectDir = tempDir
+	imageDir := filepath.Join(tempDir, "images")
+	artifactPath := filepath.Join(tempDir, "artifact.qcow2")
+	t.Setenv(linuxLibvirtURIEnvVar, "qemu:///session")
+	t.Setenv(linuxLibvirtImageDirEnvVar, imageDir)
+
+	if err := os.WriteFile(artifactPath, []byte("artifact"), 0o644); err != nil {
+		t.Fatalf("failed to seed test artifact: %v", err)
+	}
+
+	lookPathLinuxLibvirtCommand = func(file string) (string, error) {
+		return "/usr/bin/" + file, nil
+	}
+	runLinuxLibvirtCommandWithStreamingLogs = func(_ string, _ time.Duration, executable string, args []string, _ string) error {
+		if executable != "qemu-img" {
+			t.Fatalf("expected only qemu-img before XML failure, got %q", executable)
+		}
+		if len(args) == 0 {
+			t.Fatal("expected qemu-img args")
+		}
+		return os.WriteFile(args[len(args)-1], []byte("disk"), 0o644)
+	}
+	runLinuxLibvirtCommandWithCombinedOut = func(_ string, _ time.Duration, executable string, args []string) (string, error) {
+		if executable != "virt-install" {
+			t.Fatalf("expected virt-install, got %q", executable)
+		}
+		joined := strings.Join(args, " ")
+		if !strings.Contains(joined, "--virt-type qemu") {
+			t.Fatalf("expected emulated arm64 virt-install args to force TCG, got %q", joined)
+		}
+		return "ERROR    Unknown --cpu options: ['sve']\n", errors.New("exit status 1")
+	}
+
+	config := alchemy_build.VirtualMachineConfig{
+		OS:                     "ubuntu",
+		UbuntuType:             "desktop",
+		Arch:                   "arm64",
+		HostOs:                 alchemy_build.HostOsLinux,
+		VirtualizationEngine:   alchemy_build.VirtualizationEngineQemu,
+		ExpectedBuildArtifacts: []string{artifactPath},
+	}
+
+	err := RunLinuxQemuDeployOnLinux(config)
+	if err == nil {
+		t.Fatal("expected deploy failure")
+	}
+	if !strings.Contains(err.Error(), "Unknown --cpu options") {
+		t.Fatalf("expected virt-install output in error, got %v", err)
+	}
+	if _, statErr := os.Stat(linuxLibvirtDiskPath(config)); !os.IsNotExist(statErr) {
+		t.Fatalf("expected failed deploy to remove cloned disk, stat err: %v", statErr)
 	}
 }
 

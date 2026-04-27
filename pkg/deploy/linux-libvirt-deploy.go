@@ -95,6 +95,9 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 	)
 	if err != nil {
 		_ = os.Remove(diskPath)
+		if trimmedOutput := strings.TrimSpace(xml); trimmedOutput != "" {
+			return fmt.Errorf("failed to generate libvirt domain XML for %s: %w; output: %s", linuxLibvirtDomainName(config), err, trimmedOutput)
+		}
 		return fmt.Errorf("failed to generate libvirt domain XML for %s: %w", linuxLibvirtDomainName(config), err)
 	}
 	if strings.TrimSpace(xml) == "" {
@@ -413,6 +416,10 @@ func linuxLibvirtVirtInstallArgs(config alchemy_build.VirtualMachineConfig, uri 
 		"--print-xml",
 	}
 
+	if !linuxLibvirtUsesNativeArch(config) {
+		args = append(args, "--virt-type", "qemu")
+	}
+
 	switch config.Arch {
 	case "arm64":
 		args = append(args,
@@ -459,7 +466,7 @@ func linuxLibvirtCPUArg(config alchemy_build.VirtualMachineConfig) string {
 	case "amd64":
 		return "Skylake-Client"
 	case "arm64":
-		return "max,sve=off,sme=off,pauth-impdef=on"
+		return "cortex-a57"
 	default:
 		return "max"
 	}
