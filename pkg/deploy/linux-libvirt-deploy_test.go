@@ -377,14 +377,14 @@ func TestLinuxLibvirtVirtInstallArgsUseEmulatedArm64Settings(t *testing.T) {
 		OS:         "ubuntu",
 		UbuntuType: "server",
 		Arch:       "arm64",
-		Cpus:       4,
+		Cpus:       1,
 		MemoryMB:   4096,
 	}, "qemu:///session", "/tmp/test.qcow2")
 
 	joined := strings.Join(args, " ")
 	for _, want := range []string{
 		"--cpu cortex-a57",
-		"--vcpus 4",
+		"--vcpus 1",
 		"--virt-type qemu",
 		"--arch aarch64",
 		"--machine virt",
@@ -399,14 +399,19 @@ func TestRunLinuxQemuDeployIncludesVirtInstallOutputOnXMLFailure(t *testing.T) {
 	previousRunStreaming := runLinuxLibvirtCommandWithStreamingLogs
 	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
 	previousLookPath := lookPathLinuxLibvirtCommand
+	previousLinuxLibvirtRuntimeGOARCH := linuxLibvirtRuntimeGOARCH
 	dirs := alchemy_build.GetDirectoriesInstance()
 	previousProjectDir := dirs.ProjectDir
 	t.Cleanup(func() {
 		runLinuxLibvirtCommandWithStreamingLogs = previousRunStreaming
 		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
 		lookPathLinuxLibvirtCommand = previousLookPath
+		linuxLibvirtRuntimeGOARCH = previousLinuxLibvirtRuntimeGOARCH
 		dirs.ProjectDir = previousProjectDir
 	})
+	linuxLibvirtRuntimeGOARCH = func() string {
+		return "amd64"
+	}
 
 	tempDir := t.TempDir()
 	dirs.ProjectDir = tempDir
