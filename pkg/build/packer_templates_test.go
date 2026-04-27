@@ -214,6 +214,81 @@ func TestQemuWrapperScriptsUseSharedTemplate(t *testing.T) {
 	}
 }
 
+func TestMacOSQemuWrapperSupportsPackerStartOnlyProbe(t *testing.T) {
+	t.Parallel()
+
+	scriptPath := "build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh"
+	content, err := os.ReadFile(repoPath(t, scriptPath))
+	if err != nil {
+		t.Fatalf("failed to read script %q: %v", scriptPath, err)
+	}
+
+	got := string(content)
+	for _, want := range []string{
+		`DEV_ALCHEMY_PACKER_START_ONLY`,
+		`--packer-start-only`,
+		`run_packer_build_start_only`,
+		`Using isolated cache directory for start-only Packer probe`,
+		`-var "cache_dir=$effective_cache_dir"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected macOS QEMU wrapper to contain %q", want)
+		}
+	}
+}
+
+func TestMacOSWorkflowUsesStartOnlyProbeForUbuntuQemuBuilds(t *testing.T) {
+	t.Parallel()
+
+	workflowPath := ".github/workflows/test-build-macos.yml"
+	content, err := os.ReadFile(repoPath(t, workflowPath))
+	if err != nil {
+		t.Fatalf("failed to read workflow %q: %v", workflowPath, err)
+	}
+
+	got := string(content)
+	for _, testName := range []string{
+		"TestBuildQemuUbuntuServerArm64OnMacos",
+		"TestBuildQemuUbuntuServerAmd64OnMacos",
+		"TestBuildQemuUbuntuDesktopArm64OnMacos",
+		"TestBuildQemuUbuntuDesktopAmd64OnMacos",
+	} {
+		entry := workflowMatrixEntryForTest(t, got, testName)
+		if !strings.Contains(entry, `packer_start_only: "true"`) {
+			t.Fatalf("expected workflow matrix entry for %s to run as a start-only Packer probe", testName)
+		}
+	}
+
+	if !strings.Contains(got, `DEV_ALCHEMY_PACKER_START_ONLY: ${{ matrix.packer_start_only }}`) {
+		t.Fatal("expected workflow to pass packer_start_only through to the build step")
+	}
+	if !strings.Contains(got, `steps.packer_build.outcome == 'success' && matrix.packer_start_only != 'true'`) {
+		t.Fatal("expected workflow to skip deploy smoke tests for start-only Packer probes")
+	}
+}
+
+func workflowMatrixEntryForTest(t *testing.T, workflow string, testName string) string {
+	t.Helper()
+
+	testMarker := "go_test_name: " + testName
+	start := strings.Index(workflow, testMarker)
+	if start == -1 {
+		t.Fatalf("failed to find workflow matrix entry for %s", testName)
+	}
+
+	entryStart := strings.LastIndex(workflow[:start], "\n          - ")
+	if entryStart == -1 {
+		t.Fatalf("failed to find start of workflow matrix entry for %s", testName)
+	}
+	entryStart++
+
+	nextEntry := strings.Index(workflow[start:], "\n          - ")
+	if nextEntry == -1 {
+		return workflow[entryStart:]
+	}
+	return workflow[entryStart : start+nextEntry]
+}
+
 func repoPath(t *testing.T, relPath string) string {
 	t.Helper()
 
