@@ -22,7 +22,7 @@ variable "vm_size" {
 
 variable "github_actions_version" {
   type    = string
-  default = "2.330.0"
+  default = "2.334.0"
 }
 
 variable "image_resource_group" {
