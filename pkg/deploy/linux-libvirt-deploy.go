@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -423,7 +424,7 @@ func linuxLibvirtStorageAccessRepairHint(output string) string {
 		return ""
 	}
 
-	imageDir := filepath.Dir(accessErr.storagePath)
+	imageDir := path.Dir(accessErr.storagePath)
 	traversalDirs := linuxLibvirtManagedImageTraversalDirs(imageDir)
 	quotedImageDir := linuxLibvirtShellQuote(imageDir)
 
@@ -472,13 +473,13 @@ func linuxLibvirtManagedImageTraversalDirs(imageDir string) []string {
 	}
 	return []string{
 		baseDir,
-		filepath.Join(baseDir, "libvirt"),
+		path.Join(baseDir, "libvirt"),
 	}
 }
 
 func linuxLibvirtManagedImageBaseDir(imageDir string) (string, bool) {
-	cleanImageDir := filepath.Clean(imageDir)
-	managedSuffix := string(filepath.Separator) + filepath.FromSlash(linuxLibvirtManagedDomainDirectory)
+	cleanImageDir := path.Clean(imageDir)
+	managedSuffix := "/" + linuxLibvirtManagedDomainDirectory
 	if !strings.HasSuffix(cleanImageDir, managedSuffix) {
 		return "", false
 	}
