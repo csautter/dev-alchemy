@@ -147,6 +147,132 @@ func TestLinuxLibvirtNetworkArg(t *testing.T) {
 	}
 }
 
+func TestEnsureLinuxLibvirtConfiguredNetworkReadyChecksDefaultNetwork(t *testing.T) {
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	dirs := alchemy_build.GetDirectoriesInstance()
+	previousProjectDir := dirs.ProjectDir
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+		dirs.ProjectDir = previousProjectDir
+	})
+
+	dirs.ProjectDir = t.TempDir()
+	runLinuxLibvirtCommandWithCombinedOut = func(projectDir string, _ time.Duration, executable string, args []string) (string, error) {
+		if projectDir != dirs.ProjectDir {
+			t.Fatalf("expected project dir %q, got %q", dirs.ProjectDir, projectDir)
+		}
+		if executable != "virsh" {
+			t.Fatalf("expected virsh, got %q", executable)
+		}
+		joined := strings.Join(args, " ")
+		if joined != "--connect qemu:///system net-info default" {
+			t.Fatalf("unexpected virsh args %q", joined)
+		}
+		return "Name: default\nActive: yes\nAutostart: yes\n", nil
+	}
+
+	err := ensureLinuxLibvirtConfiguredNetworkReady(alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "amd64",
+	}, "qemu:///system")
+	if err != nil {
+		t.Fatalf("expected active default network to pass preflight: %v", err)
+	}
+}
+
+func TestEnsureLinuxLibvirtConfiguredNetworkReadySkipsSessionUserNetwork(t *testing.T) {
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+	})
+
+	runLinuxLibvirtCommandWithCombinedOut = func(_ string, _ time.Duration, executable string, args []string) (string, error) {
+		t.Fatalf("did not expect network preflight for %s %q", executable, strings.Join(args, " "))
+		return "", nil
+	}
+
+	err := ensureLinuxLibvirtConfiguredNetworkReady(alchemy_build.VirtualMachineConfig{
+		OS:         "ubuntu",
+		UbuntuType: "server",
+		Arch:       "amd64",
+	}, "qemu:///session")
+	if err != nil {
+		t.Fatalf("expected session user network to skip preflight: %v", err)
+	}
+}
+
+func TestEnsureLinuxLibvirtNetworkReadyUsesConfiguredSessionURI(t *testing.T) {
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+	})
+
+	runLinuxLibvirtCommandWithCombinedOut = func(_ string, _ time.Duration, executable string, args []string) (string, error) {
+		if executable != "virsh" {
+			t.Fatalf("expected virsh, got %q", executable)
+		}
+		joined := strings.Join(args, " ")
+		if joined != "--connect qemu:///session net-info default" {
+			t.Fatalf("unexpected virsh args %q", joined)
+		}
+		return "Name: default\nActive: yes\n", nil
+	}
+
+	if err := ensureLinuxLibvirtNetworkReady("qemu:///session", "default"); err != nil {
+		t.Fatalf("expected session default network check to use configured URI: %v", err)
+	}
+}
+
+func TestEnsureLinuxLibvirtNetworkReadyFailsWhenInactive(t *testing.T) {
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+	})
+
+	runLinuxLibvirtCommandWithCombinedOut = func(_ string, _ time.Duration, _ string, _ []string) (string, error) {
+		return "Name: default\nActive: no\n", nil
+	}
+
+	err := ensureLinuxLibvirtNetworkReady("qemu:///system", "default")
+	if err == nil {
+		t.Fatal("expected inactive network error")
+	}
+	for _, want := range []string{
+		`libvirt network "default" on qemu:///system is inactive`,
+		"sudo virsh --connect qemu:///system net-start default && sudo virsh --connect qemu:///system net-autostart default",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("expected error to contain %q, got %v", want, err)
+		}
+	}
+}
+
+func TestEnsureLinuxLibvirtNetworkReadyReportsMissingNetwork(t *testing.T) {
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+	})
+
+	runLinuxLibvirtCommandWithCombinedOut = func(_ string, _ time.Duration, _ string, _ []string) (string, error) {
+		return "error: Network not found: no network with matching name 'default'\n", errors.New("exit status 1")
+	}
+
+	err := ensureLinuxLibvirtNetworkReady("qemu:///session", "default")
+	if err == nil {
+		t.Fatal("expected missing network error")
+	}
+	for _, want := range []string{
+		`failed to inspect libvirt network "default" on qemu:///session`,
+		"Network not found",
+		"virsh --connect qemu:///session net-start default && virsh --connect qemu:///session net-autostart default",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("expected error to contain %q, got %v", want, err)
+		}
+	}
+}
+
 func TestLinuxLibvirtStateIndicatesRunning(t *testing.T) {
 	if linuxLibvirtStateIndicatesRunning("shut off") {
 		t.Fatal("expected shut off VM to be treated as stopped")
@@ -420,6 +546,116 @@ func TestRunLinuxQemuDeployEnsuresDefaultImageDirHasRestrictivePermissions(t *te
 	}
 }
 
+func TestRunLinuxQemuDeployPreflightsDefaultNetworkBeforeClone(t *testing.T) {
+	previousRunStreaming := runLinuxLibvirtCommandWithStreamingLogs
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	previousLookPath := lookPathLinuxLibvirtCommand
+	dirs := alchemy_build.GetDirectoriesInstance()
+	previousProjectDir := dirs.ProjectDir
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithStreamingLogs = previousRunStreaming
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+		lookPathLinuxLibvirtCommand = previousLookPath
+		dirs.ProjectDir = previousProjectDir
+	})
+
+	tempDir := t.TempDir()
+	dirs.ProjectDir = tempDir
+	imageDir := filepath.Join(tempDir, "images")
+	artifactPath := filepath.Join(tempDir, "artifact.qcow2")
+	t.Setenv(linuxLibvirtURIEnvVar, "qemu:///system")
+	t.Setenv(linuxLibvirtImageDirEnvVar, imageDir)
+
+	if err := os.WriteFile(artifactPath, []byte("artifact"), 0o644); err != nil {
+		t.Fatalf("failed to seed test artifact: %v", err)
+	}
+
+	lookPathLinuxLibvirtCommand = func(file string) (string, error) {
+		return "/usr/bin/" + file, nil
+	}
+	runLinuxLibvirtCommandWithStreamingLogs = func(_ string, _ time.Duration, executable string, args []string, _ string) error {
+		t.Fatalf("did not expect streaming command before network preflight passes: %s %q", executable, strings.Join(args, " "))
+		return nil
+	}
+	runLinuxLibvirtCommandWithCombinedOut = func(_ string, _ time.Duration, executable string, args []string) (string, error) {
+		if executable != "virsh" {
+			t.Fatalf("expected virsh network preflight, got %q", executable)
+		}
+		joined := strings.Join(args, " ")
+		if joined != "--connect qemu:///system net-info default" {
+			t.Fatalf("unexpected virsh args %q", joined)
+		}
+		return "Name: default\nActive: no\n", nil
+	}
+
+	err := RunLinuxQemuDeployOnLinux(alchemy_build.VirtualMachineConfig{
+		OS:                     "ubuntu",
+		UbuntuType:             "server",
+		Arch:                   "amd64",
+		HostOs:                 alchemy_build.HostOsLinux,
+		VirtualizationEngine:   alchemy_build.VirtualizationEngineQemu,
+		ExpectedBuildArtifacts: []string{artifactPath},
+	})
+	if err == nil {
+		t.Fatal("expected network preflight failure")
+	}
+	if !strings.Contains(err.Error(), `libvirt network "default" on qemu:///system is inactive`) {
+		t.Fatalf("expected inactive network error, got %v", err)
+	}
+}
+
+func TestRunLinuxQemuStartPreflightsDefaultNetworkBeforeStart(t *testing.T) {
+	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
+	previousLookPath := lookPathLinuxLibvirtCommand
+	dirs := alchemy_build.GetDirectoriesInstance()
+	previousProjectDir := dirs.ProjectDir
+	t.Cleanup(func() {
+		runLinuxLibvirtCommandWithCombinedOut = previousRunCombined
+		lookPathLinuxLibvirtCommand = previousLookPath
+		dirs.ProjectDir = previousProjectDir
+	})
+
+	dirs.ProjectDir = t.TempDir()
+	t.Setenv(linuxLibvirtURIEnvVar, "qemu:///system")
+	t.Setenv(linuxLibvirtImageDirEnvVar, "")
+
+	lookPathLinuxLibvirtCommand = func(file string) (string, error) {
+		return "/usr/bin/" + file, nil
+	}
+	runLinuxLibvirtCommandWithCombinedOut = func(_ string, _ time.Duration, executable string, args []string) (string, error) {
+		if executable != "virsh" {
+			t.Fatalf("expected virsh, got %q", executable)
+		}
+		joined := strings.Join(args, " ")
+		switch {
+		case strings.Contains(joined, " domstate "):
+			return "shut off\n", nil
+		case strings.Contains(joined, " net-info default"):
+			return "Name: default\nActive: no\n", nil
+		case strings.Contains(joined, " start "):
+			t.Fatalf("did not expect start before network preflight passes: %q", joined)
+			return "", nil
+		default:
+			t.Fatalf("unexpected virsh args %q", joined)
+			return "", nil
+		}
+	}
+
+	err := RunLinuxQemuStartOnLinux(alchemy_build.VirtualMachineConfig{
+		OS:                   "ubuntu",
+		UbuntuType:           "server",
+		Arch:                 "amd64",
+		HostOs:               alchemy_build.HostOsLinux,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+	})
+	if err == nil {
+		t.Fatal("expected network preflight failure")
+	}
+	if !strings.Contains(err.Error(), "sudo virsh --connect qemu:///system net-start default") {
+		t.Fatalf("expected remediation command in error, got %v", err)
+	}
+}
+
 func TestRunLinuxQemuStartSuggestsLibvirtStorageACLRepair(t *testing.T) {
 	previousRunCombined := runLinuxLibvirtCommandWithCombinedOut
 	previousLookPath := lookPathLinuxLibvirtCommand
@@ -446,6 +682,8 @@ func TestRunLinuxQemuStartSuggestsLibvirtStorageACLRepair(t *testing.T) {
 		switch {
 		case strings.Contains(joined, " domstate "):
 			return "shut off\n", nil
+		case strings.Contains(joined, " net-info default"):
+			return "Name: default\nActive: yes\n", nil
 		case strings.Contains(joined, " start "):
 			return "error: Failed to start domain 'ubuntu-desktop-amd64-dev-alchemy'\n" +
 					"error: Cannot access storage file '/var/tmp/dev-alchemy/libvirt/images/ubuntu-desktop-amd64-dev-alchemy.qcow2' (as uid:64055, gid:993): Keine Berechtigung\n",
