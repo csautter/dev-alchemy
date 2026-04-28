@@ -301,6 +301,30 @@ brew_version_matches() {
 	[[ "${comparison}" =~ ^-?[0-9]+$ && "${comparison}" -ge 0 ]]
 }
 
+brew_installed_version() {
+	local list_pkg="$1"
+	shift
+
+	local -a list_flags=("$@")
+	local version best_version comparison
+
+	while read -r version; do
+		[[ -n "${version}" ]] || continue
+
+		if [[ -z "${best_version:-}" ]]; then
+			best_version="${version}"
+			continue
+		fi
+
+		comparison="$(brew_version_compare "${version}" "${best_version}")"
+		if [[ "${comparison}" =~ ^-?[0-9]+$ && "${comparison}" -gt 0 ]]; then
+			best_version="${version}"
+		fi
+	done < <(brew list "${list_flags[@]}" --versions "${list_pkg}" 2>/dev/null | awk '{ for (i = 2; i <= NF; i++) print $i }')
+
+	printf '%s\n' "${best_version:-}"
+}
+
 brew_install() {
 	local label="$1" cmd="$2" pkg="$3" version="$4" tap="${5:-}" flags="${6:-}"
 	local tap_line="" check list_pkg list_flags pin_line unpin_line status_line version_helpers
@@ -317,7 +341,7 @@ brew_install() {
 		status_line="echo '${label}' \"\${installed_version}\" 'installed and satisfies ${version}.'"
 	fi
 
-	version_helpers="$(declare -f brew_version_compare brew_version_without_revision brew_version_matches)"
+	version_helpers="$(declare -f brew_version_compare brew_version_without_revision brew_version_matches brew_installed_version)"
 
 	[[ -n "$tap" ]] && tap_line="brew tap ${tap} || echo 'WARNING: tap ${tap} failed, continuing...'"
 	if [[ "$cmd" == /* ]]; then
@@ -329,7 +353,7 @@ brew_install() {
 ${tap_line}
 ${version_helpers}
 
-installed_version=\"\$(brew list ${list_flags} --versions ${list_pkg} 2>/dev/null | awk 'NR == 1 { print \$2 }')\"
+installed_version=\"\$(brew_installed_version ${list_pkg} ${list_flags})\"
 
 if ! brew_version_matches \"\${installed_version}\" \"${version}\" \"${flags}\"; then
 	if [[ -n \"\${installed_version}\" ]]; then
@@ -341,7 +365,7 @@ if ! brew_version_matches \"\${installed_version}\" \"${version}\" \"${flags}\";
 		brew install ${flags} ${pkg}
 	fi
 
-	installed_version=\"\$(brew list ${list_flags} --versions ${list_pkg} 2>/dev/null | awk 'NR == 1 { print \$2 }')\"
+	installed_version=\"\$(brew_installed_version ${list_pkg} ${list_flags})\"
 fi
 
 if ! brew_version_matches \"\${installed_version}\" \"${version}\" \"${flags}\"; then
