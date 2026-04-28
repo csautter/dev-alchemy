@@ -179,12 +179,12 @@ brew_install() {
 	list_flags=""
 	pin_line="brew pin ${list_pkg} || true"
 	unpin_line="brew unpin ${list_pkg} || true"
-	status_line="echo '${label} ${version} installed and pinned.'"
+	status_line="echo '${label}' \"\${installed_version}\" 'installed and pinned (matches ${version}).'"
 	if [[ " ${flags} " == *" --cask "* ]]; then
 		list_flags="--cask"
 		pin_line=""
 		unpin_line=""
-		status_line="echo '${label} ${version} installed and verified against pin.'"
+		status_line="echo '${label}' \"\${installed_version}\" 'installed and verified against pin ${version}.'"
 	fi
 
 	[[ -n "$tap" ]] && tap_line="brew tap ${tap} || echo 'WARNING: tap ${tap} failed, continuing...'"
@@ -195,9 +195,24 @@ brew_install() {
 	fi
 	provision_step "${label}" "
 ${tap_line}
+brew_version_matches() {
+	local installed=\"\$1\" pinned=\"\$2\" flags=\"\$3\" revision
+
+	if [[ \"\${installed}\" == \"\${pinned}\" ]]; then
+		return 0
+	fi
+
+	if [[ \" \${flags} \" != *\" --cask \"* && \"\${installed}\" == \"\${pinned}_\"* ]]; then
+		revision=\"\${installed#\"\${pinned}_\"}\"
+		[[ \"\${revision}\" =~ ^[0-9]+$ ]] && return 0
+	fi
+
+	return 1
+}
+
 installed_version=\"\$(brew list ${list_flags} --versions ${list_pkg} 2>/dev/null | awk 'NR == 1 { print \$2 }')\"
 
-if [[ \"\${installed_version}\" != \"${version}\" ]]; then
+if ! brew_version_matches \"\${installed_version}\" \"${version}\" \"${flags}\"; then
 	if [[ -n \"\${installed_version}\" ]]; then
 		echo '${label} version' \"\${installed_version}\" 'does not match pinned ${version}; updating via Homebrew...'
 		${unpin_line}
@@ -210,7 +225,7 @@ if [[ \"\${installed_version}\" != \"${version}\" ]]; then
 	installed_version=\"\$(brew list ${list_flags} --versions ${list_pkg} 2>/dev/null | awk 'NR == 1 { print \$2 }')\"
 fi
 
-if [[ \"\${installed_version}\" != \"${version}\" ]]; then
+if ! brew_version_matches \"\${installed_version}\" \"${version}\" \"${flags}\"; then
 	echo 'ERROR: ${label} installed version' \"\${installed_version:-<missing>}\" 'does not match pinned ${version}.' >&2
 	echo '       Update the Renovate-managed pin or ensure Homebrew can provide that version.' >&2
 	exit 1

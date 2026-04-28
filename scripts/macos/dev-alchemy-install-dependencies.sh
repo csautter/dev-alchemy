@@ -55,7 +55,7 @@ brew_install() {
 
 	installed_version="$(brew list "${list_flags[@]}" --versions "${list_pkg}" 2>/dev/null | awk 'NR == 1 { print $2 }')"
 
-	if [[ "${installed_version}" != "${version}" ]]; then
+	if ! brew_version_matches "${installed_version}" "${version}" "${flags}"; then
 		if [[ -n "${installed_version}" ]]; then
 			echo "${label} version ${installed_version} does not match pinned ${version}; updating via Homebrew..."
 			if [[ " ${flags} " != *" --cask "* ]]; then
@@ -70,7 +70,7 @@ brew_install() {
 		installed_version="$(brew list "${list_flags[@]}" --versions "${list_pkg}" 2>/dev/null | awk 'NR == 1 { print $2 }')"
 	fi
 
-	if [[ "${installed_version}" != "${version}" ]]; then
+	if ! brew_version_matches "${installed_version}" "${version}" "${flags}"; then
 		echo "ERROR: ${label} installed version ${installed_version:-<missing>} does not match pinned ${version}." >&2
 		echo "       Update the Renovate-managed pin or ensure Homebrew can provide that version." >&2
 		exit 1
@@ -88,10 +88,25 @@ brew_install() {
 
 	if [[ " ${flags} " != *" --cask "* ]]; then
 		brew pin "${list_pkg}" || true
-		echo "${label} ${version} installed and pinned."
+		echo "${label} ${installed_version} installed and pinned (matches ${version})."
 	else
-		echo "${label} ${version} installed and verified against pin."
+		echo "${label} ${installed_version} installed and verified against pin ${version}."
 	fi
+}
+
+brew_version_matches() {
+	local installed="$1" pinned="$2" flags="${3:-}" revision
+
+	if [[ "${installed}" == "${pinned}" ]]; then
+		return 0
+	fi
+
+	if [[ " ${flags} " != *" --cask "* && "${installed}" == "${pinned}_"* ]]; then
+		revision="${installed#"${pinned}_"}"
+		[[ "${revision}" =~ ^[0-9]+$ ]] && return 0
+	fi
+
+	return 1
 }
 
 brew_install "Packer"      packer                    hashicorp/tap/packer  "${PACKER_VERSION}"       hashicorp/tap
