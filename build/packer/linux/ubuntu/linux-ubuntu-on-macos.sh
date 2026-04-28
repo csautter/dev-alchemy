@@ -130,7 +130,7 @@ run_packer_build_start_only() {
 	local vm_started
 	local rc
 
-	probe_log="$(mktemp "${TMPDIR:-/tmp}/dev-alchemy-packer-start-only.XXXXXX.log")" || return 1
+	probe_log="$(mktemp "${TMPDIR:-/tmp}/dev-alchemy-packer-start-only.XXXXXX")" || return 1
 	elapsed_seconds=0
 	packer_started="false"
 	vm_started="false"
@@ -327,9 +327,10 @@ cleanup_start_only_cache() {
 }
 
 if is_truthy "$packer_start_only"; then
-	start_only_cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/dev-alchemy-packer-start-only-cache.XXXXXX")" || exit 1
+	# Keep start-only paths short because QEMU's macOS QMP socket path limit is 104 bytes.
+	start_only_cache_dir="$(mktemp -d "/tmp/da-pc.XXXXXX")" || exit 1
 	effective_cache_dir="$start_only_cache_dir"
-	build_output_dir="$effective_cache_dir/qemu-out-ubuntu-${ubuntu_type}-${arch}"
+	build_output_dir="$effective_cache_dir/o"
 	trap cleanup_start_only_cache EXIT
 	echo "Using isolated cache directory for start-only Packer probe: $effective_cache_dir"
 fi

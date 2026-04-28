@@ -229,10 +229,22 @@ func TestMacOSQemuWrapperSupportsPackerStartOnlyProbe(t *testing.T) {
 		`--packer-start-only`,
 		`run_packer_build_start_only`,
 		`Using isolated cache directory for start-only Packer probe`,
+		`mktemp -d "/tmp/da-pc.XXXXXX"`,
+		`build_output_dir="$effective_cache_dir/o"`,
 		`-var "cache_dir=$effective_cache_dir"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected macOS QEMU wrapper to contain %q", want)
+		}
+	}
+
+	for _, oldLongPath := range []string{
+		`dev-alchemy-packer-start-only-cache.XXXXXX`,
+		`build_output_dir="$effective_cache_dir/qemu-out-ubuntu-${ubuntu_type}-${arch}"`,
+		`.XXXXXX.log`,
+	} {
+		if strings.Contains(got, oldLongPath) {
+			t.Fatalf("macOS QEMU start-only probe still contains long or non-portable path pattern %q", oldLongPath)
 		}
 	}
 }
