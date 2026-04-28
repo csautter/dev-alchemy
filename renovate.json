@@ -12,6 +12,7 @@
       "description": "Update annotated custom dependency pins in Go and shell scripts",
       "managerFilePatterns": [
         "/(^|/)\\.github/runners/prepare-tart-base\\.sh$/",
+        "/(^|/)scripts/macos/dev-alchemy-install-dependencies\\.sh$/",
         "/(^|/)pkg/build/dependencies\\.go$/",
         "/(^|/)build/packer/linux/ubuntu/linux-ubuntu-(on-macos|qemu)\\.sh$/",
         "/(^|/)scripts/macos/download-virtio-win-iso\\.sh$/",

@@ -50,6 +50,8 @@ FFMPEG_VERSION="8.1"
 VNCSNAPSHOT_VERSION="1.2a"
 # renovate: datasource=custom.homebrew-formula depName=xorriso packageName=xorriso versioning=loose
 XORRISO_VERSION="1.5.8.pl01"
+# renovate: datasource=custom.homebrew-formula depName=ansible packageName=ansible versioning=loose
+ANSIBLE_VERSION="13.5.0"
 # renovate: datasource=custom.homebrew-formula depName=python@3.13 packageName=python@3.13 versioning=loose
 PYTHON_3_13_VERSION="3.13.13"
 
@@ -133,6 +135,10 @@ vm_ssh() {
 		-o "UserKnownHostsFile=/dev/null" \
 		-o "ConnectTimeout=5" \
 		"${VM_SSH_USER}@${VM_IP}" "$@"
+}
+
+ssh_quote() {
+	printf '%q' "$1"
 }
 
 # ─── Wait for SSH ─────────────────────────────────────────────────────────────
@@ -258,13 +264,23 @@ brew_install "xz"          xz                        xz                    "${XZ
 brew_install "FFmpeg"      ffmpeg                    ffmpeg                "${FFMPEG_VERSION}"
 brew_install "vncsnapshot" vncsnapshot               vncsnapshot           "${VNCSNAPSHOT_VERSION}"
 brew_install "xorriso"     xorriso                   xorriso               "${XORRISO_VERSION}"
+brew_install "Ansible"     ansible                   ansible               "${ANSIBLE_VERSION}"
 brew_install "Python 3"    python3                   python@3.13           "${PYTHON_3_13_VERSION}"
 
 # ─── Download and install GitHub Actions runner ───────────────────────────────
 echo "Installing GitHub Actions runner ${RUNNER_VERSION} into golden image..."
 
-vm_ssh bash <<EOF
+vm_ssh bash -s -- \
+	"$(ssh_quote "${RUNNER_DIR}")" \
+	"$(ssh_quote "${RUNNER_ARCHIVE}")" \
+	"$(ssh_quote "${RUNNER_DOWNLOAD_URL}")" \
+	"$(ssh_quote "${RUNNER_VERSION}")" <<'RUNNER_INSTALL'
 set -e
+
+RUNNER_DIR="$1"
+RUNNER_ARCHIVE="$2"
+RUNNER_DOWNLOAD_URL="$3"
+RUNNER_VERSION="$4"
 
 mkdir -p "${RUNNER_DIR}"
 cd "${RUNNER_DIR}"
@@ -275,7 +291,7 @@ tar xzf "${RUNNER_ARCHIVE}"
 rm -f "${RUNNER_ARCHIVE}"
 
 echo "Runner ${RUNNER_VERSION} installed to ${RUNNER_DIR}."
-EOF
+RUNNER_INSTALL
 
 echo "Runner installation complete."
 echo "Provisioning finished successfully."
