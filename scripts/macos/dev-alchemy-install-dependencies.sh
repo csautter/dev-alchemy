@@ -37,6 +37,136 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+brew_version_compare() {
+	local left="$1" right="$2"
+
+	awk -v left="${left}" -v right="${right}" '
+function tokenize(version, values, types,    i, char, type, last_type, count, token) {
+	version = tolower(version)
+	count = 0
+	token = ""
+	last_type = ""
+
+	for (i = 1; i <= length(version); i++) {
+		char = substr(version, i, 1)
+		if (char ~ /[0-9]/) {
+			type = "number"
+		} else if (char ~ /[a-z]/) {
+			type = "text"
+		} else {
+			type = "delimiter"
+		}
+
+		if (type == "delimiter") {
+			if (token != "") {
+				values[++count] = token
+				types[count] = last_type
+				token = ""
+			}
+			last_type = ""
+			continue
+		}
+
+		if (token != "" && type != last_type) {
+			values[++count] = token
+			types[count] = last_type
+			token = ""
+		}
+
+		token = token char
+		last_type = type
+	}
+
+	if (token != "") {
+		values[++count] = token
+		types[count] = last_type
+	}
+
+	return count
+}
+
+function normalize_number(value) {
+	sub(/^0+/, "", value)
+	return value == "" ? "0" : value
+}
+
+BEGIN {
+	left_count = tokenize(left, left_values, left_types)
+	right_count = tokenize(right, right_values, right_types)
+	max_count = left_count > right_count ? left_count : right_count
+
+	for (i = 1; i <= max_count; i++) {
+		if (i > left_count) {
+			print -1
+			exit
+		}
+		if (i > right_count) {
+			print 1
+			exit
+		}
+
+		if (left_types[i] == "number" && right_types[i] == "number") {
+			left_number = normalize_number(left_values[i])
+			right_number = normalize_number(right_values[i])
+
+			if (length(left_number) != length(right_number)) {
+				print (length(left_number) > length(right_number) ? 1 : -1)
+				exit
+			}
+			if (left_number != right_number) {
+				print (left_number > right_number ? 1 : -1)
+				exit
+			}
+		} else if (left_values[i] != right_values[i]) {
+			if (left_types[i] == right_types[i]) {
+				print (left_values[i] > right_values[i] ? 1 : -1)
+				exit
+			}
+			print (left_types[i] == "number" ? 1 : -1)
+			exit
+		}
+	}
+
+	print 0
+}'
+}
+
+brew_version_without_revision() {
+	local version="$1"
+
+	if [[ "${version}" =~ ^(.+)_([0-9]+)$ ]]; then
+		printf '%s\n' "${BASH_REMATCH[1]}"
+	else
+		printf '%s\n' "${version}"
+	fi
+}
+
+brew_version_matches() {
+	local installed="$1" pinned="$2" flags="${3:-}"
+	local normalized_installed normalized_pinned comparison
+
+	if [[ -z "${installed}" ]]; then
+		return 1
+	fi
+
+	if [[ "${installed}" == "${pinned}" ]]; then
+		return 0
+	fi
+
+	normalized_installed="${installed}"
+	normalized_pinned="${pinned}"
+	if [[ " ${flags} " != *" --cask "* ]]; then
+		normalized_installed="$(brew_version_without_revision "${installed}")"
+		normalized_pinned="$(brew_version_without_revision "${pinned}")"
+		if [[ "${normalized_installed}" == "${normalized_pinned}" ]]; then
+			return 0
+		fi
+	fi
+
+	comparison="$(brew_version_compare "${normalized_installed}" "${normalized_pinned}")"
+	[[ "${comparison}" =~ ^-?[0-9]+$ && "${comparison}" -ge 0 ]]
+}
+
 brew_install() {
 	local label="$1" cmd="$2" pkg="$3" version="$4" tap="${5:-}" flags="${6:-}"
 	local list_pkg="${pkg##*/}"
@@ -57,7 +187,7 @@ brew_install() {
 
 	if ! brew_version_matches "${installed_version}" "${version}" "${flags}"; then
 		if [[ -n "${installed_version}" ]]; then
-			echo "${label} version ${installed_version} does not match pinned ${version}; updating via Homebrew..."
+			echo "${label} version ${installed_version} is older than required ${version}; updating via Homebrew..."
 			if [[ " ${flags} " != *" --cask "* ]]; then
 				brew unpin "${list_pkg}" || true
 			fi
@@ -71,8 +201,8 @@ brew_install() {
 	fi
 
 	if ! brew_version_matches "${installed_version}" "${version}" "${flags}"; then
-		echo "ERROR: ${label} installed version ${installed_version:-<missing>} does not match pinned ${version}." >&2
-		echo "       Update the Renovate-managed pin or ensure Homebrew can provide that version." >&2
+		echo "ERROR: ${label} installed version ${installed_version:-<missing>} is older than required ${version}." >&2
+		echo "       Update the Renovate-managed pin or ensure Homebrew can provide the required version." >&2
 		exit 1
 	fi
 
@@ -88,25 +218,10 @@ brew_install() {
 
 	if [[ " ${flags} " != *" --cask "* ]]; then
 		brew pin "${list_pkg}" || true
-		echo "${label} ${installed_version} installed and pinned (matches ${version})."
+		echo "${label} ${installed_version} installed and pinned (satisfies ${version})."
 	else
-		echo "${label} ${installed_version} installed and verified against pin ${version}."
+		echo "${label} ${installed_version} installed and satisfies ${version}."
 	fi
-}
-
-brew_version_matches() {
-	local installed="$1" pinned="$2" flags="${3:-}" revision
-
-	if [[ "${installed}" == "${pinned}" ]]; then
-		return 0
-	fi
-
-	if [[ " ${flags} " != *" --cask "* && "${installed}" == "${pinned}_"* ]]; then
-		revision="${installed#"${pinned}_"}"
-		[[ "${revision}" =~ ^[0-9]+$ ]] && return 0
-	fi
-
-	return 1
 }
 
 brew_install "Packer"      packer                    hashicorp/tap/packer  "${PACKER_VERSION}"       hashicorp/tap
