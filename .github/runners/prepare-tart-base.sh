@@ -15,7 +15,7 @@ set -e
 #   VM_SSH_PASS        - SSH password inside the VM         (default: admin)
 #   NET_INTERFACE      - bridged network interface          (default: Wi-Fi)
 #   RUNNER_DIR         - install directory inside the VM    (default: /Users/admin/actions-runner)
-#   RUNNER_VERSION     - pinned runner version (default: resolve latest via gh api)
+#   RUNNER_VERSION     - GitHub Actions runner version      (default: pinned below)
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 TART_SOURCE_IMAGE="${TART_SOURCE_IMAGE:-tahoe-base}"
@@ -26,44 +26,48 @@ VM_SSH_PASS="${VM_SSH_PASS:-admin}"
 NET_INTERFACE="${NET_INTERFACE:-Wi-Fi}"
 RUNNER_DIR="${RUNNER_DIR:-/Users/admin/actions-runner}"
 BUILD_VM="build-${TART_GOLDEN_IMAGE}"
-# RUNNER_VERSION resolved below after pre-flight
+
+# ─── Renovate-managed version pins ────────────────────────────────────────────
+# renovate: datasource=github-releases depName=actions/runner versioning=loose
+DEFAULT_RUNNER_VERSION="2.334.0"
+# renovate: datasource=custom.homebrew-formula depName=azure-cli packageName=azure-cli versioning=loose
+AZURE_CLI_VERSION="2.85.0"
+# renovate: datasource=custom.homebrew-formula depName=gh packageName=gh versioning=loose
+GH_CLI_VERSION="2.92.0"
+# renovate: datasource=custom.hashicorp depName=packer packageName=packer versioning=semver
+PACKER_VERSION="1.15.3"
+# renovate: datasource=custom.homebrew-formula depName=go packageName=go versioning=loose
+GO_VERSION="1.26.2"
+# renovate: datasource=custom.homebrew-cask depName=utm packageName=utm versioning=loose
+UTM_VERSION="4.7.5"
+# renovate: datasource=custom.homebrew-formula depName=qemu packageName=qemu versioning=loose
+QEMU_VERSION="11.0.0"
+# renovate: datasource=custom.homebrew-formula depName=xz packageName=xz versioning=loose
+XZ_VERSION="5.8.3"
+# renovate: datasource=custom.homebrew-formula depName=ffmpeg packageName=ffmpeg versioning=loose
+FFMPEG_VERSION="8.1"
+# renovate: datasource=custom.homebrew-formula depName=vncsnapshot packageName=vncsnapshot versioning=loose
+VNCSNAPSHOT_VERSION="1.2a"
+# renovate: datasource=custom.homebrew-formula depName=xorriso packageName=xorriso versioning=loose
+XORRISO_VERSION="1.5.8.pl01"
+# renovate: datasource=custom.homebrew-formula depName=python@3.13 packageName=python@3.13 versioning=loose
+PYTHON_3_13_VERSION="3.13.13"
+
+RUNNER_VERSION="${RUNNER_VERSION:-$DEFAULT_RUNNER_VERSION}"
 # ───────────────────────────────────────────────────────────────────────────────
 
 # ─── Pre-flight checks ─────────────────────────────────────────────────────────
-for cmd in tart sshpass gh; do
+for cmd in tart sshpass; do
 	if ! command -v "$cmd" &>/dev/null; then
 		echo "ERROR: '$cmd' not found."
 		case "$cmd" in
 			tart)    echo "  Install: brew install tart" ;;
 			sshpass) echo "  Install: brew install sshpass" ;;
-			gh)      echo "  Install: brew install gh" ;;
 		esac
 		exit 1
 	fi
 done
 
-# ─── GitHub CLI authentication check ──────────────────────────────────────────
-if ! gh auth status &>/dev/null; then
-	echo "WARNING: GitHub CLI is not authenticated."
-	echo "Attempting to authenticate via 'gh auth login'..."
-	if ! gh auth login; then
-		echo "ERROR: GitHub CLI authentication failed."
-		echo "  Run 'gh auth login' manually and re-run this script."
-		exit 1
-	fi
-	# Re-verify after login
-	if ! gh auth status &>/dev/null; then
-		echo "ERROR: GitHub CLI still not authenticated after login attempt."
-		exit 1
-	fi
-fi
-echo "GitHub CLI authentication: OK"
-
-# ─── Resolve runner version ────────────────────────────────────────────────────
-if [[ -z "${RUNNER_VERSION:-}" ]]; then
-	echo "Resolving latest GitHub Actions runner version..."
-	RUNNER_VERSION=$(gh api /repos/actions/runner/releases/latest --jq '.tag_name' | sed 's/^v//')
-fi
 echo "Runner version: ${RUNNER_VERSION}"
 RUNNER_ARCHIVE="actions-runner-osx-arm64-${RUNNER_VERSION}.tar.gz"
 RUNNER_DOWNLOAD_URL="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${RUNNER_ARCHIVE}"
@@ -154,15 +158,29 @@ ${body}
 ENDSSH
 }
 
-# brew_install LABEL CMD PKG [TAP] [FLAGS]
-#   LABEL - human-readable name shown in output
-#   CMD   - binary name (checked via command -v) or absolute path (checked via -e)
-#   PKG   - brew package to install (use "org/tap/pkg" form when a tap is needed)
-#   TAP   - (optional) brew tap to register before installing
-#   FLAGS - (optional) extra brew install flags, e.g. --cask
+# brew_install LABEL CMD PKG VERSION [TAP] [FLAGS]
+#   LABEL   - human-readable name shown in output
+#   CMD     - binary name (checked via command -v) or absolute path (checked via -e)
+#   PKG     - brew package to install (use "org/tap/pkg" form when a tap is needed)
+#   VERSION - Renovate-managed package version pin
+#   TAP     - (optional) brew tap to register before installing
+#   FLAGS   - (optional) extra brew install flags, e.g. --cask
 brew_install() {
-	local label="$1" cmd="$2" pkg="$3" tap="${4:-}" flags="${5:-}"
-	local tap_line="" check
+	local label="$1" cmd="$2" pkg="$3" version="$4" tap="${5:-}" flags="${6:-}"
+	local tap_line="" check list_pkg list_flags pin_line unpin_line status_line
+
+	list_pkg="${pkg##*/}"
+	list_flags=""
+	pin_line="brew pin ${list_pkg} || true"
+	unpin_line="brew unpin ${list_pkg} || true"
+	status_line="echo '${label} ${version} installed and pinned.'"
+	if [[ " ${flags} " == *" --cask "* ]]; then
+		list_flags="--cask"
+		pin_line=""
+		unpin_line=""
+		status_line="echo '${label} ${version} installed and verified against pin.'"
+	fi
+
 	[[ -n "$tap" ]] && tap_line="brew tap ${tap} || echo 'WARNING: tap ${tap} failed, continuing...'"
 	if [[ "$cmd" == /* ]]; then
 		check="[[ -e ${cmd} ]]"
@@ -170,13 +188,35 @@ brew_install() {
 		check="command -v ${cmd} &>/dev/null"
 	fi
 	provision_step "${label}" "
-if ! ${check}; then
-	echo 'Installing ${label}...'
-	${tap_line}
-	brew install ${flags} ${pkg} || echo 'WARNING: ${label} install failed, continuing...'
-else
-	echo '${label} already installed.'
+${tap_line}
+installed_version=\"\$(brew list ${list_flags} --versions ${list_pkg} 2>/dev/null | awk 'NR == 1 { print \$2 }')\"
+
+if [[ \"\${installed_version}\" != \"${version}\" ]]; then
+	if [[ -n \"\${installed_version}\" ]]; then
+		echo '${label} version' \"\${installed_version}\" 'does not match pinned ${version}; updating via Homebrew...'
+		${unpin_line}
+		brew upgrade ${flags} ${pkg} || brew install ${flags} ${pkg}
+	else
+		echo 'Installing ${label} ${version}...'
+		brew install ${flags} ${pkg}
+	fi
+
+	installed_version=\"\$(brew list ${list_flags} --versions ${list_pkg} 2>/dev/null | awk 'NR == 1 { print \$2 }')\"
 fi
+
+if [[ \"\${installed_version}\" != \"${version}\" ]]; then
+	echo 'ERROR: ${label} installed version' \"\${installed_version:-<missing>}\" 'does not match pinned ${version}.' >&2
+	echo '       Update the Renovate-managed pin or ensure Homebrew can provide that version.' >&2
+	exit 1
+fi
+
+if ! ${check}; then
+	echo 'ERROR: ${label} installed at pinned version ${version}, but expected command/path ${cmd} was not found.' >&2
+	exit 1
+fi
+
+${pin_line}
+${status_line}
 "
 }
 
@@ -208,17 +248,17 @@ fi
 PROVISION
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
-brew_install "Azure CLI"   az                        azure-cli
-brew_install "GitHub CLI"  gh                        gh
-brew_install "Packer"      packer                    hashicorp/tap/packer  hashicorp/tap
-brew_install "Go"          go                        go
-brew_install "UTM"         /Applications/UTM.app     utm                   ""  --cask
-brew_install "QEMU"        qemu-img                  qemu
-brew_install "xz"          xz                        xz
-brew_install "FFmpeg"      ffmpeg                    ffmpeg
-brew_install "vncsnapshot" vncsnapshot               vncsnapshot
-brew_install "xorriso"     xorriso                   xorriso
-brew_install "Python 3"    python3                   python@3.13
+brew_install "Azure CLI"   az                        azure-cli             "${AZURE_CLI_VERSION}"
+brew_install "GitHub CLI"  gh                        gh                    "${GH_CLI_VERSION}"
+brew_install "Packer"      packer                    hashicorp/tap/packer  "${PACKER_VERSION}"       hashicorp/tap
+brew_install "Go"          go                        go                    "${GO_VERSION}"
+brew_install "UTM"         /Applications/UTM.app     utm                   "${UTM_VERSION}"          ""  --cask
+brew_install "QEMU"        qemu-img                  qemu                  "${QEMU_VERSION}"
+brew_install "xz"          xz                        xz                    "${XZ_VERSION}"
+brew_install "FFmpeg"      ffmpeg                    ffmpeg                "${FFMPEG_VERSION}"
+brew_install "vncsnapshot" vncsnapshot               vncsnapshot           "${VNCSNAPSHOT_VERSION}"
+brew_install "xorriso"     xorriso                   xorriso               "${XORRISO_VERSION}"
+brew_install "Python 3"    python3                   python@3.13           "${PYTHON_3_13_VERSION}"
 
 # ─── Download and install GitHub Actions runner ───────────────────────────────
 echo "Installing GitHub Actions runner ${RUNNER_VERSION} into golden image..."

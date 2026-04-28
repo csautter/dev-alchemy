@@ -11,13 +11,14 @@
       "customType": "regex",
       "description": "Update annotated custom dependency pins in Go and shell scripts",
       "managerFilePatterns": [
+        "/(^|/)\\.github/runners/prepare-tart-base\\.sh$/",
         "/(^|/)pkg/build/dependencies\\.go$/",
         "/(^|/)build/packer/linux/ubuntu/linux-ubuntu-(on-macos|qemu)\\.sh$/",
         "/(^|/)scripts/macos/download-virtio-win-iso\\.sh$/",
         "/(^|/)scripts/windows/dev-alchemy-self-setup\\.ps1$/"
       ],
       "matchStrings": [
-        "(?:#|//)\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+versioning=(?<versioning>\\S+)(?:\\s+registryUrl=(?<registryUrl>\\S+))?\\s+\\$?[A-Za-z0-9_]+\\s*=\\s+\"(?<currentValue>[^\"]+)\"(?:\\s+\\$?[A-Za-z0-9_]+\\s*=\\s+\"(?<currentDigest>[a-f0-9]+)\")?"
+        "(?:#|//)\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+packageName=(?<packageName>\\S+))?\\s+versioning=(?<versioning>\\S+)(?:\\s+registryUrl=(?<registryUrl>\\S+))?\\s+\\$?[A-Za-z0-9_]+\\s*=\\s*\"(?<currentValue>[^\"]+)\"(?:\\s+\\$?[A-Za-z0-9_]+\\s*=\\s*\"(?<currentDigest>[a-f0-9]+)\")?"
       ]
     },
     {
@@ -98,6 +99,27 @@
     }
   ],
   "customDatasources": {
+    "homebrew-formula": {
+      "defaultRegistryUrlTemplate": "https://formulae.brew.sh/api/formula/{{packageName}}.json",
+      "format": "json",
+      "transformTemplates": [
+        "{ \"releases\": [{ \"version\": versions.stable }] }"
+      ]
+    },
+    "homebrew-cask": {
+      "defaultRegistryUrlTemplate": "https://formulae.brew.sh/api/cask/{{packageName}}.json",
+      "format": "json",
+      "transformTemplates": [
+        "{ \"releases\": [{ \"version\": version }] }"
+      ]
+    },
+    "hashicorp": {
+      "defaultRegistryUrlTemplate": "https://api.releases.hashicorp.com/v1/releases/{{packageName}}?license_class=oss",
+      "format": "json",
+      "transformTemplates": [
+        "{ \"releases\": $map($, function($v) { { \"version\": $v.version, \"releaseTimestamp\": $v.timestamp_created, \"changelogUrl\": $v.url_changelog, \"sourceUrl\": $v.url_source_repository } }), \"homepage\": $[0].url_project_website, \"sourceUrl\": $[0].url_source_repository }"
+      ]
+    },
     "ubuntu-live-server-amd64": {
       "defaultRegistryUrlTemplate": "https://releases.ubuntu.com/24.04/SHA256SUMS",
       "format": "plain",
