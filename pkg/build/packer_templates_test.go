@@ -279,6 +279,45 @@ func TestMacOSWorkflowUsesStartOnlyProbeForUbuntuQemuBuilds(t *testing.T) {
 	}
 }
 
+func TestMacOSWorkflowDefaultsToGitHubHostedRunnersWithTartOptIn(t *testing.T) {
+	t.Parallel()
+
+	workflowPath := ".github/workflows/test-build-macos.yml"
+	content, err := os.ReadFile(repoPath(t, workflowPath))
+	if err != nil {
+		t.Fatalf("failed to read workflow %q: %v", workflowPath, err)
+	}
+
+	got := string(content)
+	runnerExpression := `${{ vars.USE_TART_MACOS_RUNNERS == 'true' && matrix.tart_runs_on || matrix.runs_on }}`
+	for _, want := range []string{
+		`runs-on: ` + runnerExpression,
+		`runner_os ` + runnerExpression,
+		`USE_TART_MACOS_RUNNERS: ${{ vars.USE_TART_MACOS_RUNNERS == 'true' && 'true' || 'false' }}`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected macOS workflow to contain %q", want)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestBuildQemuWindows11Arm64OnMacos",
+		"TestBuildQemuWindows11Amd64OnMacos",
+		"TestBuildQemuUbuntuServerArm64OnMacos",
+		"TestBuildQemuUbuntuServerAmd64OnMacos",
+		"TestBuildQemuUbuntuDesktopArm64OnMacos",
+		"TestBuildQemuUbuntuDesktopAmd64OnMacos",
+	} {
+		entry := workflowMatrixEntryForTest(t, got, testName)
+		if !strings.Contains(entry, "runs_on: macos-26") {
+			t.Fatalf("expected workflow matrix entry for %s to default to the GitHub-hosted macos-26 runner", testName)
+		}
+		if !strings.Contains(entry, "tart_runs_on: macos-26-tart") {
+			t.Fatalf("expected workflow matrix entry for %s to keep the Tart runner opt-in label", testName)
+		}
+	}
+}
+
 func workflowMatrixEntryForTest(t *testing.T, workflow string, testName string) string {
 	t.Helper()
 
