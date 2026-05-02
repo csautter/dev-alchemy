@@ -14,11 +14,11 @@ build_output_dir=""
 use_hardware_acceleration="true"
 
 script_dir=$(
-	cd "$(dirname "$0")"
+	cd "$(dirname "$0")" || exit 1
 	pwd -P
 )
 project_root=$(
-	cd "${script_dir}/../../../.."
+	cd "${script_dir}/../../../.." || exit 1
 	pwd -P
 )
 

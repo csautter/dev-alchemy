@@ -15,11 +15,11 @@ packer_start_only="${DEV_ALCHEMY_PACKER_START_ONLY:-false}"
 packer_start_timeout="${DEV_ALCHEMY_PACKER_START_TIMEOUT:-180}"
 
 script_dir=$(
-	cd "$(dirname "$0")"
+	cd "$(dirname "$0")" || exit 1
 	pwd -P
 )
 project_root=$(
-	cd "${script_dir}/../../../.."
+	cd "${script_dir}/../../../.." || exit 1
 	pwd -P
 )
 

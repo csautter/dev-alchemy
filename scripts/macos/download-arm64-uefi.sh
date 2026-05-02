@@ -2,11 +2,6 @@
 
 set -e
 
-SCRIPT_DIR=$(
-	cd "$(dirname "$0")"
-	pwd
-)
-
 host_os="$(uname -s)"
 if [ "$host_os" = "Darwin" ]; then
 	default_app_data_dir="$HOME/Library/Application Support/dev-alchemy"

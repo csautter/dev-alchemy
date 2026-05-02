@@ -131,7 +131,10 @@ resolve_from_terragrunt_output() {
   if [[ ! -d "$TERRAGRUNT_OUTPUT_DIR" ]]; then
     return 0
   fi
-  (cd "$TERRAGRUNT_OUTPUT_DIR" && terragrunt output -raw "$key" 2>/dev/null || true)
+  (
+    cd "$TERRAGRUNT_OUTPUT_DIR" || exit 0
+    terragrunt output -raw "$key" 2>/dev/null || true
+  )
 }
 
 if [[ -z "$API_CLIENT_ID" ]]; then

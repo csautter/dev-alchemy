@@ -30,7 +30,7 @@ echo "VM IP: $VM_IP"
 
 # check ssh connectivity
 # Retry SSH until successful
-until sshpass -p admin ssh -o "StrictHostKeyChecking no" -o "ConnectTimeout=5" admin@$VM_IP "echo 'SSH connection successful'"; do
+until sshpass -p admin ssh -o "StrictHostKeyChecking no" -o "ConnectTimeout=5" admin@"$VM_IP" "echo 'SSH connection successful'"; do
 	echo "Waiting for SSH to become available..."
 	sleep 2
 done

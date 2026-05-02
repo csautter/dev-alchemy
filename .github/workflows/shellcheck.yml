@@ -1,0 +1,64 @@
+name: ShellCheck
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "*.sh"
+      - "**/*.sh"
+      - ".github/workflows/shellcheck.yml"
+
+jobs:
+  shellcheck:
+    name: Check shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Select shell scripts
+        id: scripts
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            mapfile -t scripts < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA"...HEAD -- '*.sh' | sort)
+          else
+            mapfile -t scripts < <(git ls-files '*.sh' | sort)
+          fi
+
+          scripts_to_check=()
+          for script in "${scripts[@]}"; do
+            if [[ -f "$script" ]]; then
+              scripts_to_check+=("$script")
+            fi
+          done
+
+          if [[ "${#scripts_to_check[@]}" -eq 0 ]]; then
+            echo "No shell scripts to check."
+            echo "has_scripts=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf '%s\0' "${scripts_to_check[@]}" > .shellcheck-files
+          echo "has_scripts=true" >> "$GITHUB_OUTPUT"
+          printf 'Shell scripts selected for ShellCheck:\n'
+          printf '  %s\n' "${scripts_to_check[@]}"
+
+      - name: Run ShellCheck
+        if: steps.scripts.outputs.has_scripts == 'true'
+        run: |
+          xargs -0 shellcheck < .shellcheck-files
