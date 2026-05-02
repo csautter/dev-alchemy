@@ -294,6 +294,8 @@ func TestMacOSWorkflowDefaultsToGitHubHostedRunnersWithTartOptIn(t *testing.T) {
 		`runs-on: ` + runnerExpression,
 		`runner_os ` + runnerExpression,
 		`USE_TART_MACOS_RUNNERS: ${{ vars.USE_TART_MACOS_RUNNERS == 'true' && 'true' || 'false' }}`,
+		`uses: actions/setup-go@v6`,
+		`go-version-file: go.mod`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected macOS workflow to contain %q", want)
@@ -315,6 +317,12 @@ func TestMacOSWorkflowDefaultsToGitHubHostedRunnersWithTartOptIn(t *testing.T) {
 		if !strings.Contains(entry, "tart_runs_on: macos-26-tart") {
 			t.Fatalf("expected workflow matrix entry for %s to keep the Tart runner opt-in label", testName)
 		}
+	}
+
+	setupGoIndex := strings.Index(got, `uses: actions/setup-go@v6`)
+	installDepsIndex := strings.Index(got, `name: Install dependencies macos`)
+	if setupGoIndex == -1 || installDepsIndex == -1 || setupGoIndex > installDepsIndex {
+		t.Fatal("expected macOS workflow to set up the Go version from go.mod before installing dependencies")
 	}
 }
 
