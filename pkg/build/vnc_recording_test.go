@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -86,5 +87,37 @@ func TestFeedAvailableVncSnapshotFramesKeepsNewestUntilFinalFlush(t *testing.T) 
 	}
 	if _, err := os.Stat(secondFrame); !os.IsNotExist(err) {
 		t.Fatalf("expected second frame to be removed, stat err: %v", err)
+	}
+}
+
+func TestFeedAvailableVncSnapshotFramesRejectsSymlinkFrame(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink behavior differs on Windows")
+	}
+
+	dir := t.TempDir()
+	targetDir := t.TempDir()
+	target := filepath.Join(targetDir, "outside.jpg")
+	if err := os.WriteFile(target, []byte("outside"), 0600); err != nil {
+		t.Fatalf("failed to write symlink target: %v", err)
+	}
+
+	snapshotFile := filepath.Join(dir, "qemu.vnc.jpg")
+	frame := filepath.Join(dir, "qemu.vnc00001.jpg")
+	if err := os.Symlink(target, frame); err != nil {
+		t.Skipf("cannot create symlink on this host: %v", err)
+	}
+
+	var out bytes.Buffer
+	written, err := feedAvailableVncSnapshotFrames(snapshotFile, &out, true)
+	if err == nil {
+		t.Fatal("expected symlink frame to be rejected")
+	}
+	if written != 0 {
+		t.Fatalf("expected no frames written, wrote %d", written)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("expected no frame content to be copied, got %q", out.String())
 	}
 }

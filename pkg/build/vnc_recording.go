@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -10,10 +11,16 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/KarpelesLab/vncpasswd"
+)
+
+const (
+	vncRecordingFfmpegExecutable   = "ffmpeg"
+	vncRecordingSnapshotExecutable = "vncsnapshot"
 )
 
 type VncRecordingConfig struct {
@@ -56,7 +63,6 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 	}
 
 	config := RunProcessConfig{
-		ExecutablePath:   "ffmpeg",
 		Args:             ffmpegImagePipeArgs(video_file),
 		WorkingDir:       GetDirectoriesInstance().GetDirectories().ProjectDir,
 		Timeout:          10 * time.Minute,
@@ -66,13 +72,7 @@ func RunVncSnapshotProcess(vm_config VirtualMachineConfig, ctx context.Context, 
 		DelayBeforeStart: time.Minute,
 	}
 
-	// Overwrite config fields with process_config if set (non-zero values)
-	if process_config.ExecutablePath != "" {
-		config.ExecutablePath = process_config.ExecutablePath
-	}
-	if len(process_config.Args) > 0 {
-		config.Args = process_config.Args
-	}
+	// VNC streaming depends on fixed tool argv; overrides only tune runtime behavior.
 	if process_config.WorkingDir != "" {
 		config.WorkingDir = process_config.WorkingDir
 	}
@@ -173,11 +173,16 @@ func streamVncSnapshotsToFfmpeg(parentCtx context.Context, config RunProcessConf
 		}
 	}
 
+	if len(config.Args) == 0 {
+		log.Printf("Skipping VNC video recording because no ffmpeg arguments were configured")
+		return cancelledContext()
+	}
 	if !isSilent(config.Silent) {
 		log.Printf("Starting VNC video recording: vncsnapshot %s -> ffmpeg %s", vncTarget, config.Args[len(config.Args)-1])
 	}
 
-	ffmpegCmd := exec.Command(config.ExecutablePath, config.Args...)
+	// #nosec G204 -- executable is fixed to ffmpeg and argv is built internally without shell interpretation.
+	ffmpegCmd := exec.Command(vncRecordingFfmpegExecutable, config.Args...)
 	configureCommandForCleanup(ffmpegCmd)
 	ffmpegCmd.Dir = config.WorkingDir
 	if len(config.Env) > 0 {
@@ -205,8 +210,8 @@ func streamVncSnapshotsToFfmpeg(parentCtx context.Context, config RunProcessConf
 		return cancelledContext()
 	}
 	processGroupID := commandProcessGroupID(ffmpegCmd)
-	go streamProcessOutput(ffmpegStdout, config.ExecutablePath, "stdout", config.Silent)
-	go streamProcessOutput(ffmpegStderr, config.ExecutablePath, "stderr", config.Silent)
+	go streamProcessOutput(ffmpegStdout, vncRecordingFfmpegExecutable, "stdout", config.Silent)
+	go streamProcessOutput(ffmpegStderr, vncRecordingFfmpegExecutable, "stderr", config.Silent)
 
 	ffmpegDone := make(chan error, 1)
 	go func() {
@@ -280,7 +285,8 @@ func streamVncSnapshotsToFfmpeg(parentCtx context.Context, config RunProcessConf
 
 func startVncSnapshotCapture(ctx context.Context, config RunProcessConfig, vncPasswdFile string, vncTarget string, snapshotFile string) (<-chan error, int, error) {
 	args := []string{"-quiet", "-passwd", vncPasswdFile, "-compresslevel", "9", "-count", "21600", "-fps", "1", vncTarget, snapshotFile}
-	cmd := exec.CommandContext(ctx, "vncsnapshot", args...)
+	// #nosec G204 -- executable is fixed to vncsnapshot and argv is derived from the managed VNC snapshot directory.
+	cmd := exec.CommandContext(ctx, vncRecordingSnapshotExecutable, args...)
 	configureCommandForCleanup(cmd)
 	cmd.Dir = config.WorkingDir
 	if len(config.Env) > 0 {
@@ -299,8 +305,8 @@ func startVncSnapshotCapture(ctx context.Context, config RunProcessConfig, vncPa
 		return nil, 0, err
 	}
 
-	go streamProcessOutput(stdout, "vncsnapshot", "stdout", config.Silent)
-	go streamProcessOutput(stderr, "vncsnapshot", "stderr", config.Silent)
+	go streamProcessOutput(stdout, vncRecordingSnapshotExecutable, "stdout", config.Silent)
+	go streamProcessOutput(stderr, vncRecordingSnapshotExecutable, "stderr", config.Silent)
 
 	done := make(chan error, 1)
 	go func() {
@@ -329,7 +335,15 @@ func feedAvailableVncSnapshotFrames(snapshotFile string, writer io.Writer, inclu
 
 	written := 0
 	for _, framePath := range frames {
-		frame, err := os.Open(framePath)
+		validatedFramePath, err := validateVncSnapshotFramePath(snapshotFile, framePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return written, err
+		}
+		// #nosec G304 -- frame paths are globbed from and validated against the managed snapshot directory before opening.
+		frame, err := os.Open(validatedFramePath)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -350,6 +364,44 @@ func feedAvailableVncSnapshotFrames(snapshotFile string, writer io.Writer, inclu
 		written++
 	}
 	return written, nil
+}
+
+func validateVncSnapshotFramePath(snapshotFile string, framePath string) (string, error) {
+	snapshotAbs, err := filepath.Abs(snapshotFile)
+	if err != nil {
+		return "", fmt.Errorf("resolve snapshot file path: %w", err)
+	}
+	frameAbs, err := filepath.Abs(framePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve snapshot frame path: %w", err)
+	}
+
+	snapshotDir := filepath.Clean(filepath.Dir(snapshotAbs))
+	frameDir := filepath.Clean(filepath.Dir(frameAbs))
+	if frameDir != snapshotDir {
+		return "", fmt.Errorf("refusing VNC snapshot frame outside snapshot directory: %s", framePath)
+	}
+
+	snapshotBase := filepath.Base(snapshotAbs)
+	frameBase := filepath.Base(frameAbs)
+	ext := filepath.Ext(snapshotBase)
+	prefix := strings.TrimSuffix(snapshotBase, ext)
+	if !strings.HasPrefix(frameBase, prefix) || (ext != "" && filepath.Ext(frameBase) != ext) {
+		return "", fmt.Errorf("refusing unexpected VNC snapshot frame name: %s", framePath)
+	}
+
+	info, err := os.Lstat(frameAbs)
+	if err != nil {
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("refusing symlink VNC snapshot frame: %s", framePath)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("refusing non-regular VNC snapshot frame: %s", framePath)
+	}
+
+	return frameAbs, nil
 }
 
 func vncSnapshotFramePattern(snapshotFile string) string {
