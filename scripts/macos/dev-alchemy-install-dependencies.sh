@@ -195,6 +195,8 @@ brew_install() {
 	local label="$1" cmd="$2" pkg="$3" version="$4" tap="${5:-}" flags="${6:-}"
 	local list_pkg="${pkg##*/}"
 	local installed_version
+	local version_satisfied="false"
+	local installed_description
 	local -a install_args=("${pkg}")
 	local -a list_flags=()
 
@@ -224,27 +226,42 @@ brew_install() {
 		installed_version="$(brew_installed_version "${list_pkg}" "${list_flags[@]}")"
 	fi
 
-	if ! brew_version_matches "${installed_version}" "${version}" "${flags}"; then
-		echo "ERROR: ${label} installed version ${installed_version:-<missing>} is older than required ${version}." >&2
-		echo "       Update the Renovate-managed pin or ensure Homebrew can provide the required version." >&2
-		exit 1
+	if brew_version_matches "${installed_version}" "${version}" "${flags}"; then
+		version_satisfied="true"
+	else
+		echo "WARNING: ${label} installed version ${installed_version:-<missing>} does not satisfy required ${version} after Homebrew update/install." >&2
+		echo "         Continuing because Homebrew may not have the Renovate-managed version available yet." >&2
+	fi
+
+	if [[ "${version_satisfied}" == "true" ]]; then
+		installed_description="at version ${installed_version:-<unknown>} (satisfies ${version})"
+	else
+		installed_description="at version ${installed_version:-<missing>} (expected ${version})"
 	fi
 
 	if [[ "${cmd}" == /* ]]; then
 		if [[ ! -e "${cmd}" ]]; then
-			echo "ERROR: ${label} installed at pinned version ${version}, but expected path ${cmd} was not found." >&2
+			echo "ERROR: ${label} installed ${installed_description}, but expected path ${cmd} was not found." >&2
 			exit 1
 		fi
 	elif ! command -v "${cmd}" &>/dev/null; then
-		echo "ERROR: ${label} installed at pinned version ${version}, but expected command ${cmd} was not found." >&2
+		echo "ERROR: ${label} installed ${installed_description}, but expected command ${cmd} was not found." >&2
 		exit 1
 	fi
 
 	if [[ " ${flags} " != *" --cask "* ]]; then
-		brew pin "${list_pkg}" || true
-		echo "${label} ${installed_version} installed and pinned (satisfies ${version})."
+		if [[ "${version_satisfied}" == "true" ]]; then
+			brew pin "${list_pkg}" || true
+			echo "${label} ${installed_version} installed and pinned (satisfies ${version})."
+		else
+			echo "${label} ${installed_version:-<unknown>} installed but does not satisfy ${version}; leaving unpinned."
+		fi
 	else
-		echo "${label} ${installed_version} installed and satisfies ${version}."
+		if [[ "${version_satisfied}" == "true" ]]; then
+			echo "${label} ${installed_version} installed and satisfies ${version}."
+		else
+			echo "${label} ${installed_version:-<unknown>} installed but does not satisfy ${version}; continuing."
+		fi
 	fi
 }
 
