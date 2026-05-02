@@ -87,6 +87,11 @@ Install host dependencies first:
 alchemy install
 ```
 
+`alchemy install` installs the libvirt and QEMU host packages, but some
+distributions still require one manual host step before the managed VM can
+boot: enable libvirt's `default` network, or grant ACL/group access to the
+system libvirt image directory if the daemon runs guests as a different user.
+
 Build and create the Ubuntu VM:
 
 ```bash
