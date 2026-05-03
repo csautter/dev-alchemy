@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
+
+if [[ "${DEV_ALCHEMY_INSTALL_TRACE:-false}" == "true" ]]; then
+	set -x
+fi
 
 # Renovate-managed version pins
 # renovate: datasource=custom.hashicorp depName=packer packageName=packer versioning=semver
