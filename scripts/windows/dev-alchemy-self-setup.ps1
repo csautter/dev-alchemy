@@ -18,7 +18,7 @@ $azureCliVersion = "2.85.0"
 # renovate: datasource=nuget depName=python313 versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $nativePythonVersion = "3.13.13"
 # renovate: datasource=nuget depName=cygwin versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
-$cygwinVersion = "3.6.7"
+$cygwinVersion = "3.6.9"
 # renovate: datasource=nuget depName=cyg-get versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $cygGetVersion = "1.2.2"
 # renovate: datasource=nuget depName=virtualbox versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
