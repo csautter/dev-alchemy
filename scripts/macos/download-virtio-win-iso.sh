@@ -8,7 +8,7 @@ export DEV_ALCHEMY_APP_DATA_DIR="$APP_DATA_DIR"
 export DEV_ALCHEMY_CACHE_DIR="$CACHE_DIR"
 
 # renovate: datasource=custom.virtio-win depName=virtio-win versioning=loose
-VIRTIO_WIN_VERSION="0.1.266-1"
+VIRTIO_WIN_VERSION="0.1.285-1"
 VIRTIO_WIN_FILE_VERSION="${VIRTIO_WIN_VERSION%-*}"
 
 if [ ! -f "$CACHE_DIR/windows/virtio-win.iso" ]; then
