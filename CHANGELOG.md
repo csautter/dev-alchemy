@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0](https://github.com/csautter/dev-alchemy/compare/v0.13.0...v0.14.0) (2026-05-04)
+
+
+### Added
+
+* added linux create vm command ([931cae0](https://github.com/csautter/dev-alchemy/commit/931cae0c1a13c68c9a3c9ee5a527abc220faffb3))
+* **build:** stream VNC snapshots directly to mp4 ([0cc1a7d](https://github.com/csautter/dev-alchemy/commit/0cc1a7de50fbfcd18cc94496fb96b6c84a14ed32))
+* **deploy:** add libvirt workflow for Ubuntu QEMU VMs on Linux ([44fcda8](https://github.com/csautter/dev-alchemy/commit/44fcda89b0c39d61d8b3d1032f0bf2cdc957948e))
+* **provision:** support Ubuntu provisioning on Linux libvirt ([9f21d04](https://github.com/csautter/dev-alchemy/commit/9f21d04a9bab847af709ca17f5c13c30d146f89b))
+
+
+### Fixed
+
+* **build:** keep Ubuntu ISO checksums in sync ([02a86e3](https://github.com/csautter/dev-alchemy/commit/02a86e32ac33e10ed9849ac714a587540e4a76c5))
+* **build:** shorten macOS Packer start-only temp paths ([40ec4d1](https://github.com/csautter/dev-alchemy/commit/40ec4d13645c8749d5ccb14fe5dfe8f51ec72e46))
+* **ci:** accept Homebrew formula revisions ([56a94f5](https://github.com/csautter/dev-alchemy/commit/56a94f522fab8a565d5435d88b57172c437979a5))
+* **ci:** accept newer Homebrew dependency versions ([cf41138](https://github.com/csautter/dev-alchemy/commit/cf411380b8e679affd002787761b364e7c01d2b2))
+* **cli:** mark cross-arch VM targets unstable ([4ee93ea](https://github.com/csautter/dev-alchemy/commit/4ee93eaad85ec55f04f2ddd73ec9ff874941cf22))
+* **deploy:** harden libvirt image directory access ([8aa0033](https://github.com/csautter/dev-alchemy/commit/8aa00330b875338d57e8e5368e520ee1df1a7a3c))
+* **deploy:** keep libvirt ACL hints POSIX on Windows ([075404c](https://github.com/csautter/dev-alchemy/commit/075404c6e48567c0256e16d986db8f5fe7dca7c2))
+* **deploy:** make emulated arm64 libvirt domains portable ([cb34c74](https://github.com/csautter/dev-alchemy/commit/cb34c747d07c5d6e78b51692784d4faeff95e4ee))
+* **deploy:** preflight libvirt named networks ([f886bf7](https://github.com/csautter/dev-alchemy/commit/f886bf7628b23b68144ba13087fe622a7007df61))
+* **kubectl:** clean up apt key temp dir on setup failure ([1a58b5e](https://github.com/csautter/dev-alchemy/commit/1a58b5edc056958588a13572fb1673d5b8dd5a50))
+* **kubectl:** make Debian apt key setup resilient ([1efa8cc](https://github.com/csautter/dev-alchemy/commit/1efa8cc04a7b3608a2c5a77cc77e4b4fcd024a10))
+* **linux:** stabilize Ubuntu desktop QEMU/libvirt networking and desktop image setup ([f3de076](https://github.com/csautter/dev-alchemy/commit/f3de076478c15928dad55c86571b17728cb6f89b))
+* **macos:** detect latest installed Homebrew version ([1ab1fff](https://github.com/csautter/dev-alchemy/commit/1ab1fffa732e18cce13ed27855400fcd2e8c826c))
+* **macos:** pin Homebrew tooling installs ([de21704](https://github.com/csautter/dev-alchemy/commit/de217045981b82f0f62d6844425a8a197a624c33))
+* **macos:** warn on unavailable pinned brew versions ([9701275](https://github.com/csautter/dev-alchemy/commit/9701275093a024e0241ed78b71e2061a4f8f841e))
+* **packer:** restore persistent DHCP config for QEMU Ubuntu images ([072a676](https://github.com/csautter/dev-alchemy/commit/072a6761a3ff6a93794a83c0483d3865aa6167e8))
+* **packer:** simplify QEMU autoinstall networking ([261d1da](https://github.com/csautter/dev-alchemy/commit/261d1da193298616639ce7fb32b83740ec5e68bf))
+* **packer:** stabilize ARM64 Ubuntu QEMU installs ([f592a10](https://github.com/csautter/dev-alchemy/commit/f592a10f304595bb80682b289da42f9e9b3e6ea1))
+* **provision:** preflight sshpass for password SSH auth ([0409721](https://github.com/csautter/dev-alchemy/commit/0409721fef13ceec2804b46b3827e0ae2ecd1b62))
+* **qemu:** tune cross-arch emulation CPU settings ([618b13c](https://github.com/csautter/dev-alchemy/commit/618b13c53c761faa6498f035a2dc0b2b0ad3943b))
+* **security:** harden VNC recording file and process handling ([069461e](https://github.com/csautter/dev-alchemy/commit/069461e57e08bfa3261c7cb1fb86a3dd650d99ee))
+
+
+### Changed
+
+* **build:** extract VNC recording logic into dedicated file ([49dadec](https://github.com/csautter/dev-alchemy/commit/49dadec069aacd9354e9f4e4f989dcf56a9d4de3))
+* **packer:** unify Ubuntu QEMU templates ([ff189e1](https://github.com/csautter/dev-alchemy/commit/ff189e1e6526cd84873f6717799848cf625b12a6))
+
+
+### CI
+
+* add shellcheck workflow ([05eb93c](https://github.com/csautter/dev-alchemy/commit/05eb93cdf377e5e2ea96f7e4df3ba4b940736075))
+* default macOS build tests to GitHub-hosted runners ([23adc30](https://github.com/csautter/dev-alchemy/commit/23adc30e225c01186b7ae3bce3cc6c2863bf1f83))
+* set up Go before macOS build dependencies ([d02e9fe](https://github.com/csautter/dev-alchemy/commit/d02e9fe74230f99bd509a6c60ecbbd728bf0b8b4))
+* shorten macOS Ubuntu packer build checks ([ad680c0](https://github.com/csautter/dev-alchemy/commit/ad680c09aafba667f469c0e904836a306eede1c7))
+* trigger linux build on deploy runtime changes ([876cd00](https://github.com/csautter/dev-alchemy/commit/876cd00f33e25e0a199a87d495e12c1bc9505ca4))
+
 ## [0.13.0](https://github.com/csautter/dev-alchemy/compare/v0.12.0...v0.13.0) (2026-04-24)
 
 
