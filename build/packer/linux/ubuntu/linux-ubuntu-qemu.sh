@@ -23,10 +23,10 @@ project_root=$(
 )
 
 # renovate: datasource=custom.ubuntu-live-server-amd64 depName=ubuntu-live-server-amd64 versioning=loose
-UBUNTU_LIVE_SERVER_AMD64_VERSION="24.04.3"
+UBUNTU_LIVE_SERVER_AMD64_VERSION="24.04.4"
 # renovate: datasource=custom.ubuntu-live-server-arm64 depName=ubuntu-live-server-arm64 versioning=loose
-UBUNTU_LIVE_SERVER_ARM64_VERSION="24.04.3"
-UBUNTU_LIVE_SERVER_ARM64_SHA256="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
+UBUNTU_LIVE_SERVER_ARM64_VERSION="24.04.4"
+UBUNTU_LIVE_SERVER_ARM64_SHA256="9a6ce6d7e66c8abed24d24944570a495caca80b3b0007df02818e13829f27f32"
 
 detect_host_arch() {
 	case "$(uname -m)" in
