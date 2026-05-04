@@ -17,6 +17,7 @@ func RunHypervUbuntuBuildOnWindows(config VirtualMachineConfig) error {
 	args := []string{
 		"build",
 		"-var", fmt.Sprintf("iso_url=%s", ubuntuLiveServerISOPath("amd64", ubuntuLiveServerAMD64Version)),
+		"-var", fmt.Sprintf("iso_checksum=sha256:%s", ubuntuLiveServerAMD64SHA256),
 		"-var", fmt.Sprintf("cache_dir=%s", GetDirectoriesInstance().CacheDir),
 		"-var", fmt.Sprintf("ubuntu_type=%s", defaultUbuntuType(config.UbuntuType)),
 		"-var", fmt.Sprintf("cpus=%s", getVmCpuCountString(config)),

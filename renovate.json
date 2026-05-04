@@ -38,6 +38,19 @@
     },
     {
       "customType": "regex",
+      "description": "Update Ubuntu live-server amd64 version defaults in Packer templates",
+      "managerFilePatterns": [
+        "/(^|/)build/packer/linux/ubuntu/linux-ubuntu-hyperv\\.pkr\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable\\s+\"ubuntu_version\"\\s+\\{[\\s\\S]*?default\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "ubuntu-live-server-amd64",
+      "datasourceTemplate": "custom.ubuntu-live-server-amd64",
+      "versioningTemplate": "loose"
+    },
+    {
+      "customType": "regex",
       "description": "Update k9s role version pin",
       "managerFilePatterns": [
         "/(^|/)roles/k9s/defaults/main\\.yml$/"

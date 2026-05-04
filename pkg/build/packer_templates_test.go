@@ -12,6 +12,86 @@ var ubuntuQemuTemplatePaths = []string{
 	"build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl",
 }
 
+func TestUbuntuPackerTemplatesUseCallerSuppliedISOChecksum(t *testing.T) {
+	t.Parallel()
+
+	for _, templatePath := range []string{
+		"build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl",
+		"build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl",
+	} {
+		templatePath := templatePath
+		t.Run(filepath.Base(templatePath), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, templatePath))
+			if err != nil {
+				t.Fatalf("failed to read template %q: %v", templatePath, err)
+			}
+
+			got := string(content)
+			if strings.Contains(got, "c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b") {
+				t.Fatalf("template %q still contains the Ubuntu 24.04.3 amd64 checksum", templatePath)
+			}
+			if !strings.Contains(got, `variable "iso_checksum"`) {
+				t.Fatalf("expected template %q to declare iso_checksum", templatePath)
+			}
+			if !containsCollapsedAssignment(got, "ubuntu_iso_checksum", "var.iso_checksum") {
+				t.Fatalf("expected template %q to use the caller-supplied iso_checksum", templatePath)
+			}
+		})
+	}
+}
+
+func TestUbuntuLiveServerPinsStayInSync(t *testing.T) {
+	t.Parallel()
+
+	for _, scriptPath := range []string{
+		"build/packer/linux/ubuntu/linux-ubuntu-qemu.sh",
+		"build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh",
+	} {
+		scriptPath := scriptPath
+		t.Run(filepath.Base(scriptPath), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, scriptPath))
+			if err != nil {
+				t.Fatalf("failed to read script %q: %v", scriptPath, err)
+			}
+
+			got := string(content)
+			for _, want := range []string{
+				`UBUNTU_LIVE_SERVER_AMD64_VERSION="` + ubuntuLiveServerAMD64Version + `"`,
+				`UBUNTU_LIVE_SERVER_AMD64_SHA256="` + ubuntuLiveServerAMD64SHA256 + `"`,
+				`UBUNTU_LIVE_SERVER_ARM64_VERSION="` + ubuntuLiveServerArm64Version + `"`,
+				`UBUNTU_LIVE_SERVER_ARM64_SHA256="` + ubuntuLiveServerArm64SHA256 + `"`,
+				`-var "iso_checksum=sha256:$iso_checksum"`,
+			} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("expected script %q to contain %q", scriptPath, want)
+				}
+			}
+		})
+	}
+
+	hypervTemplatePath := "build/packer/linux/ubuntu/linux-ubuntu-hyperv.pkr.hcl"
+	hypervTemplate, err := os.ReadFile(repoPath(t, hypervTemplatePath))
+	if err != nil {
+		t.Fatalf("failed to read template %q: %v", hypervTemplatePath, err)
+	}
+	if !strings.Contains(string(hypervTemplate), `default = "`+ubuntuLiveServerAMD64Version+`"`) {
+		t.Fatalf("expected %q to default to Ubuntu %s", hypervTemplatePath, ubuntuLiveServerAMD64Version)
+	}
+}
+
+func containsCollapsedAssignment(content, name, value string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.Join(strings.Fields(line), " ") == name+" = "+value {
+			return true
+		}
+	}
+	return false
+}
+
 func TestUbuntuPackerTemplatesQuoteShellLocalExportPaths(t *testing.T) {
 	t.Parallel()
 

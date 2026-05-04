@@ -9,13 +9,19 @@ packer {
 
 variable "ubuntu_version" {
   type    = string
-  default = "24.04.3"
+  default = "24.04.4"
 }
 
 variable "iso_url" {
   type        = string
   default     = ""
   description = "Optional local path or URL for the Ubuntu live-server ISO. If empty, the official release URL is used."
+}
+
+variable "iso_checksum" {
+  type        = string
+  default     = "none"
+  description = "Checksum for iso_url, using Packer's checksum format."
 }
 
 variable "ubuntu_type" {
@@ -57,7 +63,7 @@ variable "cache_dir" {
 locals {
   default_ubuntu_iso_url = "https://releases.ubuntu.com/${var.ubuntu_version}/ubuntu-${var.ubuntu_version}-live-server-amd64.iso"
   effective_iso_url      = var.iso_url != "" ? var.iso_url : local.default_ubuntu_iso_url
-  ubuntu_iso_checksum    = "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b"
+  ubuntu_iso_checksum    = var.iso_checksum
   boot_command = [
     "e<wait2>",
     "<leftShiftOn><down><down><down><end><leftShiftOff><wait2>",

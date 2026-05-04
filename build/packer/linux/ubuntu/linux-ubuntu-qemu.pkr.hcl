@@ -7,11 +7,6 @@ packer {
   }
 }
 
-variable "ubuntu_version" {
-  type    = string
-  default = "24.04.3"
-}
-
 variable "host_arch" {
   type        = string
   description = "Normalized host architecture: amd64 or arm64."
@@ -52,6 +47,12 @@ variable "vnc_port" {
 
 variable "iso_url" {
   type = string
+}
+
+variable "iso_checksum" {
+  type        = string
+  default     = "none"
+  description = "Checksum for iso_url, using Packer's checksum format."
 }
 
 variable "use_hardware_acceleration" {
@@ -104,7 +105,7 @@ variable "build_output_dir" {
 
 locals {
   iso_url             = var.iso_url
-  ubuntu_iso_checksum = var.arch == "amd64" ? "sha256:c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b" : "none"
+  ubuntu_iso_checksum = var.iso_checksum
   cache_directory     = var.cache_dir
   host_is_linux       = var.host_os == "linux"
   host_is_darwin      = var.host_os == "darwin"

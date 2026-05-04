@@ -25,6 +25,7 @@ project_root=$(
 
 # renovate: datasource=custom.ubuntu-live-server-amd64 depName=ubuntu-live-server-amd64 versioning=loose
 UBUNTU_LIVE_SERVER_AMD64_VERSION="24.04.4"
+UBUNTU_LIVE_SERVER_AMD64_SHA256="e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed42f99dbc80c40f1a138433"
 # renovate: datasource=custom.ubuntu-live-server-arm64 depName=ubuntu-live-server-arm64 versioning=loose
 UBUNTU_LIVE_SERVER_ARM64_VERSION="24.04.4"
 UBUNTU_LIVE_SERVER_ARM64_SHA256="9a6ce6d7e66c8abed24d24944570a495caca80b3b0007df02818e13829f27f32"
@@ -113,6 +114,7 @@ run_packer_build() {
 		-var "cache_dir=$effective_cache_dir" \
 		-var "build_output_dir=$build_output_dir" \
 		-var "iso_url=$iso_path" \
+		-var "iso_checksum=sha256:$iso_checksum" \
 		-var "ubuntu_type=$ubuntu_type" \
 		-var "headless=$headless" \
 		-var "vnc_port=$vnc_port" \
@@ -354,6 +356,7 @@ if [[ "$arch" == "arm64" ]]; then
 fi
 
 iso_path="$cache_dir/linux/ubuntu-${UBUNTU_LIVE_SERVER_AMD64_VERSION}-live-server-amd64.iso"
+iso_checksum="${UBUNTU_LIVE_SERVER_AMD64_SHA256}"
 if [[ "$arch" == "arm64" ]]; then
 	iso_path="$cache_dir/linux/ubuntu-${UBUNTU_LIVE_SERVER_ARM64_VERSION}-live-server-arm64.iso"
 	iso_url="https://cdimage.ubuntu.com/releases/${UBUNTU_LIVE_SERVER_ARM64_VERSION}/release/ubuntu-${UBUNTU_LIVE_SERVER_ARM64_VERSION}-live-server-arm64.iso"
