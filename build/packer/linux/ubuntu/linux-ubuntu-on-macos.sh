@@ -11,13 +11,15 @@ cpus="4"
 memory="4096"
 verbose="false"
 build_output_dir=""
+packer_start_only="${DEV_ALCHEMY_PACKER_START_ONLY:-false}"
+packer_start_timeout="${DEV_ALCHEMY_PACKER_START_TIMEOUT:-180}"
 
 script_dir=$(
-	cd "$(dirname "$0")"
+	cd "$(dirname "$0")" || exit 1
 	pwd -P
 )
 project_root=$(
-	cd "${script_dir}/../../../.."
+	cd "${script_dir}/../../../.." || exit 1
 	pwd -P
 )
 
@@ -27,12 +29,170 @@ UBUNTU_LIVE_SERVER_AMD64_VERSION="24.04.3"
 UBUNTU_LIVE_SERVER_ARM64_VERSION="24.04.3"
 UBUNTU_LIVE_SERVER_ARM64_SHA256="2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
 
+detect_host_arch() {
+	case "$(uname -m)" in
+	x86_64 | amd64)
+		echo "amd64"
+		;;
+	aarch64 | arm64)
+		echo "arm64"
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 file_size_bytes() {
 	if [[ ! -f "$1" ]]; then
 		echo "0"
 		return 0
 	fi
 	stat -f%z "$1"
+}
+
+is_truthy() {
+	case "$1" in
+	1 | true | TRUE | True | yes | YES | on | ON)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+duration_seconds() {
+	local value="${1%s}"
+	if [[ "$value" =~ ^[0-9]+$ && "$value" -gt 0 ]]; then
+		printf '%s\n' "$value"
+		return 0
+	fi
+	return 1
+}
+
+packer_probe_is_running() {
+	jobs -pr | grep -qx "$1"
+}
+
+wait_for_packer_probe_settle() {
+	local pid="$1"
+	local settle_seconds="$2"
+	local elapsed_seconds=0
+
+	while packer_probe_is_running "$pid" && [[ "$elapsed_seconds" -lt "$settle_seconds" ]]; do
+		sleep 1
+		elapsed_seconds=$((elapsed_seconds + 1))
+	done
+}
+
+stop_packer_probe_process() {
+	local pid="$1"
+
+	pkill -TERM -P "$pid" >/dev/null 2>&1 || true
+	kill -TERM "$pid" >/dev/null 2>&1 || true
+
+	for _ in 1 2 3 4 5; do
+		if ! packer_probe_is_running "$pid"; then
+			wait "$pid" >/dev/null 2>&1 || true
+			return 0
+		fi
+		sleep 1
+	done
+
+	pkill -KILL -P "$pid" >/dev/null 2>&1 || true
+	kill -KILL "$pid" >/dev/null 2>&1 || true
+	wait "$pid" >/dev/null 2>&1 || true
+}
+
+run_packer_build() {
+	packer build \
+		-var "host_os=darwin" \
+		-var "host_arch=$host_arch" \
+		-var "use_hardware_acceleration=true" \
+		-var "cache_dir=$effective_cache_dir" \
+		-var "build_output_dir=$build_output_dir" \
+		-var "iso_url=$iso_path" \
+		-var "ubuntu_type=$ubuntu_type" \
+		-var "headless=$headless" \
+		-var "vnc_port=$vnc_port" \
+		-var "arch=$arch" \
+		-var "cpus=$cpus" \
+		-var "memory=$memory" \
+		"$packer_file"
+}
+
+run_packer_build_start_only() {
+	local probe_log
+	local packer_pid
+	local elapsed_seconds
+	local packer_started
+	local vm_started
+	local rc
+
+	probe_log="$(mktemp "${TMPDIR:-/tmp}/dev-alchemy-packer-start-only.XXXXXX")" || return 1
+	elapsed_seconds=0
+	packer_started="false"
+	vm_started="false"
+
+	echo "Running Packer build start-only probe for up to ${packer_start_timeout_seconds}s."
+	run_packer_build > >(tee "$probe_log") 2> >(tee -a "$probe_log" >&2) &
+	packer_pid=$!
+
+	while packer_probe_is_running "$packer_pid"; do
+		if grep -Eq "qemu\\.ubuntu:|Build 'qemu\\.ubuntu'" "$probe_log"; then
+			packer_started="true"
+		fi
+		if grep -Eiq "Starting VM|Launching VM|Waiting for SSH|Connected to SSH|Using ssh communicator" "$probe_log"; then
+			vm_started="true"
+			break
+		fi
+		if [[ "$elapsed_seconds" -ge "$packer_start_timeout_seconds" ]]; then
+			break
+		fi
+		sleep 5
+		elapsed_seconds=$((elapsed_seconds + 5))
+	done
+
+	if packer_probe_is_running "$packer_pid"; then
+		if [[ "$vm_started" == "true" ]]; then
+			wait_for_packer_probe_settle "$packer_pid" 15
+			if packer_probe_is_running "$packer_pid"; then
+				echo "Packer build start-only probe succeeded; VM startup was observed."
+				stop_packer_probe_process "$packer_pid"
+				return 0
+			fi
+
+			wait "$packer_pid"
+			rc=$?
+			if [[ "$rc" -eq 0 ]]; then
+				echo "Packer build completed during start-only probe."
+				return 0
+			fi
+
+			echo "Packer build start-only probe failed after VM startup was observed. Log: $probe_log" >&2
+			return "$rc"
+		fi
+		if [[ "$packer_started" == "true" && "$elapsed_seconds" -ge "$packer_start_timeout_seconds" ]]; then
+			echo "Packer build start-only probe succeeded; the qemu builder was still running after ${packer_start_timeout_seconds}s."
+			stop_packer_probe_process "$packer_pid"
+			return 0
+		fi
+
+		echo "Packer build start-only probe did not observe qemu builder startup within ${packer_start_timeout_seconds}s." >&2
+		stop_packer_probe_process "$packer_pid"
+		return 1
+	fi
+
+	wait "$packer_pid"
+	rc=$?
+	if [[ "$rc" -eq 0 ]]; then
+		echo "Packer build completed during start-only probe."
+		return 0
+	fi
+
+	echo "Packer build start-only probe failed before a successful startup could be confirmed. Log: $probe_log" >&2
+	return "$rc"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -109,6 +269,19 @@ while [[ $# -gt 0 ]]; do
 		verbose="true"
 		shift
 		;;
+	--packer-start-only)
+		packer_start_only="true"
+		shift
+		;;
+	--packer-start-timeout)
+		if [[ -n "$2" ]]; then
+			packer_start_timeout="$2"
+			shift 2
+		else
+			echo "Invalid value for --packer-start-timeout: $2." >&2
+			exit 1
+		fi
+		;;
 	*)
 		echo "Unknown option: $1" >&2
 		exit 1
@@ -116,10 +289,20 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+packer_start_timeout_seconds="$(duration_seconds "$packer_start_timeout")" || {
+	echo "Invalid value for packer start timeout: $packer_start_timeout. Use a positive number of seconds." >&2
+	exit 1
+}
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
 	echo "This script only supports macOS hosts. Use linux-ubuntu-on-linux.sh on Linux." >&2
 	exit 1
 fi
+
+host_arch="$(detect_host_arch)" || {
+	echo "Unsupported host architecture: $(uname -m)" >&2
+	exit 1
+}
 
 if [[ -z "$build_output_dir" ]]; then
 	build_output_dir="/tmp/dev-alchemy/qemu-out-ubuntu-${ubuntu_type}-${arch}"
@@ -135,15 +318,38 @@ export DEV_ALCHEMY_CACHE_DIR="$cache_dir"
 export DEV_ALCHEMY_PACKER_CACHE_DIR="$packer_cache_dir"
 export PACKER_CACHE_DIR="$packer_cache_dir"
 
+effective_cache_dir="$cache_dir"
+start_only_cache_dir=""
+cleanup_start_only_cache() {
+	if [[ -n "$start_only_cache_dir" && -d "$start_only_cache_dir" ]]; then
+		rm -rf "$start_only_cache_dir"
+	fi
+}
+
+if is_truthy "$packer_start_only"; then
+	# Keep start-only paths short because QEMU's macOS QMP socket path limit is 104 bytes.
+	start_only_cache_dir="$(mktemp -d "/tmp/da-pc.XXXXXX")" || exit 1
+	effective_cache_dir="$start_only_cache_dir"
+	build_output_dir="$effective_cache_dir/o"
+	trap cleanup_start_only_cache EXIT
+	echo "Using isolated cache directory for start-only Packer probe: $effective_cache_dir"
+fi
+
 if [[ "$arch" == "arm64" ]]; then
 	if ! bash "$project_root/scripts/macos/download-arm64-uefi.sh"; then
 		echo "Failed to prepare ARM64 UEFI firmware." >&2
 		exit 1
 	fi
-	firmware_path="$cache_dir/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
-	if [[ ! -f "$firmware_path" ]]; then
-		echo "ARM64 UEFI firmware is missing: $firmware_path" >&2
-		exit 1
+	for firmware_path in \
+		"$cache_dir/qemu-uefi/usr/share/AAVMF/AAVMF_CODE.no-secboot.fd" \
+		"$cache_dir/qemu-uefi/usr/share/AAVMF/AAVMF_VARS.fd"; do
+		if [[ ! -f "$firmware_path" ]]; then
+			echo "ARM64 UEFI firmware is missing: $firmware_path" >&2
+			exit 1
+		fi
+	done
+	if is_truthy "$packer_start_only"; then
+		ln -s "$cache_dir/qemu-uefi" "$effective_cache_dir/qemu-uefi"
 	fi
 fi
 
@@ -172,7 +378,7 @@ fi
 
 if [[ "$arch" == "arm64" ]]; then
 	echo "Creating QCOW2 disk image..."
-	output_directory="$cache_dir/ubuntu"
+	output_directory="$effective_cache_dir/ubuntu"
 	mkdir -p "$output_directory"
 	echo "Removing existing QCOW2 disk image if it exists..."
 	rm -f "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2"
@@ -194,21 +400,18 @@ if [[ -d "$output_dir" ]]; then
 fi
 mkdir -p "$(dirname "$output_dir")"
 
-packer_file="build/packer/linux/ubuntu/linux-ubuntu-on-macos.pkr.hcl"
-packer init "$packer_file"
+packer_file="build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl"
+if ! packer init "$packer_file"; then
+	echo "Packer init failed for $packer_file." >&2
+	exit 1
+fi
 
 if [[ "$verbose" == "true" ]]; then
 	export PACKER_LOG=1
 fi
 
-packer build \
-	-var "cache_dir=$cache_dir" \
-	-var "build_output_dir=$build_output_dir" \
-	-var "iso_url=$iso_path" \
-	-var "ubuntu_type=$ubuntu_type" \
-	-var "headless=$headless" \
-	-var "vnc_port=$vnc_port" \
-	-var "arch=$arch" \
-	-var "cpus=$cpus" \
-	-var "memory=$memory" \
-	"$packer_file"
+if is_truthy "$packer_start_only"; then
+	run_packer_build_start_only
+else
+	run_packer_build
+fi

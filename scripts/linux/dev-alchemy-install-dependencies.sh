@@ -91,12 +91,18 @@ install_linux_packages() {
 		curl
 		ffmpeg
 		gpg
+		libvirt-clients
+		libvirt-daemon-system
 		packer
 		python3
+		qemu-efi-aarch64
 		qemu-system-arm
 		qemu-system-x86
 		qemu-utils
+		sshpass
 		tar
+		virt-manager
+		virtinst
 		vncsnapshot
 		xorriso
 		xz-utils

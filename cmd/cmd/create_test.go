@@ -52,6 +52,17 @@ func TestIsCreateSupported(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "qemu supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+				OS:                   "ubuntu",
+				UbuntuType:           "server",
+				Arch:                 "amd64",
+			},
+			want: true,
+		},
+		{
 			name: "virtualbox unsupported",
 			vm: alchemy_build.VirtualMachineConfig{
 				VirtualizationEngine: alchemy_build.VirtualizationEngineVirtualBox,
@@ -73,6 +84,47 @@ func TestAvailableCreateVirtualMachinesOnlyReturnsSupportedConfigs(t *testing.T)
 			t.Fatalf("expected only supported create configs, got engine %q", vm.VirtualizationEngine)
 		}
 	}
+}
+
+func TestAvailableCreateVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstable(t *testing.T) {
+	withCurrentHostArchitecture(t, "amd64")
+
+	vms := availableCreateVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireVMStatus(t, vms, "server", "amd64", "stable")
+	requireVMStatus(t, vms, "server", "arm64", "unstable")
+	requireOnlyArch(t, defaultCreateVirtualMachinesForHostOS(alchemy_build.HostOsLinux), "amd64")
+}
+
+func TestAvailableCreateVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstableOnArm64(t *testing.T) {
+	withCurrentHostArchitecture(t, "arm64")
+
+	vms := availableCreateVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireVMStatus(t, vms, "desktop", "arm64", "stable")
+	requireVMStatus(t, vms, "desktop", "amd64", "unstable")
+	requireOnlyArch(t, defaultCreateVirtualMachinesForHostOS(alchemy_build.HostOsLinux), "arm64")
+}
+
+func TestRunCreateAllSkipsUnstableLinuxCrossArchitectureTargets(t *testing.T) {
+	withCurrentHostArchitecture(t, "amd64")
+	previousRunDeployFunc := runDeployFunc
+	t.Cleanup(func() {
+		runDeployFunc = previousRunDeployFunc
+	})
+
+	var created []alchemy_build.VirtualMachineConfig
+	runDeployFunc = func(vm alchemy_build.VirtualMachineConfig) error {
+		created = append(created, vm)
+		return nil
+	}
+
+	if err := runCreateAll(defaultCreateVirtualMachinesForHostOS(alchemy_build.HostOsLinux)); err != nil {
+		t.Fatalf("expected create all to succeed, got %v", err)
+	}
+
+	if len(created) != 2 {
+		t.Fatalf("expected create all to run the two native amd64 Linux targets, got %d", len(created))
+	}
+	requireOnlyArch(t, created, "amd64")
 }
 
 func TestPrintAvailableCreateCombinationsIncludesExistingTargetState(t *testing.T) {

@@ -16,24 +16,22 @@ var (
 
 var inspectCreateTargetExists = alchemy_deploy.CreateTargetExists
 var inspectCreateArtifactExists = alchemy_build.BuildArtifactsExistQuiet
+var runDeployFunc = runDeploy
 
 func isCreateSupported(vm alchemy_build.VirtualMachineConfig) bool {
-	switch vm.VirtualizationEngine {
-	case alchemy_build.VirtualizationEngineUtm, alchemy_build.VirtualizationEngineHyperv, alchemy_build.VirtualizationEngineTart:
-		return true
-	default:
-		return false
-	}
+	return alchemy_deploy.SupportsCreate(vm)
+}
+
+func availableCreateVirtualMachinesForHostOS(hostOs alchemy_build.HostOsType) []alchemy_build.VirtualMachineConfig {
+	return availableVirtualMachinesForHostOS(hostOs, isCreateSupported)
 }
 
 func availableCreateVirtualMachines() []alchemy_build.VirtualMachineConfig {
-	var supported []alchemy_build.VirtualMachineConfig
-	for _, vm := range alchemy_build.AvailableVirtualMachineConfigsForCurrentHostOS() {
-		if isCreateSupported(vm) {
-			supported = append(supported, vm)
-		}
-	}
-	return supported
+	return availableCreateVirtualMachinesForHostOS(alchemy_build.GetCurrentHostOs())
+}
+
+func defaultCreateVirtualMachinesForHostOS(hostOs alchemy_build.HostOsType) []alchemy_build.VirtualMachineConfig {
+	return stableVirtualMachines(availableCreateVirtualMachinesForHostOS(hostOs))
 }
 
 func printAvailableCreateCombinations() error {
@@ -43,7 +41,7 @@ func printAvailableCreateCombinations() error {
 		fmt.Sprintf("Available create combinations for host OS: %s", alchemy_build.GetCurrentHostOs()),
 		"No create combinations are available for the current host OS.",
 		vms,
-		[]string{"OS", "Type", "Arch", "Artifact", "Create"},
+		[]string{"OS", "Type", "Arch", "Status", "Artifact", "Create"},
 		func(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
 			targetExists, err := inspectCreateTargetExists(vm)
 			if err != nil {
@@ -55,7 +53,7 @@ func printAvailableCreateCombinations() error {
 				if targetExists {
 					createState = "already created"
 				}
-				return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, "public image", createState}, nil
+				return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, virtualMachineTargetStatus(vm), "public image", createState}, nil
 			}
 
 			artifactsExist, err := inspectCreateArtifactExists(vm)
@@ -75,9 +73,19 @@ func printAvailableCreateCombinations() error {
 				}
 			}
 
-			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, artifactState, createState}, nil
+			return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, virtualMachineTargetStatus(vm), artifactState, createState}, nil
 		},
 	)
+}
+
+func runCreateAll(vms []alchemy_build.VirtualMachineConfig) error {
+	for _, vm := range vms {
+		fmt.Printf("➡️ Creating VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
+		if err := runDeployFunc(vm); err != nil {
+			return fmt.Errorf("failed creating VM for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+		}
+	}
+	return nil
 }
 
 // createCmd represents the create command
@@ -85,7 +93,7 @@ var createCmd = &cobra.Command{
 	Use:   "create <osname>",
 	Short: "Creates a new VM on your system with the defined OS",
 	Long: `Creates a new VM on your system with the defined OS.
-Use "all" to create all available VM configurations.
+Use "all" to create all stable VM configurations.
 
 Example:
   alchemy create ubuntu --type server --arch amd64
@@ -102,14 +110,10 @@ Example:
 		}
 
 		if osName == "all" {
-			fmt.Println("🔧 Creating all available VM configurations")
-			for _, vm := range availableCreateVirtualMachines() {
-				fmt.Printf("➡️ Creating VM for OS: %s, Type: %s, Architecture: %s\n", vm.OS, vm.UbuntuType, vm.Arch)
-				if err := runDeploy(vm); err != nil {
-					return fmt.Errorf("failed creating VM for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
-				}
-			}
-			return nil
+			availableVMs := availableCreateVirtualMachines()
+			fmt.Println("🔧 Creating all stable VM configurations")
+			printSkippedUnstableTargets("create", availableVMs)
+			return runCreateAll(stableVirtualMachines(availableVMs))
 		}
 
 		available_virtual_machines := availableCreateVirtualMachines()
@@ -127,7 +131,8 @@ Example:
 		}
 
 		fmt.Printf("🔧 Creating VM for OS: %s, Architecture: %s, Type: %s\n", osName, arch, osType)
-		if err := runDeploy(VirtualMachineConfig); err != nil {
+		printUnstableTargetWarning(VirtualMachineConfig)
+		if err := runDeployFunc(VirtualMachineConfig); err != nil {
 			return fmt.Errorf("failed creating VM for OS=%s, type=%s, arch=%s: %w", osName, osType, arch, err)
 		}
 		return nil
@@ -164,6 +169,8 @@ func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
 		return alchemy_deploy.RunTartDeployOnMacOS(vm)
 	case alchemy_build.VirtualizationEngineHyperv:
 		return alchemy_deploy.RunHypervVagrantDeployOnWindows(vm)
+	case alchemy_build.VirtualizationEngineQemu:
+		return alchemy_deploy.RunLinuxQemuDeployOnLinux(vm)
 	default:
 		return fmt.Errorf("❌ deploy is not implemented for virtualization engine: %s", vm.VirtualizationEngine)
 	}

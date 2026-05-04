@@ -28,3 +28,39 @@ Work around it by setting this environment variable before running Ansible:
 ```bash
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 ```
+
+## Linux: `virsh domifaddr` Returns No IP
+
+Linux libvirt provisioning waits for `virsh domifaddr` to report a guest IPv4
+address. Alchemy checks the guest agent first, then libvirt DHCP leases. If both
+sources return no address, provisioning cannot build the temporary Ansible
+inventory.
+
+First confirm the VM is running and query the same libvirt connection Alchemy
+uses:
+
+```bash
+virsh --connect qemu:///system domifaddr <domain> --source agent
+virsh --connect qemu:///system domifaddr <domain> --source lease
+```
+
+If the agent lookup is empty, wait for the guest to finish booting and make sure
+the image has `qemu-guest-agent` installed and running. If the lease lookup is
+empty, make sure the VM is attached to a libvirt-managed network with visible
+DHCP leases:
+
+```bash
+virsh --connect qemu:///system net-info default
+virsh --connect qemu:///system net-dhcp-leases default
+```
+
+When the `default` network exists but is inactive, enable it:
+
+```bash
+sudo virsh --connect qemu:///system net-start default
+sudo virsh --connect qemu:///system net-autostart default
+```
+
+For `DEV_ALCHEMY_LIBVIRT_URI=qemu:///session`, run the same checks against
+`qemu:///session`. Session VMs use libvirt user-mode networking by default, so
+guest-agent visibility is usually the most reliable IP source.

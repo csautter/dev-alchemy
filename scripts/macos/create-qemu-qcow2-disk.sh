@@ -22,12 +22,6 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-# create a qcow2 disk image for QEMU
-script_dir=$(
-	cd "$(dirname "$0")"
-	pwd
-)
-
 app_data_dir="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
 cache_dir="${DEV_ALCHEMY_CACHE_DIR:-$app_data_dir/cache}"
 export DEV_ALCHEMY_APP_DATA_DIR="$app_data_dir"

@@ -94,7 +94,7 @@ locals {
       ["-machine", "virt,highmem=on"],
       # max cpu model is best choice here:
       # pmu=off is causing issues while loading windows 11 arm64 setup
-      ["-cpu", var.is_ci ? "max,sve=off,pauth-impdef=on" : "host"],
+      ["-cpu", var.is_ci ? "max,sve=off,sme=off,pauth-impdef=on" : "host"],
       # setting a specific cpu model leads to issues, therefore using max above
       # ["-cpu", var.is_ci ? "cortex-a72" : "host"],
       ["-bios", "${local.win11_uefi_bios}"],

@@ -63,6 +63,17 @@ func TestIsStartSupported(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "linux qemu supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "ubuntu",
+				Arch:                 "amd64",
+				UbuntuType:           "server",
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+			},
+			want: true,
+		},
+		{
 			name: "virtualbox unsupported",
 			vm: alchemy_build.VirtualMachineConfig{
 				OS:                   "windows11",
@@ -87,6 +98,24 @@ func TestAvailableStartVirtualMachinesOnlyReturnsSupportedConfigs(t *testing.T) 
 			t.Fatalf("expected only supported start configs, got engine %q", vm.VirtualizationEngine)
 		}
 	}
+}
+
+func TestAvailableStartVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstable(t *testing.T) {
+	withCurrentHostArchitecture(t, "amd64")
+
+	vms := availableStartVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireVMStatus(t, vms, "server", "amd64", "stable")
+	requireVMStatus(t, vms, "server", "arm64", "unstable")
+	requireOnlyArch(t, defaultStartVirtualMachinesForHostOS(alchemy_build.HostOsLinux), "amd64")
+}
+
+func TestAvailableStartVirtualMachinesMarksLinuxCrossArchitectureTargetsUnstableOnArm64(t *testing.T) {
+	withCurrentHostArchitecture(t, "arm64")
+
+	vms := availableStartVirtualMachinesForHostOS(alchemy_build.HostOsLinux)
+	requireVMStatus(t, vms, "desktop", "arm64", "stable")
+	requireVMStatus(t, vms, "desktop", "amd64", "unstable")
+	requireOnlyArch(t, defaultStartVirtualMachinesForHostOS(alchemy_build.HostOsLinux), "arm64")
 }
 
 func TestPrintAvailableStartCombinationsIncludesStartReadiness(t *testing.T) {

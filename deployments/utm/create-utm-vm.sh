@@ -42,11 +42,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 script_dir=$(
-	cd "$(dirname "$0")"
+	cd "$(dirname "$0")" || exit 1
 	pwd
 )
 project_root=$(
-	cd "${script_dir}/../.."
+	cd "${script_dir}/../.." || exit 1
 	pwd
 )
 
@@ -74,8 +74,8 @@ fi
 generate_mac_address() {
 	hexchars="0123456789ABCDEF"
 	echo "A6:$(for i in {1..5}; do
-		echo -n ${hexchars:$((RANDOM % 16)):1}${hexchars:$((RANDOM % 16)):1}
-		[ $i -lt 5 ] && echo -n ":"
+		echo -n "${hexchars:$((RANDOM % 16)):1}${hexchars:$((RANDOM % 16)):1}"
+		[ "$i" -lt 5 ] && echo -n ":"
 	done)"
 }
 

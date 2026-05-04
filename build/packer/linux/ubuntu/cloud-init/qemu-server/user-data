@@ -1,14 +1,17 @@
 #cloud-config
 
-# removes interactive prompt during autoinstall
-runcmd:
-  - [eval, 'echo $(cat /proc/cmdline) "autoinstall" > /root/cmdline']
-  - [eval, "mount -n --bind -o ro /root/cmdline /proc/cmdline"]
-  - [eval, "snap restart subiquity.subiquity-server"]
-  - [eval, "snap restart subiquity.subiquity-service"]
-
 autoinstall:
   version: 1
+  early-commands:
+    - |
+      if [ -x /usr/bin/busctl ] && [ ! -x /usr/bin/busctl.dev-alchemy-original ]; then
+        mv /usr/bin/busctl /usr/bin/busctl.dev-alchemy-original
+        cat >/usr/bin/busctl <<'EOF'
+      #!/bin/sh
+      exec /usr/bin/busctl.dev-alchemy-original --timeout=120 "$@"
+      EOF
+        chmod 0755 /usr/bin/busctl
+      fi
   identity:
     hostname: ubuntu-server
     username: packer

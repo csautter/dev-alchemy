@@ -10,6 +10,7 @@ RUN apt-get update \
         curl \
         gpg \
         ruby-full \
+        shellcheck \
         xz-utils \
         yq \
     && rm -rf /var/lib/apt/lists/*

@@ -77,6 +77,103 @@ Clean up afterwards with:
 docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 ```
 
+## Linux Host Workflows
+
+### Ubuntu on Linux with QEMU/KVM and virt-manager
+
+Install host dependencies first:
+
+```bash
+alchemy install
+```
+
+`alchemy install` installs the libvirt and QEMU host packages, but some
+distributions still require one manual host step before the managed VM can
+boot: enable libvirt's `default` network, or grant ACL/group access to the
+system libvirt image directory if the daemon runs guests as a different user.
+
+Build and create the Ubuntu VM:
+
+```bash
+arch=amd64 # or arm64
+type=desktop # or server
+alchemy build ubuntu --arch "$arch" --type "$type"
+alchemy create ubuntu --arch "$arch" --type "$type"
+```
+
+By default the Linux create/start/stop/destroy workflow uses the libvirt system
+connection (`qemu:///system`) so the VM attaches to libvirt's standard NAT
+network and gets outbound internet access in the common case. Managed QCOW2
+disks default to `/var/tmp/dev-alchemy/libvirt/images`, which avoids requiring a
+pre-created root-owned image directory. Alchemy creates managed image
+directories with mode `0750`; if your system libvirt daemon runs guests as a
+different user, grant access explicitly with a libvirt storage pool, group
+ownership/ACLs on `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR`, or use the session connection
+below.
+
+When a VM uses a named libvirt network, Alchemy preflights it before defining or
+starting the domain. With the default system URI this checks:
+
+```bash
+virsh --connect qemu:///system net-info default
+```
+
+If the `default` network exists but is inactive, enable it with:
+
+```bash
+sudo virsh --connect qemu:///system net-start default
+sudo virsh --connect qemu:///system net-autostart default
+```
+
+If you prefer the rootless libvirt user session instead, set:
+
+```bash
+export DEV_ALCHEMY_LIBVIRT_URI=qemu:///session
+# Optional when you want a custom storage location for the session connection:
+export DEV_ALCHEMY_LIBVIRT_IMAGE_DIR="$HOME/.local/share/dev-alchemy/libvirt/images"
+```
+
+The built-in session path uses libvirt user-mode networking, so it does not
+require the `default` NAT network. If a named network is configured for a session
+URI later, the same preflight is run against `qemu:///session`.
+
+If you prefer the traditional system libvirt image location instead, set:
+
+```bash
+export DEV_ALCHEMY_LIBVIRT_URI=qemu:///system
+export DEV_ALCHEMY_LIBVIRT_IMAGE_DIR=/var/lib/libvirt/images/dev-alchemy
+```
+
+You can then boot the created VM either from `virt-manager` or from the CLI:
+
+```bash
+alchemy start ubuntu --arch "$arch" --type "$type"
+alchemy provision ubuntu --arch "$arch" --type "$type" --check
+alchemy provision ubuntu --arch "$arch" --type "$type"
+alchemy stop ubuntu --arch "$arch" --type "$type"
+alchemy destroy ubuntu --arch "$arch" --type "$type"
+```
+
+The provision wrapper discovers the libvirt guest IP with `virsh domifaddr`
+and runs `ansible-playbook` with an inline SSH inventory target. Optional
+Ubuntu provisioning overrides can be set in `.env` or the process environment
+using `LIBVIRT_UBUNTU_ANSIBLE_*`:
+
+```dotenv
+LIBVIRT_UBUNTU_ANSIBLE_USER=packer
+LIBVIRT_UBUNTU_ANSIBLE_PASSWORD=P@ssw0rd!
+LIBVIRT_UBUNTU_ANSIBLE_BECOME_PASSWORD=P@ssw0rd!
+# Optional (defaults shown):
+LIBVIRT_UBUNTU_ANSIBLE_CONNECTION=ssh
+LIBVIRT_UBUNTU_ANSIBLE_SSH_COMMON_ARGS=-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no
+LIBVIRT_UBUNTU_ANSIBLE_SSH_TIMEOUT=120
+LIBVIRT_UBUNTU_ANSIBLE_SSH_RETRIES=3
+```
+
+Related guide:
+
+- [Ubuntu Packer README](../build/packer/linux/ubuntu/README.md)
+
 ## Windows Host Workflows
 
 ### Ubuntu on Windows with Hyper-V

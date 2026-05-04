@@ -2,11 +2,6 @@
 
 set -e
 
-SCRIPT_DIR=$(
-	cd "$(dirname "$0")"
-	pwd
-)
-
 host_os="$(uname -s)"
 if [ "$host_os" = "Darwin" ]; then
 	default_app_data_dir="$HOME/Library/Application Support/dev-alchemy"
@@ -22,6 +17,8 @@ export DEV_ALCHEMY_CACHE_DIR="$cache_dir"
 DEB_PATH="${cache_dir}/qemu-efi-aarch64_all.deb"
 UEFI_DIR="${cache_dir}/qemu-uefi"
 UEFI_FIRMWARE_PATH="${UEFI_DIR}/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+AAVMF_CODE_PATH="${UEFI_DIR}/usr/share/AAVMF/AAVMF_CODE.no-secboot.fd"
+AAVMF_VARS_PATH="${UEFI_DIR}/usr/share/AAVMF/AAVMF_VARS.fd"
 
 # Ensure cache directory exists before downloading
 mkdir -p "${cache_dir}"
@@ -41,7 +38,7 @@ else
 	echo "qemu-efi-aarch64_all.deb already exists, skipping download"
 fi
 
-if [ ! -f "${UEFI_FIRMWARE_PATH}" ]; then
+if [ ! -f "${UEFI_FIRMWARE_PATH}" ] || [ ! -f "${AAVMF_CODE_PATH}" ] || [ ! -f "${AAVMF_VARS_PATH}" ]; then
 	echo "Extracting qemu-efi-aarch64 package contents"
 	tmp_extract_dir="$(mktemp -d "${cache_dir}/qemu-uefi.tmp.XXXXXX")"
 	tmp_rootfs_dir="${tmp_extract_dir}/rootfs"
@@ -76,5 +73,15 @@ fi
 
 if [ ! -f "${UEFI_FIRMWARE_PATH}" ]; then
 	echo "Expected ARM64 UEFI firmware was not found at ${UEFI_FIRMWARE_PATH}" >&2
+	exit 1
+fi
+
+if [ ! -f "${AAVMF_CODE_PATH}" ]; then
+	echo "Expected ARM64 AAVMF code firmware was not found at ${AAVMF_CODE_PATH}" >&2
+	exit 1
+fi
+
+if [ ! -f "${AAVMF_VARS_PATH}" ]; then
+	echo "Expected ARM64 AAVMF vars firmware was not found at ${AAVMF_VARS_PATH}" >&2
 	exit 1
 fi

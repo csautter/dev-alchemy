@@ -66,6 +66,10 @@ build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch 
 build/packer/linux/ubuntu/linux-ubuntu-on-macos.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
 ```
 
+The macOS wrapper uses the shared QEMU template,
+[linux-ubuntu-qemu.pkr.hcl](linux-ubuntu-qemu.pkr.hcl), with macOS-specific
+display and acceleration settings.
+
 ## Build Ubuntu on Linux Hosts (QEMU)
 
 Install host dependencies first:
@@ -85,6 +89,8 @@ Use the CLI from repository root:
 arch=amd64
 alchemy build ubuntu --type server --arch "$arch"
 alchemy build ubuntu --type desktop --arch "$arch"
+alchemy create ubuntu --type server --arch "$arch"
+alchemy start ubuntu --type server --arch "$arch"
 ```
 
 Manual script usage:
@@ -94,3 +100,36 @@ export DEV_ALCHEMY_APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-${XDG_DATA_HOME:-$H
 build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch amd64 --ubuntu-type server
 build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh --project-root "$PWD" --arch amd64 --ubuntu-type desktop
 ```
+
+The Linux wrapper also uses the shared QEMU template,
+[linux-ubuntu-qemu.pkr.hcl](linux-ubuntu-qemu.pkr.hcl), after probing whether
+KVM acceleration is usable on the host.
+
+QEMU autoinstall uses the attached `cidata` seed plus the Packer boot command's
+`autoinstall ds=nocloud` kernel argument. The QEMU cloud-init seed intentionally
+leaves networking to Subiquity's default DHCP handling for `eth*`/`en*`
+interfaces. During ARM64 software emulation the installer can take longer than
+systemd's default D-Bus method timeout while applying netplan, so the QEMU seed
+extends the live installer's `busctl` timeout before Subiquity applies network
+configuration.
+
+The Linux `create`/`start`/`stop`/`destroy` flow uses libvirt so the VM appears
+in `virt-manager`.
+
+Linux libvirt runtime prefers native-architecture guests for `create all` and
+`start all`. Cross-architecture guests are available when selected explicitly,
+but they are marked unstable because QEMU TCG emulation is slow and less tested.
+
+Ubuntu QEMU images include `qemu-guest-agent` and `spice-vdagent`, and the
+libvirt domain enables the SPICE agent channel so `virt-manager` can provide
+better clipboard, pointer, and dynamic display resize integration for desktop
+guests. The Linux libvirt runtime uses a `virtio` video device for Ubuntu
+guests.
+
+- Default libvirt connection: `qemu:///system`
+- Default managed disk directory for that connection: `/var/tmp/dev-alchemy/libvirt/images`
+- Managed disk directories are created with mode `0750`; grant system libvirt
+  access explicitly with a storage pool, group ownership/ACLs, or a custom
+  `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR` when needed.
+- Optional override for rootless libvirt user-session VMs: `DEV_ALCHEMY_LIBVIRT_URI=qemu:///session`
+- Optional managed disk directory override: `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR=/path/to/images`
