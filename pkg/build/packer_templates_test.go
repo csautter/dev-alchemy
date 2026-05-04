@@ -3,6 +3,7 @@ package build
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -80,6 +81,45 @@ func TestUbuntuLiveServerPinsStayInSync(t *testing.T) {
 	}
 	if !strings.Contains(string(hypervTemplate), `default = "`+ubuntuLiveServerAMD64Version+`"`) {
 		t.Fatalf("expected %q to default to Ubuntu %s", hypervTemplatePath, ubuntuLiveServerAMD64Version)
+	}
+
+	for _, filePath := range []string{
+		".github/workflows/test-build-linux.yml",
+		".github/workflows/test-build-macos.yml",
+		"build/packer/linux/ubuntu/README.md",
+	} {
+		filePath := filePath
+		t.Run(filepath.Base(filePath)+" static ISO references", func(t *testing.T) {
+			t.Parallel()
+			assertUbuntuLiveServerISOReferencesUsePinnedVersions(t, filePath)
+		})
+	}
+}
+
+var ubuntuLiveServerISOReferenceRE = regexp.MustCompile(`ubuntu-([0-9]{2}\.[0-9]{2}(?:\.[0-9]+)?)-live-server-(amd64|arm64)\.iso`)
+
+func assertUbuntuLiveServerISOReferencesUsePinnedVersions(t *testing.T, filePath string) {
+	t.Helper()
+
+	content, err := os.ReadFile(repoPath(t, filePath))
+	if err != nil {
+		t.Fatalf("failed to read %q: %v", filePath, err)
+	}
+
+	matches := ubuntuLiveServerISOReferenceRE.FindAllStringSubmatch(string(content), -1)
+	if len(matches) == 0 {
+		t.Fatalf("expected %q to contain Ubuntu live-server ISO references", filePath)
+	}
+
+	for _, match := range matches {
+		version, arch := match[1], match[2]
+		wantVersion := ubuntuLiveServerAMD64Version
+		if arch == "arm64" {
+			wantVersion = ubuntuLiveServerArm64Version
+		}
+		if version != wantVersion {
+			t.Fatalf("expected %q to use Ubuntu %s for %s ISO reference, found %q", filePath, wantVersion, arch, match[0])
+		}
 	}
 }
 

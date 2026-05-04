@@ -141,26 +141,26 @@ jobs:
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
             runs_on: ubuntu-24.04
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
           - arch: amd64
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
             runs_on: ubuntu-24.04
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
           - arch: arm64
             go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
             runs_on: ubuntu-24.04-arm
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
           - arch: arm64
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
             runs_on: ubuntu-24.04-arm
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
 
     steps:
@@ -332,12 +332,12 @@ jobs:
             go_test_name: TestBuildQemuUbuntuServerAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
           - arch: amd64
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -459,13 +459,13 @@ jobs:
             go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
           - arch: arm64
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
     steps:
       - name: Checkout code
