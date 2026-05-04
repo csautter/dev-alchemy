@@ -86,12 +86,12 @@ type WebFileDependency struct {
 
 const (
 	// renovate: datasource=custom.ubuntu-live-server-amd64 depName=ubuntu-live-server-amd64 versioning=loose
-	ubuntuLiveServerAMD64Version = "24.04.3"
-	ubuntuLiveServerAMD64SHA256  = "c3514bf0056180d09376462a7a1b4f213c1d6e8ea67fae5c25099c6fd3d8274b"
+	ubuntuLiveServerAMD64Version = "24.04.4"
+	ubuntuLiveServerAMD64SHA256  = "e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed42f99dbc80c40f1a138433"
 
 	// renovate: datasource=custom.ubuntu-live-server-arm64 depName=ubuntu-live-server-arm64 versioning=loose
-	ubuntuLiveServerArm64Version = "24.04.3"
-	ubuntuLiveServerArm64SHA256  = "2ee2163c9b901ff5926400e80759088ff3b879982a3956c02100495b489fd555"
+	ubuntuLiveServerArm64Version = "24.04.4"
+	ubuntuLiveServerArm64SHA256  = "9a6ce6d7e66c8abed24d24944570a495caca80b3b0007df02818e13829f27f32"
 
 	// renovate: datasource=custom.virtio-win depName=virtio-win versioning=loose
 	virtioWinVersion = "0.1.285-1"
