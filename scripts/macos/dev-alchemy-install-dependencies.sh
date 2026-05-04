@@ -24,7 +24,7 @@ VNCSNAPSHOT_VERSION="1.2a"
 # renovate: datasource=custom.homebrew-formula depName=xorriso packageName=xorriso versioning=loose
 XORRISO_VERSION="1.5.8.pl01"
 # renovate: datasource=custom.homebrew-formula depName=ansible packageName=ansible versioning=loose
-ANSIBLE_VERSION="13.5.0"
+ANSIBLE_VERSION="13.6.0"
 
 install_go="false"
 
