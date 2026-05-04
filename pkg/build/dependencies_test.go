@@ -28,25 +28,55 @@ func TestBootstrapPythonEnv_VenvCreationFails(t *testing.T) {
 	}
 }
 
-// TestBootstrapPythonEnv_PipInstallFails verifies that bootstrapPythonEnv returns
-// a wrapped error when the venv directory already exists but contains no real
-// Python/pip binaries, so the playwright pip install step fails immediately.
-func TestBootstrapPythonEnv_PipInstallFails(t *testing.T) {
+// TestBootstrapPythonEnv_IncompleteVenvRecreateFails verifies that an existing
+// but incomplete venv is recreated before dependency installation begins.
+func TestBootstrapPythonEnv_IncompleteVenvRecreateFails(t *testing.T) {
 	workdir := t.TempDir()
-	// Create the .venv directory so venv creation is skipped, but leave it empty
-	// so that venvPython and pipPath do not exist.
+	if err := os.MkdirAll(filepath.Join(workdir, ".venv"), 0755); err != nil {
+		t.Fatalf("could not create mock venv dir: %v", err)
+	}
+	badPython := filepath.Join(t.TempDir(), "nonexistent-python")
+
+	err := bootstrapPythonEnv(workdir, badPython)
+
+	if err == nil {
+		t.Fatal("expected error when incomplete venv cannot be recreated, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to recreate Python venv") {
+		t.Errorf("expected error to mention venv recreation failure, got: %v", err)
+	}
+}
+
+func TestMissingPythonVenvExecutables(t *testing.T) {
+	workdir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(workdir, ".venv"), 0755); err != nil {
 		t.Fatalf("could not create mock venv dir: %v", err)
 	}
 
-	// pythonExe is irrelevant here because the venv dir already exists.
-	err := bootstrapPythonEnv(workdir, "ignored")
-
-	if err == nil {
-		t.Fatal("expected error when venv Python/pip binaries are missing, got nil")
+	missing, err := missingPythonVenvExecutables(workdir)
+	if err != nil {
+		t.Fatalf("missingPythonVenvExecutables returned error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "failed to install Windows 11 download script requirements") {
-		t.Errorf("expected error to mention requirements install failure, got: %v", err)
+	if len(missing) != 2 {
+		t.Fatalf("expected empty venv to miss 2 executables, got %d: %v", len(missing), missing)
+	}
+
+	venvPython, pipPath := pythonVenvExecutablePaths(workdir)
+	for _, path := range []string{venvPython, pipPath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("could not create parent directory for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte{}, 0755); err != nil {
+			t.Fatalf("could not create fake executable %s: %v", path, err)
+		}
+	}
+
+	missing, err = missingPythonVenvExecutables(workdir)
+	if err != nil {
+		t.Fatalf("missingPythonVenvExecutables returned error after fake executables were created: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("expected complete venv to miss no executables, got: %v", missing)
 	}
 }
 

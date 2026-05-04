@@ -2,13 +2,20 @@
 
 set -ex
 
-APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
+host_os="$(uname -s)"
+if [ "$host_os" = "Darwin" ]; then
+	DEFAULT_APP_DATA_DIR="$HOME/Library/Application Support/dev-alchemy"
+else
+	DEFAULT_APP_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/dev-alchemy"
+fi
+
+APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-$DEFAULT_APP_DATA_DIR}"
 CACHE_DIR="${DEV_ALCHEMY_CACHE_DIR:-$APP_DATA_DIR/cache}"
 export DEV_ALCHEMY_APP_DATA_DIR="$APP_DATA_DIR"
 export DEV_ALCHEMY_CACHE_DIR="$CACHE_DIR"
 
 # renovate: datasource=custom.virtio-win depName=virtio-win versioning=loose
-VIRTIO_WIN_VERSION="0.1.266-1"
+VIRTIO_WIN_VERSION="0.1.285-1"
 VIRTIO_WIN_FILE_VERSION="${VIRTIO_WIN_VERSION%-*}"
 
 if [ ! -f "$CACHE_DIR/windows/virtio-win.iso" ]; then

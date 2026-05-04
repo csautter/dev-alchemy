@@ -13,6 +13,10 @@ var ubuntuQemuTemplatePaths = []string{
 	"build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl",
 }
 
+var windowsQemuTemplatePaths = []string{
+	"build/packer/windows/windows11-qemu.pkr.hcl",
+}
+
 func TestUbuntuPackerTemplatesUseCallerSuppliedISOChecksum(t *testing.T) {
 	t.Parallel()
 
@@ -93,6 +97,86 @@ func TestUbuntuLiveServerPinsStayInSync(t *testing.T) {
 			t.Parallel()
 			assertUbuntuLiveServerISOReferencesUsePinnedVersions(t, filePath)
 		})
+	}
+}
+
+func TestWindowsQemuTemplateIsSharedAcrossMacOSAndLinux(t *testing.T) {
+	t.Parallel()
+
+	for _, templatePath := range windowsQemuTemplatePaths {
+		templatePath := templatePath
+		t.Run(filepath.Base(templatePath), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, templatePath))
+			if err != nil {
+				t.Fatalf("failed to read template %q: %v", templatePath, err)
+			}
+
+			got := string(content)
+			for _, want := range []string{
+				`variable "host_os"`,
+				`variable "host_arch"`,
+				`variable "use_hardware_acceleration"`,
+				`host_is_linux`,
+				`host_is_darwin`,
+				`amd64_accelerator`,
+				`arm64_accelerator`,
+				`qemu_display`,
+			} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("expected shared Windows QEMU template %q to contain %q", templatePath, want)
+				}
+			}
+		})
+	}
+}
+
+func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
+	t.Parallel()
+
+	for _, scriptPath := range []string{
+		"build/packer/windows/windows11-qemu.sh",
+		"build/packer/windows/windows11-on-macos.sh",
+		"build/packer/windows/windows11-on-linux.sh",
+	} {
+		scriptPath := scriptPath
+		t.Run(filepath.Base(scriptPath), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, scriptPath))
+			if err != nil {
+				t.Fatalf("failed to read script %q: %v", scriptPath, err)
+			}
+
+			got := string(content)
+			if scriptPath == "build/packer/windows/windows11-qemu.sh" {
+				for _, want := range []string{
+					`packer_file="build/packer/windows/windows11-qemu.pkr.hcl"`,
+					`-var "host_os=${host_os}"`,
+					`-var "host_arch=${host_arch}"`,
+					`-var "use_hardware_acceleration=${use_hardware_acceleration}"`,
+				} {
+					if !strings.Contains(got, want) {
+						t.Fatalf("expected script %q to contain %q", scriptPath, want)
+					}
+				}
+				return
+			}
+
+			if !strings.Contains(got, `windows11-qemu.sh`) {
+				t.Fatalf("expected wrapper script %q to call windows11-qemu.sh", scriptPath)
+			}
+		})
+	}
+
+	virtioScriptPath := "scripts/macos/download-virtio-win-iso.sh"
+	content, err := os.ReadFile(repoPath(t, virtioScriptPath))
+	if err != nil {
+		t.Fatalf("failed to read script %q: %v", virtioScriptPath, err)
+	}
+	if !strings.Contains(string(content), `VIRTIO_WIN_VERSION="`+virtioWinVersion+`"`) {
+		t.Fatalf("expected %q to use virtio-win %s", virtioScriptPath, virtioWinVersion)
 	}
 }
 

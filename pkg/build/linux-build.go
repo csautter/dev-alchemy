@@ -29,3 +29,7 @@ func runQemuUbuntuBuild(config VirtualMachineConfig, relativeScriptPath string) 
 func RunQemuUbuntuBuildOnLinux(config VirtualMachineConfig) error {
 	return runQemuUbuntuBuild(config, "build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh")
 }
+
+func RunQemuWindowsBuildOnLinux(config VirtualMachineConfig) error {
+	return runQemuWindowsBuild(config, "build/packer/windows/windows11-on-linux.sh")
+}

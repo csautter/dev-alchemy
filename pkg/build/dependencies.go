@@ -207,28 +207,13 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 
 // bootstrapPythonEnv ensures the Python virtual environment at workdir/.venv exists
 // and has playwright and playwright-stealth installed, then installs the Chromium browser.
-// pythonExe is the system Python executable used only when the venv does not yet exist.
+// pythonExe is the system Python executable used to create or repair the venv.
 func bootstrapPythonEnv(workdir, pythonExe string) error {
-	venvDir := filepath.Join(workdir, ".venv")
-	if _, err := os.Stat(venvDir); os.IsNotExist(err) {
-		log.Printf("Creating Python virtual environment for Windows 11 download script")
-		if _, err = RunCliCommand(workdir, pythonExe, []string{"-m", "venv", ".venv"}); err != nil {
-			return fmt.Errorf("failed to create Python venv: %w", err)
-		}
-	} else if err != nil {
+	if err := ensurePythonVenv(workdir, pythonExe); err != nil {
 		return err
-	} else {
-		log.Printf("Python virtual environment for Windows 11 download script already exists")
 	}
 
-	pipPath := filepath.Join(workdir, ".venv", "Scripts", "pip.exe")
-	if runtime.GOOS != "windows" {
-		pipPath = filepath.Join(workdir, ".venv", "bin", "pip")
-	}
-	venvPython := filepath.Join(workdir, ".venv", "Scripts", "python.exe")
-	if runtime.GOOS != "windows" {
-		venvPython = filepath.Join(workdir, ".venv", "bin", "python3")
-	}
+	venvPython, pipPath := pythonVenvExecutablePaths(workdir)
 
 	log.Printf("Installing required Python packages for Windows 11 download script")
 	if _, err := RunCliCommand(workdir, pipPath, []string{"install", "-r", "requirements.txt"}); err != nil {
@@ -241,6 +226,75 @@ func bootstrapPythonEnv(workdir, pythonExe string) error {
 	}
 
 	return nil
+}
+
+func ensurePythonVenv(workdir, pythonExe string) error {
+	venvDir := filepath.Join(workdir, ".venv")
+	if _, err := os.Stat(venvDir); os.IsNotExist(err) {
+		log.Printf("Creating Python virtual environment for Windows 11 download script")
+		if _, err = RunCliCommand(workdir, pythonExe, []string{"-m", "venv", ".venv"}); err != nil {
+			return fmt.Errorf("failed to create Python venv: %w", err)
+		}
+	} else if err != nil {
+		return err
+	} else {
+		log.Printf("Python virtual environment for Windows 11 download script already exists")
+		missing, err := missingPythonVenvExecutables(workdir)
+		if err != nil {
+			return err
+		}
+		if len(missing) > 0 {
+			log.Printf("Python virtual environment for Windows 11 download script is incomplete; missing %s; recreating", strings.Join(missing, ", "))
+			if err := os.RemoveAll(venvDir); err != nil {
+				return fmt.Errorf("failed to remove incomplete Python venv: %w", err)
+			}
+			if _, err := RunCliCommand(workdir, pythonExe, []string{"-m", "venv", ".venv"}); err != nil {
+				return fmt.Errorf("failed to recreate Python venv: %w", err)
+			}
+		}
+	}
+
+	missing, err := missingPythonVenvExecutables(workdir)
+	if err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("Python venv is missing required executables after creation: %s", strings.Join(missing, ", "))
+	}
+
+	return nil
+}
+
+func pythonVenvExecutablePaths(workdir string) (venvPython, pipPath string) {
+	pipPath = filepath.Join(workdir, ".venv", "Scripts", "pip.exe")
+	if runtime.GOOS != "windows" {
+		pipPath = filepath.Join(workdir, ".venv", "bin", "pip")
+	}
+	venvPython = filepath.Join(workdir, ".venv", "Scripts", "python.exe")
+	if runtime.GOOS != "windows" {
+		venvPython = filepath.Join(workdir, ".venv", "bin", "python3")
+	}
+
+	return venvPython, pipPath
+}
+
+func missingPythonVenvExecutables(workdir string) ([]string, error) {
+	venvPython, pipPath := pythonVenvExecutablePaths(workdir)
+	var missing []string
+	for _, path := range []string{venvPython, pipPath} {
+		info, err := os.Stat(path)
+		if os.IsNotExist(err) {
+			missing = append(missing, path)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to inspect Python venv executable %s: %w", path, err)
+		}
+		if info.IsDir() {
+			missing = append(missing, path)
+		}
+	}
+	return missing, nil
 }
 
 func getWindows11Download(arch string, savePath string, download bool) (string, error) {
@@ -344,9 +398,21 @@ func getWebFileDependencies() []WebFileDependency {
 				},
 				{
 					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
+				{
+					OS:                   "windows11",
 					Arch:                 "arm64",
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
 				},
 			},
 		},
@@ -381,6 +447,12 @@ func getWebFileDependencies() []WebFileDependency {
 					HostOs:               HostOsWindows,
 					VirtualizationEngine: VirtualizationEngineVirtualBox,
 				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
 			},
 		},
 		{
@@ -395,6 +467,12 @@ func getWebFileDependencies() []WebFileDependency {
 					Arch:                 "arm64",
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
 				},
 			},
 		},
@@ -411,6 +489,12 @@ func getWebFileDependencies() []WebFileDependency {
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
 				},
+				{
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
 			},
 		},
 		{
@@ -423,6 +507,12 @@ func getWebFileDependencies() []WebFileDependency {
 					Arch:                 "arm64",
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
 				},
 			},
 		},

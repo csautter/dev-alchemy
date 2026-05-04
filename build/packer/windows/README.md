@@ -2,13 +2,13 @@
 
 ## Build Windows on Windows Hosts
 
-This directory contains the Packer templates for building Windows 11 images on Windows and macOS hosts.
+This directory contains the Packer templates for building Windows 11 images on Windows, macOS, and Linux hosts.
 
 ### Prerequisites
 
 - [Packer](https://www.packer.io/downloads) installed
-- Windows host or compatible environment
-- For repository-managed host dependencies, run `alchemy` on macOS or `alchemy.exe` on Windows from repo root before building.
+- Windows, macOS, or Linux host with a compatible virtualization backend
+- For repository-managed host dependencies, run `alchemy install` on macOS/Linux or `alchemy.exe install` on Windows from repo root before building.
 
 ### Usage
 
@@ -43,7 +43,7 @@ Default for packer is `6`.
 
 ### Output
 
-## Build Windows on macOS Hosts
+## Build Windows on macOS or Linux Hosts
 
 The windows VM build process is fully automated and includes installation of:
 
@@ -52,25 +52,25 @@ The windows VM build process is fully automated and includes installation of:
 - Qemu Guest Additions
 - WinRM enabled
 - SSH server installed
-- UTM VM
+- UTM VM on macOS or libvirt VM on Linux
 
 ### run build and create
 
-After running following commands, the Windows 11 VM will be available in UTM.
+After running following commands, the Windows 11 VM will be available in UTM on macOS or libvirt on Linux.
 Every command may take a while to finish. If something goes wrong, please check the logs and retry.
 The process is idempotent, so you can re-run commands without issues.
 
 ```bash
 arch=arm64 # or amd64
-export DEV_ALCHEMY_APP_DATA_DIR="${DEV_ALCHEMY_APP_DATA_DIR:-$HOME/Library/Application Support/dev-alchemy}"
 alchemy install
 alchemy build windows11 --arch $arch
 alchemy create windows11 --arch $arch
 ```
 
-Start the VM in UTM and provision it from repository root with the unified wrapper:
+Start the VM in UTM, virt-manager, or via the CLI and provision it from repository root with the unified wrapper:
 
 ```bash
+alchemy start windows11 --arch $arch
 alchemy provision windows11 --arch $arch --check
 alchemy provision windows11 --arch $arch
 ```
@@ -80,6 +80,9 @@ Set the required WinRM credentials in project-root `.env` or process environment
 ```dotenv
 UTM_WINDOWS_ANSIBLE_USER=Administrator
 UTM_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
+# On Linux/libvirt use:
+LIBVIRT_WINDOWS_ANSIBLE_USER=Administrator
+LIBVIRT_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
 ```
 
 ### Security Note

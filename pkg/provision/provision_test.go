@@ -1184,6 +1184,44 @@ func TestLoadWindowsUtmAnsibleConnectionConfig_UsesDotEnvValues(t *testing.T) {
 	}
 }
 
+func TestLoadWindowsLibvirtAnsibleConnectionConfig_UsesDotEnvValues(t *testing.T) {
+	projectDir := t.TempDir()
+	dotEnvPath := filepath.Join(projectDir, ".env")
+
+	content := strings.Join([]string{
+		libvirtWindowsAnsibleUserEnvVar + "=Administrator",
+		libvirtWindowsAnsiblePasswordEnvVar + "='P@ssw0rd! with spaces'",
+		libvirtWindowsAnsibleConnectionEnvVar + "=winrm",
+		libvirtWindowsAnsibleWinrmTransportEnvVar + "=basic",
+		libvirtWindowsAnsiblePortEnvVar + "=5985",
+		"",
+	}, "\n")
+	if err := os.WriteFile(dotEnvPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to create .env fixture: %v", err)
+	}
+
+	connectionConfig, err := loadWindowsLibvirtAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		t.Fatalf("loadWindowsLibvirtAnsibleConnectionConfig returned error: %v", err)
+	}
+
+	if connectionConfig.User != "Administrator" {
+		t.Fatalf("expected user from .env, got %q", connectionConfig.User)
+	}
+	if connectionConfig.Password != "P@ssw0rd! with spaces" {
+		t.Fatalf("expected password from .env, got %q", connectionConfig.Password)
+	}
+	if connectionConfig.Connection != "winrm" {
+		t.Fatalf("expected connection from .env, got %q", connectionConfig.Connection)
+	}
+	if connectionConfig.WinrmTransport != "basic" {
+		t.Fatalf("expected winrm transport from .env, got %q", connectionConfig.WinrmTransport)
+	}
+	if connectionConfig.Port != "5985" {
+		t.Fatalf("expected port from .env, got %q", connectionConfig.Port)
+	}
+}
+
 func TestLoadWindowsHypervAnsibleConnectionConfig_EnvOverridesDotEnv(t *testing.T) {
 	projectDir := t.TempDir()
 	dotEnvPath := filepath.Join(projectDir, ".env")
@@ -1245,6 +1283,21 @@ func TestLoadWindowsUtmAnsibleConnectionConfig_ReturnsErrorWhenRequiredValuesMis
 		t.Fatalf("expected missing user env var name in error, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), utmWindowsAnsiblePasswordEnvVar) {
+		t.Fatalf("expected missing password env var name in error, got: %v", err)
+	}
+}
+
+func TestLoadWindowsLibvirtAnsibleConnectionConfig_ReturnsErrorWhenRequiredValuesMissing(t *testing.T) {
+	projectDir := t.TempDir()
+
+	_, err := loadWindowsLibvirtAnsibleConnectionConfig(projectDir)
+	if err == nil {
+		t.Fatal("expected missing configuration to return an error")
+	}
+	if !strings.Contains(err.Error(), libvirtWindowsAnsibleUserEnvVar) {
+		t.Fatalf("expected missing user env var name in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), libvirtWindowsAnsiblePasswordEnvVar) {
 		t.Fatalf("expected missing password env var name in error, got: %v", err)
 	}
 }

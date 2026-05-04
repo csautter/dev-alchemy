@@ -41,11 +41,11 @@ The project currently supports these host-to-target workflows:
 | --- | --- |
 | **macOS** | Managed workflows for **macOS** (Tart), **Ubuntu** (UTM), and **Windows 11** (UTM) |
 | **Windows** | Managed workflows for **Ubuntu** (Hyper-V) and **Windows 11** (Hyper-V, plus VirtualBox as unstable) |
-| **Linux** | Managed workflows for **Ubuntu** with native **QEMU/KVM** via **libvirt/virt-manager**, plus direct Ansible runs and Docker-based Linux testing |
+| **Linux** | Managed workflows for **Ubuntu** and **Windows 11** with native **QEMU/KVM** via **libvirt/virt-manager**, plus direct Ansible runs and Docker-based Linux testing |
 
 This means Dev Alchemy can cover every currently supported guest OS family on a
-**macOS host**, and every currently supported family except **macOS** on a
-**Windows host**.
+**macOS** host, and every currently supported family except
+**macOS** on a **Windows host** or **Linux** host.
 
 Use the built-in discovery commands to see the exact combinations available on
 your current machine:

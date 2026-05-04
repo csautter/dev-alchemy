@@ -95,11 +95,14 @@ install_linux_packages() {
 		libvirt-daemon-system
 		packer
 		python3
+		python3-winrm
+		python3-venv
 		qemu-efi-aarch64
 		qemu-system-arm
 		qemu-system-x86
 		qemu-utils
 		sshpass
+		swtpm
 		tar
 		virt-manager
 		virtinst

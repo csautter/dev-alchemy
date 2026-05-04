@@ -49,10 +49,10 @@ func TestCurrentHostVirtualizationEngines(t *testing.T) {
 	}
 }
 
-func TestLinuxHostUbuntuQemuConfigs(t *testing.T) {
+func TestLinuxHostQemuConfigs(t *testing.T) {
 	configs := AvailableVirtualMachineConfigsForHostOS(HostOsLinux)
-	if len(configs) != 4 {
-		t.Fatalf("expected 4 linux build configs, got %d", len(configs))
+	if len(configs) != 6 {
+		t.Fatalf("expected 6 linux build configs, got %d", len(configs))
 	}
 
 	want := map[string]bool{
@@ -60,6 +60,8 @@ func TestLinuxHostUbuntuQemuConfigs(t *testing.T) {
 		"ubuntu/server/arm64/qemu":  false,
 		"ubuntu/desktop/amd64/qemu": false,
 		"ubuntu/desktop/arm64/qemu": false,
+		"windows11//amd64/qemu":     false,
+		"windows11//arm64/qemu":     false,
 	}
 
 	for _, config := range configs {

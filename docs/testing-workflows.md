@@ -174,6 +174,59 @@ Related guide:
 
 - [Ubuntu Packer README](../build/packer/linux/ubuntu/README.md)
 
+### Windows on Linux with QEMU/KVM and virt-manager
+
+Install host dependencies first:
+
+```bash
+alchemy install
+```
+
+Build and create the Windows 11 VM:
+
+```bash
+arch=amd64 # or arm64
+alchemy build windows11 --arch "$arch" --headless
+alchemy create windows11 --arch "$arch"
+```
+
+You can then boot the created VM either from `virt-manager` or from the CLI:
+
+```bash
+alchemy start windows11 --arch "$arch"
+```
+
+The lifecycle uses the same libvirt defaults as Ubuntu on Linux: `qemu:///system`
+and managed disks under `/var/tmp/dev-alchemy/libvirt/images` unless
+`DEV_ALCHEMY_LIBVIRT_URI` or `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR` is set.
+
+Set WinRM credentials in project-root `.env` or the process environment:
+
+```dotenv
+LIBVIRT_WINDOWS_ANSIBLE_USER=Administrator
+LIBVIRT_WINDOWS_ANSIBLE_PASSWORD=your-secure-password
+# Optional (defaults shown):
+LIBVIRT_WINDOWS_ANSIBLE_CONNECTION=winrm
+LIBVIRT_WINDOWS_ANSIBLE_WINRM_TRANSPORT=basic
+LIBVIRT_WINDOWS_ANSIBLE_PORT=5985
+```
+
+Provision it from the repository root:
+
+```bash
+alchemy provision windows11 --arch "$arch" --check
+alchemy provision windows11 --arch "$arch"
+alchemy stop windows11 --arch "$arch"
+alchemy destroy windows11 --arch "$arch"
+```
+
+The provision wrapper discovers the libvirt guest IP with `virsh domifaddr`
+and runs `ansible-playbook` with an inline WinRM inventory target.
+
+Related guide:
+
+- [Windows Packer README](../build/packer/windows/README.md)
+
 ## Windows Host Workflows
 
 ### Ubuntu on Windows with Hyper-V

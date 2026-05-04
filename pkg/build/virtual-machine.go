@@ -177,6 +177,30 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			Cpus:                 4,
 			MemoryMB:             8192,
 		},
+		{
+			OS:      "windows11",
+			Arch:    "arm64",
+			VncPort: 5931,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "windows11/qemu-windows11-arm64.qcow2"),
+			},
+			HostOs:               HostOsLinux,
+			VirtualizationEngine: VirtualizationEngineQemu,
+			Cpus:                 4,
+			MemoryMB:             8192,
+		},
+		{
+			OS:      "windows11",
+			Arch:    "amd64",
+			VncPort: 5932,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "windows11/qemu-windows11-amd64.qcow2"),
+			},
+			HostOs:               HostOsLinux,
+			VirtualizationEngine: VirtualizationEngineQemu,
+			Cpus:                 4,
+			MemoryMB:             8192,
+		},
 		// Host OS Windows builds
 		{
 			OS:      "windows11",

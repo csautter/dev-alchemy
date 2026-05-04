@@ -7,6 +7,24 @@ packer {
   }
 }
 
+variable "host_arch" {
+  type        = string
+  description = "Normalized host architecture: amd64 or arm64."
+  validation {
+    condition     = var.host_arch == "amd64" || var.host_arch == "arm64"
+    error_message = "The variable host_arch must be either 'amd64' or 'arm64'."
+  }
+}
+
+variable "host_os" {
+  type        = string
+  description = "Normalized host OS: linux or darwin."
+  validation {
+    condition     = var.host_os == "linux" || var.host_os == "darwin"
+    error_message = "The variable host_os must be either 'linux' or 'darwin'."
+  }
+}
+
 variable "arch" {
   type        = string
   default     = "amd64"
@@ -23,7 +41,12 @@ variable "iso_url" {
   description = "Path to Windows 11 ISO. If empty, will be set by arch."
 }
 
-# Set to true to run QEMU in headless mode (no GUI)
+variable "use_hardware_acceleration" {
+  type        = bool
+  default     = true
+  description = "Whether to use hardware acceleration when the host can support it."
+}
+
 variable "headless" {
   type    = bool
   default = false
@@ -58,7 +81,7 @@ variable "cache_dir" {
 variable "build_output_dir" {
   type        = string
   default     = ""
-  description = "Optional short-lived Packer output directory to avoid long UNIX socket paths on macOS."
+  description = "Optional short-lived Packer output directory."
 }
 
 variable "is_ci" {
@@ -68,15 +91,33 @@ variable "is_ci" {
 
 locals {
   cache_directory = var.cache_dir
+  host_is_linux   = var.host_os == "linux"
+  host_is_darwin  = var.host_os == "darwin"
+  host_same_arch  = var.host_arch == var.arch
+
   win11_default_iso = {
     amd64 = "${local.cache_directory}/windows11/iso/win11_25h2_english_amd64.iso"
-    arm64 = "${local.cache_directory}/windows11/iso/Win11_25H2_English_arm64.iso"
+    arm64 = "${local.cache_directory}/windows11/iso/Win11_ARM64_Unattended.iso"
   }
   win11_iso         = var.iso_url != "" ? var.iso_url : local.win11_default_iso[var.arch]
   win11_qcow2       = "${local.cache_directory}/windows11/qemu-windows11-${var.arch}.qcow2"
   win11_guest_tools = "${local.cache_directory}/utm/utm-guest-tools-latest.iso"
   win11_virtio_iso  = "${local.cache_directory}/windows/virtio-win.iso"
   win11_uefi_bios   = "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+
+  amd64_can_use_native_acceleration = local.host_is_linux && local.host_same_arch && var.use_hardware_acceleration
+  amd64_accelerator                 = local.amd64_can_use_native_acceleration ? "kvm" : "tcg"
+  amd64_cpu_model                   = local.amd64_can_use_native_acceleration ? "host" : "Haswell"
+
+  arm64_can_use_linux_acceleration  = local.host_is_linux && local.host_same_arch && var.use_hardware_acceleration
+  arm64_can_use_darwin_acceleration = local.host_is_darwin && local.host_same_arch && var.use_hardware_acceleration && !var.is_ci
+  arm64_can_use_native_acceleration = local.arm64_can_use_linux_acceleration || local.arm64_can_use_darwin_acceleration
+  arm64_native_accelerator          = local.host_is_darwin ? "hvf" : "kvm"
+  arm64_accelerator                 = local.arm64_can_use_native_acceleration ? local.arm64_native_accelerator : "tcg,thread=multi,tb-size=512"
+  arm64_cpu_model                   = local.arm64_can_use_native_acceleration ? "host" : "max,sve=off,sme=off,pauth-impdef=on"
+
+  qemu_display = local.host_is_darwin && !var.headless ? "cocoa" : "none"
+
   qemu_args = {
     "amd64" = [
       ["-device", "qemu-xhci,id=usb"],
@@ -90,13 +131,9 @@ locals {
       ["-k", "de"]
     ],
     "arm64" = [
-      ["-accel", var.is_ci ? "tcg,thread=multi,tb-size=512" : "hvf"],
+      ["-accel", local.arm64_accelerator],
       ["-machine", "virt,highmem=on"],
-      # max cpu model is best choice here:
-      # pmu=off is causing issues while loading windows 11 arm64 setup
-      ["-cpu", var.is_ci ? "max,sve=off,sme=off,pauth-impdef=on" : "host"],
-      # setting a specific cpu model leads to issues, therefore using max above
-      # ["-cpu", var.is_ci ? "cortex-a72" : "host"],
+      ["-cpu", local.arm64_cpu_model],
       ["-bios", "${local.win11_uefi_bios}"],
       ["-device", "ramfb"],
       ["-device", "qemu-xhci"],
@@ -109,7 +146,7 @@ locals {
       ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=3"],
       ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${local.win11_guest_tools},readonly=true"],
       ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=1"],
-      ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${local.cache_directory}/windows11/qemu-windows11-arm64.qcow2,discard=unmap,detect-zeroes=unmap"],
+      ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${local.win11_qcow2},discard=unmap,detect-zeroes=unmap"],
       ["-boot", "order=c,menu=on"],
       ["-k", "de"]
     ]
@@ -123,7 +160,7 @@ source "qemu" "win11" {
   iso_url          = local.win11_iso
   iso_checksum     = "none"
   output_directory = var.build_output_dir != "" ? var.build_output_dir : "${local.cache_directory}/windows11/qemu-out-windows11-${var.arch}"
-  display          = var.headless ? "none" : "cocoa"
+  display          = local.qemu_display
   memory           = var.memory
   cores            = var.cpus
   vnc_bind_address = "127.0.0.1"
@@ -147,10 +184,9 @@ source "qemu" "win11" {
   shutdown_command        = "shutdown /s /t 60 /f /d p:4:1 /c \"Packer Shutdown\""
   shutdown_timeout        = "10m"
 
-  # Arch-specific config
   machine_type   = var.arch == "amd64" ? "q35" : null
-  accelerator    = var.arch == "amd64" ? "tcg" : null
-  cpu_model      = var.arch == "amd64" ? "Haswell" : null
+  accelerator    = var.arch == "amd64" ? local.amd64_accelerator : null
+  cpu_model      = var.arch == "amd64" ? local.amd64_cpu_model : null
   qemu_binary    = var.arch == "arm64" ? "qemu-system-aarch64" : "qemu-system-x86_64"
   disk_size      = "64G"
   disk_interface = var.arch == "amd64" ? "ide" : null
@@ -163,7 +199,6 @@ source "qemu" "win11" {
 
   qemuargs = local.qemu_args[var.arch]
 }
-
 
 build {
   sources = ["source.qemu.win11"]

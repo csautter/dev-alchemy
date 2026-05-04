@@ -39,7 +39,7 @@ func isBuildSupported(vm alchemy_build.VirtualMachineConfig) bool {
 		}
 	case alchemy_build.HostOsLinux:
 		return vm.VirtualizationEngine == alchemy_build.VirtualizationEngineQemu &&
-			vm.OS == "ubuntu"
+			(vm.OS == "ubuntu" || vm.OS == "windows11")
 	default:
 		return false
 	}
@@ -221,6 +221,9 @@ func runBuild(vm alchemy_build.VirtualMachineConfig) error {
 		case alchemy_build.VirtualizationEngineQemu:
 			if vm.OS == "ubuntu" {
 				return alchemy_build.RunQemuUbuntuBuildOnLinux(vm)
+			}
+			if vm.OS == "windows11" {
+				return alchemy_build.RunQemuWindowsBuildOnLinux(vm)
 			}
 		}
 	}

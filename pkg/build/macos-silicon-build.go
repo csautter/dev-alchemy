@@ -10,11 +10,15 @@ func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) error {
 }
 
 func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) error {
-	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/windows/windows11-on-macos.sh")
+	return runQemuWindowsBuild(config, "build/packer/windows/windows11-on-macos.sh")
+}
+
+func runQemuWindowsBuild(config VirtualMachineConfig, relativeScriptPath string) error {
+	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, relativeScriptPath)
 	args := []string{
 		scriptPath,
 		"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir,
-		"--build-output-dir", getDarwinQemuBuildOutputDir(config),
+		"--build-output-dir", getQemuBuildOutputDir(config),
 		"--arch", config.Arch,
 		"--vnc-port", fmt.Sprintf("%d", config.VncPort),
 		"--cpus", getVmCpuCountString(config),
