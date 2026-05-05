@@ -9,6 +9,7 @@ cpus="4"
 memory="4096"
 verbose="false"
 build_output_dir=""
+artifact_output_path=""
 use_hardware_acceleration="true"
 
 script_dir=$(
@@ -241,6 +242,15 @@ while [[ $# -gt 0 ]]; do
 			exit 1
 		fi
 		;;
+	--artifact-output-path)
+		if [[ -n "$2" ]]; then
+			artifact_output_path="$2"
+			shift 2
+		else
+			echo "Invalid value for --artifact-output-path: $2." >&2
+			exit 1
+		fi
+		;;
 	--verbose)
 		set -x
 		verbose="true"
@@ -333,10 +343,13 @@ if [[ "$arch" == "arm64" ]]; then
 fi
 
 echo "Creating QCOW2 disk image..."
-mkdir -p "${cache_dir}/windows11"
-rm -f "${cache_dir}/windows11/qemu-windows11-${arch}.qcow2"
-qemu-img create -f qcow2 -o compression_type=zstd "${cache_dir}/windows11/qemu-windows11-${arch}.qcow2" 64G
-qemu-img info "${cache_dir}/windows11/qemu-windows11-${arch}.qcow2"
+if [[ -z "$artifact_output_path" ]]; then
+	artifact_output_path="${cache_dir}/windows11/qemu-windows11-${arch}.qcow2"
+fi
+mkdir -p "$(dirname "$artifact_output_path")"
+rm -f "$artifact_output_path"
+qemu-img create -f qcow2 -o compression_type=zstd "$artifact_output_path" 64G
+qemu-img info "$artifact_output_path"
 
 packer_file="build/packer/windows/windows11-qemu.pkr.hcl"
 packer init "$packer_file"
@@ -365,6 +378,7 @@ packer build \
 	-var "use_hardware_acceleration=${use_hardware_acceleration}" \
 	-var "cache_dir=${cache_dir}" \
 	-var "build_output_dir=${build_output_dir}" \
+	-var "artifact_output_path=${artifact_output_path}" \
 	-var "iso_url=${win11_iso_path}" \
 	-var "headless=${headless}" \
 	-var "vnc_port=${vnc_port}" \

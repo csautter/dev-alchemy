@@ -60,6 +60,12 @@ variable "cache_dir" {
   }
 }
 
+variable "artifact_output_path" {
+  type        = string
+  default     = ""
+  description = "Optional Vagrant box artifact path. Used to stage no-cache rebuilds before promotion."
+}
+
 locals {
   default_ubuntu_iso_url = "https://releases.ubuntu.com/${var.ubuntu_version}/ubuntu-${var.ubuntu_version}-live-server-amd64.iso"
   effective_iso_url      = var.iso_url != "" ? var.iso_url : local.default_ubuntu_iso_url
@@ -72,7 +78,7 @@ locals {
     "<f10><wait>",
   ]
   output_directory = "${var.cache_dir}/linux/hyperv-ubuntu-${var.ubuntu_type}-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
-  box_output       = "${var.cache_dir}/ubuntu/hyperv-ubuntu-${var.ubuntu_type}-amd64.box"
+  box_output       = var.artifact_output_path != "" ? var.artifact_output_path : "${var.cache_dir}/ubuntu/hyperv-ubuntu-${var.ubuntu_type}-amd64.box"
 }
 
 source "hyperv-iso" "ubuntu" {

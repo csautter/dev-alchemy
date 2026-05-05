@@ -32,6 +32,7 @@ type VirtualMachineConfig struct {
 	VncPort                int
 	Slug                   string
 	ExpectedBuildArtifacts []string
+	StagedBuildArtifacts   []string
 	NoCache                bool
 	HostOs                 HostOsType
 	VirtualizationEngine   VirtualizationEngine

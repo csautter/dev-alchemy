@@ -103,6 +103,12 @@ variable "build_output_dir" {
   description = "Optional short-lived Packer output directory."
 }
 
+variable "artifact_output_path" {
+  type        = string
+  default     = ""
+  description = "Optional QCOW2 artifact path. Used to stage no-cache rebuilds before promotion."
+}
+
 locals {
   iso_url             = var.iso_url
   ubuntu_iso_checksum = var.iso_checksum
@@ -172,7 +178,7 @@ locals {
       ["-device", "virtio-blk-pci,drive=cdrom,bootindex=1"],
       ["-drive", "if=none,id=cdrom,media=cdrom,file=${local.iso_url},readonly=true"],
       ["-device", "virtio-blk-pci,drive=disk,serial=deadbeef,bootindex=0"],
-      ["-drive", "if=none,media=disk,id=disk,format=qcow2,file.filename=${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2,discard=unmap,detect-zeroes=unmap"],
+      ["-drive", "if=none,media=disk,id=disk,format=qcow2,file.filename=${local.ubuntu_qcow2},discard=unmap,detect-zeroes=unmap"],
       ["-drive", "if=none,id=cidata,format=raw,file=${path.root}/cloud-init/qemu-${var.ubuntu_type}/cidata.iso,readonly=true"],
       ["-device", "virtio-blk-pci,drive=cidata"],
     ]
@@ -180,6 +186,7 @@ locals {
 
   left_list        = join("", [for i in range(0, 16) : "<left>"])
   output_directory = var.build_output_dir != "" ? var.build_output_dir : "${local.cache_directory}/ubuntu/qemu-out-ubuntu-${var.ubuntu_type}-${var.arch}"
+  ubuntu_qcow2     = var.artifact_output_path != "" ? var.artifact_output_path : "${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2"
 
   # Packages are installed via Packer provisioners (instead of cloud-init) to
   # improve reliability under cross-architecture TCG emulation where the
@@ -289,8 +296,8 @@ build {
   post-processor "shell-local" {
     inline = var.arch == "amd64" ? [
       "echo 'Exporting QCOW2 image...'",
-      "mkdir -p \"${local.cache_directory}/ubuntu\"",
-      "cp \"${local.output_directory}\"/linux-ubuntu-${var.ubuntu_type}-packer-* \"${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2\"",
+      "mkdir -p \"$(dirname \"${local.ubuntu_qcow2}\")\"",
+      "cp \"${local.output_directory}\"/linux-ubuntu-${var.ubuntu_type}-packer-* \"${local.ubuntu_qcow2}\"",
       "echo 'Export completed.'"
       ] : [
       "echo 'No export needed for arm64 architecture.'"

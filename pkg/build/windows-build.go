@@ -62,6 +62,12 @@ func RunVirtualBoxWindowsBuildOnWindows(config VirtualMachineConfig) error {
 
 // runWindowsBuild executes the Packer build process for Windows VMs.
 func runWindowsBuild(config VirtualMachineConfig, packerFile string) error {
+	var err error
+	config, err = withStagedBuildArtifactsForNoCache(config)
+	if err != nil {
+		return err
+	}
+
 	// Initialize Packer with the specified configuration file
 	if err := initializePacker(config, packerFile); err != nil {
 		return fmt.Errorf("failed to initialize packer: %w", err)
@@ -102,8 +108,11 @@ func buildPackerArgs(config VirtualMachineConfig, packerFile string) []string {
 		"-var", fmt.Sprintf("cache_dir=%s", GetDirectoriesInstance().CacheDir),
 		"-var", fmt.Sprintf("cpus=%s", getVmCpuCountString(config)),
 		"-var", fmt.Sprintf("memory=%d", getVmMemoryMB(config)),
-		packerFile,
 	)
+	if stagedArtifact, ok := firstStagedBuildArtifact(config); ok {
+		args = append(args, "-var", fmt.Sprintf("artifact_output_path=%s", stagedArtifact))
+	}
+	args = append(args, packerFile)
 
 	return args
 }

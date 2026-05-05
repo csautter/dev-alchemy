@@ -44,8 +44,15 @@ variable "cache_dir" {
   }
 }
 
+variable "artifact_output_path" {
+  type        = string
+  default     = ""
+  description = "Optional Vagrant box artifact path. Used to stage no-cache rebuilds before promotion."
+}
+
 locals {
-  temp_dir = var.temp_disk_path != "" ? var.temp_disk_path : "${var.cache_dir}/windows11/hyperv-temp"
+  temp_dir   = var.temp_disk_path != "" ? var.temp_disk_path : "${var.cache_dir}/windows11/hyperv-temp"
+  box_output = var.artifact_output_path != "" ? var.artifact_output_path : "${var.cache_dir}/windows11/hyperv-windows11-amd64.box"
 }
 
 source "hyperv-iso" "win11" {
@@ -96,7 +103,7 @@ build {
   sources = ["source.hyperv-iso.win11"]
 
   post-processor "vagrant" {
-    output              = "${var.cache_dir}/windows11/hyperv-windows11-amd64.box"
+    output              = local.box_output
     keep_input_artifact = false
     provider_override   = "hyperv"
     compression_level   = 1

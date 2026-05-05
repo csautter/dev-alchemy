@@ -11,6 +11,7 @@ cpus="4"
 memory="4096"
 verbose="false"
 build_output_dir=""
+artifact_output_path=""
 packer_start_only="${DEV_ALCHEMY_PACKER_START_ONLY:-false}"
 packer_start_timeout="${DEV_ALCHEMY_PACKER_START_TIMEOUT:-180}"
 
@@ -111,9 +112,10 @@ run_packer_build() {
 		-var "host_os=darwin" \
 		-var "host_arch=$host_arch" \
 		-var "use_hardware_acceleration=true" \
-		-var "cache_dir=$effective_cache_dir" \
-		-var "build_output_dir=$build_output_dir" \
-		-var "iso_url=$iso_path" \
+			-var "cache_dir=$effective_cache_dir" \
+			-var "build_output_dir=$build_output_dir" \
+			-var "artifact_output_path=$artifact_output_path" \
+			-var "iso_url=$iso_path" \
 		-var "iso_checksum=sha256:$iso_checksum" \
 		-var "ubuntu_type=$ubuntu_type" \
 		-var "headless=$headless" \
@@ -257,20 +259,29 @@ while [[ $# -gt 0 ]]; do
 			exit 1
 		fi
 		;;
-	--build-output-dir)
-		if [[ -n "$2" ]]; then
-			build_output_dir="$2"
-			shift 2
-		else
-			echo "Invalid value for --build-output-dir: $2." >&2
-			exit 1
-		fi
-		;;
-	--verbose)
-		set -x
-		verbose="true"
-		shift
-		;;
+		--build-output-dir)
+			if [[ -n "$2" ]]; then
+				build_output_dir="$2"
+				shift 2
+			else
+				echo "Invalid value for --build-output-dir: $2." >&2
+				exit 1
+			fi
+			;;
+		--artifact-output-path)
+			if [[ -n "$2" ]]; then
+				artifact_output_path="$2"
+				shift 2
+			else
+				echo "Invalid value for --artifact-output-path: $2." >&2
+				exit 1
+			fi
+			;;
+		--verbose)
+			set -x
+			verbose="true"
+			shift
+			;;
 	--packer-start-only)
 		packer_start_only="true"
 		shift
@@ -357,6 +368,9 @@ fi
 
 iso_path="$cache_dir/linux/ubuntu-${UBUNTU_LIVE_SERVER_AMD64_VERSION}-live-server-amd64.iso"
 iso_checksum="${UBUNTU_LIVE_SERVER_AMD64_SHA256}"
+if [[ -z "$artifact_output_path" ]]; then
+	artifact_output_path="$effective_cache_dir/ubuntu/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2"
+fi
 if [[ "$arch" == "arm64" ]]; then
 	iso_path="$cache_dir/linux/ubuntu-${UBUNTU_LIVE_SERVER_ARM64_VERSION}-live-server-arm64.iso"
 	iso_url="https://cdimage.ubuntu.com/releases/${UBUNTU_LIVE_SERVER_ARM64_VERSION}/release/ubuntu-${UBUNTU_LIVE_SERVER_ARM64_VERSION}-live-server-arm64.iso"
@@ -381,12 +395,12 @@ fi
 
 if [[ "$arch" == "arm64" ]]; then
 	echo "Creating QCOW2 disk image..."
-	output_directory="$effective_cache_dir/ubuntu"
+	output_directory="$(dirname "$artifact_output_path")"
 	mkdir -p "$output_directory"
 	echo "Removing existing QCOW2 disk image if it exists..."
-	rm -f "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2"
-	qemu-img create -f qcow2 -o compression_type=zstd "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2" 64G
-	qemu-img info "$output_directory/qemu-ubuntu-${ubuntu_type}-packer-${arch}.qcow2"
+	rm -f "$artifact_output_path"
+	qemu-img create -f qcow2 -o compression_type=zstd "$artifact_output_path" 64G
+	qemu-img info "$artifact_output_path"
 fi
 
 if [[ "$arch" == "arm64" ]]; then

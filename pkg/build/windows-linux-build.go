@@ -10,6 +10,11 @@ const (
 
 // RunHypervUbuntuBuildOnWindows builds an Ubuntu VM using Hyper-V on Windows.
 func RunHypervUbuntuBuildOnWindows(config VirtualMachineConfig) error {
+	config, err := withStagedBuildArtifactsForNoCache(config)
+	if err != nil {
+		return err
+	}
+
 	if err := initializePacker(config, ubuntuHypervPackerFile); err != nil {
 		return fmt.Errorf("failed to initialize packer: %w", err)
 	}
@@ -23,6 +28,9 @@ func RunHypervUbuntuBuildOnWindows(config VirtualMachineConfig) error {
 		"-var", fmt.Sprintf("cpus=%s", getVmCpuCountString(config)),
 		"-var", fmt.Sprintf("memory=%d", getVmMemoryMB(config)),
 		ubuntuHypervPackerFile,
+	}
+	if stagedArtifact, ok := firstStagedBuildArtifact(config); ok {
+		args = append(args[:len(args)-1], "-var", fmt.Sprintf("artifact_output_path=%s", stagedArtifact), args[len(args)-1])
 	}
 
 	return RunBuildScript(config, packerExecutable, args)

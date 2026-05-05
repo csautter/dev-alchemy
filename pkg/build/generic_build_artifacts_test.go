@@ -337,6 +337,96 @@ func TestPrepareBuildArtifactsForBuildNoCacheRemovesBackupOnSuccess(t *testing.T
 	}
 }
 
+func TestPrepareBuildArtifactsForBuildPromotesStagedArtifactOnSuccess(t *testing.T) {
+	tempDir := t.TempDir()
+	artifact := filepath.Join(tempDir, "artifact-a.qcow2")
+	stagedArtifact := filepath.Join(tempDir, "artifact-a.dev-alchemy-build-1.qcow2")
+
+	if err := os.WriteFile(artifact, []byte("existing"), 0644); err != nil {
+		t.Fatalf("failed to create artifact: %v", err)
+	}
+
+	skip, cleanup, err := prepareBuildArtifactsForBuild(VirtualMachineConfig{
+		ExpectedBuildArtifacts: []string{artifact},
+		StagedBuildArtifacts:   []string{stagedArtifact},
+		NoCache:                true,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if skip {
+		t.Fatal("expected staged no-cache build to proceed")
+	}
+
+	content, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatalf("failed to read original artifact during build: %v", err)
+	}
+	if string(content) != "existing" {
+		t.Fatalf("expected original artifact to remain available during build, got %q", string(content))
+	}
+
+	if err := os.WriteFile(stagedArtifact, []byte("rebuilt"), 0644); err != nil {
+		t.Fatalf("failed to create staged artifact: %v", err)
+	}
+
+	if err := cleanup(true); err != nil {
+		t.Fatalf("expected cleanup to promote staged artifact, got %v", err)
+	}
+
+	content, err = os.ReadFile(artifact)
+	if err != nil {
+		t.Fatalf("failed to read promoted artifact: %v", err)
+	}
+	if string(content) != "rebuilt" {
+		t.Fatalf("expected staged artifact to replace original on success, got %q", string(content))
+	}
+	if _, err := os.Stat(stagedArtifact); !os.IsNotExist(err) {
+		t.Fatalf("expected staged artifact to be moved into final location, got err=%v", err)
+	}
+}
+
+func TestPrepareBuildArtifactsForBuildLeavesOriginalArtifactOnStagedFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	artifact := filepath.Join(tempDir, "artifact-a.qcow2")
+	stagedArtifact := filepath.Join(tempDir, "artifact-a.dev-alchemy-build-1.qcow2")
+
+	if err := os.WriteFile(artifact, []byte("existing"), 0644); err != nil {
+		t.Fatalf("failed to create artifact: %v", err)
+	}
+
+	skip, cleanup, err := prepareBuildArtifactsForBuild(VirtualMachineConfig{
+		ExpectedBuildArtifacts: []string{artifact},
+		StagedBuildArtifacts:   []string{stagedArtifact},
+		NoCache:                true,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if skip {
+		t.Fatal("expected staged no-cache build to proceed")
+	}
+
+	if err := os.WriteFile(stagedArtifact, []byte("partial"), 0644); err != nil {
+		t.Fatalf("failed to create staged artifact: %v", err)
+	}
+
+	if err := cleanup(false); err != nil {
+		t.Fatalf("expected cleanup to remove staged artifact, got %v", err)
+	}
+
+	content, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatalf("failed to read original artifact after failed build cleanup: %v", err)
+	}
+	if string(content) != "existing" {
+		t.Fatalf("expected original artifact to remain after failed staged build, got %q", string(content))
+	}
+	if _, err := os.Stat(stagedArtifact); !os.IsNotExist(err) {
+		t.Fatalf("expected failed staged artifact to be removed, got err=%v", err)
+	}
+}
+
 func TestRemoveBuildArtifactsForConfigUsesResolvedArtifacts(t *testing.T) {
 	tempDir := t.TempDir()
 

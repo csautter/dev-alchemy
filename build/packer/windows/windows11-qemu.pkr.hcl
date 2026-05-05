@@ -84,6 +84,12 @@ variable "build_output_dir" {
   description = "Optional short-lived Packer output directory."
 }
 
+variable "artifact_output_path" {
+  type        = string
+  default     = ""
+  description = "Optional QCOW2 artifact path. Used to stage no-cache rebuilds before promotion."
+}
+
 variable "is_ci" {
   type    = bool
   default = env("CI") == "true"
@@ -100,7 +106,7 @@ locals {
     arm64 = "${local.cache_directory}/windows11/iso/Win11_ARM64_Unattended.iso"
   }
   win11_iso         = var.iso_url != "" ? var.iso_url : local.win11_default_iso[var.arch]
-  win11_qcow2       = "${local.cache_directory}/windows11/qemu-windows11-${var.arch}.qcow2"
+  win11_qcow2       = var.artifact_output_path != "" ? var.artifact_output_path : "${local.cache_directory}/windows11/qemu-windows11-${var.arch}.qcow2"
   win11_guest_tools = "${local.cache_directory}/utm/utm-guest-tools-latest.iso"
   win11_virtio_iso  = "${local.cache_directory}/windows/virtio-win.iso"
   win11_uefi_bios   = "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"

@@ -111,8 +111,9 @@ func TestDeferBuildArtifactCleanupUsesFinalBuildSuccessValue(t *testing.T) {
 
 	func() {
 		buildSucceeded := false
-		defer deferBuildArtifactCleanup(func(success bool) {
+		defer deferBuildArtifactCleanup(func(success bool) error {
 			got = success
+			return nil
 		}, &buildSucceeded)()
 
 		buildSucceeded = true

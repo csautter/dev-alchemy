@@ -123,6 +123,8 @@ func TestWindowsQemuTemplateIsSharedAcrossMacOSAndLinux(t *testing.T) {
 				`amd64_accelerator`,
 				`arm64_accelerator`,
 				`qemu_display`,
+				`variable "artifact_output_path"`,
+				`win11_qcow2       = var.artifact_output_path != "" ? var.artifact_output_path`,
 			} {
 				if !strings.Contains(got, want) {
 					t.Fatalf("expected shared Windows QEMU template %q to contain %q", templatePath, want)
@@ -156,6 +158,7 @@ func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
 					`-var "host_os=${host_os}"`,
 					`-var "host_arch=${host_arch}"`,
 					`-var "use_hardware_acceleration=${use_hardware_acceleration}"`,
+					`-var "artifact_output_path=${artifact_output_path}"`,
 				} {
 					if !strings.Contains(got, want) {
 						t.Fatalf("expected script %q to contain %q", scriptPath, want)
@@ -230,8 +233,8 @@ func TestUbuntuPackerTemplatesQuoteShellLocalExportPaths(t *testing.T) {
 			}
 
 			got := string(content)
-			wantQuotedMkdir := "\"mkdir -p \\\"${local.cache_directory}/ubuntu\\\"\""
-			wantQuotedCp := "\"cp \\\"${local.output_directory}\\\"/linux-ubuntu-${var.ubuntu_type}-packer-* \\\"${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2\\\"\""
+			wantQuotedMkdir := "\"mkdir -p \\\"$(dirname \\\"${local.ubuntu_qcow2}\\\")\\\"\""
+			wantQuotedCp := "\"cp \\\"${local.output_directory}\\\"/linux-ubuntu-${var.ubuntu_type}-packer-* \\\"${local.ubuntu_qcow2}\\\"\""
 			oldUnquotedCp := "\"cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2\""
 
 			if !strings.Contains(got, wantQuotedMkdir) {
@@ -413,6 +416,9 @@ func TestQemuWrapperScriptsUseSharedTemplate(t *testing.T) {
 			}
 			if !strings.Contains(got, `-var "host_arch=$host_arch"`) {
 				t.Fatalf("expected script %q to pass the detected host architecture", tc.scriptPath)
+			}
+			if !strings.Contains(got, `-var "artifact_output_path=$artifact_output_path"`) {
+				t.Fatalf("expected script %q to pass an optional staged artifact output path", tc.scriptPath)
 			}
 		})
 	}
