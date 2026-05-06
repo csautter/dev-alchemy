@@ -419,6 +419,8 @@ func TestLinuxLibvirtVirtInstallArgsUseEmulatedArm64Settings(t *testing.T) {
 }
 
 func TestLinuxLibvirtVirtInstallArgsUseWindowsAmd64Devices(t *testing.T) {
+	t.Setenv(linuxLibvirtWindowsVideoEnvVar, "")
+
 	previousLinuxLibvirtRuntimeGOARCH := linuxLibvirtRuntimeGOARCH
 	t.Cleanup(func() {
 		linuxLibvirtRuntimeGOARCH = previousLinuxLibvirtRuntimeGOARCH
@@ -438,7 +440,7 @@ func TestLinuxLibvirtVirtInstallArgsUseWindowsAmd64Devices(t *testing.T) {
 	for _, want := range []string{
 		"--disk path=/tmp/test.qcow2,format=qcow2,bus=sata",
 		"--network user,model=e1000",
-		"--video model.type=qxl",
+		"--video model.type=qxl,model.ram=65536,model.vram=65536,model.vgamem=16384,model.heads=1",
 		"--machine q35",
 	} {
 		if !strings.Contains(joined, want) {
@@ -798,6 +800,8 @@ func TestLinuxLibvirtDiskBus(t *testing.T) {
 }
 
 func TestLinuxLibvirtVideoArg(t *testing.T) {
+	t.Setenv(linuxLibvirtWindowsVideoEnvVar, "")
+
 	if got := linuxLibvirtVideoArg(alchemy_build.VirtualMachineConfig{
 		OS:         "ubuntu",
 		UbuntuType: "desktop",
@@ -825,7 +829,15 @@ func TestLinuxLibvirtVideoArg(t *testing.T) {
 	if got := linuxLibvirtVideoArg(alchemy_build.VirtualMachineConfig{
 		OS:   "windows11",
 		Arch: "amd64",
-	}); got != "model.type=qxl" {
-		t.Fatalf("expected Windows amd64 guests to use qxl video, got %q", got)
+	}); got != "model.type=qxl,model.ram=65536,model.vram=65536,model.vgamem=16384,model.heads=1" {
+		t.Fatalf("expected Windows amd64 guests to use QXL video by default, got %q", got)
+	}
+
+	t.Setenv(linuxLibvirtWindowsVideoEnvVar, "virtio")
+	if got := linuxLibvirtVideoArg(alchemy_build.VirtualMachineConfig{
+		OS:   "windows11",
+		Arch: "amd64",
+	}); got != "model.type=virtio" {
+		t.Fatalf("expected Windows amd64 guests to allow virtio video override, got %q", got)
 	}
 }

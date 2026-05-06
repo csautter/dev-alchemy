@@ -131,6 +131,8 @@ locals {
       ["-drive", "if=none,id=install,format=raw,media=cdrom,file=${local.win11_iso},readonly=true"],
       ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=2"],
       ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${local.win11_guest_tools},readonly=true"],
+      ["-device", "usb-storage,drive=virtio-drivers,removable=true,bootindex=3"],
+      ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${local.win11_virtio_iso},readonly=true"],
       ["-device", "ide-hd,drive=ide0,bootindex=1"],
       ["-drive", "if=none,media=disk,id=ide0,format=qcow2,file.filename=${local.win11_qcow2},discard=unmap,detect-zeroes=unmap"],
       ["-boot", "order=c,menu=on"],

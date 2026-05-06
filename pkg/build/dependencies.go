@@ -504,6 +504,18 @@ func getWebFileDependencies() []WebFileDependency {
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
+				{
+					OS:                   "windows11",
 					Arch:                 "arm64",
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,

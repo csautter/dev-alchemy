@@ -17,6 +17,7 @@ import (
 const (
 	linuxLibvirtURIEnvVar              = "DEV_ALCHEMY_LIBVIRT_URI"
 	linuxLibvirtImageDirEnvVar         = "DEV_ALCHEMY_LIBVIRT_IMAGE_DIR"
+	linuxLibvirtWindowsVideoEnvVar     = "DEV_ALCHEMY_LIBVIRT_WINDOWS_VIDEO"
 	linuxLibvirtDefaultURI             = "qemu:///system"
 	linuxLibvirtSystemImageDir         = "/var/tmp/dev-alchemy/libvirt/images"
 	linuxLibvirtCreateTimeout          = 20 * time.Minute
@@ -676,10 +677,15 @@ func linuxLibvirtDiskBus(config alchemy_build.VirtualMachineConfig) string {
 }
 
 func linuxLibvirtVideoArg(config alchemy_build.VirtualMachineConfig) string {
-	if config.OS == "windows11" && config.Arch == "amd64" {
-		return "model.type=qxl"
+	if config.OS != "windows11" {
+		return "model.type=virtio"
 	}
-	return "model.type=virtio"
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(linuxLibvirtWindowsVideoEnvVar))) {
+	case "virtio":
+		return "model.type=virtio"
+	default:
+		return "model.type=qxl,model.ram=65536,model.vram=65536,model.vgamem=16384,model.heads=1"
+	}
 }
 
 func linuxLibvirtCPUArg(config alchemy_build.VirtualMachineConfig) string {

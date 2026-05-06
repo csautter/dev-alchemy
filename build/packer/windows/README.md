@@ -75,6 +75,12 @@ alchemy provision windows11 --arch $arch --check
 alchemy provision windows11 --arch $arch
 ```
 
+On Linux/libvirt, Windows guests default to QXL video because SPICE auto-resize
+support is most reliable with the QXL display driver and SPICE agent. If a host
+or Windows build has trouble with QXL, set
+`DEV_ALCHEMY_LIBVIRT_WINDOWS_VIDEO=virtio` before `alchemy create`; virtio video
+usually boots cleanly but may not support automatic guest resolution changes.
+
 Set the required WinRM credentials in project-root `.env` or process environment before provisioning:
 
 ```dotenv
