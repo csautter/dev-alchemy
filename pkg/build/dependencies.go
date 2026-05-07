@@ -3,6 +3,7 @@ package build
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -95,6 +96,11 @@ const (
 
 	// renovate: datasource=custom.virtio-win depName=virtio-win versioning=loose
 	virtioWinVersion = "0.1.285-1"
+
+	virtioWinFedoraArchiveURL = "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio"
+	virtioWinMirrorArchiveURL = "https://fedora-virt.repo.nfrance.com/virtio-win/direct-downloads/archive-virtio"
+	virtioWinProbeBytes       = 2 * 1024 * 1024
+	virtioWinProbeTimeout     = 20 * time.Second
 )
 
 func ubuntuLiveServerISOName(arch, version string) string {
@@ -113,16 +119,136 @@ func ubuntuLiveServerISOURL(arch, version string) string {
 	return fmt.Sprintf("https://cdimage.ubuntu.com/releases/%s/release/%s", version, name)
 }
 
-func virtioWinISOURL(version string) string {
+func virtioWinISOFileVersion(version string) string {
 	fileVersion := version
 	if idx := strings.LastIndex(version, "-"); idx > 0 {
 		fileVersion = version[:idx]
 	}
+	return fileVersion
+}
+
+func virtioWinISOFileName(version string) string {
+	return fmt.Sprintf("virtio-win-%s.iso", virtioWinISOFileVersion(version))
+}
+
+func virtioWinISOURLFromArchive(archiveURL, version string) string {
 	return fmt.Sprintf(
-		"https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-%s/virtio-win-%s.iso",
+		"%s/virtio-win-%s/%s",
+		archiveURL,
 		version,
-		fileVersion,
+		virtioWinISOFileName(version),
 	)
+}
+
+func virtioWinISOURLs(version string) []string {
+	return []string{
+		virtioWinISOURLFromArchive(virtioWinFedoraArchiveURL, version),
+		virtioWinISOURLFromArchive(virtioWinMirrorArchiveURL, version),
+	}
+}
+
+func selectFastestVirtioWinISOURL(version string) (string, error) {
+	urls := virtioWinISOURLs(version)
+	selected, err := selectFastestDownloadURL(urls, virtioWinProbeBytes, virtioWinProbeTimeout)
+	if err != nil {
+		return "", fmt.Errorf("failed to select fastest virtio-win download URL: %w", err)
+	}
+	log.Printf("Selected fastest virtio-win download URL: %s", selected)
+	return selected, nil
+}
+
+type downloadProbeResult struct {
+	URL      string
+	Bytes    int64
+	Duration time.Duration
+	Err      error
+}
+
+func selectFastestDownloadURL(urls []string, probeBytes int64, timeout time.Duration) (string, error) {
+	if len(urls) == 0 {
+		return "", fmt.Errorf("no download URLs to probe")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	results := make(chan downloadProbeResult, len(urls))
+	client := &http.Client{}
+
+	for _, candidate := range urls {
+		candidate := candidate
+		go func() {
+			results <- probeDownloadURL(ctx, client, candidate, probeBytes)
+		}()
+	}
+
+	var best *downloadProbeResult
+	var failures []string
+	for range urls {
+		result := <-results
+		if result.Err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", result.URL, result.Err))
+			log.Printf("Download probe failed for %s: %v", result.URL, result.Err)
+			continue
+		}
+
+		speed := float64(result.Bytes) / result.Duration.Seconds()
+		log.Printf("Download probe for %s read %d bytes in %s (%.2f MiB/s)", result.URL, result.Bytes, result.Duration, speed/1024/1024)
+
+		if best == nil {
+			resultCopy := result
+			best = &resultCopy
+			continue
+		}
+		bestSpeed := float64(best.Bytes) / best.Duration.Seconds()
+		if speed > bestSpeed {
+			resultCopy := result
+			best = &resultCopy
+		}
+	}
+
+	if best == nil {
+		return "", fmt.Errorf("all download URL probes failed: %s", strings.Join(failures, "; "))
+	}
+
+	return best.URL, nil
+}
+
+func probeDownloadURL(ctx context.Context, client *http.Client, candidate string, probeBytes int64) downloadProbeResult {
+	if probeBytes <= 0 {
+		probeBytes = 1024 * 1024
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, candidate, nil)
+	if err != nil {
+		return downloadProbeResult{URL: candidate, Err: err}
+	}
+	req.Header.Set("Range", fmt.Sprintf("bytes=0-%d", probeBytes-1))
+
+	start := time.Now()
+	resp, err := client.Do(req)
+	if err != nil {
+		return downloadProbeResult{URL: candidate, Err: err}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return downloadProbeResult{URL: candidate, Duration: time.Since(start), Err: fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)}
+	}
+
+	bytesRead, err := io.Copy(io.Discard, io.LimitReader(resp.Body, probeBytes))
+	duration := time.Since(start)
+	if err != nil {
+		return downloadProbeResult{URL: candidate, Bytes: bytesRead, Duration: duration, Err: err}
+	}
+	if bytesRead == 0 {
+		return downloadProbeResult{URL: candidate, Duration: duration, Err: fmt.Errorf("probe read no bytes")}
+	}
+	if duration <= 0 {
+		duration = time.Nanosecond
+	}
+
+	return downloadProbeResult{URL: candidate, Bytes: bytesRead, Duration: duration}
 }
 
 // resolveDebianPackageURL fetches the current download URL for an architecture-independent
@@ -500,7 +626,10 @@ func getWebFileDependencies() []WebFileDependency {
 		{
 			LocalPath: GetDirectoriesInstance().CachePath("windows", "virtio-win.iso"),
 			Checksum:  "",
-			Source:    virtioWinISOURL(virtioWinVersion),
+			Source:    virtioWinISOURLFromArchive(virtioWinFedoraArchiveURL, virtioWinVersion),
+			BeforeHook: func() (string, error) {
+				return selectFastestVirtioWinISOURL(virtioWinVersion)
+			},
 			RelatedVmConfigs: []VirtualMachineConfig{
 				{
 					OS:                   "windows11",

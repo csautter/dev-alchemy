@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestBootstrapPythonEnv_VenvCreationFails verifies that bootstrapPythonEnv returns
@@ -212,6 +213,84 @@ func TestDownloadWebFileDependencyWithoutProgressBar(t *testing.T) {
 
 	if err := downloadWebFileDependency(nil, dep); err != nil {
 		t.Fatalf("downloadWebFileDependency failed without progress bar: %v", err)
+	}
+
+	got, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("failed to read downloaded file: %v", err)
+	}
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("downloaded file contents mismatch: got %q want %q", string(got), string(expected))
+	}
+}
+
+func TestVirtioWinURLsUseFedoraOriginAndMirror(t *testing.T) {
+	urls := virtioWinISOURLs("0.1.285-1")
+	if len(urls) != 2 {
+		t.Fatalf("expected 2 virtio-win URLs, got %d: %v", len(urls), urls)
+	}
+
+	wantOrigin := "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285-1/virtio-win-0.1.285.iso"
+	wantMirror := "https://fedora-virt.repo.nfrance.com/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285-1/virtio-win-0.1.285.iso"
+	if urls[0] != wantOrigin {
+		t.Fatalf("unexpected Fedora origin URL: got %s want %s", urls[0], wantOrigin)
+	}
+	if urls[1] != wantMirror {
+		t.Fatalf("unexpected mirror URL: got %s want %s", urls[1], wantMirror)
+	}
+}
+
+func TestSelectFastestDownloadURL(t *testing.T) {
+	payload := bytes.Repeat([]byte("x"), 1024)
+	fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(payload)
+	}))
+	defer fast.Close()
+
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		_, _ = w.Write(payload)
+	}))
+	defer slow.Close()
+
+	fastURL := fast.URL + "/artifact.iso"
+	slowURL := slow.URL + "/artifact.iso"
+	selected, err := selectFastestDownloadURL([]string{slowURL, fastURL}, 128, 2*time.Second)
+	if err != nil {
+		t.Fatalf("selectFastestDownloadURL returned error: %v", err)
+	}
+	if selected != fastURL {
+		t.Fatalf("selected URL mismatch: got %s want %s", selected, fastURL)
+	}
+}
+
+func TestDownloadWebFileDependencySelectsFastestURL(t *testing.T) {
+	expected := bytes.Repeat([]byte("fast virtio payload"), 128)
+
+	fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(expected)
+	}))
+	defer fast.Close()
+
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		_, _ = w.Write([]byte("slow virtio payload"))
+	}))
+	defer slow.Close()
+
+	fastURL := fast.URL + "/artifact.iso"
+	slowURL := slow.URL + "/artifact.iso"
+	destPath := filepath.Join(t.TempDir(), "artifact.iso")
+	dep := WebFileDependency{
+		LocalPath: destPath,
+		Source:    slowURL,
+		BeforeHook: func() (string, error) {
+			return selectFastestDownloadURL([]string{slowURL, fastURL}, 128, 2*time.Second)
+		},
+	}
+
+	if err := downloadWebFileDependency(nil, dep); err != nil {
+		t.Fatalf("downloadWebFileDependency returned error: %v", err)
 	}
 
 	got, err := os.ReadFile(destPath)
