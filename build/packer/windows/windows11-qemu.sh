@@ -324,7 +324,6 @@ windows_source_iso_path="${cache_dir}/windows11/iso/win11_25h2_english_${arch}.i
 download_windows_iso_if_missing "$arch" "$windows_source_iso_path"
 
 bash "${project_root}/scripts/macos/download-utm-guest-tools.sh"
-bash "${project_root}/scripts/macos/download-virtio-win-iso.sh"
 
 if [[ "$arch" == "arm64" ]]; then
 	if ! bash "${project_root}/scripts/macos/download-arm64-uefi.sh"; then
@@ -339,6 +338,8 @@ if [[ "$arch" == "arm64" ]]; then
 
 	echo "Creating Windows 11 ARM64 unattended ISO..."
 	bash "${project_root}/scripts/macos/create-win11-autounattend-iso.sh"
+
+	bash "${project_root}/scripts/macos/download-virtio-win-iso.sh"
 fi
 
 echo "Creating QCOW2 disk image..."

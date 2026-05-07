@@ -247,32 +247,6 @@ $scripts = @(
 		<File path="C:\Windows\Setup\Scripts\FirstLogon.ps1">
 $scripts = @(
 	{
-		$qxlDriverLog = "C:\QXLDriverInstall.log"
-		try {
-			$drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -in 2, 5 }
-			$qxlInf = $null
-			foreach ($drive in $drives) {
-				$candidate = Get-ChildItem -Path "$($drive.DeviceID)\" -Filter "qxldod.inf" -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -First 1
-				if ($candidate) {
-					$qxlInf = $candidate
-					break
-				}
-			}
-			if ($qxlInf) {
-				Write-Output "Found QXL DOD driver at $($qxlInf.FullName)" | Out-File -Append $qxlDriverLog
-				pnputil.exe /add-driver "$($qxlInf.FullName)" /install | Out-File -Append $qxlDriverLog
-				if ($LASTEXITCODE -ne 0) {
-					throw "pnputil failed with exit code $LASTEXITCODE"
-				}
-				Write-Output "QXL DOD driver staged successfully." | Out-File -Append $qxlDriverLog
-			} else {
-				Write-Output "QXL DOD driver qxldod.inf not found on any CD or USB drive." | Out-File -Append $qxlDriverLog
-			}
-		} catch {
-			Write-Output "Error during QXL DOD driver staging: $_" | Out-File -Append $qxlDriverLog
-		}
-	};
-	{
 		$guestToolsLog = "C:\UTMGuestToolsInstall.log"
 		try {
 			$drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -in 2, 5 }
