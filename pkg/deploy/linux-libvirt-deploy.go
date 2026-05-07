@@ -677,7 +677,7 @@ func linuxLibvirtDiskBus(config alchemy_build.VirtualMachineConfig) string {
 
 func linuxLibvirtVideoArg(config alchemy_build.VirtualMachineConfig) string {
 	if config.OS == "windows11" && config.Arch == "amd64" {
-		return "model.type=qxl"
+		return "model.type=qxl,model.ram=65536,model.vram=65536,model.vgamem=65536,model.heads=1"
 	}
 	return "model.type=virtio"
 }
