@@ -554,6 +554,73 @@ func TestMacOSWorkflowUsesStartOnlyProbeForUbuntuQemuBuilds(t *testing.T) {
 	}
 }
 
+func TestLinuxWorkflowRunsWindowsQemuBuilds(t *testing.T) {
+	t.Parallel()
+
+	workflowPath := ".github/workflows/test-build-linux.yml"
+	content, err := os.ReadFile(repoPath(t, workflowPath))
+	if err != nil {
+		t.Fatalf("failed to read workflow %q: %v", workflowPath, err)
+	}
+
+	got := string(content)
+	for _, tc := range []struct {
+		testName           string
+		dependencyTestName string
+		runsOn             string
+		isoPath            string
+		expectedEntries    int
+	}{
+		{
+			testName:           "TestBuildQemuWindows11Amd64OnLinux",
+			dependencyTestName: "TestIntegrationDependencyReconciliationQemuWindows11Amd64OnLinux",
+			runsOn:             "runs_on: ubuntu-24.04",
+			isoPath:            "./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso",
+			expectedEntries:    2,
+		},
+		{
+			testName:           "TestBuildQemuWindows11Arm64OnLinux",
+			dependencyTestName: "TestIntegrationDependencyReconciliationQemuWindows11Arm64OnLinux",
+			runsOn:             "runs_on: ubuntu-24.04-arm",
+			isoPath:            "./.dev-alchemy/cache/windows11/iso/win11_25h2_english_arm64.iso",
+			expectedEntries:    2,
+		},
+	} {
+		entry := workflowMatrixEntryForTest(t, got, tc.testName)
+		for _, want := range []string{
+			tc.dependencyTestName,
+			tc.runsOn,
+			tc.isoPath,
+			"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso",
+			"./.dev-alchemy/cache/windows/virtio-win.iso",
+		} {
+			if !strings.Contains(entry, want) {
+				t.Fatalf("expected Linux workflow matrix entry for %s to contain %q", tc.testName, want)
+			}
+		}
+		if strings.Count(got, "go_test_name: "+tc.testName) != tc.expectedEntries {
+			t.Fatalf("expected Linux workflow to include %d entries for %s", tc.expectedEntries, tc.testName)
+		}
+		if strings.Count(got, tc.isoPath) != tc.expectedEntries {
+			t.Fatalf("expected Linux workflow to cache %s in %d entries", tc.isoPath, tc.expectedEntries)
+		}
+	}
+
+	arm64Entry := workflowMatrixEntryForTest(t, got, "TestBuildQemuWindows11Arm64OnLinux")
+	if !strings.Contains(arm64Entry, "./.dev-alchemy/cache/qemu-efi-aarch64_all.deb") {
+		t.Fatal("expected Windows 11 ARM64 Linux QEMU entry to cache qemu-efi-aarch64")
+	}
+	for _, want := range []string{
+		`TARGET_JOB_PATTERN: "^build TestBuildQemu(Ubuntu|Windows11).*Amd64OnLinux on Hetzner$"`,
+		`TARGET_JOB_PATTERN: "^build TestBuildQemu(Ubuntu|Windows11).*Arm64OnLinux on Hetzner$"`,
+		`name: packer-qemu-${{ matrix.go_test_name }}.vnc.mp4`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected Linux workflow to contain %q", want)
+		}
+	}
+}
+
 func TestMacOSWorkflowDefaultsToGitHubHostedRunnersWithTartOptIn(t *testing.T) {
 	t.Parallel()
 
