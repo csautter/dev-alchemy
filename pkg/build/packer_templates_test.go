@@ -208,6 +208,61 @@ func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
 	}
 }
 
+func TestWindowsArm64UnattendIsoScriptUsesUDFCapableExtraction(t *testing.T) {
+	t.Parallel()
+
+	scriptPath := "scripts/macos/create-win11-autounattend-iso.sh"
+	content, err := os.ReadFile(repoPath(t, scriptPath))
+	if err != nil {
+		t.Fatalf("failed to read script %q: %v", scriptPath, err)
+	}
+
+	got := string(content)
+	for _, want := range []string{
+		`extract_windows_source_iso`,
+		`try_extract_windows_source_iso`,
+		`windows_source_extraction_is_complete`,
+		`command -v 7z`,
+		`command -v 7zz`,
+		`command -v bsdtar`,
+		`tar_supports_libarchive`,
+		`hdiutil attach -readonly`,
+		`find_extracted_efisys_bin`,
+		`Windows 11 ARM64 source ISO extraction appears incomplete.`,
+		`-append_partition 2 0xef "$efisys_bin_path"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q to contain %q", scriptPath, want)
+		}
+	}
+
+	if strings.Contains(got, `xorriso -osirrox on`) {
+		t.Fatalf("expected %q not to use xorriso for source ISO extraction; Windows media is UDF", scriptPath)
+	}
+}
+
+func TestLinuxDependencyInstallerIncludesWindowsIsoExtractionTools(t *testing.T) {
+	t.Parallel()
+
+	scriptPath := "scripts/linux/dev-alchemy-install-dependencies.sh"
+	content, err := os.ReadFile(repoPath(t, scriptPath))
+	if err != nil {
+		t.Fatalf("failed to read script %q: %v", scriptPath, err)
+	}
+
+	got := string(content)
+	for _, want := range []string{
+		`apt-cache show 7zip`,
+		`p7zip-full`,
+		`libarchive-tools`,
+		`xorriso`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q to contain %q", scriptPath, want)
+		}
+	}
+}
+
 func TestWindowsQemuAmd64MountsVirtioIsoForQxlDriverInstall(t *testing.T) {
 	t.Parallel()
 
