@@ -183,6 +183,46 @@ func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
 	}
 }
 
+func TestWindowsQemuAmd64MountsVirtioIsoForQxlDriverInstall(t *testing.T) {
+	t.Parallel()
+
+	templatePath := "build/packer/windows/windows11-qemu.pkr.hcl"
+	templateContent, err := os.ReadFile(repoPath(t, templatePath))
+	if err != nil {
+		t.Fatalf("failed to read template %q: %v", templatePath, err)
+	}
+
+	amd64Args, ok := textBetween(string(templateContent), `"amd64" = [`, `"arm64" = [`)
+	if !ok {
+		t.Fatalf("failed to locate amd64 QEMU args in %q", templatePath)
+	}
+	for _, want := range []string{
+		`["-device", "usb-storage,drive=virtio-drivers,removable=true,bootindex=2"]`,
+		`["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${local.win11_virtio_iso},readonly=true"]`,
+	} {
+		if !strings.Contains(amd64Args, want) {
+			t.Fatalf("expected amd64 QEMU args in %q to contain %q", templatePath, want)
+		}
+	}
+
+	autounattendPath := "build/packer/windows/qemu-amd64/autounattend.xml"
+	autounattendContent, err := os.ReadFile(repoPath(t, autounattendPath))
+	if err != nil {
+		t.Fatalf("failed to read autounattend file %q: %v", autounattendPath, err)
+	}
+	got := string(autounattendContent)
+	for _, want := range []string{
+		`C:\QXLDriverInstall.log`,
+		`Starting QXL DOD driver install/stage during first logon.`,
+		`qxldod\w10\amd64\qxldod.inf`,
+		`pnputil.exe /add-driver`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q to contain %q", autounattendPath, want)
+		}
+	}
+}
+
 var ubuntuLiveServerISOReferenceRE = regexp.MustCompile(`ubuntu-([0-9]{2}\.[0-9]{2}(?:\.[0-9]+)?)-live-server-(amd64|arm64)\.iso`)
 
 func assertUbuntuLiveServerISOReferencesUsePinnedVersions(t *testing.T, filePath string) {
@@ -217,6 +257,19 @@ func containsCollapsedAssignment(content, name, value string) bool {
 		}
 	}
 	return false
+}
+
+func textBetween(content, start, end string) (string, bool) {
+	startIndex := strings.Index(content, start)
+	if startIndex == -1 {
+		return "", false
+	}
+	startIndex += len(start)
+	endIndex := strings.Index(content[startIndex:], end)
+	if endIndex == -1 {
+		return "", false
+	}
+	return content[startIndex : startIndex+endIndex], true
 }
 
 func TestUbuntuPackerTemplatesQuoteShellLocalExportPaths(t *testing.T) {

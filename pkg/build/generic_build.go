@@ -37,7 +37,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 		return nil
 	}
 	buildSucceeded := false
-	defer func() {
+	cleanupBuildArtifacts := func() {
 		if cleanupErr := cleanupArtifacts(buildSucceeded); cleanupErr != nil {
 			if err == nil {
 				err = cleanupErr
@@ -45,7 +45,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 				log.Printf("Build artifact cleanup failed after build error: %v", cleanupErr)
 			}
 		}
-	}()
+	}
 	defer restoreInteractiveTerminal()
 
 	// Ensure all required dependencies are present
@@ -76,6 +76,10 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	configureCommandForCleanup(cmd)
 	restoreCommandTerminal := attachCommandToInteractiveTerminal(cmd)
 	defer restoreCommandTerminal()
+	// Run artifact cleanup before terminal restoration. On Unix, job-control terminal
+	// restoration can stop this process after the child exits, and no-cache builds must
+	// promote staged artifacts before any terminal cleanup can interrupt the parent.
+	defer cleanupBuildArtifacts()
 	cmd.Dir = GetDirectoriesInstance().GetDirectories().ProjectDir
 	cmd.Env = append(os.Environ(), GetDirectoriesInstance().ManagedEnv()...)
 	if config.Verbose {
@@ -419,8 +423,10 @@ func prepareBuildArtifactsForBuild(config VirtualMachineConfig) (bool, func(bool
 		}
 		cleanup := func(success bool) error {
 			if success {
+				log.Printf("Promoting staged build artifact(s) after successful no-cache build: %v -> %v", stagedArtifacts, artifacts)
 				return promoteStagedBuildArtifacts(artifacts, stagedArtifacts)
 			}
+			log.Printf("Removing staged build artifact(s) after failed no-cache build: %v", stagedArtifacts)
 			return removeBuildArtifacts(stagedArtifacts)
 		}
 
