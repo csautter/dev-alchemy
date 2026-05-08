@@ -164,6 +164,18 @@ func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
 						t.Fatalf("expected script %q to contain %q", scriptPath, want)
 					}
 				}
+
+				virtioDownload := `bash "${project_root}/scripts/macos/download-virtio-win-iso.sh"`
+				if !strings.Contains(got, virtioDownload) {
+					t.Fatalf("expected script %q to download the virtio-win ISO", scriptPath)
+				}
+				arm64Block, ok := textBetween(got, `if [[ "$arch" == "arm64" ]]; then`, `echo "Creating QCOW2 disk image..."`)
+				if !ok {
+					t.Fatalf("failed to locate ARM64-specific block in script %q", scriptPath)
+				}
+				if strings.Contains(arm64Block, virtioDownload) {
+					t.Fatalf("expected script %q to download virtio-win outside the ARM64-only block", scriptPath)
+				}
 				return
 			}
 

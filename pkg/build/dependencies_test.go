@@ -81,6 +81,34 @@ func TestMissingPythonVenvExecutables(t *testing.T) {
 	}
 }
 
+func TestWindows11Amd64LinuxQemuDependencyReconciliationIncludesVirtioWinISO(t *testing.T) {
+	dirs := GetDirectoriesInstance()
+	originalCacheDir := dirs.CacheDir
+	dirs.CacheDir = t.TempDir()
+	defer func() {
+		dirs.CacheDir = originalCacheDir
+	}()
+
+	vmconfig := VirtualMachineConfig{
+		OS:                   "windows11",
+		Arch:                 "amd64",
+		HostOs:               HostOsLinux,
+		VirtualizationEngine: VirtualizationEngineQemu,
+	}
+
+	deps := webFileDependenciesForVMConfig(vmconfig)
+	wantPath := filepath.Join(dirs.CacheDir, "windows", "virtio-win.iso")
+	gotPaths := make([]string, 0, len(deps))
+	for _, dep := range deps {
+		gotPaths = append(gotPaths, dep.LocalPath)
+		if dep.LocalPath == wantPath {
+			return
+		}
+	}
+
+	t.Fatalf("expected dependency reconciliation for Windows 11 amd64 Linux QEMU to include %s, got %v", wantPath, gotPaths)
+}
+
 func TestIntegrationDependencyReconciliation(t *testing.T) {
 	if os.Getenv("RUN_INTEGRATION_TESTS") == "" {
 		t.Skip("skipping integration test; set RUN_INTEGRATION_TESTS=1 to run")

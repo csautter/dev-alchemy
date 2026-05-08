@@ -313,22 +313,37 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	p := mpb.New(mpb.WithWidth(80))
 	defer p.Wait()
 
-	for _, dep := range getWebFileDependencies() {
-		needsDownload := false
-		for _, relatedConfig := range dep.RelatedVmConfigs {
-			if string(relatedConfig.HostOs) == string(vmconfig.HostOs) && relatedConfig.OS == vmconfig.OS && relatedConfig.Arch == vmconfig.Arch && relatedConfig.UbuntuType == vmconfig.UbuntuType && string(relatedConfig.VirtualizationEngine) == string(vmconfig.VirtualizationEngine) {
-				if !checkIfWebFileDependencyExists(dep) {
-					needsDownload = true
-				}
-			}
-		}
-		if needsDownload {
+	for _, dep := range webFileDependenciesForVMConfig(vmconfig) {
+		if !checkIfWebFileDependencyExists(dep) {
 			err := downloadWebFileDependency(p, dep)
 			if err != nil {
 				log.Fatalf("Failed to download web file dependency: %v", err)
 			}
 		}
 	}
+}
+
+func webFileDependenciesForVMConfig(vmconfig VirtualMachineConfig) []WebFileDependency {
+	var deps []WebFileDependency
+	for _, dep := range getWebFileDependencies() {
+		if webFileDependencyMatchesVMConfig(dep, vmconfig) {
+			deps = append(deps, dep)
+		}
+	}
+	return deps
+}
+
+func webFileDependencyMatchesVMConfig(dep WebFileDependency, vmconfig VirtualMachineConfig) bool {
+	for _, relatedConfig := range dep.RelatedVmConfigs {
+		if string(relatedConfig.HostOs) == string(vmconfig.HostOs) &&
+			relatedConfig.OS == vmconfig.OS &&
+			relatedConfig.Arch == vmconfig.Arch &&
+			relatedConfig.UbuntuType == vmconfig.UbuntuType &&
+			string(relatedConfig.VirtualizationEngine) == string(vmconfig.VirtualizationEngine) {
+			return true
+		}
+	}
+	return false
 }
 
 // bootstrapPythonEnv ensures the Python virtual environment at workdir/.venv exists
@@ -631,6 +646,18 @@ func getWebFileDependencies() []WebFileDependency {
 				return selectFastestVirtioWinISOURL(virtioWinVersion)
 			},
 			RelatedVmConfigs: []VirtualMachineConfig{
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
 				{
 					OS:                   "windows11",
 					Arch:                 "arm64",
