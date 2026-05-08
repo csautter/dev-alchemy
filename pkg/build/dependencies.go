@@ -96,6 +96,7 @@ const (
 
 	// renovate: datasource=custom.virtio-win depName=virtio-win versioning=loose
 	virtioWinVersion = "0.1.285-1"
+	virtioWinSHA256  = "e14cf2b94492c3e925f0070ba7fdfedeb2048c91eea9c5a5afb30232a3976331"
 
 	virtioWinFedoraArchiveURL = "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio"
 	virtioWinMirrorArchiveURL = "https://fedora-virt.repo.nfrance.com/virtio-win/direct-downloads/archive-virtio"
@@ -640,7 +641,7 @@ func getWebFileDependencies() []WebFileDependency {
 		},
 		{
 			LocalPath: GetDirectoriesInstance().CachePath("windows", "virtio-win.iso"),
-			Checksum:  "",
+			Checksum:  "sha256:" + virtioWinSHA256,
 			Source:    virtioWinISOURLFromArchive(virtioWinFedoraArchiveURL, virtioWinVersion),
 			BeforeHook: func() (string, error) {
 				return selectFastestVirtioWinISOURL(virtioWinVersion)

@@ -193,6 +193,19 @@ func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
 	if !strings.Contains(string(content), `VIRTIO_WIN_VERSION="`+virtioWinVersion+`"`) {
 		t.Fatalf("expected %q to use virtio-win %s", virtioScriptPath, virtioWinVersion)
 	}
+	if !strings.Contains(string(content), `VIRTIO_WIN_SHA256="`+virtioWinSHA256+`"`) {
+		t.Fatalf("expected %q to verify virtio-win checksum %s", virtioScriptPath, virtioWinSHA256)
+	}
+	for _, want := range []string{
+		`verify_sha256 "$virtio_iso_path"`,
+		`verify_sha256 "$tmp_path"`,
+		`sha256sum -c -`,
+		`shasum -a 256`,
+	} {
+		if !strings.Contains(string(content), want) {
+			t.Fatalf("expected %q to contain %q", virtioScriptPath, want)
+		}
+	}
 }
 
 func TestWindowsQemuAmd64MountsVirtioIsoForQxlDriverInstall(t *testing.T) {

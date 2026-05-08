@@ -98,10 +98,14 @@ func TestWindows11Amd64LinuxQemuDependencyReconciliationIncludesVirtioWinISO(t *
 
 	deps := webFileDependenciesForVMConfig(vmconfig)
 	wantPath := filepath.Join(dirs.CacheDir, "windows", "virtio-win.iso")
+	wantChecksum := "sha256:e14cf2b94492c3e925f0070ba7fdfedeb2048c91eea9c5a5afb30232a3976331"
 	gotPaths := make([]string, 0, len(deps))
 	for _, dep := range deps {
 		gotPaths = append(gotPaths, dep.LocalPath)
 		if dep.LocalPath == wantPath {
+			if dep.Checksum != wantChecksum {
+				t.Fatalf("expected virtio-win dependency checksum %q, got %q", wantChecksum, dep.Checksum)
+			}
 			return
 		}
 	}
@@ -327,5 +331,26 @@ func TestDownloadWebFileDependencySelectsFastestURL(t *testing.T) {
 	}
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("downloaded file contents mismatch: got %q want %q", string(got), string(expected))
+	}
+}
+
+func TestDownloadWebFileDependencyRejectsChecksumMismatch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("unexpected payload"))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(t.TempDir(), "artifact.iso")
+	dep := WebFileDependency{
+		LocalPath: destPath,
+		Source:    server.URL + "/artifact.iso",
+		Checksum:  "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+	}
+
+	if err := downloadWebFileDependency(nil, dep); err == nil {
+		t.Fatal("expected downloadWebFileDependency to reject checksum mismatch")
+	}
+	if _, err := os.Stat(destPath); !os.IsNotExist(err) {
+		t.Fatalf("expected checksum-mismatched download to be removed, stat err: %v", err)
 	}
 }
