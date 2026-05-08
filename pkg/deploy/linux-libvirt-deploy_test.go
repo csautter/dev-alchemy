@@ -825,7 +825,7 @@ func TestLinuxLibvirtVideoArg(t *testing.T) {
 	if got := linuxLibvirtVideoArg(alchemy_build.VirtualMachineConfig{
 		OS:   "windows11",
 		Arch: "amd64",
-	}); got != "model.type=qxl" {
+	}); got != "model.type=qxl,model.ram=65536,model.vram=65536,model.vgamem=65536,model.heads=1" {
 		t.Fatalf("expected Windows amd64 guests to use qxl video, got %q", got)
 	}
 }
