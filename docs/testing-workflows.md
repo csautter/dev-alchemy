@@ -200,6 +200,10 @@ The lifecycle uses the same libvirt defaults as Ubuntu on Linux: `qemu:///system
 and managed disks under `/var/tmp/dev-alchemy/libvirt/images` unless
 `DEV_ALCHEMY_LIBVIRT_URI` or `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR` is set.
 
+If `/dev/kvm` is unavailable or unreliable, set
+`DEV_ALCHEMY_QEMU_FORCE_SOFTWARE_EMULATION=1` to bypass KVM probing and force
+QEMU TCG software emulation.
+
 Set WinRM credentials in project-root `.env` or the process environment:
 
 ```dotenv
