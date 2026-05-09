@@ -6,6 +6,11 @@ import (
 )
 
 func runQemuUbuntuBuild(config VirtualMachineConfig, relativeScriptPath string) error {
+	config, err := withStagedBuildArtifactsForNoCache(config)
+	if err != nil {
+		return err
+	}
+
 	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, relativeScriptPath)
 	args := []string{
 		scriptPath,
@@ -16,6 +21,9 @@ func runQemuUbuntuBuild(config VirtualMachineConfig, relativeScriptPath string) 
 		"--vnc-port", fmt.Sprintf("%d", config.VncPort),
 		"--cpus", getVmCpuCountString(config),
 		"--memory", fmt.Sprintf("%d", getVmMemoryMB(config)),
+	}
+	if stagedArtifact, ok := firstStagedBuildArtifact(config); ok {
+		args = append(args, "--artifact-output-path", stagedArtifact)
 	}
 	if config.Headless {
 		args = append(args, "--headless")
@@ -28,4 +36,8 @@ func runQemuUbuntuBuild(config VirtualMachineConfig, relativeScriptPath string) 
 
 func RunQemuUbuntuBuildOnLinux(config VirtualMachineConfig) error {
 	return runQemuUbuntuBuild(config, "build/packer/linux/ubuntu/linux-ubuntu-on-linux.sh")
+}
+
+func RunQemuWindowsBuildOnLinux(config VirtualMachineConfig) error {
+	return runQemuWindowsBuild(config, "build/packer/windows/windows11-on-linux.sh")
 }

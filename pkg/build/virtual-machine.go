@@ -32,6 +32,7 @@ type VirtualMachineConfig struct {
 	VncPort                int
 	Slug                   string
 	ExpectedBuildArtifacts []string
+	StagedBuildArtifacts   []string
 	NoCache                bool
 	HostOs                 HostOsType
 	VirtualizationEngine   VirtualizationEngine
@@ -171,6 +172,30 @@ func AvailableVirtualMachineConfigs() []VirtualMachineConfig {
 			VncPort:    5924,
 			ExpectedBuildArtifacts: []string{
 				path.Join(GetDirectoriesInstance().CacheDir, "ubuntu/qemu-ubuntu-desktop-packer-amd64.qcow2"),
+			},
+			HostOs:               HostOsLinux,
+			VirtualizationEngine: VirtualizationEngineQemu,
+			Cpus:                 4,
+			MemoryMB:             8192,
+		},
+		{
+			OS:      "windows11",
+			Arch:    "arm64",
+			VncPort: 5931,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "windows11/qemu-windows11-arm64.qcow2"),
+			},
+			HostOs:               HostOsLinux,
+			VirtualizationEngine: VirtualizationEngineQemu,
+			Cpus:                 4,
+			MemoryMB:             8192,
+		},
+		{
+			OS:      "windows11",
+			Arch:    "amd64",
+			VncPort: 5932,
+			ExpectedBuildArtifacts: []string{
+				path.Join(GetDirectoriesInstance().CacheDir, "windows11/qemu-windows11-amd64.qcow2"),
 			},
 			HostOs:               HostOsLinux,
 			VirtualizationEngine: VirtualizationEngineQemu,

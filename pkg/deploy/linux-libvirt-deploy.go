@@ -40,11 +40,20 @@ var (
 )
 
 func isLinuxLibvirtTarget(config alchemy_build.VirtualMachineConfig) bool {
-	return config.HostOs == alchemy_build.HostOsLinux &&
-		config.VirtualizationEngine == alchemy_build.VirtualizationEngineQemu &&
-		config.OS == "ubuntu" &&
-		(config.UbuntuType == "server" || config.UbuntuType == "desktop") &&
-		(config.Arch == "amd64" || config.Arch == "arm64")
+	if config.HostOs != alchemy_build.HostOsLinux ||
+		config.VirtualizationEngine != alchemy_build.VirtualizationEngineQemu ||
+		(config.Arch != "amd64" && config.Arch != "arm64") {
+		return false
+	}
+
+	switch config.OS {
+	case "ubuntu":
+		return config.UbuntuType == "server" || config.UbuntuType == "desktop"
+	case "windows11":
+		return config.UbuntuType == ""
+	default:
+		return false
+	}
 }
 
 func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error {
@@ -363,6 +372,13 @@ func linuxQemuArtifactPath(config alchemy_build.VirtualMachineConfig) string {
 		return config.ExpectedBuildArtifacts[0]
 	}
 
+	if config.OS == "windows11" {
+		return alchemy_build.GetDirectoriesInstance().CachePath(
+			"windows11",
+			fmt.Sprintf("qemu-windows11-%s.qcow2", config.Arch),
+		)
+	}
+
 	return alchemy_build.GetDirectoriesInstance().CachePath(
 		"ubuntu",
 		fmt.Sprintf("qemu-ubuntu-%s-packer-%s.qcow2", config.UbuntuType, config.Arch),
@@ -522,7 +538,7 @@ func linuxLibvirtVirtInstallArgs(config alchemy_build.VirtualMachineConfig, uri 
 		"--vcpus", fmt.Sprintf("%d", alchemy_build.GetVmCpuCount(config)),
 		"--cpu", linuxLibvirtCPUArg(config),
 		"--import",
-		"--disk", fmt.Sprintf("path=%s,format=qcow2,bus=virtio", diskPath),
+		"--disk", fmt.Sprintf("path=%s,format=qcow2,bus=%s", diskPath, linuxLibvirtDiskBus(config)),
 		"--network", linuxLibvirtNetworkArg(config, uri),
 		"--graphics", "spice,clipboard.copypaste=on",
 		"--video", linuxLibvirtVideoArg(config),
@@ -652,7 +668,17 @@ func linuxLibvirtNetworkModel(config alchemy_build.VirtualMachineConfig) string 
 	return "virtio"
 }
 
+func linuxLibvirtDiskBus(config alchemy_build.VirtualMachineConfig) string {
+	if config.OS == "windows11" && config.Arch == "amd64" {
+		return "sata"
+	}
+	return "virtio"
+}
+
 func linuxLibvirtVideoArg(config alchemy_build.VirtualMachineConfig) string {
+	if config.OS == "windows11" && config.Arch == "amd64" {
+		return "model.type=qxl,model.ram=65536,model.vram=65536,model.vgamem=65536,model.heads=1"
+	}
 	return "model.type=virtio"
 }
 
@@ -665,6 +691,9 @@ func linuxLibvirtCPUArg(config alchemy_build.VirtualMachineConfig) string {
 	case "amd64":
 		return "Skylake-Client"
 	case "arm64":
+		if config.OS == "windows11" {
+			return "max,sve=off,sme=off,pauth-impdef=on"
+		}
 		return "cortex-a57"
 	default:
 		return "max"

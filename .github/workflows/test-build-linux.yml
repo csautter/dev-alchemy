@@ -43,14 +43,19 @@ on:
       - "cmd/cmd/**"
       - "build/packer/linux/*"
       - "build/packer/linux/**/*"
+      - "build/packer/windows/*"
+      - "build/packer/windows/**/*"
       - "pkg/build/**"
       - "pkg/deploy/**"
       - "pkg/provision/**"
       - "scripts/linux/*"
       - "scripts/linux/**/*"
+      - "scripts/macos/create-win11-autounattend-iso.sh"
       - "scripts/macos/playwright_win11_iso.py"
       - "scripts/macos/requirements.txt"
       - "scripts/macos/download-arm64-uefi.sh"
+      - "scripts/macos/download-utm-guest-tools.sh"
+      - "scripts/macos/download-virtio-win-iso.sh"
       - ".github/workflows/test-build-linux.yml"
       - ".github/actions/hetzner-github-runner/**"
 
@@ -131,7 +136,7 @@ jobs:
       DEV_ALCHEMY_VAGRANT_DIR: ${{ github.workspace }}/.dev-alchemy/.vagrant
       DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
       PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
-    timeout-minutes: 260
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -141,26 +146,43 @@ jobs:
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
             runs_on: ubuntu-24.04
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
           - arch: amd64
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
             runs_on: ubuntu-24.04
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
+          - arch: amd64
+            go_test_name: TestBuildQemuWindows11Amd64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Amd64OnLinux
+            runs_on: ubuntu-24.04
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},
+               {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
+               {"local-path":"./.dev-alchemy/cache/windows/virtio-win.iso"}]
           - arch: arm64
             go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
             runs_on: ubuntu-24.04-arm
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
           - arch: arm64
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
             runs_on: ubuntu-24.04-arm
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
+               {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
+          - arch: arm64
+            go_test_name: TestBuildQemuWindows11Arm64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Arm64OnLinux
+            runs_on: ubuntu-24.04-arm
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_arm64.iso","container":"build-cache"},
+               {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
+               {"local-path":"./.dev-alchemy/cache/windows/virtio-win.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
 
     steps:
@@ -231,11 +253,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
+      - name: Upload packer-qemu-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
+          name: packer-qemu-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -323,7 +345,7 @@ jobs:
       DEV_ALCHEMY_VAGRANT_DIR: ${{ github.workspace }}/.dev-alchemy/.vagrant
       DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
       PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
-    timeout-minutes: 260
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -332,12 +354,19 @@ jobs:
             go_test_name: TestBuildQemuUbuntuServerAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
           - arch: amd64
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-amd64.iso"}]
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
+          - arch: amd64
+            go_test_name: TestBuildQemuWindows11Amd64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Amd64OnLinux
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},
+               {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
+               {"local-path":"./.dev-alchemy/cache/windows/virtio-win.iso"}]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -406,11 +435,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
+      - name: Upload packer-qemu-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
+          name: packer-qemu-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -450,7 +479,7 @@ jobs:
       DEV_ALCHEMY_VAGRANT_DIR: ${{ github.workspace }}/.dev-alchemy/.vagrant
       DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
       PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
-    timeout-minutes: 260
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -459,13 +488,21 @@ jobs:
             go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
           - arch: arm64
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
             cache_files: >-
-              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.3-live-server-arm64.iso"},
+              [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
+               {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
+          - arch: arm64
+            go_test_name: TestBuildQemuWindows11Arm64OnLinux
+            dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Arm64OnLinux
+            cache_files: >-
+              [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_arm64.iso","container":"build-cache"},
+               {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
+               {"local-path":"./.dev-alchemy/cache/windows/virtio-win.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
     steps:
       - name: Checkout code
@@ -535,11 +572,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
+      - name: Upload packer-qemu-${{ matrix.go_test_name }}.vnc.mp4 artifact (always)
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: packer-qemu-ubuntu-${{ matrix.go_test_name }}.vnc.mp4
+          name: packer-qemu-${{ matrix.go_test_name }}.vnc.mp4
           path: artifact/*.vnc.mp4
           if-no-files-found: ignore
           retention-days: 1
@@ -583,7 +620,7 @@ jobs:
           POLL_INTERVAL_SECONDS: "30"
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
-          TARGET_JOB_PATTERN: "^build TestBuildQemuUbuntu.*Amd64OnLinux on Hetzner$"
+          TARGET_JOB_PATTERN: "^build TestBuildQemu(Ubuntu|Windows11).*Amd64OnLinux on Hetzner$"
           WAIT_TIMEOUT_SECONDS: "900"
         run: |
           deadline=$(( $(date +%s) + WAIT_TIMEOUT_SECONDS ))
@@ -675,7 +712,7 @@ jobs:
           POLL_INTERVAL_SECONDS: "30"
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
-          TARGET_JOB_PATTERN: "^build TestBuildQemuUbuntu.*Arm64OnLinux on Hetzner$"
+          TARGET_JOB_PATTERN: "^build TestBuildQemu(Ubuntu|Windows11).*Arm64OnLinux on Hetzner$"
           WAIT_TIMEOUT_SECONDS: "900"
         run: |
           deadline=$(( $(date +%s) + WAIT_TIMEOUT_SECONDS ))

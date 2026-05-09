@@ -3,6 +3,7 @@ package build
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -10,6 +11,10 @@ import (
 
 var ubuntuQemuTemplatePaths = []string{
 	"build/packer/linux/ubuntu/linux-ubuntu-qemu.pkr.hcl",
+}
+
+var windowsQemuTemplatePaths = []string{
+	"build/packer/windows/windows11-qemu.pkr.hcl",
 }
 
 func TestUbuntuPackerTemplatesUseCallerSuppliedISOChecksum(t *testing.T) {
@@ -81,6 +86,248 @@ func TestUbuntuLiveServerPinsStayInSync(t *testing.T) {
 	if !strings.Contains(string(hypervTemplate), `default = "`+ubuntuLiveServerAMD64Version+`"`) {
 		t.Fatalf("expected %q to default to Ubuntu %s", hypervTemplatePath, ubuntuLiveServerAMD64Version)
 	}
+
+	for _, filePath := range []string{
+		".github/workflows/test-build-linux.yml",
+		".github/workflows/test-build-macos.yml",
+		"build/packer/linux/ubuntu/README.md",
+	} {
+		filePath := filePath
+		t.Run(filepath.Base(filePath)+" static ISO references", func(t *testing.T) {
+			t.Parallel()
+			assertUbuntuLiveServerISOReferencesUsePinnedVersions(t, filePath)
+		})
+	}
+}
+
+func TestWindowsQemuTemplateIsSharedAcrossMacOSAndLinux(t *testing.T) {
+	t.Parallel()
+
+	for _, templatePath := range windowsQemuTemplatePaths {
+		templatePath := templatePath
+		t.Run(filepath.Base(templatePath), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, templatePath))
+			if err != nil {
+				t.Fatalf("failed to read template %q: %v", templatePath, err)
+			}
+
+			got := string(content)
+			for _, want := range []string{
+				`variable "host_os"`,
+				`variable "host_arch"`,
+				`variable "use_hardware_acceleration"`,
+				`host_is_linux`,
+				`host_is_darwin`,
+				`amd64_accelerator`,
+				`arm64_accelerator`,
+				`qemu_display`,
+				`variable "artifact_output_path"`,
+				`win11_qcow2       = var.artifact_output_path != "" ? var.artifact_output_path`,
+			} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("expected shared Windows QEMU template %q to contain %q", templatePath, want)
+				}
+			}
+		})
+	}
+}
+
+func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
+	t.Parallel()
+
+	for _, scriptPath := range []string{
+		"build/packer/windows/windows11-qemu.sh",
+		"build/packer/windows/windows11-on-macos.sh",
+		"build/packer/windows/windows11-on-linux.sh",
+	} {
+		scriptPath := scriptPath
+		t.Run(filepath.Base(scriptPath), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, scriptPath))
+			if err != nil {
+				t.Fatalf("failed to read script %q: %v", scriptPath, err)
+			}
+
+			got := string(content)
+			if scriptPath == "build/packer/windows/windows11-qemu.sh" {
+				for _, want := range []string{
+					`packer_file="build/packer/windows/windows11-qemu.pkr.hcl"`,
+					`-var "host_os=${host_os}"`,
+					`-var "host_arch=${host_arch}"`,
+					`-var "use_hardware_acceleration=${use_hardware_acceleration}"`,
+					`-var "artifact_output_path=${artifact_output_path}"`,
+				} {
+					if !strings.Contains(got, want) {
+						t.Fatalf("expected script %q to contain %q", scriptPath, want)
+					}
+				}
+
+				virtioDownload := `bash "${project_root}/scripts/macos/download-virtio-win-iso.sh"`
+				if !strings.Contains(got, virtioDownload) {
+					t.Fatalf("expected script %q to download the virtio-win ISO", scriptPath)
+				}
+				arm64Block, ok := textBetween(got, `if [[ "$arch" == "arm64" ]]; then`, `echo "Creating QCOW2 disk image..."`)
+				if !ok {
+					t.Fatalf("failed to locate ARM64-specific block in script %q", scriptPath)
+				}
+				if strings.Contains(arm64Block, virtioDownload) {
+					t.Fatalf("expected script %q to download virtio-win outside the ARM64-only block", scriptPath)
+				}
+				return
+			}
+
+			if !strings.Contains(got, `windows11-qemu.sh`) {
+				t.Fatalf("expected wrapper script %q to call windows11-qemu.sh", scriptPath)
+			}
+		})
+	}
+
+	virtioScriptPath := "scripts/macos/download-virtio-win-iso.sh"
+	content, err := os.ReadFile(repoPath(t, virtioScriptPath))
+	if err != nil {
+		t.Fatalf("failed to read script %q: %v", virtioScriptPath, err)
+	}
+	if !strings.Contains(string(content), `VIRTIO_WIN_VERSION="`+virtioWinVersion+`"`) {
+		t.Fatalf("expected %q to use virtio-win %s", virtioScriptPath, virtioWinVersion)
+	}
+	if !strings.Contains(string(content), `VIRTIO_WIN_SHA256="`+virtioWinSHA256+`"`) {
+		t.Fatalf("expected %q to verify virtio-win checksum %s", virtioScriptPath, virtioWinSHA256)
+	}
+	for _, want := range []string{
+		`verify_sha256 "$virtio_iso_path"`,
+		`verify_sha256 "$tmp_path"`,
+		`sha256sum -c -`,
+		`shasum -a 256`,
+	} {
+		if !strings.Contains(string(content), want) {
+			t.Fatalf("expected %q to contain %q", virtioScriptPath, want)
+		}
+	}
+}
+
+func TestWindowsArm64UnattendIsoScriptUsesUDFCapableExtraction(t *testing.T) {
+	t.Parallel()
+
+	scriptPath := "scripts/macos/create-win11-autounattend-iso.sh"
+	content, err := os.ReadFile(repoPath(t, scriptPath))
+	if err != nil {
+		t.Fatalf("failed to read script %q: %v", scriptPath, err)
+	}
+
+	got := string(content)
+	for _, want := range []string{
+		`extract_windows_source_iso`,
+		`try_extract_windows_source_iso`,
+		`windows_source_extraction_is_complete`,
+		`command -v 7z`,
+		`command -v 7zz`,
+		`command -v bsdtar`,
+		`tar_supports_libarchive`,
+		`hdiutil attach -readonly`,
+		`find_extracted_efisys_bin`,
+		`Windows 11 ARM64 source ISO extraction appears incomplete.`,
+		`-append_partition 2 0xef "$efisys_bin_path"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q to contain %q", scriptPath, want)
+		}
+	}
+
+	if strings.Contains(got, `xorriso -osirrox on`) {
+		t.Fatalf("expected %q not to use xorriso for source ISO extraction; Windows media is UDF", scriptPath)
+	}
+}
+
+func TestLinuxDependencyInstallerIncludesWindowsIsoExtractionTools(t *testing.T) {
+	t.Parallel()
+
+	scriptPath := "scripts/linux/dev-alchemy-install-dependencies.sh"
+	content, err := os.ReadFile(repoPath(t, scriptPath))
+	if err != nil {
+		t.Fatalf("failed to read script %q: %v", scriptPath, err)
+	}
+
+	got := string(content)
+	for _, want := range []string{
+		`apt-cache show 7zip`,
+		`p7zip-full`,
+		`libarchive-tools`,
+		`xorriso`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q to contain %q", scriptPath, want)
+		}
+	}
+}
+
+func TestWindowsQemuAmd64MountsVirtioIsoForQxlDriverInstall(t *testing.T) {
+	t.Parallel()
+
+	templatePath := "build/packer/windows/windows11-qemu.pkr.hcl"
+	templateContent, err := os.ReadFile(repoPath(t, templatePath))
+	if err != nil {
+		t.Fatalf("failed to read template %q: %v", templatePath, err)
+	}
+
+	amd64Args, ok := textBetween(string(templateContent), `"amd64" = [`, `"arm64" = [`)
+	if !ok {
+		t.Fatalf("failed to locate amd64 QEMU args in %q", templatePath)
+	}
+	for _, want := range []string{
+		`["-device", "usb-storage,drive=virtio-drivers,removable=true,bootindex=2"]`,
+		`["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${local.win11_virtio_iso},readonly=true"]`,
+	} {
+		if !strings.Contains(amd64Args, want) {
+			t.Fatalf("expected amd64 QEMU args in %q to contain %q", templatePath, want)
+		}
+	}
+
+	autounattendPath := "build/packer/windows/qemu-amd64/autounattend.xml"
+	autounattendContent, err := os.ReadFile(repoPath(t, autounattendPath))
+	if err != nil {
+		t.Fatalf("failed to read autounattend file %q: %v", autounattendPath, err)
+	}
+	got := string(autounattendContent)
+	for _, want := range []string{
+		`C:\QXLDriverInstall.log`,
+		`Starting QXL DOD driver install/stage during first logon.`,
+		`qxldod\w10\amd64\qxldod.inf`,
+		`pnputil.exe /add-driver`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q to contain %q", autounattendPath, want)
+		}
+	}
+}
+
+var ubuntuLiveServerISOReferenceRE = regexp.MustCompile(`ubuntu-([0-9]{2}\.[0-9]{2}(?:\.[0-9]+)?)-live-server-(amd64|arm64)\.iso`)
+
+func assertUbuntuLiveServerISOReferencesUsePinnedVersions(t *testing.T, filePath string) {
+	t.Helper()
+
+	content, err := os.ReadFile(repoPath(t, filePath))
+	if err != nil {
+		t.Fatalf("failed to read %q: %v", filePath, err)
+	}
+
+	matches := ubuntuLiveServerISOReferenceRE.FindAllStringSubmatch(string(content), -1)
+	if len(matches) == 0 {
+		t.Fatalf("expected %q to contain Ubuntu live-server ISO references", filePath)
+	}
+
+	for _, match := range matches {
+		version, arch := match[1], match[2]
+		wantVersion := ubuntuLiveServerAMD64Version
+		if arch == "arm64" {
+			wantVersion = ubuntuLiveServerArm64Version
+		}
+		if version != wantVersion {
+			t.Fatalf("expected %q to use Ubuntu %s for %s ISO reference, found %q", filePath, wantVersion, arch, match[0])
+		}
+	}
 }
 
 func containsCollapsedAssignment(content, name, value string) bool {
@@ -90,6 +337,19 @@ func containsCollapsedAssignment(content, name, value string) bool {
 		}
 	}
 	return false
+}
+
+func textBetween(content, start, end string) (string, bool) {
+	startIndex := strings.Index(content, start)
+	if startIndex == -1 {
+		return "", false
+	}
+	startIndex += len(start)
+	endIndex := strings.Index(content[startIndex:], end)
+	if endIndex == -1 {
+		return "", false
+	}
+	return content[startIndex : startIndex+endIndex], true
 }
 
 func TestUbuntuPackerTemplatesQuoteShellLocalExportPaths(t *testing.T) {
@@ -106,8 +366,8 @@ func TestUbuntuPackerTemplatesQuoteShellLocalExportPaths(t *testing.T) {
 			}
 
 			got := string(content)
-			wantQuotedMkdir := "\"mkdir -p \\\"${local.cache_directory}/ubuntu\\\"\""
-			wantQuotedCp := "\"cp \\\"${local.output_directory}\\\"/linux-ubuntu-${var.ubuntu_type}-packer-* \\\"${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2\\\"\""
+			wantQuotedMkdir := "\"mkdir -p \\\"$(dirname \\\"${local.ubuntu_qcow2}\\\")\\\"\""
+			wantQuotedCp := "\"cp \\\"${local.output_directory}\\\"/linux-ubuntu-${var.ubuntu_type}-packer-* \\\"${local.ubuntu_qcow2}\\\"\""
 			oldUnquotedCp := "\"cp ${local.output_directory}/linux-ubuntu-${var.ubuntu_type}-packer-* ${local.cache_directory}/ubuntu/qemu-ubuntu-${var.ubuntu_type}-packer-${var.arch}.qcow2\""
 
 			if !strings.Contains(got, wantQuotedMkdir) {
@@ -290,6 +550,9 @@ func TestQemuWrapperScriptsUseSharedTemplate(t *testing.T) {
 			if !strings.Contains(got, `-var "host_arch=$host_arch"`) {
 				t.Fatalf("expected script %q to pass the detected host architecture", tc.scriptPath)
 			}
+			if !strings.Contains(got, `-var "artifact_output_path=$artifact_output_path"`) {
+				t.Fatalf("expected script %q to pass an optional staged artifact output path", tc.scriptPath)
+			}
 		})
 	}
 }
@@ -356,6 +619,73 @@ func TestMacOSWorkflowUsesStartOnlyProbeForUbuntuQemuBuilds(t *testing.T) {
 	}
 	if !strings.Contains(got, `steps.packer_build.outcome == 'success' && matrix.packer_start_only != 'true'`) {
 		t.Fatal("expected workflow to skip deploy smoke tests for start-only Packer probes")
+	}
+}
+
+func TestLinuxWorkflowRunsWindowsQemuBuilds(t *testing.T) {
+	t.Parallel()
+
+	workflowPath := ".github/workflows/test-build-linux.yml"
+	content, err := os.ReadFile(repoPath(t, workflowPath))
+	if err != nil {
+		t.Fatalf("failed to read workflow %q: %v", workflowPath, err)
+	}
+
+	got := string(content)
+	for _, tc := range []struct {
+		testName           string
+		dependencyTestName string
+		runsOn             string
+		isoPath            string
+		expectedEntries    int
+	}{
+		{
+			testName:           "TestBuildQemuWindows11Amd64OnLinux",
+			dependencyTestName: "TestIntegrationDependencyReconciliationQemuWindows11Amd64OnLinux",
+			runsOn:             "runs_on: ubuntu-24.04",
+			isoPath:            "./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso",
+			expectedEntries:    2,
+		},
+		{
+			testName:           "TestBuildQemuWindows11Arm64OnLinux",
+			dependencyTestName: "TestIntegrationDependencyReconciliationQemuWindows11Arm64OnLinux",
+			runsOn:             "runs_on: ubuntu-24.04-arm",
+			isoPath:            "./.dev-alchemy/cache/windows11/iso/win11_25h2_english_arm64.iso",
+			expectedEntries:    2,
+		},
+	} {
+		entry := workflowMatrixEntryForTest(t, got, tc.testName)
+		for _, want := range []string{
+			tc.dependencyTestName,
+			tc.runsOn,
+			tc.isoPath,
+			"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso",
+			"./.dev-alchemy/cache/windows/virtio-win.iso",
+		} {
+			if !strings.Contains(entry, want) {
+				t.Fatalf("expected Linux workflow matrix entry for %s to contain %q", tc.testName, want)
+			}
+		}
+		if strings.Count(got, "go_test_name: "+tc.testName) != tc.expectedEntries {
+			t.Fatalf("expected Linux workflow to include %d entries for %s", tc.expectedEntries, tc.testName)
+		}
+		if strings.Count(got, tc.isoPath) != tc.expectedEntries {
+			t.Fatalf("expected Linux workflow to cache %s in %d entries", tc.isoPath, tc.expectedEntries)
+		}
+	}
+
+	arm64Entry := workflowMatrixEntryForTest(t, got, "TestBuildQemuWindows11Arm64OnLinux")
+	if !strings.Contains(arm64Entry, "./.dev-alchemy/cache/qemu-efi-aarch64_all.deb") {
+		t.Fatal("expected Windows 11 ARM64 Linux QEMU entry to cache qemu-efi-aarch64")
+	}
+	for _, want := range []string{
+		`TARGET_JOB_PATTERN: "^build TestBuildQemu(Ubuntu|Windows11).*Amd64OnLinux on Hetzner$"`,
+		`TARGET_JOB_PATTERN: "^build TestBuildQemu(Ubuntu|Windows11).*Arm64OnLinux on Hetzner$"`,
+		`name: packer-qemu-${{ matrix.go_test_name }}.vnc.mp4`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected Linux workflow to contain %q", want)
+		}
 	}
 }
 

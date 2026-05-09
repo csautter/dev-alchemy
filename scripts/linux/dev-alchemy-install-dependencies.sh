@@ -91,15 +91,19 @@ install_linux_packages() {
 		curl
 		ffmpeg
 		gpg
+		libarchive-tools
 		libvirt-clients
 		libvirt-daemon-system
 		packer
 		python3
+		python3-winrm
+		python3-venv
 		qemu-efi-aarch64
 		qemu-system-arm
 		qemu-system-x86
 		qemu-utils
 		sshpass
+		swtpm
 		tar
 		virt-manager
 		virtinst
@@ -107,6 +111,15 @@ install_linux_packages() {
 		xorriso
 		xz-utils
 	)
+
+	if apt-cache show 7zip >/dev/null 2>&1; then
+		packages+=(7zip)
+	elif apt-cache show p7zip-full >/dev/null 2>&1; then
+		packages+=(p7zip-full)
+	else
+		echo "Neither 7zip nor p7zip-full is available from the configured apt repositories." >&2
+		exit 1
+	fi
 
 	${SUDO} apt-get update
 	${SUDO} apt-get install -y "${packages[@]}"

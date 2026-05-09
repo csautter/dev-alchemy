@@ -2,12 +2,15 @@ package build
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestBootstrapPythonEnv_VenvCreationFails verifies that bootstrapPythonEnv returns
@@ -28,26 +31,91 @@ func TestBootstrapPythonEnv_VenvCreationFails(t *testing.T) {
 	}
 }
 
-// TestBootstrapPythonEnv_PipInstallFails verifies that bootstrapPythonEnv returns
-// a wrapped error when the venv directory already exists but contains no real
-// Python/pip binaries, so the playwright pip install step fails immediately.
-func TestBootstrapPythonEnv_PipInstallFails(t *testing.T) {
+// TestBootstrapPythonEnv_IncompleteVenvRecreateFails verifies that an existing
+// but incomplete venv is recreated before dependency installation begins.
+func TestBootstrapPythonEnv_IncompleteVenvRecreateFails(t *testing.T) {
 	workdir := t.TempDir()
-	// Create the .venv directory so venv creation is skipped, but leave it empty
-	// so that venvPython and pipPath do not exist.
+	if err := os.MkdirAll(filepath.Join(workdir, ".venv"), 0755); err != nil {
+		t.Fatalf("could not create mock venv dir: %v", err)
+	}
+	badPython := filepath.Join(t.TempDir(), "nonexistent-python")
+
+	err := bootstrapPythonEnv(workdir, badPython)
+
+	if err == nil {
+		t.Fatal("expected error when incomplete venv cannot be recreated, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to recreate Python venv") {
+		t.Errorf("expected error to mention venv recreation failure, got: %v", err)
+	}
+}
+
+func TestMissingPythonVenvExecutables(t *testing.T) {
+	workdir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(workdir, ".venv"), 0755); err != nil {
 		t.Fatalf("could not create mock venv dir: %v", err)
 	}
 
-	// pythonExe is irrelevant here because the venv dir already exists.
-	err := bootstrapPythonEnv(workdir, "ignored")
+	missing, err := missingPythonVenvExecutables(workdir)
+	if err != nil {
+		t.Fatalf("missingPythonVenvExecutables returned error: %v", err)
+	}
+	if len(missing) != 2 {
+		t.Fatalf("expected empty venv to miss 2 executables, got %d: %v", len(missing), missing)
+	}
 
-	if err == nil {
-		t.Fatal("expected error when venv Python/pip binaries are missing, got nil")
+	venvPython, pipPath := pythonVenvExecutablePaths(workdir)
+	for _, path := range []string{venvPython, pipPath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("could not create parent directory for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte{}, 0755); err != nil {
+			t.Fatalf("could not create fake executable %s: %v", path, err)
+		}
 	}
-	if !strings.Contains(err.Error(), "failed to install Windows 11 download script requirements") {
-		t.Errorf("expected error to mention requirements install failure, got: %v", err)
+
+	missing, err = missingPythonVenvExecutables(workdir)
+	if err != nil {
+		t.Fatalf("missingPythonVenvExecutables returned error after fake executables were created: %v", err)
 	}
+	if len(missing) != 0 {
+		t.Fatalf("expected complete venv to miss no executables, got: %v", missing)
+	}
+}
+
+func TestWindows11Amd64LinuxQemuDependencyReconciliationIncludesVirtioWinISO(t *testing.T) {
+	dirs := GetDirectoriesInstance()
+	originalCacheDir := dirs.CacheDir
+	dirs.CacheDir = t.TempDir()
+	defer func() {
+		dirs.CacheDir = originalCacheDir
+	}()
+
+	vmconfig := VirtualMachineConfig{
+		OS:                   "windows11",
+		Arch:                 "amd64",
+		HostOs:               HostOsLinux,
+		VirtualizationEngine: VirtualizationEngineQemu,
+	}
+
+	deps := webFileDependenciesForVMConfig(vmconfig)
+	wantPath := filepath.Join(dirs.CacheDir, "windows", "virtio-win.iso")
+	wantChecksum := "sha256:e14cf2b94492c3e925f0070ba7fdfedeb2048c91eea9c5a5afb30232a3976331"
+	gotPaths := make([]string, 0, len(deps))
+	for _, dep := range deps {
+		gotPaths = append(gotPaths, dep.LocalPath)
+		if dep.LocalPath == wantPath {
+			if dep.Checksum != wantChecksum {
+				t.Fatalf("expected virtio-win dependency checksum %q, got %q", wantChecksum, dep.Checksum)
+			}
+			if len(dep.FallbackSources) != 2 {
+				t.Fatalf("expected virtio-win dependency to include 2 fallback sources, got %d: %v", len(dep.FallbackSources), dep.FallbackSources)
+			}
+			return
+		}
+	}
+
+	t.Fatalf("expected dependency reconciliation for Windows 11 amd64 Linux QEMU to include %s, got %v", wantPath, gotPaths)
 }
 
 func TestIntegrationDependencyReconciliation(t *testing.T) {
@@ -190,5 +258,139 @@ func TestDownloadWebFileDependencyWithoutProgressBar(t *testing.T) {
 	}
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("downloaded file contents mismatch: got %q want %q", string(got), string(expected))
+	}
+}
+
+func TestVirtioWinURLsUseFedoraOriginAndMirror(t *testing.T) {
+	urls := virtioWinISOURLs("0.1.285-1")
+	if len(urls) != 2 {
+		t.Fatalf("expected 2 virtio-win URLs, got %d: %v", len(urls), urls)
+	}
+
+	wantOrigin := "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285-1/virtio-win-0.1.285.iso"
+	wantMirror := "https://fedora-virt.repo.nfrance.com/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285-1/virtio-win-0.1.285.iso"
+	if urls[0] != wantOrigin {
+		t.Fatalf("unexpected Fedora origin URL: got %s want %s", urls[0], wantOrigin)
+	}
+	if urls[1] != wantMirror {
+		t.Fatalf("unexpected mirror URL: got %s want %s", urls[1], wantMirror)
+	}
+}
+
+func TestSelectFastestDownloadURL(t *testing.T) {
+	payload := bytes.Repeat([]byte("x"), 1024)
+	fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(payload)
+	}))
+	defer fast.Close()
+
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		_, _ = w.Write(payload)
+	}))
+	defer slow.Close()
+
+	fastURL := fast.URL + "/artifact.iso"
+	slowURL := slow.URL + "/artifact.iso"
+	selected, err := selectFastestDownloadURL([]string{slowURL, fastURL}, 128, 2*time.Second)
+	if err != nil {
+		t.Fatalf("selectFastestDownloadURL returned error: %v", err)
+	}
+	if selected != fastURL {
+		t.Fatalf("selected URL mismatch: got %s want %s", selected, fastURL)
+	}
+}
+
+func TestDownloadWebFileDependencySelectsFastestURL(t *testing.T) {
+	expected := bytes.Repeat([]byte("fast virtio payload"), 128)
+
+	fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(expected)
+	}))
+	defer fast.Close()
+
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		_, _ = w.Write([]byte("slow virtio payload"))
+	}))
+	defer slow.Close()
+
+	fastURL := fast.URL + "/artifact.iso"
+	slowURL := slow.URL + "/artifact.iso"
+	destPath := filepath.Join(t.TempDir(), "artifact.iso")
+	dep := WebFileDependency{
+		LocalPath: destPath,
+		Source:    slowURL,
+		BeforeHook: func() (string, error) {
+			return selectFastestDownloadURL([]string{slowURL, fastURL}, 128, 2*time.Second)
+		},
+	}
+
+	if err := downloadWebFileDependency(nil, dep); err != nil {
+		t.Fatalf("downloadWebFileDependency returned error: %v", err)
+	}
+
+	got, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("failed to read downloaded file: %v", err)
+	}
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("downloaded file contents mismatch: got %q want %q", string(got), string(expected))
+	}
+}
+
+func TestDownloadWebFileDependencyRetriesFallbackAfterChecksumMismatch(t *testing.T) {
+	expected := []byte("expected virtio payload")
+	checksum := sha256.Sum256(expected)
+
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("unexpected virtio payload"))
+	}))
+	defer bad.Close()
+
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(expected)
+	}))
+	defer good.Close()
+
+	destPath := filepath.Join(t.TempDir(), "artifact.iso")
+	dep := WebFileDependency{
+		LocalPath:       destPath,
+		Source:          bad.URL + "/artifact.iso",
+		FallbackSources: []string{good.URL + "/artifact.iso"},
+		Checksum:        fmt.Sprintf("sha256:%x", checksum),
+	}
+
+	if err := downloadWebFileDependency(nil, dep); err != nil {
+		t.Fatalf("downloadWebFileDependency returned error after fallback source: %v", err)
+	}
+
+	got, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("failed to read downloaded file: %v", err)
+	}
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("downloaded file contents mismatch: got %q want %q", string(got), string(expected))
+	}
+}
+
+func TestDownloadWebFileDependencyRejectsChecksumMismatch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("unexpected payload"))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(t.TempDir(), "artifact.iso")
+	dep := WebFileDependency{
+		LocalPath: destPath,
+		Source:    server.URL + "/artifact.iso",
+		Checksum:  "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+	}
+
+	if err := downloadWebFileDependency(nil, dep); err == nil {
+		t.Fatal("expected downloadWebFileDependency to reject checksum mismatch")
+	}
+	if _, err := os.Stat(destPath); !os.IsNotExist(err) {
+		t.Fatalf("expected checksum-mismatched download to be removed, stat err: %v", err)
 	}
 }

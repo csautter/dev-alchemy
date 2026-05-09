@@ -23,13 +23,23 @@ func TestIsLinuxLibvirtTarget(t *testing.T) {
 		t.Fatal("expected linux ubuntu qemu config to be a supported libvirt target")
 	}
 
-	if isLinuxLibvirtTarget(alchemy_build.VirtualMachineConfig{
+	if !isLinuxLibvirtTarget(alchemy_build.VirtualMachineConfig{
 		OS:                   "windows11",
 		Arch:                 "amd64",
 		HostOs:               alchemy_build.HostOsLinux,
 		VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
 	}) {
-		t.Fatal("did not expect non-Ubuntu qemu config to be a libvirt target")
+		t.Fatal("expected linux windows qemu config to be a supported libvirt target")
+	}
+
+	if isLinuxLibvirtTarget(alchemy_build.VirtualMachineConfig{
+		OS:                   "windows11",
+		UbuntuType:           "server",
+		Arch:                 "amd64",
+		HostOs:               alchemy_build.HostOsLinux,
+		VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+	}) {
+		t.Fatal("did not expect windows config with Ubuntu type to be a libvirt target")
 	}
 }
 
@@ -62,6 +72,16 @@ func TestLinuxQemuArtifactPathFallsBackToCache(t *testing.T) {
 	want := filepath.Join(dirs.CacheDir, "ubuntu", "qemu-ubuntu-server-packer-amd64.qcow2")
 	if got != want {
 		t.Fatalf("expected artifact path %q, got %q", want, got)
+	}
+
+	got = linuxQemuArtifactPath(alchemy_build.VirtualMachineConfig{
+		OS:   "windows11",
+		Arch: "arm64",
+	})
+
+	want = filepath.Join(dirs.CacheDir, "windows11", "qemu-windows11-arm64.qcow2")
+	if got != want {
+		t.Fatalf("expected windows artifact path %q, got %q", want, got)
 	}
 }
 
@@ -317,6 +337,9 @@ func TestLinuxLibvirtCPUArgUsesVirtInstallCPUForEmulatedArch(t *testing.T) {
 	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{Arch: "arm64"}); got != "cortex-a57" {
 		t.Fatalf("expected emulated arm64 guest to use portable cortex-a57 CPU, got %q", got)
 	}
+	if got := linuxLibvirtCPUArg(alchemy_build.VirtualMachineConfig{OS: "windows11", Arch: "arm64"}); got != "max,sve=off,sme=off,pauth-impdef=on" {
+		t.Fatalf("expected emulated Windows arm64 guest to use Windows-compatible max CPU, got %q", got)
+	}
 
 	linuxLibvirtRuntimeGOARCH = func() string {
 		return "arm64"
@@ -391,6 +414,35 @@ func TestLinuxLibvirtVirtInstallArgsUseEmulatedArm64Settings(t *testing.T) {
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected virt-install args to contain %q, got %q", want, joined)
+		}
+	}
+}
+
+func TestLinuxLibvirtVirtInstallArgsUseWindowsAmd64Devices(t *testing.T) {
+	previousLinuxLibvirtRuntimeGOARCH := linuxLibvirtRuntimeGOARCH
+	t.Cleanup(func() {
+		linuxLibvirtRuntimeGOARCH = previousLinuxLibvirtRuntimeGOARCH
+	})
+	linuxLibvirtRuntimeGOARCH = func() string {
+		return "amd64"
+	}
+
+	args := linuxLibvirtVirtInstallArgs(alchemy_build.VirtualMachineConfig{
+		OS:       "windows11",
+		Arch:     "amd64",
+		Cpus:     4,
+		MemoryMB: 8192,
+	}, "qemu:///session", "/tmp/test.qcow2")
+
+	joined := strings.Join(args, " ")
+	for _, want := range []string{
+		"--disk path=/tmp/test.qcow2,format=qcow2,bus=sata",
+		"--network user,model=e1000",
+		"--video model.type=qxl",
+		"--machine q35",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected Windows virt-install args to contain %q, got %q", want, joined)
 		}
 	}
 }
@@ -733,6 +785,18 @@ func TestLinuxLibvirtNetworkModel(t *testing.T) {
 	}
 }
 
+func TestLinuxLibvirtDiskBus(t *testing.T) {
+	if got := linuxLibvirtDiskBus(alchemy_build.VirtualMachineConfig{OS: "windows11", Arch: "amd64"}); got != "sata" {
+		t.Fatalf("expected Windows amd64 guests to use SATA disk bus, got %q", got)
+	}
+	if got := linuxLibvirtDiskBus(alchemy_build.VirtualMachineConfig{OS: "windows11", Arch: "arm64"}); got != "virtio" {
+		t.Fatalf("expected Windows arm64 guests to use virtio disk bus, got %q", got)
+	}
+	if got := linuxLibvirtDiskBus(alchemy_build.VirtualMachineConfig{OS: "ubuntu", Arch: "amd64"}); got != "virtio" {
+		t.Fatalf("expected Ubuntu guests to use virtio disk bus, got %q", got)
+	}
+}
+
 func TestLinuxLibvirtVideoArg(t *testing.T) {
 	if got := linuxLibvirtVideoArg(alchemy_build.VirtualMachineConfig{
 		OS:         "ubuntu",
@@ -756,5 +820,12 @@ func TestLinuxLibvirtVideoArg(t *testing.T) {
 		Arch:       "amd64",
 	}); got != "model.type=virtio" {
 		t.Fatalf("expected server guests to keep virtio video, got %q", got)
+	}
+
+	if got := linuxLibvirtVideoArg(alchemy_build.VirtualMachineConfig{
+		OS:   "windows11",
+		Arch: "amd64",
+	}); got != "model.type=qxl,model.ram=65536,model.vram=65536,model.vgamem=65536,model.heads=1" {
+		t.Fatalf("expected Windows amd64 guests to use qxl video, got %q", got)
 	}
 }

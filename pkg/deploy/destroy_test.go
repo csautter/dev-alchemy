@@ -56,6 +56,16 @@ func TestSupportsDestroy(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "linux qemu windows supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				OS:                   "windows11",
+				Arch:                 "amd64",
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+			},
+			want: true,
+		},
+		{
 			name: "virtualbox unsupported",
 			vm: alchemy_build.VirtualMachineConfig{
 				OS:                   "windows11",

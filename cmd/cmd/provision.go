@@ -42,10 +42,14 @@ func isProvisionSupported(vm alchemy_build.VirtualMachineConfig) bool {
 
 	if vm.HostOs == alchemy_build.HostOsLinux &&
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineQemu &&
-		vm.OS == "ubuntu" &&
-		(vm.UbuntuType == "server" || vm.UbuntuType == "desktop") &&
 		(vm.Arch == "amd64" || vm.Arch == "arm64") {
-		return true
+		if vm.OS == "windows11" {
+			return true
+		}
+		if vm.OS == "ubuntu" &&
+			(vm.UbuntuType == "server" || vm.UbuntuType == "desktop") {
+			return true
+		}
 	}
 
 	return vm.HostOs == alchemy_build.HostOsDarwin &&

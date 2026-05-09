@@ -50,6 +50,16 @@ variable "cache_dir" {
   }
 }
 
+variable "artifact_output_path" {
+  type        = string
+  default     = ""
+  description = "Optional Vagrant box artifact path. Used to stage no-cache rebuilds before promotion."
+}
+
+locals {
+  box_output = var.artifact_output_path != "" ? var.artifact_output_path : "${var.cache_dir}/windows11/virtualbox-windows11-amd64.box"
+}
+
 source "virtualbox-iso" "win11" {
   vm_name          = "win11-packer-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
   output_directory = var.temp_disk_path != "" ? var.temp_disk_path : "${var.cache_dir}/windows11/virtualbox-output-${formatdate("YYYY-MM-DD-hh-mm", timestamp())}"
@@ -108,7 +118,7 @@ build {
   sources = ["source.virtualbox-iso.win11"]
 
   post-processor "vagrant" {
-    output              = "${var.cache_dir}/windows11/virtualbox-windows11-amd64.box"
+    output              = local.box_output
     keep_input_artifact = false
     provider_override   = "virtualbox"
     compression_level   = 1

@@ -3,11 +3,14 @@ package build
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -79,6 +82,7 @@ type WebFileDependency struct {
 	LocalPath        string
 	Checksum         string
 	Source           string
+	FallbackSources  []string
 	RelatedVmConfigs []VirtualMachineConfig
 	// BeforeHook is a function that is called before downloading the dependency. It can be used to modify the Source URL dynamically.
 	BeforeHook func() (string, error)
@@ -95,6 +99,12 @@ const (
 
 	// renovate: datasource=custom.virtio-win depName=virtio-win versioning=loose
 	virtioWinVersion = "0.1.285-1"
+	virtioWinSHA256  = "e14cf2b94492c3e925f0070ba7fdfedeb2048c91eea9c5a5afb30232a3976331"
+
+	virtioWinFedoraArchiveURL = "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio"
+	virtioWinMirrorArchiveURL = "https://fedora-virt.repo.nfrance.com/virtio-win/direct-downloads/archive-virtio"
+	virtioWinProbeBytes       = 2 * 1024 * 1024
+	virtioWinProbeTimeout     = 20 * time.Second
 )
 
 func ubuntuLiveServerISOName(arch, version string) string {
@@ -113,16 +123,136 @@ func ubuntuLiveServerISOURL(arch, version string) string {
 	return fmt.Sprintf("https://cdimage.ubuntu.com/releases/%s/release/%s", version, name)
 }
 
-func virtioWinISOURL(version string) string {
+func virtioWinISOFileVersion(version string) string {
 	fileVersion := version
 	if idx := strings.LastIndex(version, "-"); idx > 0 {
 		fileVersion = version[:idx]
 	}
+	return fileVersion
+}
+
+func virtioWinISOFileName(version string) string {
+	return fmt.Sprintf("virtio-win-%s.iso", virtioWinISOFileVersion(version))
+}
+
+func virtioWinISOURLFromArchive(archiveURL, version string) string {
 	return fmt.Sprintf(
-		"https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-%s/virtio-win-%s.iso",
+		"%s/virtio-win-%s/%s",
+		archiveURL,
 		version,
-		fileVersion,
+		virtioWinISOFileName(version),
 	)
+}
+
+func virtioWinISOURLs(version string) []string {
+	return []string{
+		virtioWinISOURLFromArchive(virtioWinFedoraArchiveURL, version),
+		virtioWinISOURLFromArchive(virtioWinMirrorArchiveURL, version),
+	}
+}
+
+func selectFastestVirtioWinISOURL(version string) (string, error) {
+	urls := virtioWinISOURLs(version)
+	selected, err := selectFastestDownloadURL(urls, virtioWinProbeBytes, virtioWinProbeTimeout)
+	if err != nil {
+		return "", fmt.Errorf("failed to select fastest virtio-win download URL: %w", err)
+	}
+	log.Printf("Selected fastest virtio-win download URL: %s", selected)
+	return selected, nil
+}
+
+type downloadProbeResult struct {
+	URL      string
+	Bytes    int64
+	Duration time.Duration
+	Err      error
+}
+
+func selectFastestDownloadURL(urls []string, probeBytes int64, timeout time.Duration) (string, error) {
+	if len(urls) == 0 {
+		return "", fmt.Errorf("no download URLs to probe")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	results := make(chan downloadProbeResult, len(urls))
+	client := &http.Client{}
+
+	for _, candidate := range urls {
+		candidate := candidate
+		go func() {
+			results <- probeDownloadURL(ctx, client, candidate, probeBytes)
+		}()
+	}
+
+	var best *downloadProbeResult
+	var failures []string
+	for range urls {
+		result := <-results
+		if result.Err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", result.URL, result.Err))
+			log.Printf("Download probe failed for %s: %v", result.URL, result.Err)
+			continue
+		}
+
+		speed := float64(result.Bytes) / result.Duration.Seconds()
+		log.Printf("Download probe for %s read %d bytes in %s (%.2f MiB/s)", result.URL, result.Bytes, result.Duration, speed/1024/1024)
+
+		if best == nil {
+			resultCopy := result
+			best = &resultCopy
+			continue
+		}
+		bestSpeed := float64(best.Bytes) / best.Duration.Seconds()
+		if speed > bestSpeed {
+			resultCopy := result
+			best = &resultCopy
+		}
+	}
+
+	if best == nil {
+		return "", fmt.Errorf("all download URL probes failed: %s", strings.Join(failures, "; "))
+	}
+
+	return best.URL, nil
+}
+
+func probeDownloadURL(ctx context.Context, client *http.Client, candidate string, probeBytes int64) downloadProbeResult {
+	if probeBytes <= 0 {
+		probeBytes = 1024 * 1024
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, candidate, nil)
+	if err != nil {
+		return downloadProbeResult{URL: candidate, Err: err}
+	}
+	req.Header.Set("Range", fmt.Sprintf("bytes=0-%d", probeBytes-1))
+
+	start := time.Now()
+	resp, err := client.Do(req)
+	if err != nil {
+		return downloadProbeResult{URL: candidate, Err: err}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return downloadProbeResult{URL: candidate, Duration: time.Since(start), Err: fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)}
+	}
+
+	bytesRead, err := io.Copy(io.Discard, io.LimitReader(resp.Body, probeBytes))
+	duration := time.Since(start)
+	if err != nil {
+		return downloadProbeResult{URL: candidate, Bytes: bytesRead, Duration: duration, Err: err}
+	}
+	if bytesRead == 0 {
+		return downloadProbeResult{URL: candidate, Duration: duration, Err: fmt.Errorf("probe read no bytes")}
+	}
+	if duration <= 0 {
+		duration = time.Nanosecond
+	}
+
+	return downloadProbeResult{URL: candidate, Bytes: bytesRead, Duration: duration}
 }
 
 // resolveDebianPackageURL fetches the current download URL for an architecture-independent
@@ -187,16 +317,8 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	p := mpb.New(mpb.WithWidth(80))
 	defer p.Wait()
 
-	for _, dep := range getWebFileDependencies() {
-		needsDownload := false
-		for _, relatedConfig := range dep.RelatedVmConfigs {
-			if string(relatedConfig.HostOs) == string(vmconfig.HostOs) && relatedConfig.OS == vmconfig.OS && relatedConfig.Arch == vmconfig.Arch && relatedConfig.UbuntuType == vmconfig.UbuntuType && string(relatedConfig.VirtualizationEngine) == string(vmconfig.VirtualizationEngine) {
-				if !checkIfWebFileDependencyExists(dep) {
-					needsDownload = true
-				}
-			}
-		}
-		if needsDownload {
+	for _, dep := range webFileDependenciesForVMConfig(vmconfig) {
+		if !checkIfWebFileDependencyExists(dep) {
 			err := downloadWebFileDependency(p, dep)
 			if err != nil {
 				log.Fatalf("Failed to download web file dependency: %v", err)
@@ -205,30 +327,38 @@ func DependencyReconciliation(vmconfig VirtualMachineConfig) {
 	}
 }
 
+func webFileDependenciesForVMConfig(vmconfig VirtualMachineConfig) []WebFileDependency {
+	var deps []WebFileDependency
+	for _, dep := range getWebFileDependencies() {
+		if webFileDependencyMatchesVMConfig(dep, vmconfig) {
+			deps = append(deps, dep)
+		}
+	}
+	return deps
+}
+
+func webFileDependencyMatchesVMConfig(dep WebFileDependency, vmconfig VirtualMachineConfig) bool {
+	for _, relatedConfig := range dep.RelatedVmConfigs {
+		if string(relatedConfig.HostOs) == string(vmconfig.HostOs) &&
+			relatedConfig.OS == vmconfig.OS &&
+			relatedConfig.Arch == vmconfig.Arch &&
+			relatedConfig.UbuntuType == vmconfig.UbuntuType &&
+			string(relatedConfig.VirtualizationEngine) == string(vmconfig.VirtualizationEngine) {
+			return true
+		}
+	}
+	return false
+}
+
 // bootstrapPythonEnv ensures the Python virtual environment at workdir/.venv exists
 // and has playwright and playwright-stealth installed, then installs the Chromium browser.
-// pythonExe is the system Python executable used only when the venv does not yet exist.
+// pythonExe is the system Python executable used to create or repair the venv.
 func bootstrapPythonEnv(workdir, pythonExe string) error {
-	venvDir := filepath.Join(workdir, ".venv")
-	if _, err := os.Stat(venvDir); os.IsNotExist(err) {
-		log.Printf("Creating Python virtual environment for Windows 11 download script")
-		if _, err = RunCliCommand(workdir, pythonExe, []string{"-m", "venv", ".venv"}); err != nil {
-			return fmt.Errorf("failed to create Python venv: %w", err)
-		}
-	} else if err != nil {
+	if err := ensurePythonVenv(workdir, pythonExe); err != nil {
 		return err
-	} else {
-		log.Printf("Python virtual environment for Windows 11 download script already exists")
 	}
 
-	pipPath := filepath.Join(workdir, ".venv", "Scripts", "pip.exe")
-	if runtime.GOOS != "windows" {
-		pipPath = filepath.Join(workdir, ".venv", "bin", "pip")
-	}
-	venvPython := filepath.Join(workdir, ".venv", "Scripts", "python.exe")
-	if runtime.GOOS != "windows" {
-		venvPython = filepath.Join(workdir, ".venv", "bin", "python3")
-	}
+	venvPython, pipPath := pythonVenvExecutablePaths(workdir)
 
 	log.Printf("Installing required Python packages for Windows 11 download script")
 	if _, err := RunCliCommand(workdir, pipPath, []string{"install", "-r", "requirements.txt"}); err != nil {
@@ -241,6 +371,75 @@ func bootstrapPythonEnv(workdir, pythonExe string) error {
 	}
 
 	return nil
+}
+
+func ensurePythonVenv(workdir, pythonExe string) error {
+	venvDir := filepath.Join(workdir, ".venv")
+	if _, err := os.Stat(venvDir); os.IsNotExist(err) {
+		log.Printf("Creating Python virtual environment for Windows 11 download script")
+		if _, err = RunCliCommand(workdir, pythonExe, []string{"-m", "venv", ".venv"}); err != nil {
+			return fmt.Errorf("failed to create Python venv: %w", err)
+		}
+	} else if err != nil {
+		return err
+	} else {
+		log.Printf("Python virtual environment for Windows 11 download script already exists")
+		missing, err := missingPythonVenvExecutables(workdir)
+		if err != nil {
+			return err
+		}
+		if len(missing) > 0 {
+			log.Printf("Python virtual environment for Windows 11 download script is incomplete; missing %s; recreating", strings.Join(missing, ", "))
+			if err := os.RemoveAll(venvDir); err != nil {
+				return fmt.Errorf("failed to remove incomplete Python venv: %w", err)
+			}
+			if _, err := RunCliCommand(workdir, pythonExe, []string{"-m", "venv", ".venv"}); err != nil {
+				return fmt.Errorf("failed to recreate Python venv: %w", err)
+			}
+		}
+	}
+
+	missing, err := missingPythonVenvExecutables(workdir)
+	if err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("Python venv is missing required executables after creation: %s", strings.Join(missing, ", "))
+	}
+
+	return nil
+}
+
+func pythonVenvExecutablePaths(workdir string) (venvPython, pipPath string) {
+	pipPath = filepath.Join(workdir, ".venv", "Scripts", "pip.exe")
+	if runtime.GOOS != "windows" {
+		pipPath = filepath.Join(workdir, ".venv", "bin", "pip")
+	}
+	venvPython = filepath.Join(workdir, ".venv", "Scripts", "python.exe")
+	if runtime.GOOS != "windows" {
+		venvPython = filepath.Join(workdir, ".venv", "bin", "python3")
+	}
+
+	return venvPython, pipPath
+}
+
+func missingPythonVenvExecutables(workdir string) ([]string, error) {
+	venvPython, pipPath := pythonVenvExecutablePaths(workdir)
+	var missing []string
+	for _, path := range []string{venvPython, pipPath} {
+		info, err := os.Stat(path)
+		if os.IsNotExist(err) {
+			missing = append(missing, path)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to inspect Python venv executable %s: %w", path, err)
+		}
+		if info.IsDir() {
+			missing = append(missing, path)
+		}
+	}
+	return missing, nil
 }
 
 func getWindows11Download(arch string, savePath string, download bool) (string, error) {
@@ -344,9 +543,21 @@ func getWebFileDependencies() []WebFileDependency {
 				},
 				{
 					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
+				{
+					OS:                   "windows11",
 					Arch:                 "arm64",
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
 				},
 			},
 		},
@@ -381,6 +592,12 @@ func getWebFileDependencies() []WebFileDependency {
 					HostOs:               HostOsWindows,
 					VirtualizationEngine: VirtualizationEngineVirtualBox,
 				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
 			},
 		},
 		{
@@ -395,6 +612,12 @@ func getWebFileDependencies() []WebFileDependency {
 					Arch:                 "arm64",
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
 				},
 			},
 		},
@@ -411,18 +634,46 @@ func getWebFileDependencies() []WebFileDependency {
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
 				},
+				{
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
 			},
 		},
 		{
-			LocalPath: GetDirectoriesInstance().CachePath("windows", "virtio-win.iso"),
-			Checksum:  "",
-			Source:    virtioWinISOURL(virtioWinVersion),
+			LocalPath:       GetDirectoriesInstance().CachePath("windows", "virtio-win.iso"),
+			Checksum:        "sha256:" + virtioWinSHA256,
+			Source:          virtioWinISOURLFromArchive(virtioWinFedoraArchiveURL, virtioWinVersion),
+			FallbackSources: virtioWinISOURLs(virtioWinVersion),
+			BeforeHook: func() (string, error) {
+				return selectFastestVirtioWinISOURL(virtioWinVersion)
+			},
 			RelatedVmConfigs: []VirtualMachineConfig{
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsDarwin,
+					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "amd64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
+				},
 				{
 					OS:                   "windows11",
 					Arch:                 "arm64",
 					HostOs:               HostOsDarwin,
 					VirtualizationEngine: VirtualizationEngineUtm,
+				},
+				{
+					OS:                   "windows11",
+					Arch:                 "arm64",
+					HostOs:               HostOsLinux,
+					VirtualizationEngine: VirtualizationEngineQemu,
 				},
 			},
 		},
@@ -557,11 +808,35 @@ func downloadWebFileDependency(p *mpb.Progress, dep WebFileDependency) error {
 		dep.Source = newSource
 	}
 
-	src := dep.Source
-	if dep.Checksum != "" {
-		src = src + "?checksum=" + dep.Checksum
+	sources := downloadSources(dep.Source, dep.FallbackSources)
+	if len(sources) == 0 {
+		return fmt.Errorf("no download source configured for %s", dep.LocalPath)
 	}
 
+	var failures []string
+	for index, source := range sources {
+		err := downloadWebFileDependencyFromSource(p, dep, source)
+		if err == nil {
+			return nil
+		}
+
+		failures = append(failures, fmt.Sprintf("%s: %v", source, err))
+		if index == len(sources)-1 {
+			break
+		}
+
+		if isChecksumMismatch(err) {
+			log.Printf("Checksum mismatch downloading %s from %s; trying fallback source", dep.LocalPath, source)
+		} else {
+			log.Printf("Failed to download %s from %s; trying fallback source: %v", dep.LocalPath, source, err)
+		}
+	}
+
+	return fmt.Errorf("failed to download web file dependency from all sources: %s", strings.Join(failures, "; "))
+}
+
+func downloadWebFileDependencyFromSource(p *mpb.Progress, dep WebFileDependency, source string) error {
+	src := sourceWithChecksum(source, dep.Checksum)
 	listener := &ProgressBarListener{progress: p}
 	client := &getter.Client{
 		Src:              src,
@@ -576,15 +851,52 @@ func downloadWebFileDependency(p *mpb.Progress, dep WebFileDependency) error {
 		if listener.bar != nil {
 			listener.bar.Abort(false)
 		}
-		log.Printf("Failed to download web file dependency from %s to %s: %v", dep.Source, dep.LocalPath, err)
+		log.Printf("Failed to download web file dependency from %s to %s: %v", source, dep.LocalPath, err)
 		return err
 	}
 	if listener.bar != nil {
 		// Mark bar complete; mpb renders it as done and removes it from the live display.
 		listener.bar.SetTotal(listener.bar.Current(), true)
 	}
-	log.Printf("Successfully downloaded web file dependency from %s to %s", dep.Source, dep.LocalPath)
+	log.Printf("Successfully downloaded web file dependency from %s to %s", source, dep.LocalPath)
 	return nil
+}
+
+func downloadSources(primary string, fallbacks []string) []string {
+	seen := map[string]bool{}
+	sources := make([]string, 0, 1+len(fallbacks))
+	for _, source := range append([]string{primary}, fallbacks...) {
+		if source == "" || seen[source] {
+			continue
+		}
+		seen[source] = true
+		sources = append(sources, source)
+	}
+	return sources
+}
+
+func sourceWithChecksum(source, checksum string) string {
+	if checksum == "" {
+		return source
+	}
+	parsed, err := url.Parse(source)
+	if err == nil && parsed.Scheme != "" {
+		query := parsed.Query()
+		query.Set("checksum", checksum)
+		parsed.RawQuery = query.Encode()
+		return parsed.String()
+	}
+
+	separator := "?"
+	if strings.Contains(source, "?") {
+		separator = "&"
+	}
+	return source + separator + "checksum=" + url.QueryEscape(checksum)
+}
+
+func isChecksumMismatch(err error) bool {
+	var checksumErr *getter.ChecksumError
+	return errors.As(err, &checksumErr)
 }
 
 func checkIfWebFileDependencyExists(dep WebFileDependency) bool {

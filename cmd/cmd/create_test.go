@@ -63,6 +63,16 @@ func TestIsCreateSupported(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "qemu windows supported",
+			vm: alchemy_build.VirtualMachineConfig{
+				HostOs:               alchemy_build.HostOsLinux,
+				VirtualizationEngine: alchemy_build.VirtualizationEngineQemu,
+				OS:                   "windows11",
+				Arch:                 "amd64",
+			},
+			want: true,
+		},
+		{
 			name: "virtualbox unsupported",
 			vm: alchemy_build.VirtualMachineConfig{
 				VirtualizationEngine: alchemy_build.VirtualizationEngineVirtualBox,
@@ -121,8 +131,8 @@ func TestRunCreateAllSkipsUnstableLinuxCrossArchitectureTargets(t *testing.T) {
 		t.Fatalf("expected create all to succeed, got %v", err)
 	}
 
-	if len(created) != 2 {
-		t.Fatalf("expected create all to run the two native amd64 Linux targets, got %d", len(created))
+	if len(created) != 3 {
+		t.Fatalf("expected create all to run the three native amd64 Linux targets, got %d", len(created))
 	}
 	requireOnlyArch(t, created, "amd64")
 }

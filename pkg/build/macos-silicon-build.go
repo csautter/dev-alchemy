@@ -10,15 +10,27 @@ func RunQemuUbuntuBuildOnMacOS(config VirtualMachineConfig) error {
 }
 
 func RunQemuWindowsBuildOnMacOS(config VirtualMachineConfig) error {
-	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, "build/packer/windows/windows11-on-macos.sh")
+	return runQemuWindowsBuild(config, "build/packer/windows/windows11-on-macos.sh")
+}
+
+func runQemuWindowsBuild(config VirtualMachineConfig, relativeScriptPath string) error {
+	config, err := withStagedBuildArtifactsForNoCache(config)
+	if err != nil {
+		return err
+	}
+
+	scriptPath := filepath.Join(GetDirectoriesInstance().GetDirectories().ProjectDir, relativeScriptPath)
 	args := []string{
 		scriptPath,
 		"--project-root", GetDirectoriesInstance().GetDirectories().ProjectDir,
-		"--build-output-dir", getDarwinQemuBuildOutputDir(config),
+		"--build-output-dir", getQemuBuildOutputDir(config),
 		"--arch", config.Arch,
 		"--vnc-port", fmt.Sprintf("%d", config.VncPort),
 		"--cpus", getVmCpuCountString(config),
 		"--memory", fmt.Sprintf("%d", getVmMemoryMB(config)),
+	}
+	if stagedArtifact, ok := firstStagedBuildArtifact(config); ok {
+		args = append(args, "--artifact-output-path", stagedArtifact)
 	}
 	if config.Headless {
 		args = append(args, "--headless")

@@ -33,6 +33,12 @@ const (
 	utmWindowsAnsibleWinrmTransportEnvVar = "UTM_WINDOWS_ANSIBLE_WINRM_TRANSPORT"
 	utmWindowsAnsiblePortEnvVar           = "UTM_WINDOWS_ANSIBLE_PORT"
 
+	libvirtWindowsAnsibleUserEnvVar           = "LIBVIRT_WINDOWS_ANSIBLE_USER"
+	libvirtWindowsAnsiblePasswordEnvVar       = "LIBVIRT_WINDOWS_ANSIBLE_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
+	libvirtWindowsAnsibleConnectionEnvVar     = "LIBVIRT_WINDOWS_ANSIBLE_CONNECTION"
+	libvirtWindowsAnsibleWinrmTransportEnvVar = "LIBVIRT_WINDOWS_ANSIBLE_WINRM_TRANSPORT"
+	libvirtWindowsAnsiblePortEnvVar           = "LIBVIRT_WINDOWS_ANSIBLE_PORT"
+
 	hypervUbuntuAnsibleUserEnvVar           = "HYPERV_UBUNTU_ANSIBLE_USER"
 	hypervUbuntuAnsiblePasswordEnvVar       = "HYPERV_UBUNTU_ANSIBLE_PASSWORD"        // #nosec G101 -- environment variable name, not an embedded credential.
 	hypervUbuntuAnsibleBecomePasswordEnvVar = "HYPERV_UBUNTU_ANSIBLE_BECOME_PASSWORD" // #nosec G101 -- environment variable name, not an embedded credential.
@@ -258,6 +264,9 @@ func RunProvisionWithOptions(vm alchemy_build.VirtualMachineConfig, options Prov
 	if isUtmWindows11ProvisionTarget(vm) {
 		return runUtmWindows11Provision(vm, options)
 	}
+	if isLinuxQemuWindows11ProvisionTarget(vm) {
+		return runLinuxQemuWindows11Provision(vm, options)
+	}
 	if isUtmUbuntuProvisionTarget(vm) {
 		return runUtmUbuntuProvision(vm, options)
 	}
@@ -309,6 +318,13 @@ func isUtmUbuntuProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
 func isLinuxQemuUbuntuProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
 	return vm.OS == "ubuntu" &&
 		(vm.UbuntuType == "server" || vm.UbuntuType == "desktop") &&
+		(vm.Arch == "amd64" || vm.Arch == "arm64") &&
+		vm.HostOs == alchemy_build.HostOsLinux &&
+		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineQemu
+}
+
+func isLinuxQemuWindows11ProvisionTarget(vm alchemy_build.VirtualMachineConfig) bool {
+	return vm.OS == "windows11" &&
 		(vm.Arch == "amd64" || vm.Arch == "arm64") &&
 		vm.HostOs == alchemy_build.HostOsLinux &&
 		vm.VirtualizationEngine == alchemy_build.VirtualizationEngineQemu
@@ -412,6 +428,44 @@ func runUtmWindows11Provision(vm alchemy_build.VirtualMachineConfig, options Pro
 	}
 
 	runErr := runAnsibleProvisionCommand(projectDir, args, 90*time.Minute, fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch))
+
+	cleanupErr := cleanupExtraVarsFile()
+	if runErr != nil {
+		if cleanupErr != nil {
+			return fmt.Errorf("ansible provisioning failed for %s:%s: %w (also failed to remove ansible extra-vars temp file: %v)", vm.OS, vm.Arch, runErr, cleanupErr)
+		}
+		return fmt.Errorf("ansible provisioning failed for %s:%s: %w", vm.OS, vm.Arch, runErr)
+	}
+	if cleanupErr != nil {
+		return fmt.Errorf("failed to remove ansible extra-vars temp file for %s:%s: %w", vm.OS, vm.Arch, cleanupErr)
+	}
+
+	return nil
+}
+
+func runLinuxQemuWindows11Provision(vm alchemy_build.VirtualMachineConfig, options ProvisionOptions) error {
+	if err := ensureProvisionTargetRunning(vm); err != nil {
+		return err
+	}
+
+	projectDir := alchemy_build.GetDirectoriesInstance().ProjectDir
+
+	ip, err := discoverLinuxLibvirtVMIPv4(projectDir, vm)
+	if err != nil {
+		return fmt.Errorf("failed to determine libvirt VM IPv4 address: %w", err)
+	}
+
+	connectionConfig, err := loadWindowsLibvirtAnsibleConnectionConfig(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to load libvirt windows ansible configuration: %w", err)
+	}
+
+	args, cleanupExtraVarsFile, err := buildWindowsProvisionArgs(projectDir, ip, connectionConfig, options)
+	if err != nil {
+		return fmt.Errorf("failed to build ansible arguments for discovered host %q: %w", ip, err)
+	}
+
+	runErr := runAnsibleProvisionCommandFunc(projectDir, args, 90*time.Minute, fmt.Sprintf("%s:%s:provision", vm.OS, vm.Arch))
 
 	cleanupErr := cleanupExtraVarsFile()
 	if runErr != nil {
@@ -1538,6 +1592,16 @@ func loadWindowsUtmAnsibleConnectionConfig(projectDir string) (windowsAnsibleCon
 		Connection:     utmWindowsAnsibleConnectionEnvVar,
 		WinrmTransport: utmWindowsAnsibleWinrmTransportEnvVar,
 		Port:           utmWindowsAnsiblePortEnvVar,
+	})
+}
+
+func loadWindowsLibvirtAnsibleConnectionConfig(projectDir string) (windowsAnsibleConnectionConfig, error) {
+	return loadWindowsAnsibleConnectionConfig(projectDir, windowsAnsibleConnectionEnvVars{
+		User:           libvirtWindowsAnsibleUserEnvVar,
+		Password:       libvirtWindowsAnsiblePasswordEnvVar,
+		Connection:     libvirtWindowsAnsibleConnectionEnvVar,
+		WinrmTransport: libvirtWindowsAnsibleWinrmTransportEnvVar,
+		Port:           libvirtWindowsAnsiblePortEnvVar,
 	})
 }
 
