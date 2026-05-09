@@ -2,6 +2,8 @@ package build
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -105,6 +107,9 @@ func TestWindows11Amd64LinuxQemuDependencyReconciliationIncludesVirtioWinISO(t *
 		if dep.LocalPath == wantPath {
 			if dep.Checksum != wantChecksum {
 				t.Fatalf("expected virtio-win dependency checksum %q, got %q", wantChecksum, dep.Checksum)
+			}
+			if len(dep.FallbackSources) != 2 {
+				t.Fatalf("expected virtio-win dependency to include 2 fallback sources, got %d: %v", len(dep.FallbackSources), dep.FallbackSources)
 			}
 			return
 		}
@@ -323,6 +328,41 @@ func TestDownloadWebFileDependencySelectsFastestURL(t *testing.T) {
 
 	if err := downloadWebFileDependency(nil, dep); err != nil {
 		t.Fatalf("downloadWebFileDependency returned error: %v", err)
+	}
+
+	got, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("failed to read downloaded file: %v", err)
+	}
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("downloaded file contents mismatch: got %q want %q", string(got), string(expected))
+	}
+}
+
+func TestDownloadWebFileDependencyRetriesFallbackAfterChecksumMismatch(t *testing.T) {
+	expected := []byte("expected virtio payload")
+	checksum := sha256.Sum256(expected)
+
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("unexpected virtio payload"))
+	}))
+	defer bad.Close()
+
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(expected)
+	}))
+	defer good.Close()
+
+	destPath := filepath.Join(t.TempDir(), "artifact.iso")
+	dep := WebFileDependency{
+		LocalPath:       destPath,
+		Source:          bad.URL + "/artifact.iso",
+		FallbackSources: []string{good.URL + "/artifact.iso"},
+		Checksum:        fmt.Sprintf("sha256:%x", checksum),
+	}
+
+	if err := downloadWebFileDependency(nil, dep); err != nil {
+		t.Fatalf("downloadWebFileDependency returned error after fallback source: %v", err)
 	}
 
 	got, err := os.ReadFile(destPath)

@@ -5,10 +5,12 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -80,6 +82,7 @@ type WebFileDependency struct {
 	LocalPath        string
 	Checksum         string
 	Source           string
+	FallbackSources  []string
 	RelatedVmConfigs []VirtualMachineConfig
 	// BeforeHook is a function that is called before downloading the dependency. It can be used to modify the Source URL dynamically.
 	BeforeHook func() (string, error)
@@ -640,9 +643,10 @@ func getWebFileDependencies() []WebFileDependency {
 			},
 		},
 		{
-			LocalPath: GetDirectoriesInstance().CachePath("windows", "virtio-win.iso"),
-			Checksum:  "sha256:" + virtioWinSHA256,
-			Source:    virtioWinISOURLFromArchive(virtioWinFedoraArchiveURL, virtioWinVersion),
+			LocalPath:       GetDirectoriesInstance().CachePath("windows", "virtio-win.iso"),
+			Checksum:        "sha256:" + virtioWinSHA256,
+			Source:          virtioWinISOURLFromArchive(virtioWinFedoraArchiveURL, virtioWinVersion),
+			FallbackSources: virtioWinISOURLs(virtioWinVersion),
 			BeforeHook: func() (string, error) {
 				return selectFastestVirtioWinISOURL(virtioWinVersion)
 			},
@@ -804,11 +808,35 @@ func downloadWebFileDependency(p *mpb.Progress, dep WebFileDependency) error {
 		dep.Source = newSource
 	}
 
-	src := dep.Source
-	if dep.Checksum != "" {
-		src = src + "?checksum=" + dep.Checksum
+	sources := downloadSources(dep.Source, dep.FallbackSources)
+	if len(sources) == 0 {
+		return fmt.Errorf("no download source configured for %s", dep.LocalPath)
 	}
 
+	var failures []string
+	for index, source := range sources {
+		err := downloadWebFileDependencyFromSource(p, dep, source)
+		if err == nil {
+			return nil
+		}
+
+		failures = append(failures, fmt.Sprintf("%s: %v", source, err))
+		if index == len(sources)-1 {
+			break
+		}
+
+		if isChecksumMismatch(err) {
+			log.Printf("Checksum mismatch downloading %s from %s; trying fallback source", dep.LocalPath, source)
+		} else {
+			log.Printf("Failed to download %s from %s; trying fallback source: %v", dep.LocalPath, source, err)
+		}
+	}
+
+	return fmt.Errorf("failed to download web file dependency from all sources: %s", strings.Join(failures, "; "))
+}
+
+func downloadWebFileDependencyFromSource(p *mpb.Progress, dep WebFileDependency, source string) error {
+	src := sourceWithChecksum(source, dep.Checksum)
 	listener := &ProgressBarListener{progress: p}
 	client := &getter.Client{
 		Src:              src,
@@ -823,15 +851,52 @@ func downloadWebFileDependency(p *mpb.Progress, dep WebFileDependency) error {
 		if listener.bar != nil {
 			listener.bar.Abort(false)
 		}
-		log.Printf("Failed to download web file dependency from %s to %s: %v", dep.Source, dep.LocalPath, err)
+		log.Printf("Failed to download web file dependency from %s to %s: %v", source, dep.LocalPath, err)
 		return err
 	}
 	if listener.bar != nil {
 		// Mark bar complete; mpb renders it as done and removes it from the live display.
 		listener.bar.SetTotal(listener.bar.Current(), true)
 	}
-	log.Printf("Successfully downloaded web file dependency from %s to %s", dep.Source, dep.LocalPath)
+	log.Printf("Successfully downloaded web file dependency from %s to %s", source, dep.LocalPath)
 	return nil
+}
+
+func downloadSources(primary string, fallbacks []string) []string {
+	seen := map[string]bool{}
+	sources := make([]string, 0, 1+len(fallbacks))
+	for _, source := range append([]string{primary}, fallbacks...) {
+		if source == "" || seen[source] {
+			continue
+		}
+		seen[source] = true
+		sources = append(sources, source)
+	}
+	return sources
+}
+
+func sourceWithChecksum(source, checksum string) string {
+	if checksum == "" {
+		return source
+	}
+	parsed, err := url.Parse(source)
+	if err == nil && parsed.Scheme != "" {
+		query := parsed.Query()
+		query.Set("checksum", checksum)
+		parsed.RawQuery = query.Encode()
+		return parsed.String()
+	}
+
+	separator := "?"
+	if strings.Contains(source, "?") {
+		separator = "&"
+	}
+	return source + separator + "checksum=" + url.QueryEscape(checksum)
+}
+
+func isChecksumMismatch(err error) bool {
+	var checksumErr *getter.ChecksumError
+	return errors.As(err, &checksumErr)
 }
 
 func checkIfWebFileDependencyExists(dep WebFileDependency) bool {
