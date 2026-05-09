@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestHostSupportsVncRecording(t *testing.T) {
@@ -40,6 +41,12 @@ func TestHostSupportsVncViewer(t *testing.T) {
 		if got := hostSupportsVncViewer(tc.goos); got != tc.want {
 			t.Fatalf("hostSupportsVncViewer(%q) = %v, want %v", tc.goos, got, tc.want)
 		}
+	}
+}
+
+func TestBuildScriptTimeoutAllowsFiveHourBuilds(t *testing.T) {
+	if buildScriptTimeout != 5*time.Hour {
+		t.Fatalf("expected build script timeout to be 5h, got %s", buildScriptTimeout)
 	}
 }
 

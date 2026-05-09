@@ -20,6 +20,7 @@ import (
 const (
 	auxiliaryLogSilenceStartMarker = "__DEV_ALCHEMY_SILENT_HELPERS_ON__"
 	auxiliaryLogSilenceEndMarker   = "__DEV_ALCHEMY_SILENT_HELPERS_OFF__"
+	buildScriptTimeout             = 5 * time.Hour
 )
 
 type buildCompletionDecision struct {
@@ -54,8 +55,7 @@ func RunBuildScript(config VirtualMachineConfig, executable string, args []strin
 	// Check if VNC port is free, if not, increment until a free port is found
 	_ = getFreeVncPort(&config)
 
-	// Set a timeout for the script execution (adjust as needed)
-	timeout := 240 * time.Minute
+	timeout := buildScriptTimeout
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

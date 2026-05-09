@@ -136,7 +136,7 @@ jobs:
       DEV_ALCHEMY_VAGRANT_DIR: ${{ github.workspace }}/.dev-alchemy/.vagrant
       DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
       PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
-    timeout-minutes: 260
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -345,7 +345,7 @@ jobs:
       DEV_ALCHEMY_VAGRANT_DIR: ${{ github.workspace }}/.dev-alchemy/.vagrant
       DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
       PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
-    timeout-minutes: 260
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -479,7 +479,7 @@ jobs:
       DEV_ALCHEMY_VAGRANT_DIR: ${{ github.workspace }}/.dev-alchemy/.vagrant
       DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
       PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
-    timeout-minutes: 260
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
