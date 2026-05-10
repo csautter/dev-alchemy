@@ -10,9 +10,11 @@ import (
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
 	alchemy_oci "github.com/csautter/dev-alchemy/pkg/oci"
 	"github.com/spf13/cobra"
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
 )
 
-type ociTransferRunner func(context.Context, alchemy_build.VirtualMachineConfig, string, alchemy_oci.RegistryOptions) (alchemy_oci.TransferResult, error)
+type ociTransferRunner func(context.Context, alchemy_build.VirtualMachineConfig, string, alchemy_oci.RegistryOptions, alchemy_oci.TransferProgress) (alchemy_oci.TransferResult, error)
 
 var (
 	ociOS                       string
@@ -30,11 +32,11 @@ var (
 	ociRefreshToken             string
 	ociDisableDockerCredentials bool
 
-	runOCIPush ociTransferRunner = func(ctx context.Context, vm alchemy_build.VirtualMachineConfig, reference string, opts alchemy_oci.RegistryOptions) (alchemy_oci.TransferResult, error) {
-		return alchemy_oci.Push(ctx, vm, reference, alchemy_oci.PushOptions{RegistryOptions: opts})
+	runOCIPush ociTransferRunner = func(ctx context.Context, vm alchemy_build.VirtualMachineConfig, reference string, opts alchemy_oci.RegistryOptions, progress alchemy_oci.TransferProgress) (alchemy_oci.TransferResult, error) {
+		return alchemy_oci.Push(ctx, vm, reference, alchemy_oci.PushOptions{RegistryOptions: opts, Progress: progress})
 	}
-	runOCIPull ociTransferRunner = func(ctx context.Context, vm alchemy_build.VirtualMachineConfig, reference string, opts alchemy_oci.RegistryOptions) (alchemy_oci.TransferResult, error) {
-		return alchemy_oci.Pull(ctx, vm, reference, alchemy_oci.PullOptions{RegistryOptions: opts})
+	runOCIPull ociTransferRunner = func(ctx context.Context, vm alchemy_build.VirtualMachineConfig, reference string, opts alchemy_oci.RegistryOptions, progress alchemy_oci.TransferProgress) (alchemy_oci.TransferResult, error) {
+		return alchemy_oci.Pull(ctx, vm, reference, alchemy_oci.PullOptions{RegistryOptions: opts, Progress: progress})
 	}
 	inspectOCIArtifactState = localOCIArtifactState
 )
@@ -226,7 +228,78 @@ func ociRegistryOptions(cmd *cobra.Command) (alchemy_oci.RegistryOptions, error)
 	}, nil
 }
 
-func runOCITransfer(cmd *cobra.Command, reference string, runner ociTransferRunner) (alchemy_oci.TransferResult, error) {
+type ociProgressReporter struct {
+	action   string
+	output   io.Writer
+	progress *mpb.Progress
+	bar      *mpb.Bar
+	total    int64
+}
+
+func newOCIProgressReporter(action string, output io.Writer) *ociProgressReporter {
+	return &ociProgressReporter{
+		action: action,
+		output: output,
+	}
+}
+
+func (p *ociProgressReporter) Start(totalBytes int64) {
+	if p == nil || p.output == nil {
+		return
+	}
+	p.total = totalBytes
+	p.progress = mpb.New(mpb.WithWidth(80), mpb.WithOutput(p.output))
+	p.bar = p.progress.AddBar(totalBytes,
+		mpb.PrependDecorators(
+			decor.Name(fmt.Sprintf("%-24s", p.action+" artifact")),
+		),
+		mpb.AppendDecorators(
+			decor.CountersKibiByte("% .2f / % .2f"),
+			decor.Name(" | "),
+			decor.Percentage(),
+			decor.Name(" | "),
+			decor.AverageSpeed(decor.SizeB1024(0), "% .2f"),
+			decor.Name(" | "),
+			decor.AverageETA(decor.ET_STYLE_GO),
+		),
+	)
+}
+
+func (p *ociProgressReporter) Add(bytes int64) {
+	if p == nil || p.bar == nil || bytes <= 0 {
+		return
+	}
+	p.bar.IncrInt64(bytes)
+}
+
+func (p *ociProgressReporter) Done(success bool) {
+	if p == nil || p.progress == nil {
+		return
+	}
+	if p.bar != nil {
+		if success {
+			p.bar.SetTotal(p.total, true)
+		} else {
+			p.bar.Abort(false)
+		}
+	}
+	p.progress.Wait()
+	p.progress = nil
+	p.bar = nil
+}
+
+func (p *ociProgressReporter) Status(message string) {
+	if p == nil || p.output == nil || message == "" {
+		return
+	}
+	if p.progress != nil {
+		_, _ = fmt.Fprintln(p.progress, message)
+		return
+	}
+	_, _ = fmt.Fprintln(p.output, message)
+}
+
+func runOCITransfer(cmd *cobra.Command, reference string, action string, runner ociTransferRunner) (alchemy_oci.TransferResult, error) {
 	vm, err := resolveOCIVirtualMachine(ociHostOS, ociOS, ociType, ociArch, ociEngine)
 	if err != nil {
 		return alchemy_oci.TransferResult{}, err
@@ -235,7 +308,7 @@ func runOCITransfer(cmd *cobra.Command, reference string, runner ociTransferRunn
 	if err != nil {
 		return alchemy_oci.TransferResult{}, err
 	}
-	return runner(cmd.Context(), vm, reference, options)
+	return runner(cmd.Context(), vm, reference, options, newOCIProgressReporter(action, cmd.ErrOrStderr()))
 }
 
 func printOCITransferResult(action string, result alchemy_oci.TransferResult) {
@@ -257,7 +330,7 @@ Examples:
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := runOCITransfer(cmd, args[0], runOCIPush)
+		result, err := runOCITransfer(cmd, args[0], "pushing", runOCIPush)
 		if err != nil {
 			return err
 		}
@@ -286,7 +359,7 @@ Examples:
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := runOCITransfer(cmd, args[0], runOCIPull)
+		result, err := runOCITransfer(cmd, args[0], "pulling", runOCIPull)
 		if err != nil {
 			return err
 		}

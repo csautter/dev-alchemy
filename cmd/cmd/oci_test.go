@@ -93,6 +93,17 @@ func TestOCIRegistryOptionsIncludeTLSSettings(t *testing.T) {
 	}
 }
 
+func TestOCIProgressReporterWritesStatusToOutput(t *testing.T) {
+	var output bytes.Buffer
+	reporter := newOCIProgressReporter("pushing", &output)
+
+	reporter.Status("Hashing local artifact /tmp/artifact.qcow2")
+
+	if got := output.String(); !strings.Contains(got, "Hashing local artifact /tmp/artifact.qcow2") {
+		t.Fatalf("expected status output, got %q", got)
+	}
+}
+
 func TestLocalOCIArtifactStateDetectsMissingPartialAndExistingArtifacts(t *testing.T) {
 	tempDir := t.TempDir()
 	artifactA := filepath.Join(tempDir, "artifact-a.qcow2")
