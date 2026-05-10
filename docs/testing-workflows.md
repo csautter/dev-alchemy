@@ -75,6 +75,18 @@ The OCI client reads Docker credentials by default, so `docker login` works for
 authenticated registries. Use `--username`, `--password-stdin`, or
 `--access-token` when you want command-specific credentials.
 
+The gh actions build workflow publishes completed Ubuntu artifacts to GitHub
+Container Registry on `main` and on manual `workflow_dispatch` runs. Artifacts
+are stored under `ghcr.io/<owner>/ubuntu-24` with tags using the
+`<type>-<arch>-<hostos>-build` schema, for example:
+
+```bash
+ghcr.io/csautter/ubuntu-24:server-amd64-linux-build
+ghcr.io/csautter/ubuntu-24:desktop-arm64-linux-build
+```
+
+Windows VM build artifacts are intentionally not published.
+
 For HTTPS registries with an internal or self-signed certificate, prefer adding
 the registry CA with `--ca-file /path/to/ca.pem`. For short-lived testing
 against a registry you already trust, `--insecure-skip-tls-verify` disables TLS

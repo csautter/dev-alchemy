@@ -3,6 +3,7 @@ name: Test Packer Build on Linux for VMs
 permissions:
   contents: read
   id-token: write
+  packages: write
 
 on:
   workflow_dispatch:
@@ -37,6 +38,29 @@ on:
         required: false
         default: "cax21"
         type: string
+  push:
+    branches: [main]
+    paths:
+      - "cmd/main.go"
+      - "cmd/cmd/**"
+      - "build/packer/linux/*"
+      - "build/packer/linux/**/*"
+      - "build/packer/windows/*"
+      - "build/packer/windows/**/*"
+      - "pkg/build/**"
+      - "pkg/deploy/**"
+      - "pkg/oci/**"
+      - "pkg/provision/**"
+      - "scripts/linux/*"
+      - "scripts/linux/**/*"
+      - "scripts/macos/create-win11-autounattend-iso.sh"
+      - "scripts/macos/playwright_win11_iso.py"
+      - "scripts/macos/requirements.txt"
+      - "scripts/macos/download-arm64-uefi.sh"
+      - "scripts/macos/download-utm-guest-tools.sh"
+      - "scripts/macos/download-virtio-win-iso.sh"
+      - ".github/workflows/test-build-linux.yml"
+      - ".github/actions/hetzner-github-runner/**"
   pull_request:
     paths:
       - "cmd/main.go"
@@ -47,6 +71,7 @@ on:
       - "build/packer/windows/**/*"
       - "pkg/build/**"
       - "pkg/deploy/**"
+      - "pkg/oci/**"
       - "pkg/provision/**"
       - "scripts/linux/*"
       - "scripts/linux/**/*"
@@ -63,9 +88,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
+env:
+  OCI_UBUNTU_IMAGE: ghcr.io/${{ github.repository_owner }}/ubuntu-24
+
 jobs:
   test-cold-cache-dependency-bootstrap:
-    if: github.event_name == 'pull_request' || inputs.enable_linux_qemu
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu
     name: cold-cache dependency bootstrap
     runs-on: ubuntu-24.04
     env:
@@ -107,7 +135,7 @@ jobs:
           go test -timeout 45m -v ./pkg/build -run '^(TestGetWindows11DownloadAmd64|TestGetWindows11DownloadArm64|TestResolveDebianPackageURL|TestResolveAndDownloadQemuEfiAarch64)$'
 
   determine-runner-mode:
-    if: github.event_name == 'pull_request' || inputs.enable_linux_qemu
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu
     runs-on: ubuntu-latest
     outputs:
       use-hetzner: ${{ steps.mode.outputs.use-hetzner }}
@@ -127,7 +155,7 @@ jobs:
 
   test-packer-build-hosted:
     needs: [determine-runner-mode]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner != 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner != 'true'
     name: build ${{ matrix.go_test_name }} runner_os ${{ matrix.runs_on }}
     runs-on: ${{ matrix.runs_on }}
     env:
@@ -141,7 +169,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
+          - vm_os: ubuntu
+            ubuntu_type: server
+            arch: amd64
             go_test_name: TestBuildQemuUbuntuServerAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
             runs_on: ubuntu-24.04
@@ -149,7 +179,9 @@ jobs:
             packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
-          - arch: amd64
+          - vm_os: ubuntu
+            ubuntu_type: desktop
+            arch: amd64
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
             runs_on: ubuntu-24.04
@@ -157,7 +189,9 @@ jobs:
             packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
-          - arch: amd64
+          - vm_os: windows11
+            ubuntu_type: ""
+            arch: amd64
             go_test_name: TestBuildQemuWindows11Amd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Amd64OnLinux
             runs_on: ubuntu-24.04
@@ -167,7 +201,9 @@ jobs:
               [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},
                {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
                {"local-path":"./.dev-alchemy/cache/windows/virtio-win.iso"}]
-          - arch: arm64
+          - vm_os: ubuntu
+            ubuntu_type: server
+            arch: arm64
             go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
             runs_on: ubuntu-24.04-arm
@@ -176,7 +212,9 @@ jobs:
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
-          - arch: arm64
+          - vm_os: ubuntu
+            ubuntu_type: desktop
+            arch: arm64
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
             runs_on: ubuntu-24.04-arm
@@ -185,7 +223,9 @@ jobs:
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
-          - arch: arm64
+          - vm_os: windows11
+            ubuntu_type: ""
+            arch: arm64
             go_test_name: TestBuildQemuWindows11Arm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Arm64OnLinux
             runs_on: ubuntu-24.04-arm
@@ -250,6 +290,25 @@ jobs:
           go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
+      - name: Push Ubuntu OCI artifact to GHCR
+        id: oci_push
+        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        shell: bash
+        continue-on-error: true
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"
+          echo "Pushing ${reference}"
+          printf '%s' "${GHCR_TOKEN}" | go run cmd/main.go push "${reference}" \
+            --os ubuntu \
+            --type "${{ matrix.ubuntu_type }}" \
+            --arch "${{ matrix.arch }}" \
+            --host-os linux \
+            --engine qemu \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
         run: |
@@ -290,15 +349,15 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
-      - name: Fail if dependency reconciliation or build smoke test failed
-        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure')
+      - name: Fail if dependency reconciliation, build, or OCI publish failed
+        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure' || steps.oci_push.outcome == 'failure')
         run: |
-          echo "Dependency reconciliation and/or build smoke test failed. Failing workflow."
+          echo "Dependency reconciliation, build smoke test, and/or OCI publish failed. Failing workflow."
           exit 1
 
   provision-hetzner-linux-amd64-runner:
     needs: [determine-runner-mode]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     outputs:
       runner-label: ${{ steps.provision.outputs.label }}
@@ -322,7 +381,7 @@ jobs:
 
   provision-hetzner-linux-arm64-runner:
     needs: [determine-runner-mode]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     outputs:
       runner-label: ${{ steps.provision.outputs.label }}
@@ -346,7 +405,7 @@ jobs:
 
   test-packer-build-hetzner-amd64:
     needs: [determine-runner-mode, provision-hetzner-linux-amd64-runner]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     name: build ${{ matrix.go_test_name }} on Hetzner
     runs-on:
       - self-hosted
@@ -364,21 +423,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
+          - vm_os: ubuntu
+            ubuntu_type: server
+            arch: amd64
             go_test_name: TestBuildQemuUbuntuServerAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
             packer_start_only: "false"
             packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
-          - arch: amd64
+          - vm_os: ubuntu
+            ubuntu_type: desktop
+            arch: amd64
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
             packer_start_only: "false"
             packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
-          - arch: amd64
+          - vm_os: windows11
+            ubuntu_type: ""
+            arch: amd64
             go_test_name: TestBuildQemuWindows11Amd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Amd64OnLinux
             packer_start_only: "true"
@@ -440,6 +505,25 @@ jobs:
           go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
+      - name: Push Ubuntu OCI artifact to GHCR
+        id: oci_push
+        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        shell: bash
+        continue-on-error: true
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"
+          echo "Pushing ${reference}"
+          printf '%s' "${GHCR_TOKEN}" | go run cmd/main.go push "${reference}" \
+            --os ubuntu \
+            --type "${{ matrix.ubuntu_type }}" \
+            --arch "${{ matrix.arch }}" \
+            --host-os linux \
+            --engine qemu \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
         run: |
@@ -480,15 +564,15 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
-      - name: Fail if dependency reconciliation or build smoke test failed
-        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure')
+      - name: Fail if dependency reconciliation, build, or OCI publish failed
+        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure' || steps.oci_push.outcome == 'failure')
         run: |
-          echo "Dependency reconciliation and/or build smoke test failed. Failing workflow."
+          echo "Dependency reconciliation, build smoke test, and/or OCI publish failed. Failing workflow."
           exit 1
 
   test-packer-build-hetzner-arm64:
     needs: [determine-runner-mode, provision-hetzner-linux-arm64-runner]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     name: build ${{ matrix.go_test_name }} on Hetzner
     runs-on:
       - self-hosted
@@ -506,7 +590,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: arm64
+          - vm_os: ubuntu
+            ubuntu_type: server
+            arch: arm64
             go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
             packer_start_only: "false"
@@ -514,7 +600,9 @@ jobs:
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
-          - arch: arm64
+          - vm_os: ubuntu
+            ubuntu_type: desktop
+            arch: arm64
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
             packer_start_only: "false"
@@ -522,7 +610,9 @@ jobs:
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
-          - arch: arm64
+          - vm_os: windows11
+            ubuntu_type: ""
+            arch: arm64
             go_test_name: TestBuildQemuWindows11Arm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Arm64OnLinux
             packer_start_only: "true"
@@ -585,6 +675,25 @@ jobs:
           go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
+      - name: Push Ubuntu OCI artifact to GHCR
+        id: oci_push
+        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        shell: bash
+        continue-on-error: true
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"
+          echo "Pushing ${reference}"
+          printf '%s' "${GHCR_TOKEN}" | go run cmd/main.go push "${reference}" \
+            --os ubuntu \
+            --type "${{ matrix.ubuntu_type }}" \
+            --arch "${{ matrix.arch }}" \
+            --host-os linux \
+            --engine qemu \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
         run: |
@@ -625,15 +734,15 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
-      - name: Fail if dependency reconciliation or build smoke test failed
-        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure')
+      - name: Fail if dependency reconciliation, build, or OCI publish failed
+        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure' || steps.oci_push.outcome == 'failure')
         run: |
-          echo "Dependency reconciliation and/or build smoke test failed. Failing workflow."
+          echo "Dependency reconciliation, build smoke test, and/or OCI publish failed. Failing workflow."
           exit 1
 
   watch-hetzner-linux-amd64-runner-queue:
     needs: [determine-runner-mode, provision-hetzner-linux-amd64-runner]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -725,7 +834,7 @@ jobs:
 
   watch-hetzner-linux-arm64-runner-queue:
     needs: [determine-runner-mode, provision-hetzner-linux-arm64-runner]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -821,7 +930,7 @@ jobs:
       - provision-hetzner-linux-amd64-runner
       - test-packer-build-hetzner-amd64
       - watch-hetzner-linux-amd64-runner-queue
-    if: always() && (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -843,7 +952,7 @@ jobs:
       - provision-hetzner-linux-arm64-runner
       - test-packer-build-hetzner-arm64
       - watch-hetzner-linux-arm64-runner-queue
-    if: always() && (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

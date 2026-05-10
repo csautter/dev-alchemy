@@ -721,6 +721,79 @@ func TestLinuxWorkflowRunsWindowsQemuBuilds(t *testing.T) {
 	}
 }
 
+func TestLinuxWorkflowPublishesUbuntuArtifactsToGHCR(t *testing.T) {
+	t.Parallel()
+
+	workflowPath := ".github/workflows/test-build-linux.yml"
+	content, err := os.ReadFile(repoPath(t, workflowPath))
+	if err != nil {
+		t.Fatalf("failed to read workflow %q: %v", workflowPath, err)
+	}
+
+	got := string(content)
+	for _, want := range []string{
+		`packages: write`,
+		`branches: [main]`,
+		`pkg/oci/**`,
+		`OCI_UBUNTU_IMAGE: ghcr.io/${{ github.repository_owner }}/ubuntu-24`,
+		`name: Push Ubuntu OCI artifact to GHCR`,
+		`matrix.vm_os == 'ubuntu'`,
+		`github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'`,
+		`reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"`,
+		`go run cmd/main.go push "${reference}"`,
+		`--os ubuntu`,
+		`--host-os linux`,
+		`--engine qemu`,
+		`--username "${GITHUB_ACTOR}"`,
+		`--password-stdin`,
+		`steps.oci_push.outcome == 'failure'`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected Linux workflow to contain %q", want)
+		}
+	}
+
+	if strings.Count(got, `name: Push Ubuntu OCI artifact to GHCR`) != 3 {
+		t.Fatalf("expected each Linux build job to include one OCI publish step")
+	}
+	if strings.Contains(got, `--os windows11`) {
+		t.Fatal("expected Linux workflow not to publish Windows OCI artifacts")
+	}
+
+	for _, tc := range []struct {
+		testName   string
+		ubuntuType string
+	}{
+		{testName: "TestBuildQemuUbuntuServerAmd64OnLinux", ubuntuType: "server"},
+		{testName: "TestBuildQemuUbuntuDesktopAmd64OnLinux", ubuntuType: "desktop"},
+		{testName: "TestBuildQemuUbuntuServerArm64OnLinux", ubuntuType: "server"},
+		{testName: "TestBuildQemuUbuntuDesktopArm64OnLinux", ubuntuType: "desktop"},
+	} {
+		for _, entry := range workflowMatrixEntriesForTest(t, got, tc.testName) {
+			for _, want := range []string{
+				`vm_os: ubuntu`,
+				`ubuntu_type: ` + tc.ubuntuType,
+				`packer_start_only: "false"`,
+			} {
+				if !strings.Contains(entry, want) {
+					t.Fatalf("expected Linux workflow matrix entry for %s to contain %q", tc.testName, want)
+				}
+			}
+		}
+	}
+
+	for _, testName := range []string{
+		"TestBuildQemuWindows11Amd64OnLinux",
+		"TestBuildQemuWindows11Arm64OnLinux",
+	} {
+		for _, entry := range workflowMatrixEntriesForTest(t, got, testName) {
+			if !strings.Contains(entry, `vm_os: windows11`) {
+				t.Fatalf("expected Linux workflow matrix entry for %s to mark Windows VM OS", testName)
+			}
+		}
+	}
+}
+
 func TestMacOSWorkflowDefaultsToGitHubHostedRunnersWithTartOptIn(t *testing.T) {
 	t.Parallel()
 
