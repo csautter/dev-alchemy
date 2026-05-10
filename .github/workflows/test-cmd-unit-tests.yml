@@ -8,14 +8,20 @@ on:
       - "cmd/main.go"
       - "cmd/cmd/**"
       - ".github/workflows/test-cmd-unit-tests.yml"
+      - "go.mod"
+      - "go.sum"
       - "pkg/build/**"
+      - "pkg/oci/**"
       - "runtimeassets.go"
   pull_request:
     paths:
       - "cmd/main.go"
       - "cmd/cmd/**"
       - ".github/workflows/test-cmd-unit-tests.yml"
+      - "go.mod"
+      - "go.sum"
       - "pkg/build/**"
+      - "pkg/oci/**"
       - "runtimeassets.go"
   workflow_dispatch:
 
@@ -46,3 +52,6 @@ jobs:
 
       - name: Run build package tests
         run: go test ./pkg/build/...
+
+      - name: Run OCI package tests
+        run: go test ./pkg/oci/...
