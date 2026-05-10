@@ -46,6 +46,48 @@ alchemy start --help
 alchemy provision --help
 ```
 
+## OCI Build Artifact Registry Workflow
+
+Final build artifacts can be pushed to, and pulled from, an OCI registry. The
+commands use the same target vocabulary as the VM workflow and a Docker-like
+reference argument:
+
+```bash
+alchemy push localhost:5000/dev-alchemy/ubuntu-server-amd64:qemu \
+  --plain-http \
+  --os ubuntu \
+  --type server \
+  --arch amd64 \
+  --host-os linux
+
+alchemy pull localhost:5000/dev-alchemy/ubuntu-server-amd64:qemu \
+  --plain-http \
+  --os ubuntu \
+  --type server \
+  --arch amd64 \
+  --host-os linux
+```
+
+The OCI client reads Docker credentials by default, so `docker login` works for
+authenticated registries. Use `--username`, `--password-stdin`, or
+`--access-token` when you want command-specific credentials.
+
+For a local zot registry, use `--plain-http`. To run the opt-in integration test
+against that registry:
+
+```bash
+DEV_ALCHEMY_OCI_INTEGRATION_REF=localhost:5000/dev-alchemy/integration:oci \
+DEV_ALCHEMY_OCI_INTEGRATION_PLAIN_HTTP=true \
+go test ./pkg/oci -run TestOCIRegistryPushPullIntegration -count=1
+```
+
+The pushed artifact is an ordinary OCI artifact, so it can also be inspected
+with ORAS:
+
+```bash
+oras manifest fetch --plain-http localhost:5000/dev-alchemy/ubuntu-server-amd64:qemu
+```
+
 ## System-Agnostic Docker Workflow
 
 ## Local Host Provisioning

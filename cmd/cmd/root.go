@@ -21,6 +21,8 @@ Available Commands:
   destroy     Destroy a VM previously created on your system
   install     Install dependencies on the current host OS
   provision   Provision a VM with Ansible
+  pull        Pull VM build artifacts from an OCI registry
+  push        Push VM build artifacts to an OCI registry
   start       Start an existing VM on your system
   stop        Stop an existing VM on your system
   help        Help about any command
