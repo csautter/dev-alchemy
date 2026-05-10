@@ -2,12 +2,15 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
+	alchemy_oci "github.com/csautter/dev-alchemy/pkg/oci"
 	"github.com/spf13/cobra"
 )
 
@@ -90,6 +93,61 @@ func TestOCIRegistryOptionsIncludeTLSSettings(t *testing.T) {
 	}
 	if options.CAFile != "/tmp/dev-alchemy-test-ca.pem" {
 		t.Fatalf("expected CA file option, got %q", options.CAFile)
+	}
+}
+
+func TestConfirmOCIForeignArtifactUsePromptsForConfirmation(t *testing.T) {
+	previousAssumeYes := ociAssumeYes
+	t.Cleanup(func() {
+		ociAssumeYes = previousAssumeYes
+	})
+	ociAssumeYes = false
+
+	var output bytes.Buffer
+	command := &cobra.Command{}
+	command.SetIn(bytes.NewBufferString("yes\n"))
+	command.SetOut(&output)
+
+	confirmed, err := confirmOCIForeignArtifactUse(command)(context.Background(), testForeignOCIArtifact())
+	if err != nil {
+		t.Fatalf("expected foreign artifact confirmation to succeed: %v", err)
+	}
+	if !confirmed {
+		t.Fatal("expected foreign artifact confirmation")
+	}
+	for _, want := range []string{"foreign build artifact", "host_os=darwin", "engine=utm", "host_os=debian", "engine=qemu", "Continue? [y/N]:"} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("expected confirmation output to contain %q, got %q", want, output.String())
+		}
+	}
+}
+
+func TestConfirmOCIForeignArtifactUseSkipsPromptWhenYesFlagIsSet(t *testing.T) {
+	previousAssumeYes := ociAssumeYes
+	previousPrompt := promptForConfirmationFunc
+	t.Cleanup(func() {
+		ociAssumeYes = previousAssumeYes
+		promptForConfirmationFunc = previousPrompt
+	})
+	ociAssumeYes = true
+	promptForConfirmationFunc = func(input io.Reader, output io.Writer, prompt string) (bool, error) {
+		t.Fatal("did not expect confirmation prompt when --yes is set")
+		return false, nil
+	}
+
+	var stderr bytes.Buffer
+	command := &cobra.Command{}
+	command.SetErr(&stderr)
+
+	confirmed, err := confirmOCIForeignArtifactUse(command)(context.Background(), testForeignOCIArtifact())
+	if err != nil {
+		t.Fatalf("expected --yes to confirm foreign artifact: %v", err)
+	}
+	if !confirmed {
+		t.Fatal("expected --yes to confirm foreign artifact")
+	}
+	if !strings.Contains(stderr.String(), "Continuing because --yes is set") {
+		t.Fatalf("expected --yes warning output, got %q", stderr.String())
 	}
 }
 
@@ -240,5 +298,25 @@ func TestOCICommandsIncludeTLSFlags(t *testing.T) {
 				t.Fatalf("expected %s command to include --%s", command.Name(), flagName)
 			}
 		}
+	}
+}
+
+func TestPullCommandIncludesForeignArtifactYesFlag(t *testing.T) {
+	if pullCmd.Flags().Lookup("yes") == nil {
+		t.Fatal("expected pull command to include --yes")
+	}
+}
+
+func testForeignOCIArtifact() alchemy_oci.ForeignArtifact {
+	return alchemy_oci.ForeignArtifact{
+		OS:                             "ubuntu",
+		UbuntuType:                     "server",
+		Arch:                           "arm64",
+		SourceHostOS:                   alchemy_build.HostOsDarwin,
+		SourceVirtualizationEngine:     alchemy_build.VirtualizationEngineUtm,
+		TargetHostOS:                   alchemy_build.HostOsLinux,
+		TargetVirtualizationEngine:     alchemy_build.VirtualizationEngineQemu,
+		SourceHostOSAnnotation:         "darwin",
+		SourceVirtualizationAnnotation: "utm",
 	}
 }

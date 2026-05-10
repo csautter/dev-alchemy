@@ -14,7 +14,7 @@ import (
 	"github.com/vbauerster/mpb/v8/decor"
 )
 
-type ociTransferRunner func(context.Context, alchemy_build.VirtualMachineConfig, string, alchemy_oci.RegistryOptions, alchemy_oci.TransferProgress) (alchemy_oci.TransferResult, error)
+type ociTransferRunner func(*cobra.Command, context.Context, alchemy_build.VirtualMachineConfig, string, alchemy_oci.RegistryOptions, alchemy_oci.TransferProgress) (alchemy_oci.TransferResult, error)
 
 var (
 	ociOS                       string
@@ -31,12 +31,17 @@ var (
 	ociAccessToken              string
 	ociRefreshToken             string
 	ociDisableDockerCredentials bool
+	ociAssumeYes                bool
 
-	runOCIPush ociTransferRunner = func(ctx context.Context, vm alchemy_build.VirtualMachineConfig, reference string, opts alchemy_oci.RegistryOptions, progress alchemy_oci.TransferProgress) (alchemy_oci.TransferResult, error) {
+	runOCIPush ociTransferRunner = func(_ *cobra.Command, ctx context.Context, vm alchemy_build.VirtualMachineConfig, reference string, opts alchemy_oci.RegistryOptions, progress alchemy_oci.TransferProgress) (alchemy_oci.TransferResult, error) {
 		return alchemy_oci.Push(ctx, vm, reference, alchemy_oci.PushOptions{RegistryOptions: opts, Progress: progress})
 	}
-	runOCIPull ociTransferRunner = func(ctx context.Context, vm alchemy_build.VirtualMachineConfig, reference string, opts alchemy_oci.RegistryOptions, progress alchemy_oci.TransferProgress) (alchemy_oci.TransferResult, error) {
-		return alchemy_oci.Pull(ctx, vm, reference, alchemy_oci.PullOptions{RegistryOptions: opts, Progress: progress})
+	runOCIPull ociTransferRunner = func(cmd *cobra.Command, ctx context.Context, vm alchemy_build.VirtualMachineConfig, reference string, opts alchemy_oci.RegistryOptions, progress alchemy_oci.TransferProgress) (alchemy_oci.TransferResult, error) {
+		return alchemy_oci.Pull(ctx, vm, reference, alchemy_oci.PullOptions{
+			RegistryOptions:           opts,
+			Progress:                  progress,
+			ConfirmForeignArtifactUse: confirmOCIForeignArtifactUse(cmd),
+		})
 	}
 	inspectOCIArtifactState = localOCIArtifactState
 )
@@ -228,6 +233,52 @@ func ociRegistryOptions(cmd *cobra.Command) (alchemy_oci.RegistryOptions, error)
 	}, nil
 }
 
+func confirmOCIForeignArtifactUse(cmd *cobra.Command) alchemy_oci.ForeignArtifactConfirmation {
+	return func(ctx context.Context, foreign alchemy_oci.ForeignArtifact) (bool, error) {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+
+		message := ociForeignArtifactConfirmationMessage(foreign)
+		if ociAssumeYes {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s Continuing because --yes is set.\n", message)
+			return true, nil
+		}
+
+		if !isInteractiveInput(cmd.InOrStdin()) {
+			return false, fmt.Errorf("%s Re-run with --yes to continue non-interactively", message)
+		}
+
+		confirmed, err := promptForConfirmationFunc(
+			cmd.InOrStdin(),
+			cmd.OutOrStdout(),
+			message+" Continue? [y/N]: ",
+		)
+		if err != nil {
+			return false, err
+		}
+		return confirmed, nil
+	}
+}
+
+func ociForeignArtifactConfirmationMessage(foreign alchemy_oci.ForeignArtifact) string {
+	targetType := foreign.UbuntuType
+	if targetType == "" {
+		targetType = "-"
+	}
+
+	return fmt.Sprintf(
+		"OCI artifact target is OS=%s type=%s arch=%s host_os=%s engine=%s, but this pull targets host_os=%s engine=%s. Darwin and Linux build artifacts usually share the same local artifact shape after layer validation, but this is a foreign build artifact and may not work on this host.",
+		foreign.OS,
+		targetType,
+		foreign.Arch,
+		foreign.SourceHostOSAnnotation,
+		foreign.SourceVirtualizationAnnotation,
+		foreign.TargetHostOS,
+		foreign.TargetVirtualizationEngine,
+	)
+}
+
 type ociProgressReporter struct {
 	action   string
 	output   io.Writer
@@ -308,7 +359,7 @@ func runOCITransfer(cmd *cobra.Command, reference string, action string, runner 
 	if err != nil {
 		return alchemy_oci.TransferResult{}, err
 	}
-	return runner(cmd.Context(), vm, reference, options, newOCIProgressReporter(action, cmd.ErrOrStderr()))
+	return runner(cmd, cmd.Context(), vm, reference, options, newOCIProgressReporter(action, cmd.ErrOrStderr()))
 }
 
 func printOCITransferResult(action string, result alchemy_oci.TransferResult) {
@@ -405,6 +456,7 @@ func init() {
 	pullCmd.AddCommand(pullListCmd)
 	addOCIFlags(pushCmd)
 	addOCIFlags(pullCmd)
+	pullCmd.Flags().BoolVarP(&ociAssumeYes, "yes", "y", false, "Accept compatible foreign darwin/linux OCI build artifacts without prompting")
 	addOCIListFlags(pushListCmd)
 	addOCIListFlags(pullListCmd)
 }
