@@ -165,6 +165,36 @@ func TestValidateManifestLayersRejectsUnexpectedLayer(t *testing.T) {
 	}
 }
 
+func TestValidateManifestLayersRejectsDuplicateLayerName(t *testing.T) {
+	layerName := "expected.qcow2"
+
+	err := validateManifestLayers(
+		ocispec.Manifest{
+			Layers: []ocispec.Descriptor{
+				{
+					MediaType: MediaTypeQCOW2,
+					Annotations: map[string]string{
+						ocispec.AnnotationTitle: layerName,
+					},
+				},
+				{
+					MediaType: MediaTypeQCOW2,
+					Annotations: map[string]string{
+						ocispec.AnnotationTitle: layerName,
+					},
+				},
+			},
+		},
+		[]ArtifactFile{{Name: layerName, MediaType: MediaTypeQCOW2}},
+	)
+	if err == nil {
+		t.Fatal("expected duplicate layer to fail validation")
+	}
+	if !strings.Contains(err.Error(), "duplicate layer") {
+		t.Fatalf("expected duplicate layer error, got %q", err.Error())
+	}
+}
+
 func linuxQemuOCIConfig(osName string, ubuntuType string, arch string) alchemy_build.VirtualMachineConfig {
 	return alchemy_build.VirtualMachineConfig{
 		OS:                   osName,

@@ -220,6 +220,9 @@ func validateManifestLayers(manifest ocispec.Manifest, expected []ArtifactFile) 
 		if name == "" {
 			return errors.New("OCI artifact layer is missing title annotation")
 		}
+		if seen[name] {
+			return fmt.Errorf("OCI artifact contains duplicate layer %q", name)
+		}
 		expectedFile, ok := expectedByName[name]
 		if !ok {
 			return fmt.Errorf("OCI artifact contains unexpected layer %q", name)
@@ -228,6 +231,10 @@ func validateManifestLayers(manifest ocispec.Manifest, expected []ArtifactFile) 
 			return fmt.Errorf("OCI artifact layer %q has media type %q, expected %q", name, layer.MediaType, expectedFile.MediaType)
 		}
 		seen[name] = true
+	}
+
+	if len(manifest.Layers) != len(expected) {
+		return fmt.Errorf("OCI artifact contains %d layers, expected %d", len(manifest.Layers), len(expected))
 	}
 
 	for _, expectedFile := range expected {
