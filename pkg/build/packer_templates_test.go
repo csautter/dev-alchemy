@@ -736,9 +736,16 @@ func TestLinuxWorkflowPublishesUbuntuArtifactsToGHCR(t *testing.T) {
 		`branches: [main]`,
 		`pkg/oci/**`,
 		`OCI_UBUNTU_IMAGE: ghcr.io/${{ github.repository_owner }}/ubuntu-24`,
+		`name: Upload Ubuntu OCI build artifact`,
+		`ubuntu-oci-${{ matrix.ubuntu_type }}-${{ matrix.arch }}`,
+		`include-hidden-files: true`,
+		`publish-ubuntu-oci-artifacts:`,
+		`github.event_name != 'pull_request'`,
+		`permissions:` + "\n" + `      contents: read` + "\n" + `      packages: write`,
+		`uses: actions/download-artifact@v7`,
 		`name: Push Ubuntu OCI artifact to GHCR`,
 		`matrix.vm_os == 'ubuntu'`,
-		`github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'`,
+		`github.ref == 'refs/heads/main'`,
 		`reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"`,
 		`go run cmd/main.go push "${reference}"`,
 		`--os ubuntu`,
@@ -746,15 +753,28 @@ func TestLinuxWorkflowPublishesUbuntuArtifactsToGHCR(t *testing.T) {
 		`--engine qemu`,
 		`--username "${GITHUB_ACTOR}"`,
 		`--password-stdin`,
-		`steps.oci_push.outcome == 'failure'`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected Linux workflow to contain %q", want)
 		}
 	}
 
-	if strings.Count(got, `name: Push Ubuntu OCI artifact to GHCR`) != 3 {
-		t.Fatalf("expected each Linux build job to include one OCI publish step")
+	jobsIndex := strings.Index(got, "\njobs:")
+	if jobsIndex == -1 {
+		t.Fatal("expected Linux workflow to define jobs")
+	}
+	if strings.Contains(got[:jobsIndex], `packages: write`) {
+		t.Fatal("expected Linux workflow not to grant packages: write at workflow scope")
+	}
+
+	if strings.Count(got, `name: Upload Ubuntu OCI build artifact`) != 3 {
+		t.Fatalf("expected each Linux build job to upload Ubuntu OCI artifacts for publishing")
+	}
+	if strings.Count(got, `name: Push Ubuntu OCI artifact to GHCR`) != 1 {
+		t.Fatalf("expected only the dedicated publish job to push Ubuntu OCI artifacts")
+	}
+	if strings.Contains(got, `steps.oci_push`) {
+		t.Fatal("expected Linux build jobs not to depend on inline OCI publish steps")
 	}
 	if strings.Contains(got, `--os windows11`) {
 		t.Fatal("expected Linux workflow not to publish Windows OCI artifacts")

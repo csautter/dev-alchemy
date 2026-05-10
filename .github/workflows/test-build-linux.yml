@@ -2,8 +2,6 @@ name: Test Packer Build on Linux for VMs
 
 permissions:
   contents: read
-  id-token: write
-  packages: write
 
 on:
   workflow_dispatch:
@@ -158,6 +156,9 @@ jobs:
     if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner != 'true'
     name: build ${{ matrix.go_test_name }} runner_os ${{ matrix.runs_on }}
     runs-on: ${{ matrix.runs_on }}
+    permissions:
+      contents: read
+      id-token: write
     env:
       DEV_ALCHEMY_APP_DATA_DIR: ${{ github.workspace }}/.dev-alchemy
       DEV_ALCHEMY_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/cache
@@ -290,24 +291,15 @@ jobs:
           go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
-      - name: Push Ubuntu OCI artifact to GHCR
-        id: oci_push
+      - name: Upload Ubuntu OCI build artifact
         if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && github.ref == 'refs/heads/main'
-        shell: bash
-        continue-on-error: true
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"
-          echo "Pushing ${reference}"
-          printf '%s' "${GHCR_TOKEN}" | go run cmd/main.go push "${reference}" \
-            --os ubuntu \
-            --type "${{ matrix.ubuntu_type }}" \
-            --arch "${{ matrix.arch }}" \
-            --host-os linux \
-            --engine qemu \
-            --username "${GITHUB_ACTOR}" \
-            --password-stdin
+        uses: actions/upload-artifact@v7
+        with:
+          name: ubuntu-oci-${{ matrix.ubuntu_type }}-${{ matrix.arch }}
+          path: .dev-alchemy/cache/ubuntu/qemu-ubuntu-${{ matrix.ubuntu_type }}-packer-${{ matrix.arch }}.qcow2
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
 
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
@@ -349,10 +341,10 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
-      - name: Fail if dependency reconciliation, build, or OCI publish failed
-        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure' || steps.oci_push.outcome == 'failure')
+      - name: Fail if dependency reconciliation or build failed
+        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure')
         run: |
-          echo "Dependency reconciliation, build smoke test, and/or OCI publish failed. Failing workflow."
+          echo "Dependency reconciliation and/or build smoke test failed. Failing workflow."
           exit 1
 
   provision-hetzner-linux-amd64-runner:
@@ -412,6 +404,9 @@ jobs:
       - Linux
       - X64
       - ${{ needs.provision-hetzner-linux-amd64-runner.outputs.runner-label }}
+    permissions:
+      contents: read
+      id-token: write
     env:
       DEV_ALCHEMY_APP_DATA_DIR: ${{ github.workspace }}/.dev-alchemy
       DEV_ALCHEMY_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/cache
@@ -505,24 +500,15 @@ jobs:
           go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
-      - name: Push Ubuntu OCI artifact to GHCR
-        id: oci_push
-        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
-        shell: bash
-        continue-on-error: true
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"
-          echo "Pushing ${reference}"
-          printf '%s' "${GHCR_TOKEN}" | go run cmd/main.go push "${reference}" \
-            --os ubuntu \
-            --type "${{ matrix.ubuntu_type }}" \
-            --arch "${{ matrix.arch }}" \
-            --host-os linux \
-            --engine qemu \
-            --username "${GITHUB_ACTOR}" \
-            --password-stdin
+      - name: Upload Ubuntu OCI build artifact
+        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ubuntu-oci-${{ matrix.ubuntu_type }}-${{ matrix.arch }}
+          path: .dev-alchemy/cache/ubuntu/qemu-ubuntu-${{ matrix.ubuntu_type }}-packer-${{ matrix.arch }}.qcow2
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
 
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
@@ -564,10 +550,10 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
-      - name: Fail if dependency reconciliation, build, or OCI publish failed
-        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure' || steps.oci_push.outcome == 'failure')
+      - name: Fail if dependency reconciliation or build failed
+        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure')
         run: |
-          echo "Dependency reconciliation, build smoke test, and/or OCI publish failed. Failing workflow."
+          echo "Dependency reconciliation and/or build smoke test failed. Failing workflow."
           exit 1
 
   test-packer-build-hetzner-arm64:
@@ -579,6 +565,9 @@ jobs:
       - Linux
       - ARM64
       - ${{ needs.provision-hetzner-linux-arm64-runner.outputs.runner-label }}
+    permissions:
+      contents: read
+      id-token: write
     env:
       DEV_ALCHEMY_APP_DATA_DIR: ${{ github.workspace }}/.dev-alchemy
       DEV_ALCHEMY_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/cache
@@ -675,24 +664,15 @@ jobs:
           go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
 
-      - name: Push Ubuntu OCI artifact to GHCR
-        id: oci_push
-        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
-        shell: bash
-        continue-on-error: true
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"
-          echo "Pushing ${reference}"
-          printf '%s' "${GHCR_TOKEN}" | go run cmd/main.go push "${reference}" \
-            --os ubuntu \
-            --type "${{ matrix.ubuntu_type }}" \
-            --arch "${{ matrix.arch }}" \
-            --host-os linux \
-            --engine qemu \
-            --username "${GITHUB_ACTOR}" \
-            --password-stdin
+      - name: Upload Ubuntu OCI build artifact
+        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ubuntu-oci-${{ matrix.ubuntu_type }}-${{ matrix.arch }}
+          path: .dev-alchemy/cache/ubuntu/qemu-ubuntu-${{ matrix.ubuntu_type }}-packer-${{ matrix.arch }}.qcow2
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
 
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
@@ -734,11 +714,83 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
-      - name: Fail if dependency reconciliation, build, or OCI publish failed
-        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure' || steps.oci_push.outcome == 'failure')
+      - name: Fail if dependency reconciliation or build failed
+        if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure')
         run: |
-          echo "Dependency reconciliation, build smoke test, and/or OCI publish failed. Failing workflow."
+          echo "Dependency reconciliation and/or build smoke test failed. Failing workflow."
           exit 1
+
+  publish-ubuntu-oci-artifacts:
+    needs:
+      - determine-runner-mode
+      - test-packer-build-hosted
+      - test-packer-build-hetzner-amd64
+      - test-packer-build-hetzner-arm64
+    if: >-
+      always() &&
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      (
+        needs.test-packer-build-hosted.result == 'success' ||
+        (
+          needs.test-packer-build-hetzner-amd64.result == 'success' &&
+          needs.test-packer-build-hetzner-arm64.result == 'success'
+        )
+      )
+    name: publish ubuntu ${{ matrix.ubuntu_type }} ${{ matrix.arch }} OCI artifact
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DEV_ALCHEMY_APP_DATA_DIR: ${{ github.workspace }}/.dev-alchemy
+      DEV_ALCHEMY_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/cache
+      DEV_ALCHEMY_VAGRANT_DIR: ${{ github.workspace }}/.dev-alchemy/.vagrant
+      DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
+      PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ubuntu_type: server
+            arch: amd64
+          - ubuntu_type: desktop
+            arch: amd64
+          - ubuntu_type: server
+            arch: arm64
+          - ubuntu_type: desktop
+            arch: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download Ubuntu OCI build artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ubuntu-oci-${{ matrix.ubuntu_type }}-${{ matrix.arch }}
+          path: .dev-alchemy/cache/ubuntu
+
+      - name: Push Ubuntu OCI artifact to GHCR
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"
+          echo "Pushing ${reference}"
+          printf '%s' "${GHCR_TOKEN}" | go run cmd/main.go push "${reference}" \
+            --os ubuntu \
+            --type "${{ matrix.ubuntu_type }}" \
+            --arch "${{ matrix.arch }}" \
+            --host-os linux \
+            --engine qemu \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
 
   watch-hetzner-linux-amd64-runner-queue:
     needs: [determine-runner-mode, provision-hetzner-linux-amd64-runner]
