@@ -10,23 +10,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "alchemy",
 	Short: "Alchemy CLI - build self provisioning developer environments",
-	Long: `Alchemy is a developer tool that helps you to build self provisioning developer environments for multiple platforms with ease.
-
-Usage:
-  alchemy [command]
-
-Available Commands:
-  build       Build the VM Images for multiple target OS
-  create      Create a new VM on your system with the defined OS
-  destroy     Destroy a VM previously created on your system
-  install     Install dependencies on the current host OS
-  provision   Provision a VM with Ansible
-  pull        Pull VM build artifacts from an OCI registry
-  push        Push VM build artifacts to an OCI registry
-  start       Start an existing VM on your system
-  stop        Stop an existing VM on your system
-  help        Help about any command
-`,
+	Long:  "Alchemy is a developer tool that helps you to build self provisioning developer environments for multiple platforms with ease.",
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
