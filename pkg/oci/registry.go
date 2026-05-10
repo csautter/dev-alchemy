@@ -63,8 +63,8 @@ func registryHTTPClient(opts RegistryOptions) (*http.Client, error) {
 		return nil, nil
 	}
 
-	tlsConfig := &tls.Config{ // #nosec G402 -- controlled by the explicit --insecure-skip-tls-verify registry option.
-		InsecureSkipVerify: opts.InsecureSkipTLSVerify,
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: opts.InsecureSkipTLSVerify, // #nosec G402 -- controlled by the explicit --insecure-skip-tls-verify registry option.
 	}
 	if opts.CAFile != "" {
 		rootCAs, err := x509.SystemCertPool()
