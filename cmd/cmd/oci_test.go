@@ -70,6 +70,29 @@ func TestOCIRegistryOptionsReadsPasswordStdin(t *testing.T) {
 	}
 }
 
+func TestOCIRegistryOptionsIncludeTLSSettings(t *testing.T) {
+	previousInsecureSkipTLSVerify := ociInsecureSkipTLSVerify
+	previousCAFile := ociCAFile
+	t.Cleanup(func() {
+		ociInsecureSkipTLSVerify = previousInsecureSkipTLSVerify
+		ociCAFile = previousCAFile
+	})
+
+	ociInsecureSkipTLSVerify = true
+	ociCAFile = "/tmp/dev-alchemy-test-ca.pem"
+
+	options, err := ociRegistryOptions(&cobra.Command{})
+	if err != nil {
+		t.Fatalf("expected OCI registry options to parse: %v", err)
+	}
+	if !options.InsecureSkipTLSVerify {
+		t.Fatal("expected insecure skip TLS verify option")
+	}
+	if options.CAFile != "/tmp/dev-alchemy-test-ca.pem" {
+		t.Fatalf("expected CA file option, got %q", options.CAFile)
+	}
+}
+
 func TestLocalOCIArtifactStateDetectsMissingPartialAndExistingArtifacts(t *testing.T) {
 	tempDir := t.TempDir()
 	artifactA := filepath.Join(tempDir, "artifact-a.qcow2")
@@ -195,6 +218,16 @@ func TestOCICommandsIncludeListSubcommands(t *testing.T) {
 		}
 		if !found {
 			t.Fatalf("expected %s command to include list subcommand", command.Name())
+		}
+	}
+}
+
+func TestOCICommandsIncludeTLSFlags(t *testing.T) {
+	for _, command := range []*cobra.Command{pushCmd, pullCmd} {
+		for _, flagName := range []string{"insecure-skip-tls-verify", "ca-file"} {
+			if command.Flags().Lookup(flagName) == nil {
+				t.Fatalf("expected %s command to include --%s", command.Name(), flagName)
+			}
 		}
 	}
 }

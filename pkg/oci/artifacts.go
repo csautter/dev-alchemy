@@ -2,9 +2,12 @@ package oci
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -40,6 +43,8 @@ const (
 
 type RegistryOptions struct {
 	PlainHTTP                bool
+	InsecureSkipTLSVerify    bool
+	CAFile                   string
 	Username                 string
 	Password                 string
 	AccessToken              string
@@ -410,19 +415,60 @@ func newRepository(ref remoteReference, opts RegistryOptions) (*remote.Repositor
 	}
 	repo.PlainHTTP = opts.PlainHTTP
 
+	httpClient, err := registryHTTPClient(opts)
+	if err != nil {
+		return nil, err
+	}
 	credential, err := credentialFunc(ref.registry, opts)
 	if err != nil {
 		return nil, err
 	}
-	if credential != nil {
+	if credential != nil || httpClient != nil {
 		repo.Client = &auth.Client{
-			Client:     retry.DefaultClient,
+			Client:     registryAuthHTTPClient(httpClient),
+			Header:     auth.DefaultClient.Header.Clone(),
 			Cache:      auth.NewCache(),
 			Credential: credential,
 		}
 	}
 
 	return repo, nil
+}
+
+func registryAuthHTTPClient(client *http.Client) *http.Client {
+	if client != nil {
+		return client
+	}
+	return retry.DefaultClient
+}
+
+func registryHTTPClient(opts RegistryOptions) (*http.Client, error) {
+	if !opts.InsecureSkipTLSVerify && opts.CAFile == "" {
+		return nil, nil
+	}
+
+	tlsConfig := &tls.Config{ // #nosec G402 -- controlled by the explicit --insecure-skip-tls-verify registry option.
+		InsecureSkipVerify: opts.InsecureSkipTLSVerify,
+	}
+	if opts.CAFile != "" {
+		rootCAs, err := x509.SystemCertPool()
+		if err != nil || rootCAs == nil {
+			rootCAs = x509.NewCertPool()
+		}
+
+		caBytes, err := os.ReadFile(opts.CAFile)
+		if err != nil {
+			return nil, fmt.Errorf("read OCI registry CA file %s: %w", opts.CAFile, err)
+		}
+		if ok := rootCAs.AppendCertsFromPEM(caBytes); !ok {
+			return nil, fmt.Errorf("parse OCI registry CA file %s: no PEM certificates found", opts.CAFile)
+		}
+		tlsConfig.RootCAs = rootCAs
+	}
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsConfig
+	return &http.Client{Transport: retry.NewTransport(transport)}, nil
 }
 
 func credentialFunc(registryHost string, opts RegistryOptions) (auth.CredentialFunc, error) {

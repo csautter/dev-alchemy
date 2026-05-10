@@ -21,6 +21,8 @@ var (
 	ociEngine                   string
 	ociHostOS                   string
 	ociPlainHTTP                bool
+	ociInsecureSkipTLSVerify    bool
+	ociCAFile                   string
 	ociUsername                 string
 	ociPassword                 string
 	ociPasswordStdin            bool
@@ -214,6 +216,8 @@ func ociRegistryOptions(cmd *cobra.Command) (alchemy_oci.RegistryOptions, error)
 
 	return alchemy_oci.RegistryOptions{
 		PlainHTTP:                ociPlainHTTP,
+		InsecureSkipTLSVerify:    ociInsecureSkipTLSVerify,
+		CAFile:                   ociCAFile,
 		Username:                 ociUsername,
 		Password:                 password,
 		AccessToken:              ociAccessToken,
@@ -307,6 +311,8 @@ func addOCIFlags(command *cobra.Command) {
 	command.Flags().StringVar(&ociEngine, "engine", "", "Virtualization engine for the build artifact (e.g., qemu, utm, hyperv, virtualbox)")
 	command.Flags().StringVar(&ociHostOS, "host-os", string(alchemy_build.GetCurrentHostOs()), "Host OS that owns the build artifact shape (linux/debian, windows, darwin/macos)")
 	command.Flags().BoolVar(&ociPlainHTTP, "plain-http", false, "Use plain HTTP for the OCI registry")
+	command.Flags().BoolVar(&ociInsecureSkipTLSVerify, "insecure-skip-tls-verify", false, "Skip TLS certificate verification for HTTPS OCI registries")
+	command.Flags().StringVar(&ociCAFile, "ca-file", "", "Path to a PEM CA certificate bundle to trust for HTTPS OCI registries")
 	command.Flags().StringVar(&ociUsername, "username", "", "OCI registry username")
 	command.Flags().StringVar(&ociPassword, "password", "", "OCI registry password")
 	command.Flags().BoolVar(&ociPasswordStdin, "password-stdin", false, "Read OCI registry password from stdin")

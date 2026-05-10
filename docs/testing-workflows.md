@@ -75,6 +75,11 @@ The OCI client reads Docker credentials by default, so `docker login` works for
 authenticated registries. Use `--username`, `--password-stdin`, or
 `--access-token` when you want command-specific credentials.
 
+For HTTPS registries with an internal or self-signed certificate, prefer adding
+the registry CA with `--ca-file /path/to/ca.pem`. For short-lived testing
+against a registry you already trust, `--insecure-skip-tls-verify` disables TLS
+certificate verification.
+
 For a local zot registry, use `--plain-http`. To run the opt-in integration test
 against that registry:
 
