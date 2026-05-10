@@ -158,7 +158,12 @@ func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
 					`-var "host_os=${host_os}"`,
 					`-var "host_arch=${host_arch}"`,
 					`-var "use_hardware_acceleration=${use_hardware_acceleration}"`,
+					`-var "cache_dir=${effective_cache_dir}"`,
 					`-var "artifact_output_path=${artifact_output_path}"`,
+					`DEV_ALCHEMY_PACKER_START_ONLY`,
+					`--packer-start-only`,
+					`run_packer_build_start_only`,
+					`Using isolated cache directory for start-only Packer probe`,
 				} {
 					if !strings.Contains(got, want) {
 						t.Fatalf("expected script %q to contain %q", scriptPath, want)
@@ -654,6 +659,11 @@ func TestLinuxWorkflowRunsWindowsQemuBuilds(t *testing.T) {
 			expectedEntries:    2,
 		},
 	} {
+		entries := workflowMatrixEntriesForTest(t, got, tc.testName)
+		if len(entries) != tc.expectedEntries {
+			t.Fatalf("expected Linux workflow to include %d entries for %s, got %d", tc.expectedEntries, tc.testName, len(entries))
+		}
+
 		entry := workflowMatrixEntryForTest(t, got, tc.testName)
 		for _, want := range []string{
 			tc.dependencyTestName,
@@ -661,16 +671,36 @@ func TestLinuxWorkflowRunsWindowsQemuBuilds(t *testing.T) {
 			tc.isoPath,
 			"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso",
 			"./.dev-alchemy/cache/windows/virtio-win.iso",
+			`packer_start_only: "true"`,
+			`packer_start_timeout: "180"`,
 		} {
 			if !strings.Contains(entry, want) {
 				t.Fatalf("expected Linux workflow matrix entry for %s to contain %q", tc.testName, want)
 			}
 		}
-		if strings.Count(got, "go_test_name: "+tc.testName) != tc.expectedEntries {
-			t.Fatalf("expected Linux workflow to include %d entries for %s", tc.expectedEntries, tc.testName)
+		for _, entry := range entries {
+			if !strings.Contains(entry, `packer_start_only: "true"`) {
+				t.Fatalf("expected every Linux workflow matrix entry for %s to run as a start-only Packer probe", tc.testName)
+			}
+			if !strings.Contains(entry, `packer_start_timeout: "180"`) {
+				t.Fatalf("expected every Linux workflow matrix entry for %s to set a Packer start timeout", tc.testName)
+			}
 		}
 		if strings.Count(got, tc.isoPath) != tc.expectedEntries {
 			t.Fatalf("expected Linux workflow to cache %s in %d entries", tc.isoPath, tc.expectedEntries)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestBuildQemuUbuntuServerAmd64OnLinux",
+		"TestBuildQemuUbuntuDesktopAmd64OnLinux",
+		"TestBuildQemuUbuntuServerArm64OnLinux",
+		"TestBuildQemuUbuntuDesktopArm64OnLinux",
+	} {
+		for _, entry := range workflowMatrixEntriesForTest(t, got, testName) {
+			if !strings.Contains(entry, `packer_start_only: "false"`) {
+				t.Fatalf("expected Linux workflow matrix entry for %s to run a full Packer build", testName)
+			}
 		}
 	}
 
@@ -679,6 +709,8 @@ func TestLinuxWorkflowRunsWindowsQemuBuilds(t *testing.T) {
 		t.Fatal("expected Windows 11 ARM64 Linux QEMU entry to cache qemu-efi-aarch64")
 	}
 	for _, want := range []string{
+		`DEV_ALCHEMY_PACKER_START_ONLY: ${{ matrix.packer_start_only }}`,
+		`DEV_ALCHEMY_PACKER_START_TIMEOUT: ${{ matrix.packer_start_timeout }}`,
 		`TARGET_JOB_PATTERN: "^build TestBuildQemu(Ubuntu|Windows11).*Amd64OnLinux on Hetzner$"`,
 		`TARGET_JOB_PATTERN: "^build TestBuildQemu(Ubuntu|Windows11).*Arm64OnLinux on Hetzner$"`,
 		`name: packer-qemu-${{ matrix.go_test_name }}.vnc.mp4`,
@@ -739,23 +771,41 @@ func TestMacOSWorkflowDefaultsToGitHubHostedRunnersWithTartOptIn(t *testing.T) {
 func workflowMatrixEntryForTest(t *testing.T, workflow string, testName string) string {
 	t.Helper()
 
+	return workflowMatrixEntriesForTest(t, workflow, testName)[0]
+}
+
+func workflowMatrixEntriesForTest(t *testing.T, workflow string, testName string) []string {
+	t.Helper()
+
 	testMarker := "go_test_name: " + testName
-	start := strings.Index(workflow, testMarker)
-	if start == -1 {
+	offset := 0
+	var entries []string
+
+	for {
+		relativeStart := strings.Index(workflow[offset:], testMarker)
+		if relativeStart == -1 {
+			break
+		}
+		start := offset + relativeStart
+		entryStart := strings.LastIndex(workflow[:start], "\n          - ")
+		if entryStart == -1 {
+			t.Fatalf("failed to find start of workflow matrix entry for %s", testName)
+		}
+		entryStart++
+
+		nextEntry := strings.Index(workflow[start:], "\n          - ")
+		if nextEntry == -1 {
+			entries = append(entries, workflow[entryStart:])
+		} else {
+			entries = append(entries, workflow[entryStart:start+nextEntry])
+		}
+		offset = start + len(testMarker)
+	}
+
+	if len(entries) == 0 {
 		t.Fatalf("failed to find workflow matrix entry for %s", testName)
 	}
-
-	entryStart := strings.LastIndex(workflow[:start], "\n          - ")
-	if entryStart == -1 {
-		t.Fatalf("failed to find start of workflow matrix entry for %s", testName)
-	}
-	entryStart++
-
-	nextEntry := strings.Index(workflow[start:], "\n          - ")
-	if nextEntry == -1 {
-		return workflow[entryStart:]
-	}
-	return workflow[entryStart : start+nextEntry]
+	return entries
 }
 
 func normalizeLineEndings(content string) string {
