@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	alchemy_build "github.com/csautter/dev-alchemy/pkg/build"
@@ -33,6 +34,7 @@ var (
 	runOCIPull ociTransferRunner = func(ctx context.Context, vm alchemy_build.VirtualMachineConfig, reference string, opts alchemy_oci.RegistryOptions) (alchemy_oci.TransferResult, error) {
 		return alchemy_oci.Pull(ctx, vm, reference, alchemy_oci.PullOptions{RegistryOptions: opts})
 	}
+	inspectOCIArtifactState = localOCIArtifactState
 )
 
 func isOCISupported(vm alchemy_build.VirtualMachineConfig) bool {
@@ -41,6 +43,92 @@ func isOCISupported(vm alchemy_build.VirtualMachineConfig) bool {
 
 func availableOCIVirtualMachinesForHostOS(hostOs alchemy_build.HostOsType) []alchemy_build.VirtualMachineConfig {
 	return availableVirtualMachinesForHostOS(hostOs, isOCISupported)
+}
+
+func printAvailableOCICombinations(action string, rowBuilder vmTableRowBuilder) error {
+	hostOs, err := parseHostOS(ociHostOS)
+	if err != nil {
+		return err
+	}
+
+	return printVirtualMachineCombinationTable(
+		os.Stdout,
+		fmt.Sprintf("Available %s combinations for host OS: %s", action, hostOs),
+		fmt.Sprintf("No %s combinations are available for host OS %s.", action, hostOs),
+		availableOCIVirtualMachinesForHostOS(hostOs),
+		[]string{"OS", "Type", "Arch", "Artifact", ociActionColumnTitle(action)},
+		rowBuilder,
+	)
+}
+
+func ociActionColumnTitle(action string) string {
+	if action == "" {
+		return ""
+	}
+	return strings.ToUpper(action[:1]) + action[1:]
+}
+
+func localOCIArtifactState(vm alchemy_build.VirtualMachineConfig) (string, error) {
+	artifacts, err := alchemy_oci.ArtifactFiles(vm)
+	if err != nil {
+		return "", err
+	}
+	if len(artifacts) == 0 {
+		return "missing", nil
+	}
+
+	existingArtifacts := 0
+	for _, artifact := range artifacts {
+		if _, err := os.Stat(artifact.Path); err == nil {
+			existingArtifacts++
+			continue
+		} else if !os.IsNotExist(err) {
+			return "", fmt.Errorf("inspect artifact %s: %w", artifact.Path, err)
+		}
+	}
+
+	switch existingArtifacts {
+	case len(artifacts):
+		return "exists", nil
+	case 0:
+		return "missing", nil
+	default:
+		return "partial", nil
+	}
+}
+
+func pushListRow(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
+	artifactState, err := inspectOCIArtifactState(vm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect push artifacts for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+	}
+
+	pushState := "build required"
+	switch artifactState {
+	case "exists":
+		pushState = "ready to push"
+	case "partial":
+		pushState = "incomplete"
+	}
+
+	return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, artifactState, pushState}, nil
+}
+
+func pullListRow(vm alchemy_build.VirtualMachineConfig) ([]string, error) {
+	artifactState, err := inspectOCIArtifactState(vm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect pull destination for OS=%s, type=%s, arch=%s: %w", vm.OS, vm.UbuntuType, vm.Arch, err)
+	}
+
+	pullState := "ready to pull"
+	switch artifactState {
+	case "exists":
+		pullState = "will replace"
+	case "partial":
+		pullState = "will replace partial"
+	}
+
+	return []string{vm.OS, displayVirtualMachineType(vm), vm.Arch, artifactState, pullState}, nil
 }
 
 func resolveOCIVirtualMachine(hostOsValue string, osName string, osTypeValue string, archValue string, engineValue string) (alchemy_build.VirtualMachineConfig, error) {
@@ -174,6 +262,15 @@ Examples:
 	},
 }
 
+var pushListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List available push combinations and local artifact readiness",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return printAvailableOCICombinations("push", pushListRow)
+	},
+}
+
 var pullCmd = &cobra.Command{
 	Use:   "pull <registry>/<repository>[:tag|@digest]",
 	Short: "Pull VM build artifacts from an OCI registry",
@@ -194,6 +291,15 @@ Examples:
 	},
 }
 
+var pullListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List available pull combinations and local artifact overwrite status",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return printAvailableOCICombinations("pull", pullListRow)
+	},
+}
+
 func addOCIFlags(command *cobra.Command) {
 	command.Flags().StringVar(&ociOS, "os", "", "Target operating system for the build artifact (e.g., ubuntu, windows11)")
 	command.Flags().StringVarP(&ociType, "type", "t", "server", "Type of OS for Ubuntu artifacts (e.g., server, desktop)")
@@ -209,9 +315,17 @@ func addOCIFlags(command *cobra.Command) {
 	command.Flags().BoolVar(&ociDisableDockerCredentials, "no-docker-credentials", false, "Do not read credentials from Docker's credential store")
 }
 
+func addOCIListFlags(command *cobra.Command) {
+	command.Flags().StringVar(&ociHostOS, "host-os", string(alchemy_build.GetCurrentHostOs()), "Host OS that owns the build artifact shape (linux/debian, windows, darwin/macos)")
+}
+
 func init() {
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(pullCmd)
+	pushCmd.AddCommand(pushListCmd)
+	pullCmd.AddCommand(pullListCmd)
 	addOCIFlags(pushCmd)
 	addOCIFlags(pullCmd)
+	addOCIListFlags(pushListCmd)
+	addOCIListFlags(pullListCmd)
 }

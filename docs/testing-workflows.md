@@ -53,6 +53,9 @@ commands use the same target vocabulary as the VM workflow and a Docker-like
 reference argument:
 
 ```bash
+alchemy push list
+alchemy pull list
+
 alchemy push localhost:5000/dev-alchemy/ubuntu-server-amd64:qemu \
   --plain-http \
   --os ubuntu \
