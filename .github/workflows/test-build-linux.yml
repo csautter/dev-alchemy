@@ -292,7 +292,7 @@ jobs:
 
       - name: Push Ubuntu OCI artifact to GHCR
         id: oci_push
-        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && github.ref == 'refs/heads/main'
         shell: bash
         continue-on-error: true
         env:
