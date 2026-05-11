@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0](https://github.com/csautter/dev-alchemy/compare/v0.14.0...v0.15.0) (2026-05-11)
+
+
+### Added
+
+* add oci registry support ([9615e78](https://github.com/csautter/dev-alchemy/commit/9615e7848908c0c44cb34eeb3db126eb92e89c98))
+* **oci:** add push and pull list commands ([49ddd64](https://github.com/csautter/dev-alchemy/commit/49ddd64cf8ad84bbf5a1e35fedb31754f328b10e))
+* **oci:** add registry push and pull for build artifacts ([3c061f2](https://github.com/csautter/dev-alchemy/commit/3c061f22a10fb3ee223f8f11b69174ec7ce5c3bb))
+* **oci:** add TLS options for registry transfers ([e087def](https://github.com/csautter/dev-alchemy/commit/e087defa2600f4bc20ccdfc7e8a154c3b531eb66))
+* **oci:** allow confirmed darwin/linux foreign artifact pulls ([a4786a1](https://github.com/csautter/dev-alchemy/commit/a4786a1ff7cbf594d175bcbaae532a9ff79fcad2))
+* **oci:** show transfer progress for push and pull ([2e649a0](https://github.com/csautter/dev-alchemy/commit/2e649a0a563408d04563e1dcd98d41a5fca9845f))
+
+
+### Fixed
+
+* **ci:** restrict GHCR publish permissions ([2a6f990](https://github.com/csautter/dev-alchemy/commit/2a6f9900976516c44886cc6f0f97ffeb4c0f3cfe))
+* **cli:** remove duplicated root help sections ([22fd4f1](https://github.com/csautter/dev-alchemy/commit/22fd4f1ccaaaaaeb7e698a744644523c6ab7b006))
+* **oci:** reject duplicate manifest layer titles ([8f389b9](https://github.com/csautter/dev-alchemy/commit/8f389b923977dd121a9b0eb76dbe6d51ebad1685))
+* **oci:** suppress gosec G402 on insecure TLS field ([c5d970d](https://github.com/csautter/dev-alchemy/commit/c5d970d6a383870b00bc3ee895252425180392da))
+* **test:** normalize workflow line endings for Windows CI ([43f77a0](https://github.com/csautter/dev-alchemy/commit/43f77a0bfccf7f80cb90f8a44ebf0a0a3f918c6a))
+
+
+### Changed
+
+* **oci:** split artifact handling into focused modules ([850ef4f](https://github.com/csautter/dev-alchemy/commit/850ef4f9dd9df3503f627fae805b4481d74bff1c))
+
+
+### CI
+
+* publish ubuntu build artifacts to GHCR ([b0ed47d](https://github.com/csautter/dev-alchemy/commit/b0ed47d81af7a6482b5ba6b4fa1fceb41f00d388))
+* restrict GHCR artifact publishing to main ([c74a1e2](https://github.com/csautter/dev-alchemy/commit/c74a1e2ccc53930abb51b59bde06accedd8a19d9))
+* run Linux Windows QEMU builds as start-only probes ([83acc0e](https://github.com/csautter/dev-alchemy/commit/83acc0efc276d02ca31114e2335e88576290e563))
+* run OCI package unit tests ([ca1490f](https://github.com/csautter/dev-alchemy/commit/ca1490f4ff8404f7eae7b9838179e3b45ee12372))
+* run OCI registry integration test ([23e8781](https://github.com/csautter/dev-alchemy/commit/23e87812471eb6e5fcaa8ad5d80c6383daa88c78))
+
 ## [0.14.0](https://github.com/csautter/dev-alchemy/compare/v0.13.0...v0.14.0) (2026-05-09)
 
 
