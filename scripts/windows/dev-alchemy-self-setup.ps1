@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # renovate: datasource=nuget depName=golang versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
-$golangVersion = "1.26.2"
+$golangVersion = "1.26.3"
 # renovate: datasource=nuget depName=git versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $gitVersion = "2.54.0"
 # renovate: datasource=nuget depName=make versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
