@@ -2,7 +2,6 @@ name: Test Packer Build on Linux for VMs
 
 permissions:
   contents: read
-  id-token: write
 
 on:
   workflow_dispatch:
@@ -37,6 +36,29 @@ on:
         required: false
         default: "cax21"
         type: string
+  push:
+    branches: [main]
+    paths:
+      - "cmd/main.go"
+      - "cmd/cmd/**"
+      - "build/packer/linux/*"
+      - "build/packer/linux/**/*"
+      - "build/packer/windows/*"
+      - "build/packer/windows/**/*"
+      - "pkg/build/**"
+      - "pkg/deploy/**"
+      - "pkg/oci/**"
+      - "pkg/provision/**"
+      - "scripts/linux/*"
+      - "scripts/linux/**/*"
+      - "scripts/macos/create-win11-autounattend-iso.sh"
+      - "scripts/macos/playwright_win11_iso.py"
+      - "scripts/macos/requirements.txt"
+      - "scripts/macos/download-arm64-uefi.sh"
+      - "scripts/macos/download-utm-guest-tools.sh"
+      - "scripts/macos/download-virtio-win-iso.sh"
+      - ".github/workflows/test-build-linux.yml"
+      - ".github/actions/hetzner-github-runner/**"
   pull_request:
     paths:
       - "cmd/main.go"
@@ -47,6 +69,7 @@ on:
       - "build/packer/windows/**/*"
       - "pkg/build/**"
       - "pkg/deploy/**"
+      - "pkg/oci/**"
       - "pkg/provision/**"
       - "scripts/linux/*"
       - "scripts/linux/**/*"
@@ -63,9 +86,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
+env:
+  OCI_UBUNTU_IMAGE: ghcr.io/${{ github.repository_owner }}/ubuntu-24
+
 jobs:
   test-cold-cache-dependency-bootstrap:
-    if: github.event_name == 'pull_request' || inputs.enable_linux_qemu
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu
     name: cold-cache dependency bootstrap
     runs-on: ubuntu-24.04
     env:
@@ -107,7 +133,7 @@ jobs:
           go test -timeout 45m -v ./pkg/build -run '^(TestGetWindows11DownloadAmd64|TestGetWindows11DownloadArm64|TestResolveDebianPackageURL|TestResolveAndDownloadQemuEfiAarch64)$'
 
   determine-runner-mode:
-    if: github.event_name == 'pull_request' || inputs.enable_linux_qemu
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu
     runs-on: ubuntu-latest
     outputs:
       use-hetzner: ${{ steps.mode.outputs.use-hetzner }}
@@ -127,9 +153,12 @@ jobs:
 
   test-packer-build-hosted:
     needs: [determine-runner-mode]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner != 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner != 'true'
     name: build ${{ matrix.go_test_name }} runner_os ${{ matrix.runs_on }}
     runs-on: ${{ matrix.runs_on }}
+    permissions:
+      contents: read
+      id-token: write
     env:
       DEV_ALCHEMY_APP_DATA_DIR: ${{ github.workspace }}/.dev-alchemy
       DEV_ALCHEMY_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/cache
@@ -141,44 +170,68 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
+          - vm_os: ubuntu
+            ubuntu_type: server
+            arch: amd64
             go_test_name: TestBuildQemuUbuntuServerAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
             runs_on: ubuntu-24.04
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
-          - arch: amd64
+          - vm_os: ubuntu
+            ubuntu_type: desktop
+            arch: amd64
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
             runs_on: ubuntu-24.04
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
-          - arch: amd64
+          - vm_os: windows11
+            ubuntu_type: ""
+            arch: amd64
             go_test_name: TestBuildQemuWindows11Amd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Amd64OnLinux
             runs_on: ubuntu-24.04
+            packer_start_only: "true"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},
                {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
                {"local-path":"./.dev-alchemy/cache/windows/virtio-win.iso"}]
-          - arch: arm64
+          - vm_os: ubuntu
+            ubuntu_type: server
+            arch: arm64
             go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
             runs_on: ubuntu-24.04-arm
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
-          - arch: arm64
+          - vm_os: ubuntu
+            ubuntu_type: desktop
+            arch: arm64
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
             runs_on: ubuntu-24.04-arm
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
-          - arch: arm64
+          - vm_os: windows11
+            ubuntu_type: ""
+            arch: arm64
             go_test_name: TestBuildQemuWindows11Arm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Arm64OnLinux
             runs_on: ubuntu-24.04-arm
+            packer_start_only: "true"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_arm64.iso","container":"build-cache"},
                {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
@@ -228,6 +281,8 @@ jobs:
         continue-on-error: true
         env:
           RUN_INTEGRATION_TESTS: "1"
+          DEV_ALCHEMY_PACKER_START_ONLY: ${{ matrix.packer_start_only }}
+          DEV_ALCHEMY_PACKER_START_TIMEOUT: ${{ matrix.packer_start_timeout }}
           PACKER_LOG: 1
           PACKER_LOG_PATH: ${{ github.workspace }}/artifact/${{ matrix.go_test_name }}.packer.log
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -235,6 +290,16 @@ jobs:
           mkdir -p artifact
           go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
+
+      - name: Upload Ubuntu OCI build artifact
+        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ubuntu-oci-${{ matrix.ubuntu_type }}-${{ matrix.arch }}
+          path: .dev-alchemy/cache/ubuntu/qemu-ubuntu-${{ matrix.ubuntu_type }}-packer-${{ matrix.arch }}.qcow2
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
 
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
@@ -276,7 +341,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
-      - name: Fail if dependency reconciliation or build smoke test failed
+      - name: Fail if dependency reconciliation or build failed
         if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure')
         run: |
           echo "Dependency reconciliation and/or build smoke test failed. Failing workflow."
@@ -284,7 +349,7 @@ jobs:
 
   provision-hetzner-linux-amd64-runner:
     needs: [determine-runner-mode]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     outputs:
       runner-label: ${{ steps.provision.outputs.label }}
@@ -308,7 +373,7 @@ jobs:
 
   provision-hetzner-linux-arm64-runner:
     needs: [determine-runner-mode]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     outputs:
       runner-label: ${{ steps.provision.outputs.label }}
@@ -332,13 +397,16 @@ jobs:
 
   test-packer-build-hetzner-amd64:
     needs: [determine-runner-mode, provision-hetzner-linux-amd64-runner]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     name: build ${{ matrix.go_test_name }} on Hetzner
     runs-on:
       - self-hosted
       - Linux
       - X64
       - ${{ needs.provision-hetzner-linux-amd64-runner.outputs.runner-label }}
+    permissions:
+      contents: read
+      id-token: write
     env:
       DEV_ALCHEMY_APP_DATA_DIR: ${{ github.workspace }}/.dev-alchemy
       DEV_ALCHEMY_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/cache
@@ -350,19 +418,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
+          - vm_os: ubuntu
+            ubuntu_type: server
+            arch: amd64
             go_test_name: TestBuildQemuUbuntuServerAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuAmd64OnLinux
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
-          - arch: amd64
+          - vm_os: ubuntu
+            ubuntu_type: desktop
+            arch: amd64
             go_test_name: TestBuildQemuUbuntuDesktopAmd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopAmd64OnLinux
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-amd64.iso"}]
-          - arch: amd64
+          - vm_os: windows11
+            ubuntu_type: ""
+            arch: amd64
             go_test_name: TestBuildQemuWindows11Amd64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Amd64OnLinux
+            packer_start_only: "true"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},
                {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
@@ -410,6 +490,8 @@ jobs:
         continue-on-error: true
         env:
           RUN_INTEGRATION_TESTS: "1"
+          DEV_ALCHEMY_PACKER_START_ONLY: ${{ matrix.packer_start_only }}
+          DEV_ALCHEMY_PACKER_START_TIMEOUT: ${{ matrix.packer_start_timeout }}
           PACKER_LOG: 1
           PACKER_LOG_PATH: ${{ github.workspace }}/artifact/${{ matrix.go_test_name }}.packer.log
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -417,6 +499,16 @@ jobs:
           mkdir -p artifact
           go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
+
+      - name: Upload Ubuntu OCI build artifact
+        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ubuntu-oci-${{ matrix.ubuntu_type }}-${{ matrix.arch }}
+          path: .dev-alchemy/cache/ubuntu/qemu-ubuntu-${{ matrix.ubuntu_type }}-packer-${{ matrix.arch }}.qcow2
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
 
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
@@ -458,7 +550,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
-      - name: Fail if dependency reconciliation or build smoke test failed
+      - name: Fail if dependency reconciliation or build failed
         if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure')
         run: |
           echo "Dependency reconciliation and/or build smoke test failed. Failing workflow."
@@ -466,13 +558,16 @@ jobs:
 
   test-packer-build-hetzner-arm64:
     needs: [determine-runner-mode, provision-hetzner-linux-arm64-runner]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     name: build ${{ matrix.go_test_name }} on Hetzner
     runs-on:
       - self-hosted
       - Linux
       - ARM64
       - ${{ needs.provision-hetzner-linux-arm64-runner.outputs.runner-label }}
+    permissions:
+      contents: read
+      id-token: write
     env:
       DEV_ALCHEMY_APP_DATA_DIR: ${{ github.workspace }}/.dev-alchemy
       DEV_ALCHEMY_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/cache
@@ -484,21 +579,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: arm64
+          - vm_os: ubuntu
+            ubuntu_type: server
+            arch: arm64
             go_test_name: TestBuildQemuUbuntuServerArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuArm64OnLinux
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
-          - arch: arm64
+          - vm_os: ubuntu
+            ubuntu_type: desktop
+            arch: arm64
             go_test_name: TestBuildQemuUbuntuDesktopArm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuUbuntuDesktopArm64OnLinux
+            packer_start_only: "false"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/linux/ubuntu-24.04.4-live-server-arm64.iso"},
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
-          - arch: arm64
+          - vm_os: windows11
+            ubuntu_type: ""
+            arch: arm64
             go_test_name: TestBuildQemuWindows11Arm64OnLinux
             dependency_test_name: TestIntegrationDependencyReconciliationQemuWindows11Arm64OnLinux
+            packer_start_only: "true"
+            packer_start_timeout: "180"
             cache_files: >-
               [{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_arm64.iso","container":"build-cache"},
                {"local-path":"./.dev-alchemy/cache/utm/utm-guest-tools-latest.iso"},
@@ -547,6 +654,8 @@ jobs:
         continue-on-error: true
         env:
           RUN_INTEGRATION_TESTS: "1"
+          DEV_ALCHEMY_PACKER_START_ONLY: ${{ matrix.packer_start_only }}
+          DEV_ALCHEMY_PACKER_START_TIMEOUT: ${{ matrix.packer_start_timeout }}
           PACKER_LOG: 1
           PACKER_LOG_PATH: ${{ github.workspace }}/artifact/${{ matrix.go_test_name }}.packer.log
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -554,6 +663,16 @@ jobs:
           mkdir -p artifact
           go mod vendor
           make test-build-specific TEST_NAME=${{ matrix.go_test_name }}
+
+      - name: Upload Ubuntu OCI build artifact
+        if: steps.packer_build.outcome == 'success' && matrix.vm_os == 'ubuntu' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ubuntu-oci-${{ matrix.ubuntu_type }}-${{ matrix.arch }}
+          path: .dev-alchemy/cache/ubuntu/qemu-ubuntu-${{ matrix.ubuntu_type }}-packer-${{ matrix.arch }}.qcow2
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
 
       - name: Move .vnc.mp4 files to artifact directory
         if: always()
@@ -595,15 +714,87 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           local-cache-dir: ""
 
-      - name: Fail if dependency reconciliation or build smoke test failed
+      - name: Fail if dependency reconciliation or build failed
         if: always() && (steps.dependency_reconciliation.outcome == 'failure' || steps.packer_build.outcome == 'failure')
         run: |
           echo "Dependency reconciliation and/or build smoke test failed. Failing workflow."
           exit 1
 
+  publish-ubuntu-oci-artifacts:
+    needs:
+      - determine-runner-mode
+      - test-packer-build-hosted
+      - test-packer-build-hetzner-amd64
+      - test-packer-build-hetzner-arm64
+    if: >-
+      always() &&
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      (
+        needs.test-packer-build-hosted.result == 'success' ||
+        (
+          needs.test-packer-build-hetzner-amd64.result == 'success' &&
+          needs.test-packer-build-hetzner-arm64.result == 'success'
+        )
+      )
+    name: publish ubuntu ${{ matrix.ubuntu_type }} ${{ matrix.arch }} OCI artifact
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DEV_ALCHEMY_APP_DATA_DIR: ${{ github.workspace }}/.dev-alchemy
+      DEV_ALCHEMY_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/cache
+      DEV_ALCHEMY_VAGRANT_DIR: ${{ github.workspace }}/.dev-alchemy/.vagrant
+      DEV_ALCHEMY_PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
+      PACKER_CACHE_DIR: ${{ github.workspace }}/.dev-alchemy/packer_cache
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ubuntu_type: server
+            arch: amd64
+          - ubuntu_type: desktop
+            arch: amd64
+          - ubuntu_type: server
+            arch: arm64
+          - ubuntu_type: desktop
+            arch: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download Ubuntu OCI build artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ubuntu-oci-${{ matrix.ubuntu_type }}-${{ matrix.arch }}
+          path: .dev-alchemy/cache/ubuntu
+
+      - name: Push Ubuntu OCI artifact to GHCR
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          reference="${OCI_UBUNTU_IMAGE}:${{ matrix.ubuntu_type }}-${{ matrix.arch }}-linux-build"
+          echo "Pushing ${reference}"
+          printf '%s' "${GHCR_TOKEN}" | go run cmd/main.go push "${reference}" \
+            --os ubuntu \
+            --type "${{ matrix.ubuntu_type }}" \
+            --arch "${{ matrix.arch }}" \
+            --host-os linux \
+            --engine qemu \
+            --username "${GITHUB_ACTOR}" \
+            --password-stdin
+
   watch-hetzner-linux-amd64-runner-queue:
     needs: [determine-runner-mode, provision-hetzner-linux-amd64-runner]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -695,7 +886,7 @@ jobs:
 
   watch-hetzner-linux-arm64-runner-queue:
     needs: [determine-runner-mode, provision-hetzner-linux-arm64-runner]
-    if: (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -791,7 +982,7 @@ jobs:
       - provision-hetzner-linux-amd64-runner
       - test-packer-build-hetzner-amd64
       - watch-hetzner-linux-amd64-runner-queue
-    if: always() && (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -813,7 +1004,7 @@ jobs:
       - provision-hetzner-linux-arm64-runner
       - test-packer-build-hetzner-arm64
       - watch-hetzner-linux-arm64-runner-queue
-    if: always() && (github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
+    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.enable_linux_qemu) && needs.determine-runner-mode.outputs.use-hetzner == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

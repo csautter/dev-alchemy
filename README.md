@@ -233,6 +233,10 @@ alchemy provision ubuntu --type server --arch amd64
 If you are targeting Windows and remote access is not configured yet, start
 with [Windows Ansible Access](./docs/windows-ansible-access.md).
 
+When you want to share reusable build artifacts through an OCI registry instead
+of rebuilding them locally, use `alchemy push` and `alchemy pull`; see the
+[OCI build artifact registry workflow](./docs/testing-workflows.md#oci-build-artifact-registry-workflow).
+
 ## Docs Map
 
 The root README is the fast entry point. Use these guides when you want the
@@ -243,8 +247,9 @@ next level of detail:
   flags
 - [Running Playbooks](./docs/running-playbooks.md) for direct localhost,
   remote-host, VM, and Windows `ansible-playbook` examples
-- [Testing Workflows](./docs/testing-workflows.md) for host-specific VM and
-  Docker test flows
+- [Testing Workflows](./docs/testing-workflows.md#oci-build-artifact-registry-workflow)
+  for OCI artifact registry push/pull and host-specific VM and Docker test
+  flows
 - [Managed Application Data](./docs/managed-application-data.md) for cache,
   runtime, and app-data locations
 - [Windows Ansible Access](./docs/windows-ansible-access.md) for manual WinRM

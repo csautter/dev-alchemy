@@ -8,14 +8,20 @@ on:
       - "cmd/main.go"
       - "cmd/cmd/**"
       - ".github/workflows/test-cmd-unit-tests.yml"
+      - "go.mod"
+      - "go.sum"
       - "pkg/build/**"
+      - "pkg/oci/**"
       - "runtimeassets.go"
   pull_request:
     paths:
       - "cmd/main.go"
       - "cmd/cmd/**"
       - ".github/workflows/test-cmd-unit-tests.yml"
+      - "go.mod"
+      - "go.sum"
       - "pkg/build/**"
+      - "pkg/oci/**"
       - "runtimeassets.go"
   workflow_dispatch:
 
@@ -46,3 +52,42 @@ jobs:
 
       - name: Run build package tests
         run: go test ./pkg/build/...
+
+      - name: Run OCI package tests
+        run: go test ./pkg/oci/...
+
+  oci-integration:
+    name: Run OCI registry integration test
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Wait for registry
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5000/v2/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "registry did not become ready" >&2
+          exit 1
+
+      - name: Run OCI registry integration test
+        env:
+          DEV_ALCHEMY_OCI_INTEGRATION_REF: localhost:5000/dev-alchemy/integration:${{ github.run_id }}
+          DEV_ALCHEMY_OCI_INTEGRATION_PLAIN_HTTP: "true"
+        run: go test -v ./pkg/oci -run TestOCIRegistryPushPullIntegration -count=1

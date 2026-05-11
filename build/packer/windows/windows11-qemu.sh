@@ -11,6 +11,8 @@ verbose="false"
 build_output_dir=""
 artifact_output_path=""
 use_hardware_acceleration="true"
+packer_start_only="${DEV_ALCHEMY_PACKER_START_ONLY:-false}"
+packer_start_timeout="${DEV_ALCHEMY_PACKER_START_TIMEOUT:-180}"
 
 script_dir=$(
 	cd "$(dirname "$0")" || exit 1
@@ -72,6 +74,49 @@ is_truthy() {
 		return 1
 		;;
 	esac
+}
+
+duration_seconds() {
+	local value="${1%s}"
+	if [[ "$value" =~ ^[0-9]+$ && "$value" -gt 0 ]]; then
+		printf '%s\n' "$value"
+		return 0
+	fi
+	return 1
+}
+
+packer_probe_is_running() {
+	jobs -pr | grep -qx "$1"
+}
+
+wait_for_packer_probe_settle() {
+	local pid="$1"
+	local settle_seconds="$2"
+	local elapsed_seconds=0
+
+	while packer_probe_is_running "$pid" && [[ "$elapsed_seconds" -lt "$settle_seconds" ]]; do
+		sleep 1
+		elapsed_seconds=$((elapsed_seconds + 1))
+	done
+}
+
+stop_packer_probe_process() {
+	local pid="$1"
+
+	pkill -TERM -P "$pid" >/dev/null 2>&1 || true
+	kill -TERM "$pid" >/dev/null 2>&1 || true
+
+	for _ in 1 2 3 4 5; do
+		if ! packer_probe_is_running "$pid"; then
+			wait "$pid" >/dev/null 2>&1 || true
+			return 0
+		fi
+		sleep 1
+	done
+
+	pkill -KILL -P "$pid" >/dev/null 2>&1 || true
+	kill -KILL "$pid" >/dev/null 2>&1 || true
+	wait "$pid" >/dev/null 2>&1 || true
 }
 
 qemu_binary_for_arch() {
@@ -191,6 +236,100 @@ download_windows_iso_if_missing() {
 	cd "${project_root}" || exit 1
 }
 
+run_packer_build() {
+	packer build \
+		-var "host_os=${host_os}" \
+		-var "host_arch=${host_arch}" \
+		-var "use_hardware_acceleration=${use_hardware_acceleration}" \
+		-var "cache_dir=${effective_cache_dir}" \
+		-var "build_output_dir=${build_output_dir}" \
+		-var "artifact_output_path=${artifact_output_path}" \
+		-var "iso_url=${win11_iso_path}" \
+		-var "headless=${headless}" \
+		-var "vnc_port=${vnc_port}" \
+		-var "arch=${arch}" \
+		-var "cpus=${cpus}" \
+		-var "memory=${memory}" \
+		"$packer_file"
+}
+
+run_packer_build_start_only() {
+	local probe_log
+	local packer_pid
+	local elapsed_seconds
+	local packer_started
+	local vm_started
+	local rc
+
+	probe_log="$(mktemp "${TMPDIR:-/tmp}/dev-alchemy-packer-start-only.XXXXXX")" || return 1
+	elapsed_seconds=0
+	packer_started="false"
+	vm_started="false"
+
+	echo "Running Packer build start-only probe for up to ${packer_start_timeout_seconds}s."
+	run_packer_build > >(tee "$probe_log") 2> >(tee -a "$probe_log" >&2) &
+	packer_pid=$!
+
+	while packer_probe_is_running "$packer_pid"; do
+		if grep -Eq "qemu\\.win11:|Build 'qemu\\.win11'" "$probe_log"; then
+			packer_started="true"
+		fi
+		if grep -Eiq "Starting VM|Launching VM|Waiting for WinRM|Connected to WinRM|Using winrm communicator" "$probe_log"; then
+			vm_started="true"
+			break
+		fi
+		if [[ "$elapsed_seconds" -ge "$packer_start_timeout_seconds" ]]; then
+			break
+		fi
+		sleep 5
+		elapsed_seconds=$((elapsed_seconds + 5))
+	done
+
+	if packer_probe_is_running "$packer_pid"; then
+		if [[ "$vm_started" == "true" ]]; then
+			wait_for_packer_probe_settle "$packer_pid" 15
+			if packer_probe_is_running "$packer_pid"; then
+				echo "Packer build start-only probe succeeded; VM startup was observed."
+				stop_packer_probe_process "$packer_pid"
+				return 0
+			fi
+
+			set +e
+			wait "$packer_pid"
+			rc=$?
+			set -e
+			if [[ "$rc" -eq 0 ]]; then
+				echo "Packer build completed during start-only probe."
+				return 0
+			fi
+
+			echo "Packer build start-only probe failed after VM startup was observed. Log: $probe_log" >&2
+			return "$rc"
+		fi
+		if [[ "$packer_started" == "true" && "$elapsed_seconds" -ge "$packer_start_timeout_seconds" ]]; then
+			echo "Packer build start-only probe succeeded; the qemu builder was still running after ${packer_start_timeout_seconds}s."
+			stop_packer_probe_process "$packer_pid"
+			return 0
+		fi
+
+		echo "Packer build start-only probe did not observe qemu builder startup within ${packer_start_timeout_seconds}s." >&2
+		stop_packer_probe_process "$packer_pid"
+		return 1
+	fi
+
+	set +e
+	wait "$packer_pid"
+	rc=$?
+	set -e
+	if [[ "$rc" -eq 0 ]]; then
+		echo "Packer build completed during start-only probe."
+		return 0
+	fi
+
+	echo "Packer build start-only probe failed before a successful startup could be confirmed. Log: $probe_log" >&2
+	return "$rc"
+}
+
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--arch)
@@ -256,6 +395,19 @@ while [[ $# -gt 0 ]]; do
 		verbose="true"
 		shift
 		;;
+	--packer-start-only)
+		packer_start_only="true"
+		shift
+		;;
+	--packer-start-timeout)
+		if [[ -n "$2" ]]; then
+			packer_start_timeout="$2"
+			shift 2
+		else
+			echo "Invalid value for --packer-start-timeout: $2." >&2
+			exit 1
+		fi
+		;;
 	--project-root)
 		if [[ -n "$2" ]]; then
 			project_root="$2"
@@ -271,6 +423,11 @@ while [[ $# -gt 0 ]]; do
 		;;
 	esac
 done
+
+packer_start_timeout_seconds="$(duration_seconds "$packer_start_timeout")" || {
+	echo "Invalid value for packer start timeout: $packer_start_timeout. Use a positive number of seconds." >&2
+	exit 1
+}
 
 host_os="$(detect_host_os)" || {
 	echo "Unsupported host OS: $(uname -s)" >&2
@@ -320,6 +477,22 @@ export DEV_ALCHEMY_CACHE_DIR="$cache_dir"
 export DEV_ALCHEMY_PACKER_CACHE_DIR="$packer_cache_dir"
 export PACKER_CACHE_DIR="$packer_cache_dir"
 
+effective_cache_dir="$cache_dir"
+start_only_cache_dir=""
+cleanup_start_only_cache() {
+	if [[ -n "$start_only_cache_dir" && -d "$start_only_cache_dir" ]]; then
+		rm -rf "$start_only_cache_dir"
+	fi
+}
+
+if is_truthy "$packer_start_only"; then
+	start_only_cache_dir="$(mktemp -d "/tmp/da-pc.XXXXXX")" || exit 1
+	effective_cache_dir="$start_only_cache_dir"
+	build_output_dir="$effective_cache_dir/o"
+	trap cleanup_start_only_cache EXIT
+	echo "Using isolated cache directory for start-only Packer probe: $effective_cache_dir"
+fi
+
 windows_source_iso_path="${cache_dir}/windows11/iso/win11_25h2_english_${arch}.iso"
 download_windows_iso_if_missing "$arch" "$windows_source_iso_path"
 
@@ -343,7 +516,7 @@ fi
 
 echo "Creating QCOW2 disk image..."
 if [[ -z "$artifact_output_path" ]]; then
-	artifact_output_path="${cache_dir}/windows11/qemu-windows11-${arch}.qcow2"
+	artifact_output_path="${effective_cache_dir}/windows11/qemu-windows11-${arch}.qcow2"
 fi
 mkdir -p "$(dirname "$artifact_output_path")"
 rm -f "$artifact_output_path"
@@ -359,6 +532,14 @@ else
 	win11_iso_path="${cache_dir}/windows11/iso/Win11_ARM64_Unattended.iso"
 fi
 
+if is_truthy "$packer_start_only"; then
+	ln -s "$cache_dir/utm" "$effective_cache_dir/utm"
+	ln -s "$cache_dir/windows" "$effective_cache_dir/windows"
+	if [[ "$arch" == "arm64" ]]; then
+		ln -s "$cache_dir/qemu-uefi" "$effective_cache_dir/qemu-uefi"
+	fi
+fi
+
 output_dir="$build_output_dir"
 if [[ -d "$output_dir" ]]; then
 	echo "Removing existing Packer output directory..."
@@ -370,22 +551,8 @@ if [[ "$verbose" == "true" ]]; then
 	export PACKER_LOG=1
 fi
 
-set +e
-packer build \
-	-var "host_os=${host_os}" \
-	-var "host_arch=${host_arch}" \
-	-var "use_hardware_acceleration=${use_hardware_acceleration}" \
-	-var "cache_dir=${cache_dir}" \
-	-var "build_output_dir=${build_output_dir}" \
-	-var "artifact_output_path=${artifact_output_path}" \
-	-var "iso_url=${win11_iso_path}" \
-	-var "headless=${headless}" \
-	-var "vnc_port=${vnc_port}" \
-	-var "arch=${arch}" \
-	-var "cpus=${cpus}" \
-	-var "memory=${memory}" \
-	"$packer_file"
-packer_exit_code=$?
-set -e
-
-exit "$packer_exit_code"
+if is_truthy "$packer_start_only"; then
+	run_packer_build_start_only
+else
+	run_packer_build
+fi
