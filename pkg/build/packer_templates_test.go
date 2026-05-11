@@ -730,7 +730,7 @@ func TestLinuxWorkflowPublishesUbuntuArtifactsToGHCR(t *testing.T) {
 		t.Fatalf("failed to read workflow %q: %v", workflowPath, err)
 	}
 
-	got := string(content)
+	got := normalizeLineEndings(string(content))
 	for _, want := range []string{
 		`packages: write`,
 		`branches: [main]`,
