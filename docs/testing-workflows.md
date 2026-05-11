@@ -75,9 +75,10 @@ The OCI client reads Docker credentials by default, so `docker login` works for
 authenticated registries. Use `--username`, `--password-stdin`, or
 `--access-token` when you want command-specific credentials.
 
-The gh actions build workflow publishes completed Ubuntu artifacts to GitHub
-Container Registry on `main` and on manual `workflow_dispatch` runs. Artifacts
-are stored under `ghcr.io/<owner>/ubuntu-24` with tags using the
+The Linux GitHub Actions build workflow publishes completed Ubuntu artifacts to
+GitHub Container Registry on pushes to `main` and on manual `workflow_dispatch`
+runs started from `main`. Artifacts are stored under
+`ghcr.io/<owner>/ubuntu-24` with tags using the
 `<type>-<arch>-<hostos>-build` schema, for example:
 
 ```bash
