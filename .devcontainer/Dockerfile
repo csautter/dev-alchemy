@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/devcontainers/go:2-1.26-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_VERSION=24.15.0
+ENV POWERSHELL_VERSION=7.6.1
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -14,6 +15,20 @@ RUN apt-get update \
         xz-utils \
         yq \
     && rm -rf /var/lib/apt/lists/*
+
+RUN arch="$(dpkg --print-architecture)" \
+    && case "${arch}" in \
+        amd64) powershell_arch="x64" ;; \
+        arm64) powershell_arch="arm64" ;; \
+        *) echo "Unsupported PowerShell architecture: ${arch}" >&2; exit 1 ;; \
+    esac \
+    && mkdir -p /opt/microsoft/powershell/7 \
+    && curl -fsSL "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/powershell-${POWERSHELL_VERSION}-linux-${powershell_arch}.tar.gz" -o /tmp/powershell.tar.gz \
+    && tar -xzf /tmp/powershell.tar.gz -C /opt/microsoft/powershell/7 \
+    && chmod +x /opt/microsoft/powershell/7/pwsh \
+    && ln -sf /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh \
+    && rm -f /tmp/powershell.tar.gz \
+    && pwsh --version
 
 RUN arch="$(dpkg --print-architecture)" \
     && case "${arch}" in \

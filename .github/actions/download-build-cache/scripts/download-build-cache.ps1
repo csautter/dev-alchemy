@@ -223,8 +223,10 @@ function Initialize-Ftp {
         Write-Fail "Missing FTP configuration: $($missing -join ', ')."
     }
 
-    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
-    if (-not $curl) { $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue }
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $curl) {
+        $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
     if (-not $curl) { Write-Fail 'FTP backend requires curl.exe.' }
 
     $script:CurlExe = $curl.Source
