@@ -45,7 +45,7 @@ QEMU_VERSION="11.0.0"
 # renovate: datasource=custom.homebrew-formula depName=xz packageName=xz versioning=loose
 XZ_VERSION="5.8.3"
 # renovate: datasource=custom.homebrew-formula depName=ffmpeg packageName=ffmpeg versioning=loose
-FFMPEG_VERSION="8.1"
+FFMPEG_VERSION="8.1.1"
 # renovate: datasource=custom.homebrew-formula depName=vncsnapshot packageName=vncsnapshot versioning=loose
 VNCSNAPSHOT_VERSION="1.2a"
 # renovate: datasource=custom.homebrew-formula depName=xorriso packageName=xorriso versioning=loose
