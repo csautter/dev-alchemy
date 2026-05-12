@@ -2,21 +2,21 @@ name: 'Download Build Cache Files'
 description: >
   For each file in the supplied list, checks the local workspace first, then the
   local runner shared-volume cache (macOS Tart VirtioFS), and finally the
-  selected object storage backend. Works on Windows, macOS, and Linux.
+  selected remote cache backend. Works on Windows, macOS, and Linux.
 
 inputs:
   storage-backend:
     description: >
-      Remote object storage backend. Use "hetzner-s3" for Hetzner Object Storage
-      or "azure" for the legacy Azure Blob Storage backend.
+      Remote cache backend. Use "ftp" for explicit FTPS, "hetzner-s3" for
+      Hetzner Object Storage, or "azure" for the legacy Azure Blob Storage backend.
     required: false
-    default: 'hetzner-s3'
+    default: 'ftp'
   files:
     description: |
       JSON array of cache file descriptors. Each object may contain:
         - local-path  (required) path where the file should live in the workspace
         - blob-name   (optional) object key; defaults to basename of local-path
-        - container   (optional) legacy Azure container name, or S3 bucket fallback; defaults to "build-cache"
+        - container   (optional) legacy Azure container name, or S3 bucket fallback; ignored by FTP; defaults to "build-cache"
       Example:
         '[{"local-path":"./cache/windows11/iso/win11.iso","container":"build-cache"}]'
       Pass '[]' to skip all cache operations (e.g. for builds with no cached files).
@@ -45,6 +45,26 @@ inputs:
     description: 'Optional prefix prepended to all S3 object keys'
     required: false
     default: ''
+  ftp-server:
+    description: 'FTP server hostname. Explicit TLS is enforced by the scripts.'
+    required: false
+    default: ''
+  ftp-port:
+    description: 'FTP server port. Leave empty to use the default FTP port.'
+    required: false
+    default: ''
+  ftp-username:
+    description: 'FTP username'
+    required: false
+    default: ''
+  ftp-password:
+    description: 'FTP password'
+    required: false
+    default: ''
+  ftp-base-dir:
+    description: 'Base directory on the FTP server. Defaults to "/private".'
+    required: false
+    default: ''
   local-cache-dir:
     description: >
       Path to the local runner shared-volume cache directory.
@@ -70,6 +90,11 @@ runs:
         HETZNER_S3_ACCESS_KEY_ID: ${{ inputs.s3-access-key-id || env.HETZNER_S3_ACCESS_KEY_ID || env.AWS_ACCESS_KEY_ID }}
         HETZNER_S3_SECRET_ACCESS_KEY: ${{ inputs.s3-secret-access-key || env.HETZNER_S3_SECRET_ACCESS_KEY || env.AWS_SECRET_ACCESS_KEY }}
         HETZNER_S3_PREFIX: ${{ inputs.s3-prefix || env.HETZNER_S3_PREFIX || env.S3_PREFIX }}
+        FTP_SERVER: ${{ inputs.ftp-server || env.BUILD_CACHE_FTP_SERVER || env.FTP_SERVER }}
+        FTP_PORT: ${{ inputs.ftp-port || env.BUILD_CACHE_FTP_PORT || env.FTP_PORT }}
+        FTP_USERNAME: ${{ inputs.ftp-username || env.BUILD_CACHE_FTP_USERNAME || env.FTP_USERNAME }}
+        FTP_PASSWORD: ${{ inputs.ftp-password || env.BUILD_CACHE_FTP_PASSWORD || env.FTP_PASSWORD }}
+        FTP_BASE_DIR: ${{ inputs.ftp-base-dir || env.BUILD_CACHE_FTP_BASE_DIR || env.FTP_BASE_DIR || '/private' }}
         LOCAL_CACHE_DIR: ${{ inputs.local-cache-dir }}
       run: bash "${{ github.action_path }}/scripts/download-build-cache.sh"
 
@@ -86,6 +111,11 @@ runs:
         HETZNER_S3_ACCESS_KEY_ID: ${{ inputs.s3-access-key-id || env.HETZNER_S3_ACCESS_KEY_ID || env.AWS_ACCESS_KEY_ID }}
         HETZNER_S3_SECRET_ACCESS_KEY: ${{ inputs.s3-secret-access-key || env.HETZNER_S3_SECRET_ACCESS_KEY || env.AWS_SECRET_ACCESS_KEY }}
         HETZNER_S3_PREFIX: ${{ inputs.s3-prefix || env.HETZNER_S3_PREFIX || env.S3_PREFIX }}
+        FTP_SERVER: ${{ inputs.ftp-server || env.BUILD_CACHE_FTP_SERVER || env.FTP_SERVER }}
+        FTP_PORT: ${{ inputs.ftp-port || env.BUILD_CACHE_FTP_PORT || env.FTP_PORT }}
+        FTP_USERNAME: ${{ inputs.ftp-username || env.BUILD_CACHE_FTP_USERNAME || env.FTP_USERNAME }}
+        FTP_PASSWORD: ${{ inputs.ftp-password || env.BUILD_CACHE_FTP_PASSWORD || env.FTP_PASSWORD }}
+        FTP_BASE_DIR: ${{ inputs.ftp-base-dir || env.BUILD_CACHE_FTP_BASE_DIR || env.FTP_BASE_DIR || '/private' }}
         LOCAL_CACHE_DIR: ${{ inputs.local-cache-dir }}
       run: |
         & "${{ github.action_path }}\scripts\download-build-cache.ps1"

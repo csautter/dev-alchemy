@@ -127,18 +127,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Download build cache files
         uses: ./.github/actions/download-build-cache
         with:
+          storage-backend: ftp
           files: '[{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
 
       - name: Install dependencies windows
         shell: powershell
@@ -196,18 +194,16 @@ jobs:
             Compress-Archive -Path (Join-Path $artifactDir '*') -DestinationPath $diagnosticsZip -Force
           }
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
+          storage-backend: ftp
           files: '[{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"},{"local-path":"./artifact/hyperv-diagnostics-TestBuildHypervWindows11Amd64OnWindows.zip","blob-name":"hyperv-diagnostics-TestBuildHypervWindows11Amd64OnWindows.zip","container":"build-cache","overwrite":true}]'
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
 
       - name: Fail if build or deploy smoke test failed
         if: always() && (steps.packer_build.outcome == 'failure' || steps.deploy_smoke.outcome == 'failure')
@@ -374,18 +370,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Download build cache files
         uses: ./.github/actions/download-build-cache
         with:
+          storage-backend: ftp
           files: '[{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
 
       - name: Install dependencies windows
         shell: powershell
@@ -406,18 +400,16 @@ jobs:
           make test-build-specific TEST_NAME=TestBuildVirtualBoxWindows11Amd64OnWindows
           make test-deploy-windows-hyperv
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
+          storage-backend: ftp
           files: '[{"local-path":"./.dev-alchemy/cache/windows11/iso/win11_25h2_english_amd64.iso","container":"build-cache"}]'
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
 
       - name: Fail if Packer build failed
         if: steps.packer_build.outcome == 'failure'

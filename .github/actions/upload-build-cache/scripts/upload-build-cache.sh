@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
 # Expects the following environment variables (set by the composite action):
 #   CACHE_FILES       - JSON array of cache file descriptors
-#   CACHE_BACKEND     - Remote cache backend: hetzner-s3 or azure
+#   CACHE_BACKEND     - Remote cache backend: ftp, hetzner-s3, or azure
 #   SUBSCRIPTION_ID   - Azure subscription ID (azure backend only)
 #   HETZNER_S3_*      - Hetzner S3 endpoint, bucket, access key, secret key, and optional prefix
+#   FTP_*             - FTP server, port, username, password, and base dir. Explicit TLS is enforced.
 #   LOCAL_CACHE_DIR   - Path to the local runner shared-volume cache (may be empty)
 set -euo pipefail
 
-CACHE_BACKEND=$(printf '%s' "${CACHE_BACKEND:-hetzner-s3}" | tr '[:upper:]' '[:lower:]')
+CACHE_BACKEND=$(printf '%s' "${CACHE_BACKEND:-ftp}" | tr '[:upper:]' '[:lower:]')
 MC_ALIAS="dev-alchemy-build-cache"
 MC_BIN=""
 MC_READY=false
+FTP_READY=false
+FTP_BASE_URL=""
+FTP_BASE_DIR_NORMALIZED=""
+FTP_CURL_COMMON_ARGS=()
 
 fail() {
   echo "  ✗ $*" >&2
@@ -145,6 +150,123 @@ s3_object_exists() {
   "$MC_BIN" stat "$(s3_remote_path "$bucket" "$key")" >/dev/null 2>&1
 }
 
+normalize_ftp_server() {
+  local server="$1"
+  server="${server#ftp://}"
+  server="${server#ftps://}"
+  server="${server%/}"
+
+  if [[ "$server" == */* ]]; then
+    fail "FTP server must be a hostname, optionally with a port. Put paths in ftp-base-dir."
+  fi
+
+  if [ -n "${FTP_PORT:-}" ] && [[ "$server" != *:* ]]; then
+    server="${server}:${FTP_PORT}"
+  fi
+
+  printf 'ftp://%s' "$server"
+}
+
+normalize_ftp_base_dir() {
+  local base_dir="${1:-/private}"
+  base_dir="${base_dir//\\//}"
+  base_dir="/${base_dir#/}"
+  base_dir="${base_dir%/}"
+
+  if [ -z "$base_dir" ]; then
+    base_dir="/private"
+  fi
+
+  printf '%s' "$base_dir"
+}
+
+initialize_ftp() {
+  if [ "$FTP_READY" = "true" ]; then
+    return
+  fi
+
+  FTP_SERVER="${FTP_SERVER:-${BUILD_CACHE_FTP_SERVER:-}}"
+  FTP_PORT="${FTP_PORT:-${BUILD_CACHE_FTP_PORT:-}}"
+  FTP_USERNAME="${FTP_USERNAME:-${BUILD_CACHE_FTP_USERNAME:-}}"
+  FTP_PASSWORD="${FTP_PASSWORD:-${BUILD_CACHE_FTP_PASSWORD:-}}"
+  FTP_BASE_DIR="${FTP_BASE_DIR:-${BUILD_CACHE_FTP_BASE_DIR:-/private}}"
+
+  local missing=()
+  [ -n "$FTP_SERVER" ] || missing+=("FTP_SERVER")
+  [ -n "$FTP_USERNAME" ] || missing+=("FTP_USERNAME")
+  [ -n "$FTP_PASSWORD" ] || missing+=("FTP_PASSWORD")
+  if [ "${#missing[@]}" -gt 0 ]; then
+    fail "Missing FTP configuration: ${missing[*]}."
+  fi
+
+  command -v curl >/dev/null 2>&1 || fail "FTP backend requires curl."
+
+  FTP_BASE_URL="$(normalize_ftp_server "$FTP_SERVER")"
+  FTP_BASE_DIR_NORMALIZED="$(normalize_ftp_base_dir "$FTP_BASE_DIR")"
+  FTP_CURL_COMMON_ARGS=(
+    --fail
+    --silent
+    --show-error
+    --ssl-reqd
+    --connect-timeout 30
+    --retry 3
+    --retry-delay 5
+    --user "${FTP_USERNAME}:${FTP_PASSWORD}"
+  )
+  FTP_READY=true
+}
+
+ftp_key_for_blob() {
+  local blob_name="${1#/}"
+  blob_name="${blob_name//\\//}"
+  printf '%s' "$blob_name"
+}
+
+ftp_remote_url() {
+  local key="$1"
+  printf '%s%s/%s' "$FTP_BASE_URL" "$FTP_BASE_DIR_NORMALIZED" "$key"
+}
+
+ftp_object_exists() {
+  local url="$1"
+  local status=0
+
+  curl "${FTP_CURL_COMMON_ARGS[@]}" --head --output /dev/null --dump-header /dev/null "$url" || status=$?
+  if [ "$status" -eq 0 ]; then
+    return 0
+  fi
+  if [ "$status" -eq 78 ] || [ "$status" -eq 19 ]; then
+    return 1
+  fi
+
+  fail "FTP object check failed with curl exit code $status."
+}
+
+upload_to_ftp() {
+  local real_path="$1"
+  local blob_name="$2"
+  local overwrite="$3"
+  local key
+  local url
+
+  initialize_ftp
+  key="$(ftp_key_for_blob "$blob_name")"
+  url="$(ftp_remote_url "$key")"
+
+  if [ "$overwrite" != "true" ] && ftp_object_exists "$url"; then
+    echo "  ✓ FTP object $FTP_BASE_DIR_NORMALIZED/$key already exists — skipping upload."
+    return
+  fi
+
+  if [ "$overwrite" = "true" ]; then
+    echo "  ↻ Uploading $FTP_BASE_DIR_NORMALIZED/$key via explicit FTPS with overwrite enabled..."
+  else
+    echo "  ↑ Uploading $FTP_BASE_DIR_NORMALIZED/$key via explicit FTPS..."
+  fi
+  curl "${FTP_CURL_COMMON_ARGS[@]}" --ftp-create-dirs --upload-file "$real_path" "$url"
+  echo "  ✓ Uploaded $FTP_BASE_DIR_NORMALIZED/$key."
+}
+
 upload_to_hetzner_s3() {
   local real_path="$1"
   local blob_name="$2"
@@ -263,6 +385,9 @@ for f in data:
   fi
 
   case "$CACHE_BACKEND" in
+    ftp|ftps)
+      upload_to_ftp "$real_path" "$blob_name" "$overwrite"
+      ;;
     hetzner-s3|s3)
       upload_to_hetzner_s3 "$real_path" "$blob_name" "$container" "$overwrite"
       ;;
@@ -270,7 +395,7 @@ for f in data:
       upload_to_azure "$real_path" "$blob_name" "$container" "$overwrite"
       ;;
     *)
-      fail "Unsupported storage backend '$CACHE_BACKEND'. Use 'hetzner-s3' or 'azure'."
+      fail "Unsupported storage backend '$CACHE_BACKEND'. Use 'ftp', 'hetzner-s3', or 'azure'."
       ;;
   esac
 done

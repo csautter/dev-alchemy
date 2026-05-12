@@ -1,8 +1,9 @@
 # Expects the following environment variables (set by the composite action):
 #   CACHE_FILES       - JSON array of cache file descriptors
-#   CACHE_BACKEND     - Remote cache backend: hetzner-s3 or azure
+#   CACHE_BACKEND     - Remote cache backend: ftp, hetzner-s3, or azure
 #   SUBSCRIPTION_ID   - Azure subscription ID (azure backend only)
 #   HETZNER_S3_*      - Hetzner S3 endpoint, bucket, access key, secret key, and optional prefix
+#   FTP_*             - FTP server, port, username, password, and base dir. Explicit TLS is enforced.
 #   LOCAL_CACHE_DIR   - Optional local runner cache directory
 [CmdletBinding()]
 param()
@@ -11,13 +12,18 @@ $ErrorActionPreference = 'Stop'
 
 $files          = $env:CACHE_FILES | ConvertFrom-Json
 $cacheBackend   = $env:CACHE_BACKEND
-if ([string]::IsNullOrWhiteSpace($cacheBackend)) { $cacheBackend = 'hetzner-s3' }
+if ([string]::IsNullOrWhiteSpace($cacheBackend)) { $cacheBackend = 'ftp' }
 $cacheBackend   = $cacheBackend.ToLowerInvariant()
 $resourceGroup  = 'gh-runner-storage-rg'
 $localCacheDir  = $env:LOCAL_CACHE_DIR
 $script:McAlias = 'dev-alchemy-build-cache'
 $script:McBin   = $null
 $script:McReady = $false
+$script:CurlExe = $null
+$script:FtpBaseUrl = $null
+$script:FtpBaseDirNormalized = $null
+$script:FtpCurlCommonArgs = @()
+$script:FtpReady = $false
 
 function Write-Fail {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -160,6 +166,120 @@ function Test-S3Object {
     return $LASTEXITCODE -eq 0
 }
 
+function Normalize-FtpServer {
+    param(
+        [Parameter(Mandatory = $true)][string]$Server,
+        [string]$Port
+    )
+
+    $normalized = $Server -replace '^ftps?://', ''
+    $normalized = $normalized.TrimEnd('/')
+    if ($normalized.Contains('/')) {
+        Write-Fail 'FTP server must be a hostname, optionally with a port. Put paths in ftp-base-dir.'
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Port) -and -not $normalized.Contains(':')) {
+        $normalized = '{0}:{1}' -f $normalized, $Port
+    }
+
+    return "ftp://$normalized"
+}
+
+function Normalize-FtpBaseDir {
+    param([string]$BaseDir)
+
+    $normalized = $BaseDir
+    if ([string]::IsNullOrWhiteSpace($normalized)) { $normalized = '/private' }
+    $normalized = $normalized.Replace('\', '/')
+    $normalized = '/' + $normalized.TrimStart([char[]]'/')
+    $normalized = $normalized.TrimEnd([char[]]'/')
+    if ([string]::IsNullOrWhiteSpace($normalized)) { $normalized = '/private' }
+
+    return $normalized
+}
+
+function Initialize-Ftp {
+    if ($script:FtpReady) {
+        return
+    }
+
+    $ftpServer = $env:FTP_SERVER
+    if ([string]::IsNullOrWhiteSpace($ftpServer)) { $ftpServer = $env:BUILD_CACHE_FTP_SERVER }
+    $ftpPort = $env:FTP_PORT
+    if ([string]::IsNullOrWhiteSpace($ftpPort)) { $ftpPort = $env:BUILD_CACHE_FTP_PORT }
+    $ftpUsername = $env:FTP_USERNAME
+    if ([string]::IsNullOrWhiteSpace($ftpUsername)) { $ftpUsername = $env:BUILD_CACHE_FTP_USERNAME }
+    $ftpPassword = $env:FTP_PASSWORD
+    if ([string]::IsNullOrWhiteSpace($ftpPassword)) { $ftpPassword = $env:BUILD_CACHE_FTP_PASSWORD }
+    $ftpBaseDir = $env:FTP_BASE_DIR
+    if ([string]::IsNullOrWhiteSpace($ftpBaseDir)) { $ftpBaseDir = $env:BUILD_CACHE_FTP_BASE_DIR }
+    if ([string]::IsNullOrWhiteSpace($ftpBaseDir)) { $ftpBaseDir = '/private' }
+
+    $missing = @()
+    if ([string]::IsNullOrWhiteSpace($ftpServer)) { $missing += 'FTP_SERVER' }
+    if ([string]::IsNullOrWhiteSpace($ftpUsername)) { $missing += 'FTP_USERNAME' }
+    if ([string]::IsNullOrWhiteSpace($ftpPassword)) { $missing += 'FTP_PASSWORD' }
+    if ($missing.Count -gt 0) {
+        Write-Fail "Missing FTP configuration: $($missing -join ', ')."
+    }
+
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if (-not $curl) { $curl = Get-Command curl -CommandType Application -ErrorAction SilentlyContinue }
+    if (-not $curl) { Write-Fail 'FTP backend requires curl.exe.' }
+
+    $script:CurlExe = $curl.Source
+    $script:FtpBaseUrl = Normalize-FtpServer -Server $ftpServer -Port $ftpPort
+    $script:FtpBaseDirNormalized = Normalize-FtpBaseDir -BaseDir $ftpBaseDir
+    $script:FtpCurlCommonArgs = @(
+        '--fail',
+        '--silent',
+        '--show-error',
+        '--ssl-reqd',
+        '--connect-timeout', '30',
+        '--retry', '3',
+        '--retry-delay', '5',
+        '--user', ('{0}:{1}' -f $ftpUsername, $ftpPassword)
+    )
+    $script:FtpReady = $true
+}
+
+function Get-FtpKeyForBlob {
+    param([Parameter(Mandatory = $true)][string]$BlobName)
+
+    return $BlobName.Replace('\', '/').TrimStart([char[]]'/')
+}
+
+function Get-FtpRemoteUrl {
+    param([Parameter(Mandatory = $true)][string]$Key)
+
+    return ('{0}{1}/{2}' -f $script:FtpBaseUrl, $script:FtpBaseDirNormalized, $Key)
+}
+
+function Invoke-FtpCurl {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [switch]$AllowMissing
+    )
+
+    & $script:CurlExe @Arguments
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -eq 0) {
+        return $true
+    }
+    if ($AllowMissing -and ($exitCode -eq 78 -or $exitCode -eq 19)) {
+        return $false
+    }
+
+    Write-Fail "FTP curl command failed with exit code $exitCode."
+}
+
+function Test-FtpObject {
+    param([Parameter(Mandatory = $true)][string]$Url)
+
+    $args = $script:FtpCurlCommonArgs + @('--head', '--output', 'NUL', '--dump-header', 'NUL', $Url)
+    return Invoke-FtpCurl -Arguments $args -AllowMissing
+}
+
 function Save-ToLocalCache {
     param(
         [Parameter(Mandatory = $true)][string]$LocalPath,
@@ -179,6 +299,38 @@ function Save-ToLocalCache {
             Copy-Item -Path $LocalPath -Destination $cached -Force
             Write-Host '  [ok] Saved to local runner cache.'
         }
+    }
+}
+
+function Download-FromFtp {
+    param(
+        [Parameter(Mandatory = $true)][string]$LocalPath,
+        [Parameter(Mandatory = $true)][string]$BlobName
+    )
+
+    Initialize-Ftp
+    $key = Get-FtpKeyForBlob $BlobName
+    $url = Get-FtpRemoteUrl $key
+
+    Write-Host "  [download] Not in local cache. Attempting explicit FTPS download from '$script:FtpBaseDirNormalized/$key'..."
+
+    if (Test-FtpObject -Url $url) {
+        $dir = Split-Path -Path $LocalPath -Parent
+        if ($dir -and -not (Test-Path $dir -PathType Container)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+
+        $tmpPath = "$LocalPath.part"
+        if (Test-Path $tmpPath -PathType Leaf) {
+            Remove-Item -Path $tmpPath -Force
+        }
+        $args = $script:FtpCurlCommonArgs + @('--location', '--output', $tmpPath, $url)
+        Invoke-FtpCurl -Arguments $args | Out-Null
+        Move-Item -Path $tmpPath -Destination $LocalPath -Force
+        Write-Host "  [ok] Downloaded $script:FtpBaseDirNormalized/$key -> $LocalPath"
+        Save-ToLocalCache -LocalPath $LocalPath -BlobName $BlobName
+    } else {
+        Write-Host "  [miss] FTP object $script:FtpBaseDirNormalized/$key not found."
     }
 }
 
@@ -280,11 +432,13 @@ foreach ($f in $files) {
         }
     }
 
-    if ($cacheBackend -eq 'hetzner-s3' -or $cacheBackend -eq 's3') {
+    if ($cacheBackend -eq 'ftp' -or $cacheBackend -eq 'ftps') {
+        Download-FromFtp -LocalPath $localPath -BlobName $blobName
+    } elseif ($cacheBackend -eq 'hetzner-s3' -or $cacheBackend -eq 's3') {
         Download-FromHetznerS3 -LocalPath $localPath -BlobName $blobName -Container $container
     } elseif ($cacheBackend -eq 'azure' -or $cacheBackend -eq 'azure-blob') {
         Download-FromAzure -LocalPath $localPath -BlobName $blobName -Container $container
     } else {
-        Write-Fail "Unsupported storage backend '$cacheBackend'. Use 'hetzner-s3' or 'azure'."
+        Write-Fail "Unsupported storage backend '$cacheBackend'. Use 'ftp', 'hetzner-s3', or 'azure'."
     }
 }

@@ -27,8 +27,7 @@ GITHUB_REPO=myorg/myrepo ./create-macos-tart-runner.sh
 Workflows that test Packer builds require large files — Windows 11 ISOs
 (`win11_25h2_english_arm64.iso`, `win11_25h2_english_amd64.iso`) and potentially other large
 build dependencies such as toolchain archives. These files are several gigabytes. On runners
-with a slow or metered internet connection the remote object storage download dominates job
-run-time.
+with a slow or metered internet connection the remote cache download dominates job run-time.
 
 To avoid repeated downloads you can maintain a **general-purpose build cache** on the **host
 machine**. The runner script mounts the directory into every VM at boot via VirtioFS
@@ -36,9 +35,9 @@ machine**. The runner script mounts the directory into every VM at boot via Virt
 
 1. **Cache hit** — symlinks the file from `/Volumes/My Shared Files/build-cache/` into the
    workspace; the remote download is skipped entirely.
-2. **Cache miss** — downloads the file from the configured build-cache object storage backend
-   as normal. CI uses Hetzner S3 Object Storage; the legacy Azure Blob backend is still available
-   via the cache actions' `storage-backend: azure` option.
+2. **Cache miss** — downloads the file from the configured remote build-cache backend as normal.
+   CI uses FTP with explicit TLS enforced and `/private` as the remote base directory. Hetzner S3
+   and Azure Blob backends remain available through the cache actions' `storage-backend` option.
 
 After the build the `upload-build-cache` action **copies any freshly downloaded file into the
 cache** so every subsequent run on the same runner is a cache hit. No manual preparation of
@@ -49,7 +48,7 @@ individual runners is needed.
 ```
 First run (cache empty)
 ──────────────────────────────────────────────────────────────
-Hetzner S3 Object Storage
+FTP server (/private, explicit TLS)
     │  download-build-cache action
     ▼
 Workflow workspace: cache/windows11/iso/win11_25h2_english_arm64.iso  (real file)
@@ -83,12 +82,11 @@ That's it. Alternatively, if you want to pre-seed the cache to avoid the first s
 # Option A – copy from USB drive / NAS / another machine:
 cp /path/to/win11_25h2_english_arm64.iso ~/iso-cache/
 
-# Option B – download once from Hetzner S3 Object Storage:
-mc alias set dev-alchemy-cache "$HETZNER_S3_ENDPOINT_URL" \
-  "$HETZNER_S3_ACCESS_KEY_ID" "$HETZNER_S3_SECRET_ACCESS_KEY" \
-  --api S3v4 --path auto
-mc cp "dev-alchemy-cache/${HETZNER_S3_BUCKET}/win11_25h2_english_arm64.iso" \
-  ~/iso-cache/win11_25h2_english_arm64.iso
+# Option B – download once from the FTP build cache with explicit TLS:
+curl --fail --ssl-reqd \
+  --user "${BUILD_CACHE_FTP_USERNAME}:${BUILD_CACHE_FTP_PASSWORD}" \
+  --output ~/iso-cache/win11_25h2_english_arm64.iso \
+  "ftp://${BUILD_CACHE_FTP_SERVER}/private/win11_25h2_english_arm64.iso"
 ```
 
 ### Start the runner with caching enabled
@@ -107,6 +105,11 @@ RUNNER_POOL_SIZE=2 VM_CPU_COUNT=4 VM_MEMORY_MB=8192 \
 
 The directory is mounted read-write inside every VM as `/Volumes/My Shared Files/build-cache/`.
 
+The CI cache actions expect the repository variable `BUILD_CACHE_FTP_SERVER`, the optional
+repository variable `BUILD_CACHE_FTP_PORT`, and the repository secrets
+`BUILD_CACHE_FTP_USERNAME` and `BUILD_CACHE_FTP_PASSWORD`. The remote base directory defaults to
+`/private`.
+
 ### Set the runner CPU count or memory size and run up to 2 runners in parallel
 
 It's a limitation by Apple to limit the concurrency of VMs to 2 per host machine.
@@ -122,7 +125,7 @@ RUNNER_POOL_SIZE=2 VM_CPU_COUNT=4 VM_MEMORY_MB=8192 \
 Cached files are large and rarely change. When a new version appears:
 
 1. Delete (or rename) the old file in `~/build-cache/` on each host machine.
-2. The next workflow run will automatically download the new file from object storage and
+2. The next workflow run will automatically download the new file from the remote cache and
    repopulate the cache.
 3. Alternatively, copy the new file directly into `~/build-cache/` to avoid any slow first run.
 
