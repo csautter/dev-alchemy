@@ -27,7 +27,7 @@ GITHUB_REPO=myorg/myrepo ./create-macos-tart-runner.sh
 Workflows that test Packer builds require large files — Windows 11 ISOs
 (`win11_25h2_english_arm64.iso`, `win11_25h2_english_amd64.iso`) and potentially other large
 build dependencies such as toolchain archives. These files are several gigabytes. On runners
-with a slow or metered internet connection the Azure Blob Storage download dominates job
+with a slow or metered internet connection the remote object storage download dominates job
 run-time.
 
 To avoid repeated downloads you can maintain a **general-purpose build cache** on the **host
@@ -35,8 +35,10 @@ machine**. The runner script mounts the directory into every VM at boot via Virt
 (read-write). The `download-build-cache` composite action then:
 
 1. **Cache hit** — symlinks the file from `/Volumes/My Shared Files/build-cache/` into the
-   workspace; the Azure download is skipped entirely.
-2. **Cache miss** — downloads the file from Azure Blob Storage as normal.
+   workspace; the remote download is skipped entirely.
+2. **Cache miss** — downloads the file from the configured build-cache object storage backend
+   as normal. CI uses Hetzner S3 Object Storage; the legacy Azure Blob backend is still available
+   via the cache actions' `storage-backend: azure` option.
 
 After the build the `upload-build-cache` action **copies any freshly downloaded file into the
 cache** so every subsequent run on the same runner is a cache hit. No manual preparation of
@@ -47,7 +49,7 @@ individual runners is needed.
 ```
 First run (cache empty)
 ──────────────────────────────────────────────────────────────
-Azure Blob Storage
+Hetzner S3 Object Storage
     │  download-build-cache action
     ▼
 Workflow workspace: cache/windows11/iso/win11_25h2_english_arm64.iso  (real file)
@@ -81,16 +83,12 @@ That's it. Alternatively, if you want to pre-seed the cache to avoid the first s
 # Option A – copy from USB drive / NAS / another machine:
 cp /path/to/win11_25h2_english_arm64.iso ~/iso-cache/
 
-# Option B – download once from Azure Blob Storage:
-SUBSCRIPTION_ID="<your-subscription-id>"
-STORAGE_ACCOUNT="ghrunner$(echo $SUBSCRIPTION_ID | tr -d '-' | cut -c1-24)"
-
-az storage blob download \
-  --account-name "$STORAGE_ACCOUNT" \
-  --container-name windows-isos \
-  --name win11_25h2_english_arm64.iso \
-  --file ~/iso-cache/win11_25h2_english_arm64.iso \
-  --auth-mode login
+# Option B – download once from Hetzner S3 Object Storage:
+mc alias set dev-alchemy-cache "$HETZNER_S3_ENDPOINT_URL" \
+  "$HETZNER_S3_ACCESS_KEY_ID" "$HETZNER_S3_SECRET_ACCESS_KEY" \
+  --api S3v4 --path auto
+mc cp "dev-alchemy-cache/${HETZNER_S3_BUCKET}/win11_25h2_english_arm64.iso" \
+  ~/iso-cache/win11_25h2_english_arm64.iso
 ```
 
 ### Start the runner with caching enabled
@@ -124,7 +122,7 @@ RUNNER_POOL_SIZE=2 VM_CPU_COUNT=4 VM_MEMORY_MB=8192 \
 Cached files are large and rarely change. When a new version appears:
 
 1. Delete (or rename) the old file in `~/build-cache/` on each host machine.
-2. The next workflow run will automatically download the new file from Azure Blob Storage and
+2. The next workflow run will automatically download the new file from object storage and
    repopulate the cache.
 3. Alternatively, copy the new file directly into `~/build-cache/` to avoid any slow first run.
 
