@@ -8,7 +8,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.10.2
 	github.com/vbauerster/mpb/v8 v8.12.0
-	golang.org/x/sys v0.42.0
+	golang.org/x/sys v0.44.0
 	oras.land/oras-go/v2 v2.6.0
 )
 
