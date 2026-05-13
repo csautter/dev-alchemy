@@ -23,6 +23,7 @@ $script:CurlExe = $null
 $script:FtpBaseUrl = $null
 $script:FtpBaseDirNormalized = $null
 $script:FtpCurlCommonArgs = @()
+$script:FtpCurlTransferArgs = @()
 $script:FtpReady = $false
 
 function Write-Fail {
@@ -242,6 +243,16 @@ function Initialize-Ftp {
         '--retry-delay', '5',
         '--user', ('{0}:{1}' -f $ftpUsername, $ftpPassword)
     )
+    $script:FtpCurlTransferArgs = @(
+        '--fail',
+        '--show-error',
+        '--progress-bar',
+        '--ssl-reqd',
+        '--connect-timeout', '30',
+        '--retry', '3',
+        '--retry-delay', '5',
+        '--user', ('{0}:{1}' -f $ftpUsername, $ftpPassword)
+    )
     $script:FtpReady = $true
 }
 
@@ -326,7 +337,7 @@ function Download-FromFtp {
         if (Test-Path $tmpPath -PathType Leaf) {
             Remove-Item -Path $tmpPath -Force
         }
-        $args = $script:FtpCurlCommonArgs + @('--location', '--output', $tmpPath, $url)
+        $args = $script:FtpCurlTransferArgs + @('--location', '--output', $tmpPath, $url)
         Invoke-FtpCurl -Arguments $args | Out-Null
         Move-Item -Path $tmpPath -Destination $LocalPath -Force
         Write-Host "  [ok] Downloaded $script:FtpBaseDirNormalized/$key -> $LocalPath"

@@ -17,6 +17,7 @@ FTP_READY=false
 FTP_BASE_URL=""
 FTP_BASE_DIR_NORMALIZED=""
 FTP_CURL_COMMON_ARGS=()
+FTP_CURL_TRANSFER_ARGS=()
 
 fail() {
   echo "  ✗ $*" >&2
@@ -214,6 +215,16 @@ initialize_ftp() {
     --retry-delay 5
     --user "${FTP_USERNAME}:${FTP_PASSWORD}"
   )
+  FTP_CURL_TRANSFER_ARGS=(
+    --fail
+    --show-error
+    --progress-bar
+    --ssl-reqd
+    --connect-timeout 30
+    --retry 3
+    --retry-delay 5
+    --user "${FTP_USERNAME}:${FTP_PASSWORD}"
+  )
   FTP_READY=true
 }
 
@@ -277,7 +288,7 @@ download_from_ftp() {
     mkdir -p "$(dirname "$local_path")"
     tmp_path="${local_path}.part"
     rm -f "$tmp_path"
-    if curl "${FTP_CURL_COMMON_ARGS[@]}" --location --output "$tmp_path" "$url"; then
+    if curl "${FTP_CURL_TRANSFER_ARGS[@]}" --location --output "$tmp_path" "$url"; then
       mv "$tmp_path" "$local_path"
       echo "  ✓ Downloaded $FTP_BASE_DIR_NORMALIZED/$key → $local_path"
       save_to_local_cache "$local_path" "$blob_name"
