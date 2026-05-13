@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -350,11 +351,64 @@ func webFileDependencyMatchesVMConfig(dep WebFileDependency, vmconfig VirtualMac
 	return false
 }
 
+type pythonVenvCommand struct {
+	executable string
+	argsPrefix []string
+}
+
+func (command pythonVenvCommand) args(args ...string) []string {
+	merged := make([]string, 0, len(command.argsPrefix)+len(args))
+	merged = append(merged, command.argsPrefix...)
+	merged = append(merged, args...)
+	return merged
+}
+
+func (command pythonVenvCommand) displayName() string {
+	if len(command.argsPrefix) == 0 {
+		return command.executable
+	}
+	return command.executable + " " + strings.Join(command.argsPrefix, " ")
+}
+
+func resolvePythonVenvCommand() (pythonVenvCommand, error) {
+	return resolvePythonVenvCommandForOS(runtime.GOOS, exec.LookPath)
+}
+
+func resolvePythonVenvCommandForOS(goos string, lookPath func(string) (string, error)) (pythonVenvCommand, error) {
+	candidates := []pythonVenvCommand{
+		{executable: "python3"},
+		{executable: "python"},
+	}
+	if goos == "windows" {
+		candidates = []pythonVenvCommand{
+			{executable: "python"},
+			{executable: "py", argsPrefix: []string{"-3"}},
+			{executable: "python3"},
+		}
+	}
+
+	checked := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		resolvedPath, err := lookPath(candidate.executable)
+		if err == nil {
+			candidate.executable = resolvedPath
+			return candidate, nil
+		}
+		checked = append(checked, candidate.displayName())
+	}
+
+	return pythonVenvCommand{}, fmt.Errorf("Python 3 executable not found on PATH; checked %s", strings.Join(checked, ", "))
+}
+
 // bootstrapPythonEnv ensures the Python virtual environment at workdir/.venv exists
 // and has playwright and playwright-stealth installed, then installs the Chromium browser.
 // pythonExe is the system Python executable used to create or repair the venv.
 func bootstrapPythonEnv(workdir, pythonExe string) error {
-	if err := ensurePythonVenv(workdir, pythonExe); err != nil {
+	return bootstrapPythonEnvWithCommand(workdir, pythonVenvCommand{executable: pythonExe})
+}
+
+func bootstrapPythonEnvWithCommand(workdir string, pythonCommand pythonVenvCommand) error {
+	if err := ensurePythonVenvWithCommand(workdir, pythonCommand); err != nil {
 		return err
 	}
 
@@ -374,10 +428,14 @@ func bootstrapPythonEnv(workdir, pythonExe string) error {
 }
 
 func ensurePythonVenv(workdir, pythonExe string) error {
+	return ensurePythonVenvWithCommand(workdir, pythonVenvCommand{executable: pythonExe})
+}
+
+func ensurePythonVenvWithCommand(workdir string, pythonCommand pythonVenvCommand) error {
 	venvDir := filepath.Join(workdir, ".venv")
 	if _, err := os.Stat(venvDir); os.IsNotExist(err) {
 		log.Printf("Creating Python virtual environment for Windows 11 download script")
-		if _, err = RunCliCommand(workdir, pythonExe, []string{"-m", "venv", ".venv"}); err != nil {
+		if _, err = RunCliCommand(workdir, pythonCommand.executable, pythonCommand.args("-m", "venv", ".venv")); err != nil {
 			return fmt.Errorf("failed to create Python venv: %w", err)
 		}
 	} else if err != nil {
@@ -393,7 +451,7 @@ func ensurePythonVenv(workdir, pythonExe string) error {
 			if err := os.RemoveAll(venvDir); err != nil {
 				return fmt.Errorf("failed to remove incomplete Python venv: %w", err)
 			}
-			if _, err := RunCliCommand(workdir, pythonExe, []string{"-m", "venv", ".venv"}); err != nil {
+			if _, err := RunCliCommand(workdir, pythonCommand.executable, pythonCommand.args("-m", "venv", ".venv")); err != nil {
 				return fmt.Errorf("failed to recreate Python venv: %w", err)
 			}
 		}
@@ -460,16 +518,12 @@ func getWindows11Download(arch string, savePath string, download bool) (string, 
 		url_file = "win11_arm64_iso_url.txt"
 	}
 
-	// if running on windows
-	var python_executable string
-	if runtime.GOOS == "windows" {
-		python_executable = "python"
-	} else {
-		python_executable = "python3"
-	}
-
 	workdir := filepath.Join(GetDirectoriesInstance().ProjectDir, "./scripts/macos")
-	if err := bootstrapPythonEnv(workdir, python_executable); err != nil {
+	pythonCommand, err := resolvePythonVenvCommand()
+	if err != nil {
+		return "", fmt.Errorf("dependency bootstrap failed: %w", err)
+	}
+	if err := bootstrapPythonEnvWithCommand(workdir, pythonCommand); err != nil {
 		return "", fmt.Errorf("dependency bootstrap failed: %w", err)
 	}
 
