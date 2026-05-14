@@ -34,6 +34,16 @@ normalize_endpoint_url() {
   esac
 }
 
+resolve_real_path() {
+  local path="$1"
+
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$path"
+  else
+    python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$path"
+  fi
+}
+
 derive_azure_storage_account() {
   if [ -z "${SUBSCRIPTION_ID:-}" ]; then
     fail "subscription-id is required when storage-backend is 'azure'."
@@ -357,7 +367,7 @@ for f in data:
   # Resolve symlinks so we operate on the real bytes
   real_path="$local_path"
   if [ -L "$local_path" ]; then
-    real_path=$(readlink -f "$local_path")
+    real_path=$(resolve_real_path "$local_path")
   fi
 
   if [ ! -f "$real_path" ]; then

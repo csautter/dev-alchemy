@@ -113,6 +113,17 @@ jobs:
           EOF
           chmod +x "$fake_bin/curl"
 
+          cat > "$fake_bin/readlink" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          if [ "${1:-}" = "-f" ]; then
+            echo "readlink: illegal option -- f" >&2
+            exit 1
+          fi
+          exec /usr/bin/readlink "$@"
+          EOF
+          chmod +x "$fake_bin/readlink"
+
           export PATH="$fake_bin:$PATH"
           export CACHE_BACKEND=ftp
           export FTP_SERVER=localhost
@@ -140,6 +151,9 @@ jobs:
           test -L "$hit_target"
           test "$(readlink "$hit_target")" = "$local_cache/hits/file.iso"
           test "$(cat "$hit_target")" = "cached-hit"
+          run_upload '[{"local-path":"'"$hit_target"'","blob-name":"hits/file.iso"}]'
+          grep -F -- "--upload-file" "$FAKE_CURL_LOG" >/dev/null
+          grep -F -- "ftp://localhost/cache/hits/file.iso" "$FAKE_CURL_LOG" >/dev/null
 
           miss_target="$workspace/missing/file.iso"
           run_download '[{"local-path":"'"$miss_target"'","blob-name":"missing/file.iso"}]'
