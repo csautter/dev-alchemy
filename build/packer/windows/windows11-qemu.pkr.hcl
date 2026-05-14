@@ -188,7 +188,7 @@ source "qemu" "win11" {
   pause_before_connecting = var.is_ci ? "10m" : "1m"
   winrm_username          = "Administrator"
   winrm_password          = "P@ssw0rd!"
-  winrm_timeout           = "5h"
+  winrm_timeout           = "4h"
   shutdown_command        = "shutdown /s /t 60 /f /d p:4:1 /c \"Packer Shutdown\""
   shutdown_timeout        = "10m"
 
