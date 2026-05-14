@@ -397,6 +397,9 @@ func containsCollapsedAssignment(content, name, value string) bool {
 }
 
 func textBetween(content, start, end string) (string, bool) {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+
 	startIndex := strings.Index(content, start)
 	if startIndex == -1 {
 		return "", false
@@ -407,6 +410,18 @@ func textBetween(content, start, end string) (string, bool) {
 		return "", false
 	}
 	return content[startIndex : startIndex+endIndex], true
+}
+
+func TestTextBetweenAcceptsWindowsLineEndings(t *testing.T) {
+	t.Parallel()
+
+	got, ok := textBetween("before\r\nstart\r\nwanted\r\nend\r\nafter", "start\n", "\nend")
+	if !ok {
+		t.Fatal("expected textBetween to find delimiters across CRLF line endings")
+	}
+	if got != "wanted" {
+		t.Fatalf("expected extracted text to normalize line endings, got %q", got)
+	}
 }
 
 func TestUbuntuPackerTemplatesQuoteShellLocalExportPaths(t *testing.T) {
