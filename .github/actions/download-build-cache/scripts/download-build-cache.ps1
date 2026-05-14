@@ -289,8 +289,8 @@ function Invoke-FtpCurl {
 function Test-FtpObject {
     param([Parameter(Mandatory = $true)][string]$Url)
 
-    $args = $script:FtpCurlCommonArgs + @('--head', '--output', 'NUL', '--dump-header', 'NUL', $Url)
-    return Invoke-FtpCurl -Arguments $args -AllowMissing
+    $curlArgs = $script:FtpCurlCommonArgs + @('--head', '--output', 'NUL', '--dump-header', 'NUL', $Url)
+    return Invoke-FtpCurl -Arguments $curlArgs -AllowMissing
 }
 
 function Save-ToLocalCache {
@@ -337,8 +337,8 @@ function Download-FromFtp {
         if (Test-Path $tmpPath -PathType Leaf) {
             Remove-Item -Path $tmpPath -Force
         }
-        $args = $script:FtpCurlTransferArgs + @('--location', '--output', $tmpPath, $url)
-        Invoke-FtpCurl -Arguments $args | Out-Null
+        $curlArgs = $script:FtpCurlTransferArgs + @('--location', '--output', $tmpPath, $url)
+        Invoke-FtpCurl -Arguments $curlArgs | Out-Null
         Move-Item -Path $tmpPath -Destination $LocalPath -Force
         Write-Host "  [ok] Downloaded $script:FtpBaseDirNormalized/$key -> $LocalPath"
         Save-ToLocalCache -LocalPath $LocalPath -BlobName $BlobName

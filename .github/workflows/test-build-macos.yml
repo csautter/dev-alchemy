@@ -28,6 +28,8 @@ on:
       - "scripts/windows/*"
       - "scripts/windows/**/*"
       - ".github/workflows/test-build-macos.yml"
+      - ".github/actions/download-build-cache/**"
+      - ".github/actions/upload-build-cache/**"
 
 jobs:
   test-packer-build:

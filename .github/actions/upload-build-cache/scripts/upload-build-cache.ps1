@@ -277,8 +277,8 @@ function Invoke-FtpCurl {
 function Test-FtpObject {
     param([Parameter(Mandatory = $true)][string]$Url)
 
-    $args = $script:FtpCurlCommonArgs + @('--head', '--output', 'NUL', '--dump-header', 'NUL', $Url)
-    return Invoke-FtpCurl -Arguments $args -AllowMissing
+    $curlArgs = $script:FtpCurlCommonArgs + @('--head', '--output', 'NUL', '--dump-header', 'NUL', $Url)
+    return Invoke-FtpCurl -Arguments $curlArgs -AllowMissing
 }
 
 function Upload-ToFtp {
@@ -303,8 +303,8 @@ function Upload-ToFtp {
         Write-Host "  [upload] Uploading $script:FtpBaseDirNormalized/$key via explicit FTPS..."
     }
 
-    $args = $script:FtpCurlCommonArgs + @('--ftp-create-dirs', '--upload-file', $LocalPath, $url)
-    Invoke-FtpCurl -Arguments $args | Out-Null
+    $curlArgs = $script:FtpCurlCommonArgs + @('--ftp-create-dirs', '--upload-file', $LocalPath, $url)
+    Invoke-FtpCurl -Arguments $curlArgs | Out-Null
     Write-Host "  [ok] Uploaded $script:FtpBaseDirNormalized/$key."
 }
 

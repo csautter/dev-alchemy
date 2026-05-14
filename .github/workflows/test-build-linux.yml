@@ -58,7 +58,9 @@ on:
       - "scripts/macos/download-utm-guest-tools.sh"
       - "scripts/macos/download-virtio-win-iso.sh"
       - ".github/workflows/test-build-linux.yml"
+      - ".github/actions/download-build-cache/**"
       - ".github/actions/hetzner-github-runner/**"
+      - ".github/actions/upload-build-cache/**"
   pull_request:
     paths:
       - "cmd/main.go"
@@ -80,7 +82,9 @@ on:
       - "scripts/macos/download-utm-guest-tools.sh"
       - "scripts/macos/download-virtio-win-iso.sh"
       - ".github/workflows/test-build-linux.yml"
+      - ".github/actions/download-build-cache/**"
       - ".github/actions/hetzner-github-runner/**"
+      - ".github/actions/upload-build-cache/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
