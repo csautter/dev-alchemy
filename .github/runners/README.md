@@ -108,7 +108,18 @@ The directory is mounted read-write inside every VM as `/Volumes/My Shared Files
 The CI cache actions expect the repository variable `BUILD_CACHE_FTP_SERVER`, the optional
 repository variable `BUILD_CACHE_FTP_PORT`, and the repository secrets
 `BUILD_CACHE_FTP_USERNAME` and `BUILD_CACHE_FTP_PASSWORD`. The remote base directory defaults to
-`/private`.
+`/private`. In-repo workflows pass `storage-backend: ftp` explicitly.
+
+Remote cache backend reference:
+
+| Backend | `storage-backend` | Required configuration |
+|---|---|---|
+| FTPS | `ftp` | `BUILD_CACHE_FTP_SERVER`, optional `BUILD_CACHE_FTP_PORT`, `BUILD_CACHE_FTP_USERNAME`, `BUILD_CACHE_FTP_PASSWORD`, optional `BUILD_CACHE_FTP_BASE_DIR` |
+| Hetzner Object Storage | `hetzner-s3` | `HETZNER_S3_ENDPOINT_URL`, `HETZNER_S3_BUCKET`, `HETZNER_S3_ACCESS_KEY_ID`, `HETZNER_S3_SECRET_ACCESS_KEY`, optional `HETZNER_S3_PREFIX` |
+| Azure Blob Storage | `azure` | `subscription-id` |
+
+Callers that relied on the old implicit Azure behavior must now set `storage-backend: azure`
+and pass `subscription-id`.
 
 ### Set the runner CPU count or memory size and run up to 2 runners in parallel
 
