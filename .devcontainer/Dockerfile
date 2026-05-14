@@ -2,7 +2,11 @@ FROM mcr.microsoft.com/devcontainers/go:2-1.26-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_VERSION=24.15.0
-ENV POWERSHELL_VERSION=7.6.1
+# renovate: datasource=custom.powershell-linux-x64 depName=PowerShell/PowerShell versioning=semver
+ENV POWERSHELL_VERSION="7.6.1"
+ENV POWERSHELL_SHA256_X64="dfc94229767921603f7c3e1cb1ac5aa931448af7496ccf657723b6278057c415"
+# renovate: datasource=custom.powershell-linux-arm64 depName=PowerShell/PowerShell version=7.6.1 versioning=semver
+ENV POWERSHELL_SHA256_ARM64="73498813194ea0d849d5942332ee6e51657ea66da08216aa1050788d5c52b741"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -18,12 +22,13 @@ RUN apt-get update \
 
 RUN arch="$(dpkg --print-architecture)" \
     && case "${arch}" in \
-        amd64) powershell_arch="x64" ;; \
-        arm64) powershell_arch="arm64" ;; \
+        amd64) powershell_arch="x64"; powershell_sha256="${POWERSHELL_SHA256_X64}" ;; \
+        arm64) powershell_arch="arm64"; powershell_sha256="${POWERSHELL_SHA256_ARM64}" ;; \
         *) echo "Unsupported PowerShell architecture: ${arch}" >&2; exit 1 ;; \
     esac \
     && mkdir -p /opt/microsoft/powershell/7 \
     && curl -fsSL "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/powershell-${POWERSHELL_VERSION}-linux-${powershell_arch}.tar.gz" -o /tmp/powershell.tar.gz \
+    && printf '%s  %s\n' "${powershell_sha256}" /tmp/powershell.tar.gz | sha256sum -c - \
     && tar -xzf /tmp/powershell.tar.gz -C /opt/microsoft/powershell/7 \
     && chmod +x /opt/microsoft/powershell/7/pwsh \
     && ln -sf /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh \
