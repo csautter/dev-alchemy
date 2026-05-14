@@ -109,7 +109,8 @@ locals {
   win11_qcow2       = var.artifact_output_path != "" ? var.artifact_output_path : "${local.cache_directory}/windows11/qemu-windows11-${var.arch}.qcow2"
   win11_guest_tools = "${local.cache_directory}/utm/utm-guest-tools-latest.iso"
   win11_virtio_iso  = "${local.cache_directory}/windows/virtio-win.iso"
-  win11_uefi_bios   = "${local.cache_directory}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+  win11_uefi_code   = "${local.cache_directory}/qemu-uefi/usr/share/AAVMF/AAVMF_CODE.no-secboot.fd"
+  win11_uefi_vars   = "${local.cache_directory}/qemu-uefi/usr/share/AAVMF/AAVMF_VARS.fd"
 
   amd64_can_use_native_acceleration = local.host_is_linux && local.host_same_arch && var.use_hardware_acceleration
   amd64_accelerator                 = local.amd64_can_use_native_acceleration ? "kvm" : "tcg"
@@ -142,20 +143,20 @@ locals {
       ["-accel", local.arm64_accelerator],
       ["-machine", "virt,highmem=on"],
       ["-cpu", local.arm64_cpu_model],
-      ["-bios", "${local.win11_uefi_bios}"],
+      ["-drive", "file=${local.win11_uefi_code},if=pflash,unit=0,format=raw,readonly=on"],
+      ["-drive", "file={{ .OutputDir }}/efivars.fd,if=pflash,unit=1,format=raw"],
       ["-device", "ramfb"],
       ["-device", "qemu-xhci"],
       ["-device", "usb-kbd"],
       ["-device", "usb-tablet"],
-      ["-device", "usb-storage,drive=install,removable=true,bootindex=0"],
+      ["-device", "usb-storage,drive=install,removable=true,bootindex=1"],
       ["-drive", "if=none,id=install,format=raw,media=cdrom,file=${local.win11_iso},readonly=true"],
-      ["-device", "usb-storage,drive=virtio-drivers,removable=true,bootindex=2"],
+      ["-device", "usb-storage,drive=virtio-drivers,removable=true"],
       ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${local.win11_virtio_iso},readonly=true"],
-      ["-device", "usb-storage,drive=utm-tools,removable=true,bootindex=3"],
+      ["-device", "usb-storage,drive=utm-tools,removable=true"],
       ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${local.win11_guest_tools},readonly=true"],
-      ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=1"],
+      ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=0"],
       ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${local.win11_qcow2},discard=unmap,detect-zeroes=unmap"],
-      ["-boot", "order=c,menu=on"],
       ["-k", "de"]
     ]
   }
@@ -200,6 +201,11 @@ source "qemu" "win11" {
   disk_interface = var.arch == "amd64" ? "ide" : null
   format         = "qcow2"
   net_device     = var.arch == "amd64" ? "e1000" : "virtio-net-pci"
+
+  efi_boot          = var.arch == "arm64"
+  efi_firmware_code = var.arch == "arm64" ? local.win11_uefi_code : ""
+  efi_firmware_vars = var.arch == "arm64" ? local.win11_uefi_vars : ""
+  efi_drop_efivars  = var.arch == "arm64"
 
   tpm_device_type = var.arch == "amd64" ? "emulator" : null
 
