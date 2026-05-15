@@ -134,7 +134,7 @@ func TestWindowsQemuTemplateIsSharedAcrossMacOSAndLinux(t *testing.T) {
 	}
 }
 
-func TestWindowsArm64QemuUsesWritableEfiVarsAndDiskFirstBoot(t *testing.T) {
+func TestWindowsArm64QemuUsesWritableEfiVarsAndAccelerationAwareBootOrder(t *testing.T) {
 	t.Parallel()
 
 	for _, templatePath := range windowsQemuTemplatePaths {
@@ -155,10 +155,12 @@ func TestWindowsArm64QemuUsesWritableEfiVarsAndDiskFirstBoot(t *testing.T) {
 			for _, want := range []string{
 				`AAVMF_CODE.no-secboot.fd`,
 				`AAVMF_VARS.fd`,
+				`arm64_install_bootindex           = local.arm64_can_use_native_acceleration ? 1 : 0`,
+				`arm64_disk_bootindex              = local.arm64_can_use_native_acceleration ? 0 : 1`,
 				`file=${local.win11_uefi_code},if=pflash,unit=0,format=raw,readonly=on`,
 				`file={{ .OutputDir }}/efivars.fd,if=pflash,unit=1,format=raw`,
-				`drive=nvme0,serial=deadbeef,bootindex=0`,
-				`drive=install,removable=true,bootindex=1`,
+				`drive=nvme0,serial=deadbeef,bootindex=${local.arm64_disk_bootindex}`,
+				`drive=install,removable=true,bootindex=${local.arm64_install_bootindex}`,
 				`efi_boot`,
 				`efi_firmware_code`,
 				`efi_firmware_vars`,

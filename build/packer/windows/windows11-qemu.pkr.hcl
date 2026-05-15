@@ -122,6 +122,8 @@ locals {
   arm64_native_accelerator          = local.host_is_darwin ? "hvf" : "kvm"
   arm64_accelerator                 = local.arm64_can_use_native_acceleration ? local.arm64_native_accelerator : "tcg,thread=multi,tb-size=512"
   arm64_cpu_model                   = local.arm64_can_use_native_acceleration ? "host" : "max,sve=off,sme=off,pauth-impdef=on"
+  arm64_install_bootindex           = local.arm64_can_use_native_acceleration ? 1 : 0
+  arm64_disk_bootindex              = local.arm64_can_use_native_acceleration ? 0 : 1
 
   qemu_display = local.host_is_darwin && !var.headless ? "cocoa" : "none"
 
@@ -149,13 +151,13 @@ locals {
       ["-device", "qemu-xhci"],
       ["-device", "usb-kbd"],
       ["-device", "usb-tablet"],
-      ["-device", "usb-storage,drive=install,removable=true,bootindex=1"],
+      ["-device", "usb-storage,drive=install,removable=true,bootindex=${local.arm64_install_bootindex}"],
       ["-drive", "if=none,id=install,format=raw,media=cdrom,file=${local.win11_iso},readonly=true"],
       ["-device", "usb-storage,drive=virtio-drivers,removable=true"],
       ["-drive", "if=none,id=virtio-drivers,format=raw,media=cdrom,file=${local.win11_virtio_iso},readonly=true"],
       ["-device", "usb-storage,drive=utm-tools,removable=true"],
       ["-drive", "if=none,id=utm-tools,format=raw,media=cdrom,file=${local.win11_guest_tools},readonly=true"],
-      ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=0"],
+      ["-device", "nvme,drive=nvme0,serial=deadbeef,bootindex=${local.arm64_disk_bootindex}"],
       ["-drive", "if=none,media=disk,id=nvme0,format=qcow2,file.filename=${local.win11_qcow2},discard=unmap,detect-zeroes=unmap"],
       ["-k", "de"]
     ]
