@@ -14,7 +14,7 @@ $makeVersion = "4.4.1"
 # renovate: datasource=nuget depName=packer versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $packerVersion = "1.15.0"
 # renovate: datasource=nuget depName=azure-cli versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
-$azureCliVersion = "2.85.0"
+$azureCliVersion = "2.86.0"
 # renovate: datasource=nuget depName=python313 versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $nativePythonVersion = "3.13.13"
 # renovate: datasource=nuget depName=cygwin versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/

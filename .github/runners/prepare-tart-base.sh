@@ -31,7 +31,7 @@ BUILD_VM="build-${TART_GOLDEN_IMAGE}"
 # renovate: datasource=github-releases depName=actions/runner versioning=loose
 DEFAULT_RUNNER_VERSION="2.334.0"
 # renovate: datasource=custom.homebrew-formula depName=azure-cli packageName=azure-cli versioning=loose
-AZURE_CLI_VERSION="2.85.0"
+AZURE_CLI_VERSION="2.86.0"
 # renovate: datasource=custom.homebrew-formula depName=gh packageName=gh versioning=loose
 GH_CLI_VERSION="2.92.0"
 # renovate: datasource=custom.hashicorp depName=packer packageName=packer versioning=semver
