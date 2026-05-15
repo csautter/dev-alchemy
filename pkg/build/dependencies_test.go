@@ -83,6 +83,56 @@ func TestMissingPythonVenvExecutables(t *testing.T) {
 	}
 }
 
+func TestResolvePythonVenvCommandPrefersPython3OnUnix(t *testing.T) {
+	command, err := resolvePythonVenvCommandForOS("linux", func(name string) (string, error) {
+		if name == "python3" {
+			return "/usr/bin/python3", nil
+		}
+		return "", fmt.Errorf("%s not found", name)
+	})
+	if err != nil {
+		t.Fatalf("resolvePythonVenvCommandForOS returned error: %v", err)
+	}
+	if command.executable != "/usr/bin/python3" {
+		t.Fatalf("expected python3 path, got %q", command.executable)
+	}
+	if len(command.argsPrefix) != 0 {
+		t.Fatalf("expected no args prefix for python3, got %v", command.argsPrefix)
+	}
+}
+
+func TestResolvePythonVenvCommandFallsBackToPyLauncherOnWindows(t *testing.T) {
+	command, err := resolvePythonVenvCommandForOS("windows", func(name string) (string, error) {
+		if name == "py" {
+			return `C:\Windows\py.exe`, nil
+		}
+		return "", fmt.Errorf("%s not found", name)
+	})
+	if err != nil {
+		t.Fatalf("resolvePythonVenvCommandForOS returned error: %v", err)
+	}
+	if command.executable != `C:\Windows\py.exe` {
+		t.Fatalf("expected py launcher path, got %q", command.executable)
+	}
+	if got := strings.Join(command.argsPrefix, " "); got != "-3" {
+		t.Fatalf("expected py launcher args prefix -3, got %q", got)
+	}
+}
+
+func TestResolvePythonVenvCommandReportsCheckedCandidates(t *testing.T) {
+	_, err := resolvePythonVenvCommandForOS("windows", func(name string) (string, error) {
+		return "", fmt.Errorf("%s not found", name)
+	})
+	if err == nil {
+		t.Fatal("expected error when no Python command is found, got nil")
+	}
+	for _, want := range []string{"python", "py -3", "python3"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("expected error %q to mention checked candidate %q", err.Error(), want)
+		}
+	}
+}
+
 func TestWindows11Amd64LinuxQemuDependencyReconciliationIncludesVirtioWinISO(t *testing.T) {
 	dirs := GetDirectoriesInstance()
 	originalCacheDir := dirs.CacheDir

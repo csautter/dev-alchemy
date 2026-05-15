@@ -58,7 +58,9 @@ on:
       - "scripts/macos/download-utm-guest-tools.sh"
       - "scripts/macos/download-virtio-win-iso.sh"
       - ".github/workflows/test-build-linux.yml"
+      - ".github/actions/download-build-cache/**"
       - ".github/actions/hetzner-github-runner/**"
+      - ".github/actions/upload-build-cache/**"
   pull_request:
     paths:
       - "cmd/main.go"
@@ -80,7 +82,9 @@ on:
       - "scripts/macos/download-utm-guest-tools.sh"
       - "scripts/macos/download-virtio-win-iso.sh"
       - ".github/workflows/test-build-linux.yml"
+      - ".github/actions/download-build-cache/**"
       - ".github/actions/hetzner-github-runner/**"
+      - ".github/actions/upload-build-cache/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
@@ -248,18 +252,16 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Download build cache files
         uses: ./.github/actions/download-build-cache
         with:
+          storage-backend: ftp
           files: ${{ matrix.cache_files }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
           local-cache-dir: ""
 
       - name: Install dependencies linux
@@ -327,18 +329,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
+          storage-backend: ftp
           files: ${{ matrix.cache_files }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
           local-cache-dir: ""
 
       - name: Fail if dependency reconciliation or build failed
@@ -457,18 +457,16 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Download build cache files
         uses: ./.github/actions/download-build-cache
         with:
+          storage-backend: ftp
           files: ${{ matrix.cache_files }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
           local-cache-dir: ""
 
       - name: Install dependencies linux
@@ -536,18 +534,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
+          storage-backend: ftp
           files: ${{ matrix.cache_files }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
           local-cache-dir: ""
 
       - name: Fail if dependency reconciliation or build failed
@@ -621,18 +617,16 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Download build cache files
         uses: ./.github/actions/download-build-cache
         with:
+          storage-backend: ftp
           files: ${{ matrix.cache_files }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
           local-cache-dir: ""
 
       - name: Install dependencies linux
@@ -700,18 +694,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
       - name: Upload build cache files
         uses: ./.github/actions/upload-build-cache
         with:
+          storage-backend: ftp
           files: ${{ matrix.cache_files }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ftp-server: ${{ vars.BUILD_CACHE_FTP_SERVER }}
+          ftp-port: ${{ vars.BUILD_CACHE_FTP_PORT }}
+          ftp-username: ${{ secrets.BUILD_CACHE_FTP_USERNAME }}
+          ftp-password: ${{ secrets.BUILD_CACHE_FTP_PASSWORD }}
+          ftp-base-dir: /private
           local-cache-dir: ""
 
       - name: Fail if dependency reconciliation or build failed

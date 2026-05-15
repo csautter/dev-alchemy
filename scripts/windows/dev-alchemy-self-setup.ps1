@@ -107,6 +107,37 @@ function Ensure-PathContains {
     Refresh-ProcessPath
 }
 
+function Add-GitHubPathIfAvailable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    if (-not $env:GITHUB_PATH) {
+        return
+    }
+
+    if ((Test-Path $env:GITHUB_PATH) -and (Select-String -Path $env:GITHUB_PATH -SimpleMatch -Pattern $Directory -Quiet)) {
+        return
+    }
+
+    $Directory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+}
+
+function Export-CommandDirectoryToGitHubPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CommandName
+    )
+
+    $command = Get-Command $CommandName -ErrorAction SilentlyContinue
+    if (-not $command -or -not $command.Source) {
+        return
+    }
+
+    Add-GitHubPathIfAvailable -Directory (Split-Path -Parent $command.Source)
+}
+
 function Ensure-ChocolateyInstalled {
     if (Get-Command choco -ErrorAction SilentlyContinue) {
         Write-Output "Chocolatey is already installed."
@@ -439,6 +470,7 @@ Ensure-ChocolateyPackage -PackageName "azure-cli" -Version $azureCliVersion
 $nativePythonPackageName = Get-NativePythonChocolateyPackageName -Version $nativePythonVersion
 Ensure-ChocolateyPackage -PackageName $nativePythonPackageName -Version $nativePythonVersion
 Assert-NativePythonAvailable
+Export-CommandDirectoryToGitHubPath -CommandName "python"
 Ensure-ChocolateyPackage -PackageName "cygwin" -Version $cygwinVersion -ExtraArgs @("--params", "`"/InstallDir:$cygwinInstallRoot /NoStartMenu`"")
 Ensure-ChocolateyPackage -PackageName "cyg-get" -Version $cygGetVersion
 

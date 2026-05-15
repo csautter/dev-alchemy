@@ -1,0 +1,275 @@
+name: Test Build Cache Actions
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/actions/download-build-cache/**"
+      - ".github/actions/upload-build-cache/**"
+      - ".github/workflows/test-cache-actions.yml"
+  pull_request:
+    paths:
+      - ".github/actions/download-build-cache/**"
+      - ".github/actions/upload-build-cache/**"
+      - ".github/workflows/test-cache-actions.yml"
+
+jobs:
+  cache-actions:
+    name: Validate build cache actions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Check Bash scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          scripts=(
+            ".github/actions/download-build-cache/scripts/download-build-cache.sh"
+            ".github/actions/upload-build-cache/scripts/upload-build-cache.sh"
+          )
+
+          for script in "${scripts[@]}"; do
+            bash -n "$script"
+          done
+
+          shellcheck "${scripts[@]}"
+
+      - name: Check PowerShell scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $scripts = @(
+              '.github/actions/download-build-cache/scripts/download-build-cache.ps1',
+              '.github/actions/upload-build-cache/scripts/upload-build-cache.ps1'
+          )
+
+          foreach ($script in $scripts) {
+              $tokens = $null
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script), [ref] $tokens, [ref] $errors) | Out-Null
+              if ($errors.Count -gt 0) {
+                  $errors | Format-List | Out-String | Write-Error
+                  throw "PowerShell parser errors found in $script."
+              }
+          }
+
+          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+              Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
+          }
+
+          Import-Module PSScriptAnalyzer
+          $issues = @(
+              foreach ($script in $scripts) {
+                  Invoke-ScriptAnalyzer `
+                      -Path $script `
+                      -Severity Warning,Error `
+                      -ExcludeRule @('PSAvoidUsingWriteHost', 'PSUseApprovedVerbs')
+              }
+          )
+
+          if ($issues.Count -gt 0) {
+              $issues | Format-List | Out-String | Write-Error
+              throw 'PowerShell analyzer issues found.'
+          }
+
+      - name: Test Bash local cache behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          download_script=".github/actions/download-build-cache/scripts/download-build-cache.sh"
+          upload_script=".github/actions/upload-build-cache/scripts/upload-build-cache.sh"
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+
+          workspace="$root/workspace"
+          local_cache="$root/local-cache"
+          fake_bin="$root/fake-bin"
+          mkdir -p "$workspace" "$local_cache" "$fake_bin"
+
+          cat > "$fake_bin/curl" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          printf '%s\n' "$*" >> "${FAKE_CURL_LOG:-/dev/null}"
+          for arg in "$@"; do
+            if [ "$arg" = "--head" ]; then
+              exit 78
+            fi
+          done
+          exit 0
+          EOF
+          chmod +x "$fake_bin/curl"
+
+          cat > "$fake_bin/readlink" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          if [ "${1:-}" = "-f" ]; then
+            echo "readlink: illegal option -- f" >&2
+            exit 1
+          fi
+          exec /usr/bin/readlink "$@"
+          EOF
+          chmod +x "$fake_bin/readlink"
+
+          export PATH="$fake_bin:$PATH"
+          export CACHE_BACKEND=ftp
+          export FTP_SERVER=localhost
+          export FTP_USERNAME=user
+          export FTP_PASSWORD=password
+          export FTP_BASE_DIR=/cache
+          export LOCAL_CACHE_DIR="$local_cache"
+          export FAKE_CURL_LOG="$root/curl.log"
+
+          run_download() {
+            CACHE_FILES="$1" bash "$download_script"
+          }
+
+          run_upload() {
+            CACHE_FILES="$1" bash "$upload_script"
+          }
+
+          run_download '[]'
+          run_upload '[]'
+
+          mkdir -p "$local_cache/hits"
+          printf 'cached-hit' > "$local_cache/hits/file.iso"
+          hit_target="$workspace/downloads/file.iso"
+          run_download '[{"local-path":"'"$hit_target"'","blob-name":"hits/file.iso"}]'
+          test -L "$hit_target"
+          test "$(readlink "$hit_target")" = "$local_cache/hits/file.iso"
+          test "$(cat "$hit_target")" = "cached-hit"
+          run_upload '[{"local-path":"'"$hit_target"'","blob-name":"hits/file.iso"}]'
+          grep -F -- "--upload-file" "$FAKE_CURL_LOG" >/dev/null
+          grep -F -- "ftp://localhost/cache/hits/file.iso" "$FAKE_CURL_LOG" >/dev/null
+
+          miss_target="$workspace/missing/file.iso"
+          run_download '[{"local-path":"'"$miss_target"'","blob-name":"missing/file.iso"}]'
+          test ! -e "$miss_target"
+
+          nested_source="$workspace/source/nested.bin"
+          mkdir -p "$(dirname "$nested_source")"
+          printf 'nested-payload' > "$nested_source"
+          run_upload '[{"local-path":"'"$nested_source"'","blob-name":"nested/path/nested.bin"}]'
+          test "$(cat "$local_cache/nested/path/nested.bin")" = "nested-payload"
+
+          overwrite_source="$workspace/source/overwrite.bin"
+          mkdir -p "$local_cache/overwrite"
+          printf 'old-payload' > "$local_cache/overwrite/item.bin"
+          printf 'new-payload' > "$overwrite_source"
+          run_upload '[{"local-path":"'"$overwrite_source"'","blob-name":"overwrite/item.bin","overwrite":true}]'
+          test "$(cat "$local_cache/overwrite/item.bin")" = "new-payload"
+
+      - name: Test PowerShell local cache behavior
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $downloadScript = (Resolve-Path '.github/actions/download-build-cache/scripts/download-build-cache.ps1').Path
+          $uploadScript = (Resolve-Path '.github/actions/upload-build-cache/scripts/upload-build-cache.ps1').Path
+          $root = Join-Path ([System.IO.Path]::GetTempPath()) "cache-action-tests-$([System.Guid]::NewGuid())"
+          $workspace = Join-Path $root 'workspace'
+          $localCache = Join-Path $root 'local-cache'
+          $fakeBin = Join-Path $root 'fake-bin'
+
+          function ConvertTo-CacheJson {
+              param([Parameter(Mandatory = $true)][object[]] $Files)
+              return ConvertTo-Json -InputObject $Files -Compress -Depth 5
+          }
+
+          function Invoke-CacheScript {
+              param(
+                  [Parameter(Mandatory = $true)][string] $Script,
+                  [Parameter(Mandatory = $true)][string] $Files
+              )
+
+              $env:CACHE_FILES = $Files
+              $env:CACHE_BACKEND = 'ftp'
+              $env:FTP_SERVER = 'localhost'
+              $env:FTP_USERNAME = 'user'
+              $env:FTP_PASSWORD = 'password'
+              $env:FTP_BASE_DIR = '/cache'
+              $env:LOCAL_CACHE_DIR = $localCache
+              $env:FAKE_CURL_LOG = Join-Path $root 'curl.log'
+
+              & $Script
+          }
+
+          function Assert-FileContent {
+              param(
+                  [Parameter(Mandatory = $true)][string] $Path,
+                  [Parameter(Mandatory = $true)][string] $Expected
+              )
+
+              if (-not (Test-Path $Path -PathType Leaf)) {
+                  throw "Expected file to exist: $Path"
+              }
+
+              $actual = Get-Content -Path $Path -Raw
+              if ($actual -ne $Expected) {
+                  throw "Unexpected content in $Path. Expected '$Expected', got '$actual'."
+              }
+          }
+
+          try {
+              New-Item -ItemType Directory -Path $workspace, $localCache, $fakeBin -Force | Out-Null
+
+              $fakeCurl = Join-Path $fakeBin 'curl'
+              Set-Content -Path $fakeCurl -NoNewline -Value @'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          printf '%s\n' "$*" >> "${FAKE_CURL_LOG:-/dev/null}"
+          for arg in "$@"; do
+            if [ "$arg" = "--head" ]; then
+              exit 78
+            fi
+          done
+          exit 0
+          '@
+              & chmod +x $fakeCurl
+              $env:PATH = "$fakeBin$([System.IO.Path]::PathSeparator)$env:PATH"
+
+              Invoke-CacheScript -Script $downloadScript -Files '[]'
+              Invoke-CacheScript -Script $uploadScript -Files '[]'
+
+              $hitCache = Join-Path $localCache 'hits/file.iso'
+              New-Item -ItemType Directory -Path (Split-Path -Parent $hitCache) -Force | Out-Null
+              Set-Content -Path $hitCache -Value 'cached-hit' -NoNewline
+              $hitTarget = Join-Path $workspace 'downloads/file.iso'
+              Invoke-CacheScript -Script $downloadScript -Files (ConvertTo-CacheJson @(@{'local-path' = $hitTarget; 'blob-name' = 'hits/file.iso'}))
+              Assert-FileContent -Path $hitTarget -Expected 'cached-hit'
+
+              $missTarget = Join-Path $workspace 'missing/file.iso'
+              Invoke-CacheScript -Script $downloadScript -Files (ConvertTo-CacheJson @(@{'local-path' = $missTarget; 'blob-name' = 'missing/file.iso'}))
+              if (Test-Path $missTarget) {
+                  throw "Expected cache miss to leave target absent: $missTarget"
+              }
+
+              $nestedSource = Join-Path $workspace 'source/nested.bin'
+              New-Item -ItemType Directory -Path (Split-Path -Parent $nestedSource) -Force | Out-Null
+              Set-Content -Path $nestedSource -Value 'nested-payload' -NoNewline
+              Invoke-CacheScript -Script $uploadScript -Files (ConvertTo-CacheJson @(@{'local-path' = $nestedSource; 'blob-name' = 'nested/path/nested.bin'}))
+              Assert-FileContent -Path (Join-Path $localCache 'nested/path/nested.bin') -Expected 'nested-payload'
+
+              $overwriteSource = Join-Path $workspace 'source/overwrite.bin'
+              $overwriteCache = Join-Path $localCache 'overwrite/item.bin'
+              New-Item -ItemType Directory -Path (Split-Path -Parent $overwriteCache) -Force | Out-Null
+              Set-Content -Path $overwriteCache -Value 'old-payload' -NoNewline
+              Set-Content -Path $overwriteSource -Value 'new-payload' -NoNewline
+              Invoke-CacheScript -Script $uploadScript -Files (ConvertTo-CacheJson @(@{'local-path' = $overwriteSource; 'blob-name' = 'overwrite/item.bin'; 'overwrite' = $true}))
+              Assert-FileContent -Path $overwriteCache -Expected 'new-payload'
+          } finally {
+              Remove-Item -Path $root -Recurse -Force -ErrorAction SilentlyContinue
+          }

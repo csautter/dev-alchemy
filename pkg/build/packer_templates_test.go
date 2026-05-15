@@ -134,6 +134,52 @@ func TestWindowsQemuTemplateIsSharedAcrossMacOSAndLinux(t *testing.T) {
 	}
 }
 
+func TestWindowsArm64QemuUsesWritableEfiVarsAndAccelerationAwareBootOrder(t *testing.T) {
+	t.Parallel()
+
+	for _, templatePath := range windowsQemuTemplatePaths {
+		templatePath := templatePath
+		t.Run(filepath.Base(templatePath), func(t *testing.T) {
+			t.Parallel()
+
+			content, err := os.ReadFile(repoPath(t, templatePath))
+			if err != nil {
+				t.Fatalf("failed to read template %q: %v", templatePath, err)
+			}
+
+			got := string(content)
+			arm64Args, ok := textBetween(got, `"arm64" = [`, "]\n  }")
+			if !ok {
+				t.Fatalf("failed to locate arm64 QEMU args in %q", templatePath)
+			}
+			for _, want := range []string{
+				`AAVMF_CODE.no-secboot.fd`,
+				`AAVMF_VARS.fd`,
+				`arm64_install_bootindex           = local.arm64_can_use_native_acceleration ? 1 : 0`,
+				`arm64_disk_bootindex              = local.arm64_can_use_native_acceleration ? 0 : 1`,
+				`file=${local.win11_uefi_code},if=pflash,unit=0,format=raw,readonly=on`,
+				`file={{ .OutputDir }}/efivars.fd,if=pflash,unit=1,format=raw`,
+				`drive=nvme0,serial=deadbeef,bootindex=${local.arm64_disk_bootindex}`,
+				`drive=install,removable=true,bootindex=${local.arm64_install_bootindex}`,
+				`efi_boot`,
+				`efi_firmware_code`,
+				`efi_firmware_vars`,
+				`efi_drop_efivars`,
+			} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("expected Windows ARM64 QEMU template %q to contain %q", templatePath, want)
+				}
+			}
+			if strings.Contains(arm64Args, `["-boot",`) {
+				t.Fatalf("template %q uses unsupported ARM64 QEMU boot ordering through -boot", templatePath)
+			}
+			if strings.Contains(arm64Args, `QEMU_EFI.fd`) || strings.Contains(arm64Args, `["-bios",`) {
+				t.Fatalf("template %q still boots ARM64 Windows with non-persistent -bios firmware", templatePath)
+			}
+		})
+	}
+}
+
 func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
 	t.Parallel()
 
@@ -180,6 +226,14 @@ func TestWindowsQemuScriptsUseSharedTemplateAndPins(t *testing.T) {
 				}
 				if strings.Contains(arm64Block, virtioDownload) {
 					t.Fatalf("expected script %q to download virtio-win outside the ARM64-only block", scriptPath)
+				}
+				for _, want := range []string{
+					`qemu-uefi/usr/share/AAVMF/AAVMF_CODE.no-secboot.fd`,
+					`qemu-uefi/usr/share/AAVMF/AAVMF_VARS.fd`,
+				} {
+					if !strings.Contains(arm64Block, want) {
+						t.Fatalf("expected ARM64-specific block in script %q to validate %q", scriptPath, want)
+					}
 				}
 				return
 			}
@@ -345,6 +399,9 @@ func containsCollapsedAssignment(content, name, value string) bool {
 }
 
 func textBetween(content, start, end string) (string, bool) {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+
 	startIndex := strings.Index(content, start)
 	if startIndex == -1 {
 		return "", false
@@ -355,6 +412,18 @@ func textBetween(content, start, end string) (string, bool) {
 		return "", false
 	}
 	return content[startIndex : startIndex+endIndex], true
+}
+
+func TestTextBetweenAcceptsWindowsLineEndings(t *testing.T) {
+	t.Parallel()
+
+	got, ok := textBetween("before\r\nstart\r\nwanted\r\nend\r\nafter", "start\n", "\nend")
+	if !ok {
+		t.Fatal("expected textBetween to find delimiters across CRLF line endings")
+	}
+	if got != "wanted" {
+		t.Fatalf("expected extracted text to normalize line endings, got %q", got)
+	}
 }
 
 func TestUbuntuPackerTemplatesQuoteShellLocalExportPaths(t *testing.T) {

@@ -504,11 +504,14 @@ if [[ "$arch" == "arm64" ]]; then
 		echo "Failed to prepare ARM64 UEFI firmware." >&2
 		exit 1
 	fi
-	firmware_path="${cache_dir}/qemu-uefi/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
-	if [[ ! -f "$firmware_path" ]]; then
-		echo "ARM64 UEFI firmware is missing: $firmware_path" >&2
-		exit 1
-	fi
+	for firmware_path in \
+		"${cache_dir}/qemu-uefi/usr/share/AAVMF/AAVMF_CODE.no-secboot.fd" \
+		"${cache_dir}/qemu-uefi/usr/share/AAVMF/AAVMF_VARS.fd"; do
+		if [[ ! -f "$firmware_path" ]]; then
+			echo "ARM64 UEFI firmware is missing: $firmware_path" >&2
+			exit 1
+		fi
+	done
 
 	echo "Creating Windows 11 ARM64 unattended ISO..."
 	bash "${project_root}/scripts/macos/create-win11-autounattend-iso.sh"

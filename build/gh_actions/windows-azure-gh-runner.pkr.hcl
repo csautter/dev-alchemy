@@ -64,6 +64,7 @@ try {
 Set-Content -Path 'C:\AzureData\bootstrap.ps1' -Value $bootstrap
 EOF
   windows_setup_command = var.virtualization_flavor == "virtualbox" ? "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1 -WithGo -VirtualBox" : "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1 -WithGo"
+  refresh_path_command  = "$env:Path = @([Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User')) -join ';'"
 
 }
 
@@ -127,6 +128,8 @@ build {
 
       # install host build packages via the shared windows setup script
       local.windows_setup_command,
+      # The setup script runs in a child PowerShell process, so refresh this provisioner's PATH before verifying installed tools.
+      local.refresh_path_command,
       "python --version",
       "go version",
       # loader script to execute custom data on first boot
