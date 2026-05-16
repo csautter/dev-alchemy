@@ -42,6 +42,9 @@ BeforeAll {
         $script:EnsuredPackages = @()
         $script:EnsuredPaths = @()
         $script:CygwinEnsureCalls = @()
+        $script:CygwinPackageCalls = @()
+        $script:CygwinPipPackageCalls = @()
+        $script:ShownToolVersionsRoot = $null
 
         Mock Test-IsAdministrator { return $true }
         Mock Invoke-SelfElevated { throw "Self-elevation should not be requested by unit tests." }
@@ -62,11 +65,23 @@ BeforeAll {
                 Version = $Version
                 InstallRoot = $InstallRoot
             }
+            return $InstallRoot
         }
         Mock Ensure-PathContains { $script:EnsuredPaths += $PathEntry }
-        Mock Ensure-CygwinPackage {}
-        Mock Ensure-CygwinPipPackage {}
-        Mock Show-InstalledToolVersions {}
+        Mock Ensure-CygwinPackage {
+            $script:CygwinPackageCalls += [pscustomobject]@{
+                PackageName = $PackageName
+                CygwinRoot = $CygwinRoot
+            }
+        }
+        Mock Ensure-CygwinPipPackage {
+            $script:CygwinPipPackageCalls += [pscustomobject]@{
+                PackageName = $PackageName
+                Version = $Version
+                CygwinRoot = $CygwinRoot
+            }
+        }
+        Mock Show-InstalledToolVersions { $script:ShownToolVersionsRoot = $CygwinRoot }
     }
 }
 
@@ -110,6 +125,36 @@ Describe "dev-alchemy self setup Cygwin helpers" -Skip:(-not $IsWindows) {
         It "rejects empty and distinct paths" {
             Test-SameWindowsPath -Left "" -Right "C:\tools\cygwin" | Should -BeFalse
             Test-SameWindowsPath -Left "C:\tools\cygwin" -Right "D:\cygwin" | Should -BeFalse
+        }
+    }
+
+    Context "Assert-CygwinInstallRoot" {
+        It "returns the resolved root when it matches the selected root and required files exist" {
+            Mock Get-CygwinRootDir { return $script:PreferredRoot }
+            Set-TestPathMock -ExistingPaths @(
+                (Join-Path $script:PreferredRoot "bin\bash.exe"),
+                (Join-Path $script:PreferredRoot "etc\setup\installed.db")
+            )
+
+            Assert-CygwinInstallRoot -ExpectedRoot "C:\TOOLS\cygwin\" | Should -Be $script:PreferredRoot
+        }
+
+        It "throws when the resolved root does not match the selected root" {
+            Mock Get-CygwinRootDir { return "C:\cygwin64" }
+            Set-TestPathMock
+
+            { Assert-CygwinInstallRoot -ExpectedRoot $script:PreferredRoot } |
+                Should -Throw "*resolved to 'C:\cygwin64'*selected install root was 'C:\tools\cygwin'*"
+        }
+
+        It "throws when the resolved root is missing installed.db" {
+            Mock Get-CygwinRootDir { return $script:PreferredRoot }
+            Set-TestPathMock -ExistingPaths @(
+                (Join-Path $script:PreferredRoot "bin\bash.exe")
+            )
+
+            { Assert-CygwinInstallRoot -ExpectedRoot $script:PreferredRoot } |
+                Should -Throw "*missing required file 'C:\tools\cygwin\etc\setup\installed.db'*"
         }
     }
 
@@ -191,10 +236,13 @@ Describe "dev-alchemy self setup Cygwin helpers" -Skip:(-not $IsWindows) {
     Context "Ensure-CygwinChocolateyPackage" {
         It "does nothing when the pinned Cygwin version is already installed" {
             Mock Get-ChocolateyInstalledVersion { return $script:CygwinVersion }
+            Mock Get-CygwinRootDir { return $script:PreferredRoot }
+            Mock Assert-CygwinInstallRoot { return $ExpectedRoot }
             Mock Get-CleanCygwinInstallRoot { throw "Clean install root should not be resolved for an already pinned Cygwin package." }
             Mock Ensure-ChocolateyPackage { throw "Cygwin should not be installed when the pinned version is already present." }
 
-            $null = Ensure-CygwinChocolateyPackage -Version $script:CygwinVersion -InstallRoot $script:PreferredRoot
+            Ensure-CygwinChocolateyPackage -Version $script:CygwinVersion -InstallRoot $script:PreferredRoot |
+                Should -Be $script:PreferredRoot
         }
 
         It "installs missing Cygwin at the preferred root" {
@@ -202,9 +250,12 @@ Describe "dev-alchemy self setup Cygwin helpers" -Skip:(-not $IsWindows) {
             Mock Get-ChocolateyInstalledVersion { return $null }
             Mock Get-CygwinRootDirIfAvailable { return $null }
             Mock Get-CleanCygwinInstallRoot { return $PreferredRoot }
+            Mock Clear-CygwinRegistryRootDirs {}
             Mock Ensure-ChocolateyPackage { $script:InstalledCygwinArgs = @($ExtraArgs) }
+            Mock Assert-CygwinInstallRoot { return $ExpectedRoot }
 
-            $null = Ensure-CygwinChocolateyPackage -Version $script:CygwinVersion -InstallRoot $script:PreferredRoot
+            Ensure-CygwinChocolateyPackage -Version $script:CygwinVersion -InstallRoot $script:PreferredRoot |
+                Should -Be $script:PreferredRoot
 
             $script:InstalledCygwinArgs[0] | Should -Be "--params"
             $script:InstalledCygwinArgs[1] | Should -Be '"/InstallDir:C:\tools\cygwin /NoStartMenu"'
@@ -228,14 +279,19 @@ Describe "dev-alchemy self setup Cygwin helpers" -Skip:(-not $IsWindows) {
                 $script:Order += ("clean:{0}" -f $ExistingRoot)
                 return $PreferredRoot
             }
+            Mock Clear-CygwinRegistryRootDirs { $script:Order += "clear" }
             Mock Ensure-ChocolateyPackage {
                 $script:Order += ("ensure:{0}:{1}" -f $PackageName, $Version)
+            }
+            Mock Assert-CygwinInstallRoot {
+                $script:Order += ("assert:{0}" -f $ExpectedRoot)
+                return $ExpectedRoot
             }
 
             $null = Ensure-CygwinChocolateyPackage -Version $script:CygwinVersion -InstallRoot $script:PreferredRoot
 
             ($script:Order -join "|") |
-                Should -Be "stop:C:\cygwin64|choco:uninstall:cyg-get:1.2.2|choco:uninstall:cygwin:3.6.8|clean:C:\cygwin64|ensure:cygwin:3.6.9"
+                Should -Be "stop:C:\cygwin64|choco:uninstall:cyg-get:1.2.2|choco:uninstall:cygwin:3.6.8|clean:C:\cygwin64|clear|ensure:cygwin:3.6.9|assert:C:\tools\cygwin"
         }
 
         It "passes an alternate root to Chocolatey when cleanup cannot remove the preferred root" {
@@ -243,9 +299,12 @@ Describe "dev-alchemy self setup Cygwin helpers" -Skip:(-not $IsWindows) {
             Mock Get-ChocolateyInstalledVersion { return $null }
             Mock Get-CygwinRootDirIfAvailable { return $null }
             Mock Get-CleanCygwinInstallRoot { return "C:\tools\cygwin-3.6.9" }
+            Mock Clear-CygwinRegistryRootDirs {}
             Mock Ensure-ChocolateyPackage { $script:InstalledCygwinArgs = @($ExtraArgs) }
+            Mock Assert-CygwinInstallRoot { return $ExpectedRoot }
 
-            $null = Ensure-CygwinChocolateyPackage -Version $script:CygwinVersion -InstallRoot $script:PreferredRoot
+            Ensure-CygwinChocolateyPackage -Version $script:CygwinVersion -InstallRoot $script:PreferredRoot |
+                Should -Be "C:\tools\cygwin-3.6.9"
 
             $script:InstalledCygwinArgs[1] | Should -Be '"/InstallDir:C:\tools\cygwin-3.6.9 /NoStartMenu"'
         }
@@ -261,11 +320,46 @@ Describe "dev-alchemy self setup Cygwin helpers" -Skip:(-not $IsWindows) {
             Mock Get-CygwinRootDirIfAvailable { return "C:\Users" }
             Mock Stop-CygwinProcesses { throw "Refusing to automatically manage Cygwin root '$RootDir'." }
             Mock Invoke-ChocolateyPackageCommand { $script:Order += "uninstall" }
+            Mock Clear-CygwinRegistryRootDirs { $script:Order += "clear" }
             Mock Ensure-ChocolateyPackage { $script:Order += "install" }
 
             { Ensure-CygwinChocolateyPackage -Version $script:CygwinVersion -InstallRoot $script:PreferredRoot } |
                 Should -Throw "*Refusing to automatically manage Cygwin root 'C:\Users'*"
             $script:Order.Count | Should -Be 0
+        }
+    }
+
+    Context "Ensure-CygwinPackage" {
+        It "does not run setup when the package is already installed in the selected root" {
+            Set-TestPathMock -ExistingPaths @(
+                (Join-Path $script:PreferredRoot "etc\setup\installed.db")
+            )
+            Mock Select-String { return $true }
+            Mock Start-Process { throw "Cygwin setup should not be started for an installed package." }
+
+            $null = Ensure-CygwinPackage -PackageName "openssh" -CygwinRoot $script:PreferredRoot
+        }
+
+        It "runs the setup executable from the selected root when a package is missing" {
+            $script:StartedCygwinSetup = $null
+            Set-TestPathMock -ExistingPaths @(
+                (Join-Path $script:PreferredRoot "etc\setup\installed.db"),
+                (Join-Path $script:PreferredRoot "cygwinsetup.exe")
+            )
+            Mock Select-String { return $false }
+            Mock Start-Process {
+                $script:StartedCygwinSetup = [pscustomobject]@{
+                    FilePath = $FilePath
+                    ArgumentList = @($ArgumentList)
+                }
+                return [pscustomobject]@{ ExitCode = 0 }
+            }
+
+            $null = Ensure-CygwinPackage -PackageName "openssh" -CygwinRoot $script:PreferredRoot
+
+            $script:StartedCygwinSetup.FilePath | Should -Be (Join-Path $script:PreferredRoot "cygwinsetup.exe")
+            ($script:StartedCygwinSetup.ArgumentList -join "|") |
+                Should -Be '--quiet-mode|--root "C:\tools\cygwin"|--local-package-dir "C:\tools\cygwin\packages"|--no-desktop|--no-startmenu|--packages openssh'
         }
     }
 
@@ -278,6 +372,9 @@ Describe "dev-alchemy self setup Cygwin helpers" -Skip:(-not $IsWindows) {
             @($script:EnsuredPackages | Where-Object { $_.PackageName -eq "virtualbox" }).Count | Should -Be 0
             $script:EnsuredPaths | Should -Not -Contain "C:\Program Files\Oracle\VirtualBox"
             $script:CygwinEnsureCalls[0].InstallRoot | Should -Be $script:PreferredRoot
+            $script:CygwinPackageCalls[0].CygwinRoot | Should -Be $script:PreferredRoot
+            $script:CygwinPipPackageCalls[0].CygwinRoot | Should -Be $script:PreferredRoot
+            $script:ShownToolVersionsRoot | Should -Be $script:PreferredRoot
         }
 
         It "installs VirtualBox and adds its path when -VirtualBox is supplied" {
