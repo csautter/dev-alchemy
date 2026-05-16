@@ -12,19 +12,6 @@ BeforeAll {
         }
     }
 
-    function Get-TestPathMockTarget {
-        param(
-            [Parameter(Mandatory = $true)]
-            [hashtable]$BoundParameters
-        )
-
-        if ($BoundParameters.ContainsKey("LiteralPath")) {
-            return $BoundParameters["LiteralPath"]
-        }
-
-        return $BoundParameters["Path"]
-    }
-
     function Set-TestPathMock {
         param(
             [string[]]$ExistingPaths = @()
@@ -32,8 +19,19 @@ BeforeAll {
 
         $script:ExistingPaths = $ExistingPaths
         Mock Test-Path {
-            $target = Get-TestPathMockTarget -BoundParameters $PSBoundParameters
-            return $script:ExistingPaths -contains $target
+            $target = if ($null -ne $LiteralPath) {
+                $LiteralPath
+            } else {
+                $Path
+            }
+
+            foreach ($pathToTest in @($target)) {
+                if ($script:ExistingPaths -contains $pathToTest) {
+                    return $true
+                }
+            }
+
+            return $false
         }
     }
 
