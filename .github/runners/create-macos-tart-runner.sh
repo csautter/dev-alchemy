@@ -291,6 +291,7 @@ cancel_active_runner_job() {
 force_cancel_workflow_run() {
 	local vm="$1"
 	local run_id="$2"
+	local api_err_file api_status api_error
 
 	[[ -z "$run_id" ]] && return 1
 	if ! env_truthy "$GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN"; then
@@ -301,8 +302,21 @@ force_cancel_workflow_run() {
 	fi
 
 	echo "[${vm}] Workflow run ${run_id} is still active; requesting force-cancel..."
-	gh api --method POST -H "Accept: application/vnd.github+json" \
-		"/repos/${GITHUB_REPO}/actions/runs/${run_id}/force-cancel" >/dev/null 2>&1
+	api_err_file=$(mktemp "${TMPDIR:-/tmp}/gh-api-force-cancel.XXXXXX")
+	if gh api --method POST -H "Accept: application/vnd.github+json" \
+		"/repos/${GITHUB_REPO}/actions/runs/${run_id}/force-cancel" >/dev/null 2>"$api_err_file"; then
+		rm -f "$api_err_file"
+		echo "[${vm}] Force-cancel requested for workflow run ${run_id}."
+		return 0
+	else
+		api_status=$?
+	fi
+
+	api_error=$(<"$api_err_file")
+	rm -f "$api_err_file"
+	log_gh_api_failure "force-cancel for workflow run ${run_id}" "$api_status" "$api_error"
+	echo "[${vm}] Warning: force-cancel for workflow run ${run_id} was not accepted; manual cancellation may be required." >&2
+	return 1
 }
 
 signal_runner_processes() {

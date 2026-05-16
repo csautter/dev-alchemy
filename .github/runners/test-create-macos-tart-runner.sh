@@ -168,7 +168,11 @@ if [[ "$method" == "POST" && "$path" == */actions/runs/*/cancel ]]; then
 fi
 
 if [[ "$method" == "POST" && "$path" == */actions/runs/*/force-cancel ]]; then
-	exit "${FAKE_GH_FORCE_CANCEL_EXIT:-0}"
+	force_cancel_exit="${FAKE_GH_FORCE_CANCEL_EXIT:-0}"
+	if [[ "$force_cancel_exit" != "0" ]]; then
+		printf '%s\n' "${FAKE_GH_FORCE_CANCEL_ERROR:-force cancel failed}" >&2
+	fi
+	exit "$force_cancel_exit"
 fi
 
 if [[ "$method" == "GET" && "$path" == */actions/runners ]]; then
@@ -367,7 +371,7 @@ begin_test() {
 
 	unset FAKE_GH_RUN_IDS FAKE_GH_JOB_LINE FAKE_GH_JOB_LINE_QUEUE FAKE_GH_RUNNER_INFO FAKE_GH_RUNNER_INFO_QUEUE
 	unset FAKE_GH_RUN_LIST_FAIL FAKE_GH_JOB_LIST_FAIL FAKE_GH_RUNNER_LIST_FAIL
-	unset FAKE_GH_CANCEL_EXIT FAKE_GH_FORCE_CANCEL_EXIT FAKE_GH_DELETE_EXIT
+	unset FAKE_GH_CANCEL_EXIT FAKE_GH_FORCE_CANCEL_EXIT FAKE_GH_FORCE_CANCEL_ERROR FAKE_GH_DELETE_EXIT
 	unset FAKE_DATE_SEQUENCE FAKE_DATE_VALUE FAKE_SSH_RUNNER_BLOCK FAKE_SSH_RUNNER_EXIT
 	unset FAKE_TART_IP
 
@@ -533,6 +537,26 @@ test_force_cancel_requires_opt_in() {
 	assert_contains "${TEST_LOG_DIR}/gh.log" "/repos/owner/repo/actions/runs/9001/force-cancel"
 }
 
+test_force_cancel_failure_is_reported() {
+	begin_test "force-cancel-failure"
+	GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN="true"
+	RUNNER_SHUTDOWN_GRACE_SECONDS="1"
+	RUNNER_FORCE_CANCEL_AFTER_SECONDS="1"
+	export FAKE_GH_RUNNER_INFO=$'123\ttrue\tonline'
+	export FAKE_GH_FORCE_CANCEL_EXIT="22"
+	export FAKE_GH_FORCE_CANCEL_ERROR="force cancel denied"
+	set_date_sequence 100 101
+
+	if wait_for_runner_to_settle "vm-1" "runner-1" "9001" >"${TEST_LOG_DIR}/output" 2>&1; then
+		fail "wait_for_runner_to_settle unexpectedly succeeded with busy runner"
+	fi
+
+	assert_contains "${TEST_LOG_DIR}/output" "requesting force-cancel"
+	assert_contains "${TEST_LOG_DIR}/output" "GitHub API force-cancel for workflow run 9001 failed (exit 22): force cancel denied"
+	assert_contains "${TEST_LOG_DIR}/output" "force-cancel for workflow run 9001 was not accepted; manual cancellation may be required"
+	assert_contains "${TEST_LOG_DIR}/gh.log" "/repos/owner/repo/actions/runs/9001/force-cancel"
+}
+
 test_zero_force_cancel_delay_disables_force_cancel() {
 	begin_test "zero-force-cancel-delay"
 	GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN="true"
@@ -624,6 +648,7 @@ run_test test_no_active_job_waits_until_busy_grace_deadline
 run_test test_zero_shutdown_grace_waits_until_runner_releases
 run_test test_busy_runner_retries_job_lookup_and_cancels_race
 run_test test_force_cancel_requires_opt_in
+run_test test_force_cancel_failure_is_reported
 run_test test_zero_force_cancel_delay_disables_force_cancel
 run_test test_org_scope_does_not_call_repo_workflow_run_endpoints
 run_test test_parent_term_reaches_worker_and_cleanup_is_idempotent
