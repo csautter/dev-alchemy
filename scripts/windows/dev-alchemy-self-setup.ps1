@@ -386,6 +386,25 @@ function Get-CygwinBashPath {
     return Join-Path (Get-CygwinRootDir) "bin\bash.exe"
 }
 
+function Get-NormalizedWindowsPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    $normalizedPath = $fullPath.TrimEnd([char[]]@('\', '/'))
+    if (-not [string]::IsNullOrWhiteSpace($pathRoot)) {
+        $normalizedRoot = $pathRoot.TrimEnd([char[]]@('\', '/'))
+        if ($normalizedPath.Equals($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $pathRoot
+        }
+    }
+
+    return $normalizedPath
+}
+
 function Test-SameWindowsPath {
     param(
         [string]$Left,
@@ -396,9 +415,167 @@ function Test-SameWindowsPath {
         return $false
     }
 
-    $normalizedLeft = ([System.IO.Path]::GetFullPath($Left)).TrimEnd([char[]]@('\', '/'))
-    $normalizedRight = ([System.IO.Path]::GetFullPath($Right)).TrimEnd([char[]]@('\', '/'))
+    $normalizedLeft = Get-NormalizedWindowsPath -Path $Left
+    $normalizedRight = Get-NormalizedWindowsPath -Path $Right
     return $normalizedLeft.Equals($normalizedRight, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-CygwinRemovalAllowedRoots {
+    return @(
+        $cygwinInstallRoot,
+        "C:\cygwin64",
+        "C:\cygwin",
+        "D:\cygwin"
+    )
+}
+
+function Test-CygwinRootInPreferredFamily {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    $preferredRoot = Get-NormalizedWindowsPath -Path $cygwinInstallRoot
+    $preferredParentPath = Split-Path -Parent $preferredRoot
+    if ([string]::IsNullOrWhiteSpace($preferredParentPath)) {
+        return $false
+    }
+
+    $preferredParent = Get-NormalizedWindowsPath -Path $preferredParentPath
+    $preferredLeaf = Split-Path -Leaf $preferredRoot
+    $normalizedRoot = Get-NormalizedWindowsPath -Path $RootDir
+    $candidateParentPath = Split-Path -Parent $normalizedRoot
+    if ([string]::IsNullOrWhiteSpace($candidateParentPath)) {
+        return $false
+    }
+
+    $candidateParent = Get-NormalizedWindowsPath -Path $candidateParentPath
+    $candidateLeaf = Split-Path -Leaf $normalizedRoot
+    $versionedPreferredLeafPattern = "^$([regex]::Escape($preferredLeaf))-\d"
+
+    return (
+        $candidateParent.Equals($preferredParent, [System.StringComparison]::OrdinalIgnoreCase) -and
+        (
+            $candidateLeaf.Equals($preferredLeaf, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $candidateLeaf -match $versionedPreferredLeafPattern
+        )
+    )
+}
+
+function Test-CygwinRootInRemovalAllowlist {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    foreach ($allowedRoot in (Get-CygwinRemovalAllowedRoots)) {
+        if (Test-SameWindowsPath -Left $RootDir -Right $allowedRoot) {
+            return $true
+        }
+    }
+
+    return Test-CygwinRootInPreferredFamily -RootDir $RootDir
+}
+
+function Test-WindowsPathIsDriveRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    if ([string]::IsNullOrWhiteSpace($pathRoot)) {
+        return $false
+    }
+
+    $normalizedPath = $fullPath.TrimEnd([char[]]@('\', '/'))
+    $normalizedRoot = $pathRoot.TrimEnd([char[]]@('\', '/'))
+    return $normalizedPath.Equals($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-WindowsPathDepth {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    if ([string]::IsNullOrWhiteSpace($pathRoot)) {
+        return 0
+    }
+
+    $relativePath = $fullPath.Substring($pathRoot.Length).Trim([char[]]@('\', '/'))
+    if ([string]::IsNullOrWhiteSpace($relativePath)) {
+        return 0
+    }
+
+    return @($relativePath -split "[\\/]" | Where-Object { $_ -ne "" }).Count
+}
+
+function Test-CygwinRootHasDeletionMarkers {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    if (-not (Test-Path -LiteralPath (Join-Path $RootDir "bin\bash.exe") -PathType Leaf)) {
+        return $false
+    }
+
+    $markerPaths = @(
+        "etc\setup\installed.db",
+        "etc\setup\setup.rc",
+        "var\log\setup.log",
+        "Cygwin.bat"
+    )
+    foreach ($markerPath in $markerPaths) {
+        if (Test-Path -LiteralPath (Join-Path $RootDir $markerPath) -PathType Leaf) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Assert-CygwinRootSafeForAutomation {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    $reasons = @()
+    $normalizedRoot = $null
+    try {
+        $normalizedRoot = Get-NormalizedWindowsPath -Path $RootDir
+    } catch {
+        $reasons += "the path could not be normalized: $($_.Exception.Message)"
+    }
+
+    if ($normalizedRoot) {
+        $isAllowedRoot = Test-CygwinRootInRemovalAllowlist -RootDir $normalizedRoot
+        if ($RootDir -notmatch "^[A-Za-z]:[\\/]") {
+            $reasons += "it is not an absolute local Windows path"
+        }
+        if (Test-WindowsPathIsDriveRoot -Path $normalizedRoot) {
+            $reasons += "it resolves to a drive root"
+        }
+        if ((Get-WindowsPathDepth -Path $normalizedRoot) -le 1 -and -not $isAllowedRoot) {
+            $reasons += "it resolves to a high-level directory"
+        }
+        if (-not $isAllowedRoot) {
+            $allowedRoots = (Get-CygwinRemovalAllowedRoots) -join ", "
+            $reasons += "it is outside the allowed Cygwin roots ($allowedRoots, or a versioned sibling of $cygwinInstallRoot)"
+        }
+        if (-not (Test-CygwinRootHasDeletionMarkers -RootDir $normalizedRoot)) {
+            $reasons += "it does not contain bin\bash.exe plus a Cygwin setup marker"
+        }
+    }
+
+    if ($reasons.Count -gt 0) {
+        throw "Refusing to automatically manage Cygwin root '$RootDir' because $($reasons -join '; '). The Cygwin registry rootdir may be stale or corrupt. Fix HKLM:\SOFTWARE\Cygwin\setup rootdir and HKLM:\SOFTWARE\WOW6432Node\Cygwin\setup rootdir if present, or manually remove the directory after verifying it is a Cygwin installation, then rerun this installer."
+    }
 }
 
 function Stop-CygwinProcesses {
@@ -407,9 +584,11 @@ function Stop-CygwinProcesses {
         [string]$RootDir
     )
 
-    if ([string]::IsNullOrWhiteSpace($RootDir)) {
+    if ([string]::IsNullOrWhiteSpace($RootDir) -or -not (Test-Path -LiteralPath $RootDir)) {
         return
     }
+
+    Assert-CygwinRootSafeForAutomation -RootDir $RootDir
 
     $normalizedRoot = ([System.IO.Path]::GetFullPath($RootDir)).TrimEnd([char[]]@('\', '/'))
     $rootPrefix = $normalizedRoot + "\"
@@ -437,6 +616,8 @@ function Remove-CygwinInstallRoot {
     if ([string]::IsNullOrWhiteSpace($RootDir) -or -not (Test-Path -LiteralPath $RootDir)) {
         return
     }
+
+    Assert-CygwinRootSafeForAutomation -RootDir $RootDir
 
     Write-Host "Removing existing Cygwin root at $RootDir."
     try {
