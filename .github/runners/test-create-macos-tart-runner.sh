@@ -444,7 +444,9 @@ test_successful_cancel_signals_runner_and_stops_vm() {
 
 test_runner_list_api_failure_remains_unknown() {
 	begin_test "runner-list-api-failure"
+	RUNNER_SHUTDOWN_GRACE_SECONDS="1"
 	export FAKE_GH_RUNNER_LIST_FAIL="true"
+	set_date_sequence 100 101
 
 	if wait_for_runner_to_settle "vm-1" "runner-1" "" >"${TEST_LOG_DIR}/output" 2>&1; then
 		fail "wait_for_runner_to_settle unexpectedly succeeded"
@@ -457,18 +459,33 @@ test_runner_list_api_failure_remains_unknown() {
 
 test_no_active_job_waits_until_busy_grace_deadline() {
 	begin_test "no-active-job-busy-until-deadline"
+	RUNNER_SHUTDOWN_GRACE_SECONDS="1"
 	export FAKE_GH_RUN_IDS=""
 	export FAKE_GH_RUNNER_INFO=$'123\ttrue\tonline'
+	set_date_sequence 100 101
 
 	cleanup_vm "vm-1" "runner-1" "10.0.0.2" "true" >"${TEST_LOG_DIR}/output" 2>&1 || true
 
 	assert_contains "${TEST_LOG_DIR}/output" "No in-progress GitHub Actions job found for runner 'runner-1'"
-	assert_contains "${TEST_LOG_DIR}/output" "runner 'runner-1' is still busy after 0s"
+	assert_contains "${TEST_LOG_DIR}/output" "runner 'runner-1' is still busy after 1s"
 	assert_contains "${TEST_LOG_DIR}/output" "runner 'runner-1' is still busy; skipping GitHub runner deletion"
 	assert_contains "${TEST_LOG_DIR}/output" "leaving VM running because GitHub still reports runner 'runner-1' as busy or unknown"
 	assert_not_contains "${TEST_LOG_DIR}/gh.log" "/cancel"
 	assert_not_contains "${TEST_LOG_DIR}/tart.log" $'tart\tstop\tvm-1'
 	assert_not_contains "${TEST_LOG_DIR}/tart.log" $'tart\tdelete\tvm-1'
+}
+
+test_zero_shutdown_grace_waits_until_runner_releases() {
+	begin_test "zero-shutdown-grace-waits"
+	RUNNER_SHUTDOWN_GRACE_SECONDS="0"
+	RUNNER_SHUTDOWN_POLL_SECONDS="0"
+	set_runner_info_queue $'123\ttrue\tonline' $'123\tfalse\tonline'
+	set_date_sequence 100 100 100
+
+	wait_for_runner_to_settle "vm-1" "runner-1" "9001" >"${TEST_LOG_DIR}/output" 2>&1
+
+	assert_contains "${TEST_LOG_DIR}/output" "Runner 'runner-1' is no longer busy"
+	assert_not_contains "${TEST_LOG_DIR}/output" "runner 'runner-1' is still busy after 0s"
 }
 
 test_busy_runner_retries_job_lookup_and_cancels_race() {
@@ -519,17 +536,17 @@ test_force_cancel_requires_opt_in() {
 test_zero_force_cancel_delay_disables_force_cancel() {
 	begin_test "zero-force-cancel-delay"
 	GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN="true"
-	RUNNER_SHUTDOWN_GRACE_SECONDS="0"
+	RUNNER_SHUTDOWN_GRACE_SECONDS="1"
 	RUNNER_FORCE_CANCEL_AFTER_SECONDS="0"
 	export FAKE_GH_RUNNER_INFO=$'123\ttrue\tonline'
-	set_date_sequence 100 100
+	set_date_sequence 100 101
 
 	if wait_for_runner_to_settle "vm-1" "runner-1" "9001" >"${TEST_LOG_DIR}/output" 2>&1; then
 		fail "wait_for_runner_to_settle unexpectedly succeeded with busy runner"
 	fi
 
 	assert_not_contains "${TEST_LOG_DIR}/gh.log" "/force-cancel"
-	assert_contains "${TEST_LOG_DIR}/output" "runner 'runner-1' is still busy after 0s"
+	assert_contains "${TEST_LOG_DIR}/output" "runner 'runner-1' is still busy after 1s"
 }
 
 test_org_scope_does_not_call_repo_workflow_run_endpoints() {
@@ -604,6 +621,7 @@ test_parent_term_reaches_worker_and_cleanup_is_idempotent() {
 run_test test_successful_cancel_signals_runner_and_stops_vm
 run_test test_runner_list_api_failure_remains_unknown
 run_test test_no_active_job_waits_until_busy_grace_deadline
+run_test test_zero_shutdown_grace_waits_until_runner_releases
 run_test test_busy_runner_retries_job_lookup_and_cancels_race
 run_test test_force_cancel_requires_opt_in
 run_test test_zero_force_cancel_delay_disables_force_cancel

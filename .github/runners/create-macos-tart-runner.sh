@@ -22,7 +22,7 @@ set -e
 #   VM_MEMORY_MB      - memory in MiB to assign to each VM (default: image default)
 #   GITHUB_CANCEL_RUN_ON_SHUTDOWN       - cancel active workflow run before VM teardown (default: true)
 #   GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN - force-cancel if normal cancel does not settle (default: false)
-#   RUNNER_SHUTDOWN_GRACE_SECONDS       - seconds to wait for cancel/deregister before VM stop (default: 120)
+#   RUNNER_SHUTDOWN_GRACE_SECONDS       - seconds to wait for cancel/deregister before preserving the VM (default: 0 = wait indefinitely)
 #   RUNNER_FORCE_CANCEL_AFTER_SECONDS   - seconds to wait before optional force-cancel (default: 30)
 #   RUNNER_SHUTDOWN_POLL_SECONDS        - seconds between runner-state polls during shutdown (default: 5)
 
@@ -45,7 +45,7 @@ VM_CPU_COUNT="${VM_CPU_COUNT:-}"   # vCPU cores,   e.g. 4
 VM_MEMORY_MB="${VM_MEMORY_MB:-}"   # memory (MiB), e.g. 8192
 GITHUB_CANCEL_RUN_ON_SHUTDOWN="${GITHUB_CANCEL_RUN_ON_SHUTDOWN:-true}"
 GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN="${GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN:-false}"
-RUNNER_SHUTDOWN_GRACE_SECONDS="${RUNNER_SHUTDOWN_GRACE_SECONDS:-120}"
+RUNNER_SHUTDOWN_GRACE_SECONDS="${RUNNER_SHUTDOWN_GRACE_SECONDS:-0}"
 RUNNER_FORCE_CANCEL_AFTER_SECONDS="${RUNNER_FORCE_CANCEL_AFTER_SECONDS:-30}"
 RUNNER_SHUTDOWN_POLL_SECONDS="${RUNNER_SHUTDOWN_POLL_SECONDS:-5}"
 # Optional: path on the HOST for the general-purpose build cache (ISOs, toolchain
@@ -91,6 +91,16 @@ vm_ssh() {
 		"${VM_SSH_USER}@${ip}" "$@"
 }
 
+run_in_new_session() {
+	if command -v setsid >/dev/null 2>&1; then
+		exec setsid "$@"
+	fi
+	if command -v perl >/dev/null 2>&1; then
+		exec perl -MPOSIX=setsid -e 'setsid() or die "setsid: $!"; exec @ARGV or die "exec: $!"' -- "$@"
+	fi
+	exec "$@"
+}
+
 # ─── GitHub Actions shutdown helpers ──────────────────────────────────────────
 env_truthy() {
 	case "$1" in
@@ -108,7 +118,7 @@ shell_number_or_default() {
 	esac
 }
 
-RUNNER_SHUTDOWN_GRACE_SECONDS="$(shell_number_or_default "$RUNNER_SHUTDOWN_GRACE_SECONDS" 120)"
+RUNNER_SHUTDOWN_GRACE_SECONDS="$(shell_number_or_default "$RUNNER_SHUTDOWN_GRACE_SECONDS" 0)"
 RUNNER_FORCE_CANCEL_AFTER_SECONDS="$(shell_number_or_default "$RUNNER_FORCE_CANCEL_AFTER_SECONDS" 30)"
 RUNNER_SHUTDOWN_POLL_SECONDS="$(shell_number_or_default "$RUNNER_SHUTDOWN_POLL_SECONDS" 5)"
 
@@ -320,9 +330,15 @@ wait_for_runner_to_settle() {
 	local runner_name="$2"
 	local run_id="$3"
 	local start_ts now deadline force_after_ts forced runner_state_unknown runner_info runner_id runner_busy runner_status
+	local has_shutdown_deadline=false
 
 	start_ts=$(date +%s)
-	deadline=$(( start_ts + RUNNER_SHUTDOWN_GRACE_SECONDS ))
+	if [[ "$RUNNER_SHUTDOWN_GRACE_SECONDS" -gt 0 ]]; then
+		has_shutdown_deadline=true
+		deadline=$(( start_ts + RUNNER_SHUTDOWN_GRACE_SECONDS ))
+	else
+		deadline=0
+	fi
 	force_after_ts=$(( start_ts + RUNNER_FORCE_CANCEL_AFTER_SECONDS ))
 	forced=false
 	runner_state_unknown=false
@@ -361,7 +377,7 @@ wait_for_runner_to_settle() {
 			forced=true
 		fi
 
-		if [[ "$now" -ge "$deadline" ]]; then
+		if [[ "$has_shutdown_deadline" == "true" && "$now" -ge "$deadline" ]]; then
 			if [[ "$runner_state_unknown" == "true" ]]; then
 				echo "[${vm}] Warning: could not confirm runner '${runner_name}' state after ${RUNNER_SHUTDOWN_GRACE_SECONDS}s."
 			else
@@ -600,7 +616,7 @@ run_worker() {
 		fi
 		(
 			trap '' INT HUP
-			exec tart run --no-graphics --net-bridged="Wi-Fi" "${tart_dir_flag[@]}" "${vm_name}"
+			run_in_new_session tart run --no-graphics --net-bridged="Wi-Fi" "${tart_dir_flag[@]}" "${vm_name}"
 		) &
 		current_tart_run_pid=$!
 
@@ -665,7 +681,11 @@ run_worker() {
 		local runner_exit=0
 		(
 			trap '' INT HUP
-			vm_ssh "$current_vm_ip" bash <<EOF
+			run_in_new_session sshpass -p "${VM_SSH_PASS}" ssh \
+				-o "StrictHostKeyChecking=no" \
+				-o "UserKnownHostsFile=/dev/null" \
+				-o "ConnectTimeout=5" \
+				"${VM_SSH_USER}@${current_vm_ip}" bash <<EOF
 set -e
 
 cd "${RUNNER_DIR}"
