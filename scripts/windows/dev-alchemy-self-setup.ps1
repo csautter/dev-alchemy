@@ -171,6 +171,43 @@ function Get-ChocolateyInstalledVersion {
     return $null
 }
 
+function Invoke-ChocolateyPackageCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Command,
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName,
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $maxAttempts = 3
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $chocoOutput = & choco @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+
+        foreach ($line in $chocoOutput) {
+            Write-Output $line
+        }
+
+        if ($exitCode -in @(0, 1641, 3010)) {
+            Refresh-ProcessPath
+            return
+        }
+
+        $shouldRetry = $attempt -lt $maxAttempts -and (Test-ShouldRetryChocolateyCommand -OutputLines $chocoOutput)
+        if (-not $shouldRetry) {
+            throw "Chocolatey failed to $Command $PackageName $Version with exit code $exitCode."
+        }
+
+        $sleepSeconds = 5 * $attempt
+        Write-Warning "Chocolatey failed to $Command $PackageName $Version with exit code $exitCode. Retrying in $sleepSeconds seconds (attempt $($attempt + 1) of $maxAttempts)..."
+        Start-Sleep -Seconds $sleepSeconds
+    }
+}
+
 function Ensure-ChocolateyPackage {
     param(
         [Parameter(Mandatory = $true)]
@@ -202,29 +239,7 @@ function Ensure-ChocolateyPackage {
         $args += $ExtraArgs
     }
 
-    $maxAttempts = 3
-    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-        $chocoOutput = & choco @args 2>&1
-        $exitCode = $LASTEXITCODE
-
-        foreach ($line in $chocoOutput) {
-            Write-Output $line
-        }
-
-        if ($exitCode -in @(0, 1641, 3010)) {
-            Refresh-ProcessPath
-            return
-        }
-
-        $shouldRetry = $attempt -lt $maxAttempts -and (Test-ShouldRetryChocolateyCommand -OutputLines $chocoOutput)
-        if (-not $shouldRetry) {
-            throw "Chocolatey failed to $command $PackageName $Version with exit code $exitCode."
-        }
-
-        $sleepSeconds = 5 * $attempt
-        Write-Warning "Chocolatey failed to $command $PackageName $Version with exit code $exitCode. Retrying in $sleepSeconds seconds (attempt $($attempt + 1) of $maxAttempts)..."
-        Start-Sleep -Seconds $sleepSeconds
-    }
+    Invoke-ChocolateyPackageCommand -Command $command -PackageName $PackageName -Version $Version -Arguments $args
 }
 
 function Ensure-GoInstallRootClean {
@@ -322,7 +337,7 @@ function Test-ShouldRetryChocolateyCommand {
     )
 }
 
-function Get-CygwinRootDir {
+function Get-CygwinRootDirIfAvailable {
     $registryKeys = @(
         "HKLM:\SOFTWARE\Cygwin\setup",
         "HKLM:\SOFTWARE\WOW6432Node\Cygwin\setup"
@@ -351,6 +366,15 @@ function Get-CygwinRootDir {
         }
     }
 
+    return $null
+}
+
+function Get-CygwinRootDir {
+    $rootDir = Get-CygwinRootDirIfAvailable
+    if ($rootDir) {
+        return $rootDir
+    }
+
     throw "Unable to locate the Cygwin installation root."
 }
 
@@ -360,6 +384,107 @@ function Get-CygwinInstalledDbPath {
 
 function Get-CygwinBashPath {
     return Join-Path (Get-CygwinRootDir) "bin\bash.exe"
+}
+
+function Stop-CygwinProcesses {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RootDir)) {
+        return
+    }
+
+    $normalizedRoot = ([System.IO.Path]::GetFullPath($RootDir)).TrimEnd([char[]]@('\', '/'))
+    $rootPrefix = $normalizedRoot + "\"
+    $processes = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.ProcessId -ne $PID -and
+        $_.ExecutablePath -and
+        (
+            $_.ExecutablePath.Equals($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $_.ExecutablePath.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+        )
+    })
+
+    foreach ($process in $processes) {
+        Write-Output "Stopping Cygwin process $($process.ProcessId) ($($process.Name)) before reinstalling Cygwin."
+        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Remove-CygwinInstallRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RootDir) -or -not (Test-Path -LiteralPath $RootDir)) {
+        return
+    }
+
+    Write-Output "Removing existing Cygwin root at $RootDir."
+    try {
+        Remove-Item -LiteralPath $RootDir -Recurse -Force -ErrorAction Stop
+    } catch {
+        throw "Unable to remove existing Cygwin root at $RootDir. Close any Cygwin processes and rerun the installer. $($_.Exception.Message)"
+    }
+}
+
+function Uninstall-ChocolateyPackageIfPresent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName
+    )
+
+    $installedVersion = Get-ChocolateyInstalledVersion -PackageName $PackageName
+    if (-not $installedVersion) {
+        return
+    }
+
+    Write-Output "Removing $PackageName $installedVersion before reinstalling Cygwin."
+    $args = @("uninstall", $PackageName, "-y", "--no-progress")
+    Invoke-ChocolateyPackageCommand -Command "uninstall" -PackageName $PackageName -Version $installedVersion -Arguments $args
+}
+
+function Ensure-CygwinChocolateyPackage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [Parameter(Mandatory = $true)]
+        [string]$InstallRoot,
+        [string[]]$ExtraArgs = @()
+    )
+
+    $installedVersion = Get-ChocolateyInstalledVersion -PackageName "cygwin"
+    if ($installedVersion -eq $Version) {
+        Write-Output "cygwin $Version is already installed."
+        return
+    }
+
+    if (-not $installedVersion) {
+        Ensure-ChocolateyPackage -PackageName "cygwin" -Version $Version -ExtraArgs $ExtraArgs
+        return
+    }
+
+    # The upstream Chocolatey upgrade path rewrites cygwinsetup.exe in-place and can fail on stateful runners.
+    Write-Output "cygwin $installedVersion detected. Reinstalling cleanly with pinned version $Version..."
+    $existingRoot = Get-CygwinRootDirIfAvailable
+    if ($existingRoot) {
+        Stop-CygwinProcesses -RootDir $existingRoot
+    }
+
+    Uninstall-ChocolateyPackageIfPresent -PackageName "cyg-get"
+    Uninstall-ChocolateyPackageIfPresent -PackageName "cygwin"
+
+    if ($existingRoot) {
+        Remove-CygwinInstallRoot -RootDir $existingRoot
+    }
+    if ($InstallRoot -ne $existingRoot) {
+        Remove-CygwinInstallRoot -RootDir $InstallRoot
+    }
+
+    Ensure-ChocolateyPackage -PackageName "cygwin" -Version $Version -ExtraArgs $ExtraArgs
 }
 
 function Test-CygwinPackageInstalled {
@@ -471,7 +596,7 @@ $nativePythonPackageName = Get-NativePythonChocolateyPackageName -Version $nativ
 Ensure-ChocolateyPackage -PackageName $nativePythonPackageName -Version $nativePythonVersion
 Assert-NativePythonAvailable
 Export-CommandDirectoryToGitHubPath -CommandName "python"
-Ensure-ChocolateyPackage -PackageName "cygwin" -Version $cygwinVersion -ExtraArgs @("--params", "`"/InstallDir:$cygwinInstallRoot /NoStartMenu`"")
+Ensure-CygwinChocolateyPackage -Version $cygwinVersion -InstallRoot $cygwinInstallRoot -ExtraArgs @("--params", "`"/InstallDir:$cygwinInstallRoot /NoStartMenu`"")
 Ensure-ChocolateyPackage -PackageName "cyg-get" -Version $cygGetVersion
 
 if ($VirtualBox) {
