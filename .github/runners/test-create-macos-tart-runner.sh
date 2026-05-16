@@ -140,9 +140,26 @@ if [[ "$method" == "GET" && "$path" == /repos/*/actions/runs/*/jobs* ]]; then
 		printf 'job list failed\n' >&2
 		exit "${FAKE_GH_JOB_LIST_EXIT:-22}"
 	fi
-	if [[ -n "${FAKE_GH_JOB_LINE:-}" ]]; then
-		printf '%s\n' "${FAKE_GH_JOB_LINE}"
+
+	line="${FAKE_GH_JOB_LINE:-}"
+	queue="${FAKE_GH_JOB_LINE_QUEUE:-}"
+	if [[ -n "$queue" && -f "$queue" ]]; then
+		if IFS= read -r line <"$queue"; then
+			tmp="${queue}.$$"
+			tail -n +2 "$queue" >"$tmp" || true
+			mv "$tmp" "$queue"
+		else
+			line=""
+		fi
 	fi
+
+	case "$line" in
+		__EMPTY__|"")
+			;;
+		*)
+			printf '%s\n' "$line"
+			;;
+	esac
 	exit 0
 fi
 
@@ -348,7 +365,7 @@ begin_test() {
 	: >"${TEST_LOG_DIR}/sleep.log"
 	export TEST_LOG_DIR
 
-	unset FAKE_GH_RUN_IDS FAKE_GH_JOB_LINE FAKE_GH_RUNNER_INFO FAKE_GH_RUNNER_INFO_QUEUE
+	unset FAKE_GH_RUN_IDS FAKE_GH_JOB_LINE FAKE_GH_JOB_LINE_QUEUE FAKE_GH_RUNNER_INFO FAKE_GH_RUNNER_INFO_QUEUE
 	unset FAKE_GH_RUN_LIST_FAIL FAKE_GH_JOB_LIST_FAIL FAKE_GH_RUNNER_LIST_FAIL
 	unset FAKE_GH_CANCEL_EXIT FAKE_GH_FORCE_CANCEL_EXIT FAKE_GH_DELETE_EXIT
 	unset FAKE_DATE_SEQUENCE FAKE_DATE_VALUE FAKE_SSH_RUNNER_BLOCK FAKE_SSH_RUNNER_EXIT
@@ -366,6 +383,28 @@ set_date_sequence() {
 		printf '%s\n' "$value" >>"${sequence_file}"
 	done
 	export FAKE_DATE_SEQUENCE="${sequence_file}"
+}
+
+set_job_line_queue() {
+	local queue_file="${TEST_LOG_DIR}/job-line-queue"
+
+	: >"${queue_file}"
+	local value
+	for value in "$@"; do
+		printf '%s\n' "$value" >>"${queue_file}"
+	done
+	export FAKE_GH_JOB_LINE_QUEUE="${queue_file}"
+}
+
+set_runner_info_queue() {
+	local queue_file="${TEST_LOG_DIR}/runner-info-queue"
+
+	: >"${queue_file}"
+	local value
+	for value in "$@"; do
+		printf '%s\n' "$value" >>"${queue_file}"
+	done
+	export FAKE_GH_RUNNER_INFO_QUEUE="${queue_file}"
 }
 
 run_test() {
@@ -421,11 +460,31 @@ test_no_active_job_waits_until_busy_grace_deadline() {
 	export FAKE_GH_RUN_IDS=""
 	export FAKE_GH_RUNNER_INFO=$'123\ttrue\tonline'
 
-	cleanup_vm "vm-1" "runner-1" "10.0.0.2" "true" >"${TEST_LOG_DIR}/output" 2>&1
+	cleanup_vm "vm-1" "runner-1" "10.0.0.2" "true" >"${TEST_LOG_DIR}/output" 2>&1 || true
 
 	assert_contains "${TEST_LOG_DIR}/output" "No in-progress GitHub Actions job found for runner 'runner-1'"
 	assert_contains "${TEST_LOG_DIR}/output" "runner 'runner-1' is still busy after 0s"
+	assert_contains "${TEST_LOG_DIR}/output" "runner 'runner-1' is still busy; skipping GitHub runner deletion"
+	assert_contains "${TEST_LOG_DIR}/output" "leaving VM running because GitHub still reports runner 'runner-1' as busy or unknown"
 	assert_not_contains "${TEST_LOG_DIR}/gh.log" "/cancel"
+	assert_not_contains "${TEST_LOG_DIR}/tart.log" $'tart\tstop\tvm-1'
+	assert_not_contains "${TEST_LOG_DIR}/tart.log" $'tart\tdelete\tvm-1'
+}
+
+test_busy_runner_retries_job_lookup_and_cancels_race() {
+	begin_test "busy-runner-retry-cancel"
+	RUNNER_SHUTDOWN_GRACE_SECONDS="1"
+	export FAKE_GH_RUN_IDS="9001"
+	set_job_line_queue "__EMPTY__" $'9001\t501\tbuild\t"https://example.test/job"'
+	set_runner_info_queue $'123\ttrue\tonline' $'123\tfalse\tonline' $'123\tfalse\tonline'
+	set_date_sequence 100 100 100
+
+	cleanup_vm "vm-1" "runner-1" "10.0.0.2" "true" >"${TEST_LOG_DIR}/output" 2>&1
+
+	assert_contains "${TEST_LOG_DIR}/output" "Runner 'runner-1' is busy; retrying active job lookup before teardown"
+	assert_contains "${TEST_LOG_DIR}/output" "Canceling workflow run 9001"
+	assert_contains "${TEST_LOG_DIR}/output" "Runner 'runner-1' is no longer busy"
+	assert_contains "${TEST_LOG_DIR}/gh.log" "/repos/owner/repo/actions/runs/9001/cancel"
 	assert_contains "${TEST_LOG_DIR}/tart.log" $'tart\tstop\tvm-1'
 	assert_contains "${TEST_LOG_DIR}/tart.log" $'tart\tdelete\tvm-1'
 }
@@ -545,6 +604,7 @@ test_parent_term_reaches_worker_and_cleanup_is_idempotent() {
 run_test test_successful_cancel_signals_runner_and_stops_vm
 run_test test_runner_list_api_failure_remains_unknown
 run_test test_no_active_job_waits_until_busy_grace_deadline
+run_test test_busy_runner_retries_job_lookup_and_cancels_race
 run_test test_force_cancel_requires_opt_in
 run_test test_zero_force_cancel_delay_disables_force_cancel
 run_test test_org_scope_does_not_call_repo_workflow_run_endpoints

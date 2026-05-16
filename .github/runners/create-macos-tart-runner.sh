@@ -336,6 +336,13 @@ wait_for_runner_to_settle() {
 				echo "[${vm}] Runner '${runner_name}' is no longer busy (status: ${runner_status})."
 				return 0
 			fi
+
+			if [[ -z "$run_id" && "$GITHUB_SCOPE" == "repo" ]] && env_truthy "$GITHUB_CANCEL_RUN_ON_SHUTDOWN"; then
+				echo "[${vm}] Runner '${runner_name}' is busy; retrying active job lookup before teardown..."
+				if cancel_active_runner_job "$vm" "$runner_name"; then
+					run_id="$REQUESTED_CANCEL_RUN_ID"
+				fi
+			fi
 		else
 			case "$?" in
 				1)
@@ -374,6 +381,7 @@ cleanup_vm() {
 	local runner_name="${2:-}"
 	local vm_ip="${3:-}"
 	local cancel_active_job="${4:-false}"
+	local preserve_busy_vm=false
 	[[ -z "$vm" ]] && return
 
 	# Deregister the runner before stopping the VM (handles Ctrl+C interruption).
@@ -381,8 +389,8 @@ cleanup_vm() {
 	# wait briefly and only attempt an explicit removal if the runner is still listed.
 	if [[ -n "$runner_name" ]]; then
 		if [[ "$cancel_active_job" == "true" ]]; then
-			cancel_active_runner_job "$vm" "$runner_name" || true
 			signal_runner_processes "$vm" "$vm_ip"
+			cancel_active_runner_job "$vm" "$runner_name" || true
 			wait_for_runner_to_settle "$vm" "$runner_name" "$REQUESTED_CANCEL_RUN_ID" || true
 		else
 			# Give run.sh a moment to finish its own graceful shutdown / self-deregistration.
@@ -397,7 +405,12 @@ cleanup_vm() {
 		if runner_info=$(find_runner_info "$runner_name"); then
 			IFS=$'\t' read -r runner_id runner_busy runner_status <<< "$runner_info"
 
-			if [[ -n "$runner_id" ]]; then
+			if [[ "$runner_busy" == "true" ]]; then
+				echo "[${vm}] Warning: runner '${runner_name}' is still busy; skipping GitHub runner deletion."
+				if [[ "$cancel_active_job" == "true" ]]; then
+					preserve_busy_vm=true
+				fi
+			elif [[ -n "$runner_id" ]]; then
 				local api_path
 				api_path=$(runner_delete_api_path "$runner_id")
 				if gh api --method DELETE "$api_path" 2>/dev/null; then
@@ -413,9 +426,18 @@ cleanup_vm() {
 					;;
 				*)
 					echo "[${vm}] Warning: Could not verify runner '${runner_name}' registration state; manual cleanup may be required."
+					if [[ "$cancel_active_job" == "true" ]]; then
+						preserve_busy_vm=true
+					fi
 					;;
 			esac
 		fi
+	fi
+
+	if [[ "$preserve_busy_vm" == "true" ]]; then
+		echo "[${vm}] Warning: leaving VM running because GitHub still reports runner '${runner_name}' as busy or unknown."
+		echo "[${vm}]          Cancel the workflow run or wait for it to finish, then remove the runner/VM manually."
+		return 1
 	fi
 
 	echo "[${vm}] Stopping VM..."
@@ -426,6 +448,25 @@ cleanup_vm() {
 	fi
 }
 
+wait_for_local_process_exit() {
+	local pid="$1"
+	local timeout_seconds="${2:-10}"
+	local waited_seconds=0
+
+	[[ -z "$pid" ]] && return 0
+	while kill -0 "$pid" 2>/dev/null; do
+		if [[ "$waited_seconds" -ge "$timeout_seconds" ]]; then
+			kill -TERM "$pid" 2>/dev/null || true
+			sleep 1
+			kill -KILL "$pid" 2>/dev/null || true
+			break
+		fi
+		sleep 1
+		waited_seconds=$(( waited_seconds + 1 ))
+	done
+	wait "$pid" 2>/dev/null || true
+}
+
 # ─── Single worker (runs one runner cycle at a time, loops until MAX_RUNS) ─────
 run_worker() {
 	local worker_id="$1"
@@ -433,6 +474,7 @@ run_worker() {
 	local current_runner_name=""
 	local current_vm_ip=""
 	local current_runner_ssh_pid=""
+	local current_tart_run_pid=""
 	local shutdown_requested=false
 	local run_count=0
 
@@ -440,16 +482,27 @@ run_worker() {
 	_worker_cleanup() {
 		[[ -z "$current_vm_name" ]] && return
 		local cancel_active_job=false
+		local cleanup_status=0
 		[[ "$shutdown_requested" == "true" ]] && cancel_active_job=true
-		cleanup_vm "$current_vm_name" "$current_runner_name" "$current_vm_ip" "$cancel_active_job"
-		if [[ -n "$current_runner_ssh_pid" ]]; then
+		cleanup_vm "$current_vm_name" "$current_runner_name" "$current_vm_ip" "$cancel_active_job" || cleanup_status=$?
+		if [[ -n "$current_runner_ssh_pid" && "$cleanup_status" -eq 0 ]]; then
 			kill -TERM "$current_runner_ssh_pid" 2>/dev/null || true
 			wait "$current_runner_ssh_pid" 2>/dev/null || true
+		fi
+		if [[ -n "$current_runner_ssh_pid" && "$cleanup_status" -ne 0 ]]; then
+			disown "$current_runner_ssh_pid" 2>/dev/null || true
+		fi
+		if [[ -n "$current_tart_run_pid" && "$cleanup_status" -eq 0 ]]; then
+			wait_for_local_process_exit "$current_tart_run_pid"
+		fi
+		if [[ -n "$current_tart_run_pid" && "$cleanup_status" -ne 0 ]]; then
+			disown "$current_tart_run_pid" 2>/dev/null || true
 		fi
 		current_vm_name=""
 		current_runner_name=""
 		current_vm_ip=""
 		current_runner_ssh_pid=""
+		current_tart_run_pid=""
 	}
 	# EXIT runs the actual cleanup.
 	# INT/TERM call exit so the EXIT trap fires and the worker subshell terminates;
@@ -545,7 +598,11 @@ run_worker() {
 			echo "[worker-${worker_id}] Sharing build cache '${BUILD_CACHE_DIR}' → /Volumes/My Shared Files/build-cache/ inside VM"
 			tart_dir_flag=("--dir=build-cache:${BUILD_CACHE_DIR}")
 		fi
-		tart run --no-graphics --net-bridged="Wi-Fi" "${tart_dir_flag[@]}" "${vm_name}" &
+		(
+			trap '' INT HUP
+			exec tart run --no-graphics --net-bridged="Wi-Fi" "${tart_dir_flag[@]}" "${vm_name}"
+		) &
+		current_tart_run_pid=$!
 
 		# ── Wait for an IP (90 s timeout) ───────────────────────────
 		current_vm_ip=""
@@ -563,8 +620,12 @@ run_worker() {
 		done
 		if [[ -z "$current_vm_ip" ]]; then
 			cleanup_vm "$current_vm_name" "$current_runner_name"
+			if [[ -n "$current_tart_run_pid" ]]; then
+				wait_for_local_process_exit "$current_tart_run_pid"
+			fi
 			current_vm_name=""
 			current_runner_name=""
+			current_tart_run_pid=""
 			continue
 		fi
 		echo "[worker-${worker_id}] VM IP: $current_vm_ip"
@@ -583,8 +644,12 @@ run_worker() {
 		done
 		if [[ -z "$current_vm_ip" ]]; then
 			cleanup_vm "$current_vm_name" "$current_runner_name"
+			if [[ -n "$current_tart_run_pid" ]]; then
+				wait_for_local_process_exit "$current_tart_run_pid"
+			fi
 			current_vm_name=""
 			current_runner_name=""
+			current_tart_run_pid=""
 			continue
 		fi
 		echo "[worker-${worker_id}] SSH connection successful."
@@ -598,7 +663,9 @@ run_worker() {
 		echo "[worker-${worker_id}] Configuring and starting GitHub Actions runner '${runner_name}'..."
 
 		local runner_exit=0
-		vm_ssh "$current_vm_ip" bash <<EOF &
+		(
+			trap '' INT HUP
+			vm_ssh "$current_vm_ip" bash <<EOF
 set -e
 
 cd "${RUNNER_DIR}"
@@ -623,16 +690,25 @@ echo "Runner configured. Waiting for a job (./run.sh)..."
 ./run.sh
 echo "Runner finished."
 EOF
+		) &
 		current_runner_ssh_pid=$!
 		wait "$current_runner_ssh_pid" || runner_exit=$?
 		current_runner_ssh_pid=""
 
 		if [[ $runner_exit -ne 0 ]]; then
 			echo "[worker-${worker_id}] ERROR: Runner SSH session failed (exit ${runner_exit}). Cleaning up and retrying in 10s..."
-			cleanup_vm "$current_vm_name" "$current_runner_name" "$current_vm_ip" "true"
+			local cleanup_status=0
+			cleanup_vm "$current_vm_name" "$current_runner_name" "$current_vm_ip" "true" || cleanup_status=$?
+			if [[ -n "$current_tart_run_pid" && "$cleanup_status" -eq 0 ]]; then
+				wait_for_local_process_exit "$current_tart_run_pid"
+			fi
+			if [[ -n "$current_tart_run_pid" && "$cleanup_status" -ne 0 ]]; then
+				disown "$current_tart_run_pid" 2>/dev/null || true
+			fi
 			current_vm_name=""
 			current_runner_name=""
 			current_vm_ip=""
+			current_tart_run_pid=""
 			sleep 10
 			continue
 		fi
@@ -641,9 +717,13 @@ EOF
 
 		# ── Shut down VM ─────────────────────────────────────────────
 		cleanup_vm "$current_vm_name" "$current_runner_name"
+		if [[ -n "$current_tart_run_pid" ]]; then
+			wait_for_local_process_exit "$current_tart_run_pid"
+		fi
 		current_vm_name=""
 		current_runner_name=""
 		current_vm_ip=""
+		current_tart_run_pid=""
 
 		# ── Check cycle limit ────────────────────────────────────────
 		if [[ "$MAX_RUNS" -gt 0 && "$run_count" -ge "$MAX_RUNS" ]]; then
