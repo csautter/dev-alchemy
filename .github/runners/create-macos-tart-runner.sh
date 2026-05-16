@@ -133,14 +133,49 @@ runner_delete_api_path() {
 	fi
 }
 
+log_gh_api_failure() {
+	local context="$1"
+	local status="$2"
+	local error="$3"
+
+	error=${error//$'\n'/ }
+	error=${error//$'\r'/ }
+	error=$(printf '%s' "$error" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+
+	if [[ -n "$error" ]]; then
+		echo "Warning: GitHub API ${context} failed (exit ${status}): ${error}" >&2
+	else
+		echo "Warning: GitHub API ${context} failed (exit ${status})." >&2
+	fi
+}
+
+# Lookup helpers print matching records to stdout and return:
+# 0 = found, 1 = not found, 2 = GitHub API failure / unknown state.
 find_runner_info() {
 	local runner_name="$1"
-	local runner_name_jq
+	local runner_name_jq runner_lines api_err_file api_status api_error first_runner_line
 	runner_name_jq=$(escape_jq_string "$runner_name")
 
-	gh api "$(runner_list_api_path)" --paginate \
+	api_err_file=$(mktemp "${TMPDIR:-/tmp}/gh-api-runner-list.XXXXXX")
+	if runner_lines=$(gh api "$(runner_list_api_path)" --paginate \
 		--jq ".runners[] | select(.name == \"${runner_name_jq}\") | [.id, .busy, .status] | @tsv" \
-		2>/dev/null | head -n 1 || true
+		2>"$api_err_file"); then
+		rm -f "$api_err_file"
+	else
+		api_status=$?
+		api_error=$(<"$api_err_file")
+		rm -f "$api_err_file"
+		log_gh_api_failure "runner lookup for '${runner_name}'" "$api_status" "$api_error"
+		return 2
+	fi
+
+	if [[ -z "$runner_lines" ]]; then
+		return 1
+	fi
+
+	IFS= read -r first_runner_line <<< "$runner_lines" || true
+	printf '%s\n' "$first_runner_line"
+	return 0
 }
 
 find_active_runner_job() {
@@ -152,17 +187,39 @@ find_active_runner_job() {
 		return 1
 	fi
 
-	local runner_name_jq run_ids run_id job_line
+	local runner_name_jq run_ids run_id job_lines job_line api_err_file api_status api_error
 	runner_name_jq=$(escape_jq_string "$runner_name")
-	run_ids=$(gh api "/repos/${GITHUB_REPO}/actions/runs?status=in_progress&per_page=100" --paginate \
-		--jq '.workflow_runs[].id' 2>/dev/null || true)
+
+	api_err_file=$(mktemp "${TMPDIR:-/tmp}/gh-api-run-list.XXXXXX")
+	if run_ids=$(gh api "/repos/${GITHUB_REPO}/actions/runs?status=in_progress&per_page=100" --paginate \
+		--jq '.workflow_runs[].id' 2>"$api_err_file"); then
+		rm -f "$api_err_file"
+	else
+		api_status=$?
+		api_error=$(<"$api_err_file")
+		rm -f "$api_err_file"
+		log_gh_api_failure "workflow run lookup for runner '${runner_name}'" "$api_status" "$api_error"
+		return 2
+	fi
 	[[ -z "$run_ids" ]] && return 1
 
 	while IFS= read -r run_id; do
 		[[ -z "$run_id" ]] && continue
-		job_line=$(gh api "/repos/${GITHUB_REPO}/actions/runs/${run_id}/jobs?filter=latest&per_page=100" --paginate \
+
+		api_err_file=$(mktemp "${TMPDIR:-/tmp}/gh-api-job-list.XXXXXX")
+		if job_lines=$(gh api "/repos/${GITHUB_REPO}/actions/runs/${run_id}/jobs?filter=latest&per_page=100" --paginate \
 			--jq ".jobs[] | select(.status == \"in_progress\" and .runner_name == \"${runner_name_jq}\") | [(.run_id // ${run_id}), .id, .name, .html_url] | @tsv" \
-			2>/dev/null | head -n 1 || true)
+			2>"$api_err_file"); then
+			rm -f "$api_err_file"
+		else
+			api_status=$?
+			api_error=$(<"$api_err_file")
+			rm -f "$api_err_file"
+			log_gh_api_failure "job lookup for workflow run ${run_id}" "$api_status" "$api_error"
+			return 2
+		fi
+
+		IFS= read -r job_line <<< "$job_lines" || true
 		if [[ -n "$job_line" ]]; then
 			printf '%s\n' "$job_line"
 			return 0
@@ -190,9 +247,17 @@ cancel_active_runner_job() {
 	fi
 
 	local job_line run_id job_id job_name job_url
-	job_line=$(find_active_runner_job "$runner_name" || true)
-	if [[ -z "$job_line" ]]; then
-		echo "[${vm}] No in-progress GitHub Actions job found for runner '${runner_name}'."
+	if job_line=$(find_active_runner_job "$runner_name"); then
+		:
+	else
+		case "$?" in
+			1)
+				echo "[${vm}] No in-progress GitHub Actions job found for runner '${runner_name}'."
+				;;
+			*)
+				echo "[${vm}] Warning: could not determine whether runner '${runner_name}' has an active job."
+				;;
+		esac
 		return 1
 	fi
 
@@ -251,25 +316,34 @@ wait_for_runner_to_settle() {
 	local vm="$1"
 	local runner_name="$2"
 	local run_id="$3"
-	local start_ts now deadline force_after_ts forced runner_info runner_id runner_busy runner_status
+	local start_ts now deadline force_after_ts forced runner_state_unknown runner_info runner_id runner_busy runner_status
 
 	start_ts=$(date +%s)
 	deadline=$(( start_ts + RUNNER_SHUTDOWN_GRACE_SECONDS ))
 	force_after_ts=$(( start_ts + RUNNER_FORCE_CANCEL_AFTER_SECONDS ))
 	forced=false
+	runner_state_unknown=false
 
 	while true; do
 		now=$(date +%s)
-		runner_info=$(find_runner_info "$runner_name")
-		if [[ -z "$runner_info" ]]; then
-			echo "[${vm}] Runner '${runner_name}' is no longer registered."
-			return 0
-		fi
-
-		IFS=$'\t' read -r runner_id runner_busy runner_status <<< "$runner_info"
-		if [[ "$runner_busy" != "true" ]]; then
-			echo "[${vm}] Runner '${runner_name}' is no longer busy (status: ${runner_status})."
-			return 0
+		if runner_info=$(find_runner_info "$runner_name"); then
+			runner_state_unknown=false
+			IFS=$'\t' read -r runner_id runner_busy runner_status <<< "$runner_info"
+			if [[ "$runner_busy" != "true" ]]; then
+				echo "[${vm}] Runner '${runner_name}' is no longer busy (status: ${runner_status})."
+				return 0
+			fi
+		else
+			case "$?" in
+				1)
+					echo "[${vm}] Runner '${runner_name}' is no longer registered."
+					return 0
+					;;
+				*)
+					runner_state_unknown=true
+					echo "[${vm}] Runner '${runner_name}' state is unknown; continuing to wait for GitHub API recovery."
+					;;
+			esac
 		fi
 
 		if [[ "$forced" != "true" && -n "$run_id" && "$RUNNER_FORCE_CANCEL_AFTER_SECONDS" -gt 0 && "$now" -ge "$force_after_ts" ]]; then
@@ -278,7 +352,11 @@ wait_for_runner_to_settle() {
 		fi
 
 		if [[ "$now" -ge "$deadline" ]]; then
-			echo "[${vm}] Warning: runner '${runner_name}' is still busy after ${RUNNER_SHUTDOWN_GRACE_SECONDS}s."
+			if [[ "$runner_state_unknown" == "true" ]]; then
+				echo "[${vm}] Warning: could not confirm runner '${runner_name}' state after ${RUNNER_SHUTDOWN_GRACE_SECONDS}s."
+			else
+				echo "[${vm}] Warning: runner '${runner_name}' is still busy after ${RUNNER_SHUTDOWN_GRACE_SECONDS}s."
+			fi
 			return 1
 		fi
 
@@ -313,19 +391,27 @@ cleanup_vm() {
 		# Use the GitHub API directly via the local gh CLI as the last-resort removal
 		# path if the ephemeral runner did not already deregister itself.
 		local runner_info runner_id runner_busy runner_status
-		runner_info=$(find_runner_info "$runner_name")
-		IFS=$'\t' read -r runner_id runner_busy runner_status <<< "$runner_info"
+		if runner_info=$(find_runner_info "$runner_name"); then
+			IFS=$'\t' read -r runner_id runner_busy runner_status <<< "$runner_info"
 
-		if [[ -n "$runner_id" ]]; then
-			local api_path
-			api_path=$(runner_delete_api_path "$runner_id")
-			if gh api --method DELETE "$api_path" 2>/dev/null; then
-				echo "[${vm}] Runner '${runner_name}' deregistered via GitHub API."
-			else
-				echo "[${vm}] Warning: Could not deregister runner '${runner_name}'; manual cleanup may be required."
+			if [[ -n "$runner_id" ]]; then
+				local api_path
+				api_path=$(runner_delete_api_path "$runner_id")
+				if gh api --method DELETE "$api_path" 2>/dev/null; then
+					echo "[${vm}] Runner '${runner_name}' deregistered via GitHub API."
+				else
+					echo "[${vm}] Warning: Could not deregister runner '${runner_name}'; manual cleanup may be required."
+				fi
 			fi
 		else
-			echo "[${vm}] Runner '${runner_name}' not found; likely already self-deregistered."
+			case "$?" in
+				1)
+					echo "[${vm}] Runner '${runner_name}' not found; likely already self-deregistered."
+					;;
+				*)
+					echo "[${vm}] Warning: Could not verify runner '${runner_name}' registration state; manual cleanup may be required."
+					;;
+			esac
 		fi
 	fi
 
