@@ -1,0 +1,92 @@
+name: Test Windows PowerShell Scripts
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/windows/*.ps1"
+      - "scripts/windows/**/*.ps1"
+      - ".github/workflows/test-windows-powershell.yml"
+
+jobs:
+  windows-powershell:
+    name: Parser, analyzer, and Pester
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install PowerShell test modules
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
+          Install-Module -Name Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+
+      - name: Parse and analyze Windows scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $scripts = @(Get-ChildItem -Path "scripts/windows" -Filter "*.ps1" -Recurse | Sort-Object FullName)
+          if ($scripts.Count -eq 0) {
+              Write-Output "No Windows PowerShell scripts found."
+              exit 0
+          }
+
+          foreach ($script in $scripts) {
+              $tokens = $null
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref] $tokens, [ref] $errors) | Out-Null
+              if ($errors.Count -gt 0) {
+                  $errors | Format-List | Out-String | Write-Error
+                  throw "PowerShell parser errors found in $($script.FullName)."
+              }
+          }
+
+          Import-Module PSScriptAnalyzer
+          $excludedRules = @(
+              "PSAvoidUsingConvertToSecureStringWithPlainText",
+              "PSAvoidUsingInvokeExpression",
+              "PSAvoidUsingWriteHost",
+              "PSUseApprovedVerbs",
+              "PSUseShouldProcessForStateChangingFunctions",
+              "PSUseSingularNouns"
+          )
+          $issues = @(
+              foreach ($script in $scripts) {
+                  Invoke-ScriptAnalyzer `
+                      -Path $script.FullName `
+                      -Severity Warning,Error `
+                      -ExcludeRule $excludedRules
+              }
+          )
+
+          if ($issues.Count -gt 0) {
+              $issues | Format-List | Out-String | Write-Error
+              throw "PowerShell analyzer issues found."
+          }
+
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          Import-Module Pester -MinimumVersion 5.5.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = "scripts/windows"
+          $config.Run.PassThru = $true
+          $config.Output.Verbosity = "Detailed"
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = "TestResults-WindowsPowerShell.xml"
+
+          $result = Invoke-Pester -Configuration $config
+          if ($result.FailedCount -gt 0) {
+              throw "$($result.FailedCount) Pester test(s) failed."
+          }

@@ -50,6 +50,11 @@ function Test-IsAdministrator {
 }
 
 function Invoke-SelfElevated {
+    param(
+        [switch]$WithGo,
+        [switch]$VirtualBox
+    )
+
     $scriptPath = $PSCommandPath
     if (-not $scriptPath) {
         $scriptPath = $MyInvocation.MyCommand.Path
@@ -231,15 +236,15 @@ function Ensure-ChocolateyPackage {
         $command = "install"
     }
 
-    $args = @($command, $PackageName, "-y", "--no-progress", "--version", $Version)
+    $packageArguments = @($command, $PackageName, "-y", "--no-progress", "--version", $Version)
     if ($command -eq "upgrade") {
-        $args += "--allow-downgrade"
+        $packageArguments += "--allow-downgrade"
     }
     if ($ExtraArgs.Count -gt 0) {
-        $args += $ExtraArgs
+        $packageArguments += $ExtraArgs
     }
 
-    Invoke-ChocolateyPackageCommand -Command $command -PackageName $PackageName -Version $Version -Arguments $args
+    Invoke-ChocolateyPackageCommand -Command $command -PackageName $PackageName -Version $Version -Arguments $packageArguments
 }
 
 function Ensure-GoInstallRootClean {
@@ -712,8 +717,8 @@ function Uninstall-ChocolateyPackageIfPresent {
     }
 
     Write-Output "Removing $PackageName $installedVersion before reinstalling Cygwin."
-    $args = @("uninstall", $PackageName, "-y", "--no-progress")
-    Invoke-ChocolateyPackageCommand -Command "uninstall" -PackageName $PackageName -Version $installedVersion -Arguments $args
+    $packageArguments = @("uninstall", $PackageName, "-y", "--no-progress")
+    Invoke-ChocolateyPackageCommand -Command "uninstall" -PackageName $PackageName -Version $installedVersion -Arguments $packageArguments
 }
 
 function Ensure-CygwinChocolateyPackage {
@@ -840,54 +845,72 @@ function Ensure-CygwinPipPackage {
     }
 }
 
-if (-not (Test-IsAdministrator)) {
-    Invoke-SelfElevated
+function Show-InstalledToolVersions {
+    param(
+        [switch]$WithGo
+    )
+
+    $bashExePath = Get-CygwinBashPath
+    python --version
+    & $bashExePath -lc "python3 --version"
+    & $bashExePath -lc "ansible --version"
+    if ($WithGo) {
+        go version
+    }
+    git --version
+    make --version
+    packer version
+    az version
 }
 
-Ensure-ChocolateyInstalled
+function Invoke-DevAlchemySelfSetup {
+    param(
+        [switch]$WithGo,
+        [switch]$VirtualBox
+    )
 
-if ($WithGo) {
-    Ensure-GoInstallRootClean -DesiredVersion $golangVersion
-    Ensure-ChocolateyPackage -PackageName "golang" -Version $golangVersion
-    Assert-GoToolchainLayout
-} else {
-    Write-Output "Skipping Go installation because -WithGo was not specified."
+    if (-not (Test-IsAdministrator)) {
+        Invoke-SelfElevated -WithGo:$WithGo -VirtualBox:$VirtualBox
+    }
+
+    Ensure-ChocolateyInstalled
+
+    if ($WithGo) {
+        Ensure-GoInstallRootClean -DesiredVersion $golangVersion
+        Ensure-ChocolateyPackage -PackageName "golang" -Version $golangVersion
+        Assert-GoToolchainLayout
+    } else {
+        Write-Output "Skipping Go installation because -WithGo was not specified."
+    }
+    Ensure-ChocolateyPackage -PackageName "git" -Version $gitVersion
+    Ensure-ChocolateyPackage -PackageName "make" -Version $makeVersion
+    Ensure-ChocolateyPackage -PackageName "packer" -Version $packerVersion
+    Ensure-ChocolateyPackage -PackageName "azure-cli" -Version $azureCliVersion
+    $nativePythonPackageName = Get-NativePythonChocolateyPackageName -Version $nativePythonVersion
+    Ensure-ChocolateyPackage -PackageName $nativePythonPackageName -Version $nativePythonVersion
+    Assert-NativePythonAvailable
+    Export-CommandDirectoryToGitHubPath -CommandName "python"
+    Ensure-CygwinChocolateyPackage -Version $cygwinVersion -InstallRoot $cygwinInstallRoot
+    Ensure-ChocolateyPackage -PackageName "cyg-get" -Version $cygGetVersion
+
+    if ($VirtualBox) {
+        Ensure-ChocolateyPackage -PackageName "virtualbox" -Version $virtualBoxVersion
+        Ensure-PathContains -PathEntry "C:\Program Files\Oracle\VirtualBox"
+    } else {
+        Write-Output "Skipping VirtualBox installation because -VirtualBox was not specified."
+    }
+
+    Ensure-PathContains -PathEntry "C:\Program Files\Git\bin"
+
+    foreach ($package in $cygwinPackages) {
+        Ensure-CygwinPackage -PackageName $package
+    }
+
+    Ensure-CygwinPipPackage -PackageName "ansible" -Version $ansibleVersion
+    Ensure-CygwinPipPackage -PackageName "pywinrm" -Version $pywinrmVersion
+    Show-InstalledToolVersions -WithGo:$WithGo
 }
-Ensure-ChocolateyPackage -PackageName "git" -Version $gitVersion
-Ensure-ChocolateyPackage -PackageName "make" -Version $makeVersion
-Ensure-ChocolateyPackage -PackageName "packer" -Version $packerVersion
-Ensure-ChocolateyPackage -PackageName "azure-cli" -Version $azureCliVersion
-$nativePythonPackageName = Get-NativePythonChocolateyPackageName -Version $nativePythonVersion
-Ensure-ChocolateyPackage -PackageName $nativePythonPackageName -Version $nativePythonVersion
-Assert-NativePythonAvailable
-Export-CommandDirectoryToGitHubPath -CommandName "python"
-Ensure-CygwinChocolateyPackage -Version $cygwinVersion -InstallRoot $cygwinInstallRoot
-Ensure-ChocolateyPackage -PackageName "cyg-get" -Version $cygGetVersion
 
-if ($VirtualBox) {
-    Ensure-ChocolateyPackage -PackageName "virtualbox" -Version $virtualBoxVersion
-    Ensure-PathContains -PathEntry "C:\Program Files\Oracle\VirtualBox"
-} else {
-    Write-Output "Skipping VirtualBox installation because -VirtualBox was not specified."
+if ($env:DEV_ALCHEMY_SELF_SETUP_IMPORT_ONLY -ne "1") {
+    Invoke-DevAlchemySelfSetup -WithGo:$WithGo -VirtualBox:$VirtualBox
 }
-
-Ensure-PathContains -PathEntry "C:\Program Files\Git\bin"
-
-foreach ($package in $cygwinPackages) {
-    Ensure-CygwinPackage -PackageName $package
-}
-
-Ensure-CygwinPipPackage -PackageName "ansible" -Version $ansibleVersion
-Ensure-CygwinPipPackage -PackageName "pywinrm" -Version $pywinrmVersion
-
-$bashExePath = Get-CygwinBashPath
-python --version
-& $bashExePath -lc "python3 --version"
-& $bashExePath -lc "ansible --version"
-if ($WithGo) {
-    go version
-}
-git --version
-make --version
-packer version
-az version
