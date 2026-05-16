@@ -131,6 +131,21 @@ RUNNER_POOL_SIZE=2 VM_CPU_COUNT=4 VM_MEMORY_MB=8192 \
 ./create-macos-tart-runner.sh
 ```
 
+### Stopping the runner pool
+
+Pressing `Ctrl+C` asks each active worker to cancel its current GitHub Actions workflow run
+before stopping and deleting the Tart VM. The script sends `SIGINT` to the runner process inside
+the VM so it stops accepting new work, finds the in-progress job by the generated runner name,
+calls the workflow run cancellation API, waits for the runner to become idle or deregister, and
+only then tears down the VM. By default this wait has no deadline, so the script should not exit
+until the runner is released or deregistered. If you set a finite shutdown grace period and GitHub
+still reports the runner as busy or its state cannot be confirmed after that period, the script
+leaves that VM running instead of deleting the clone under an active job.
+
+This clean cancellation path requires repo-scoped runners (`GITHUB_SCOPE=repo`) and a `gh` token
+with `Actions: write` access to `GITHUB_REPO`. Org-scoped runner pools still stop the VM, but the
+script cannot reliably know which repository owns the active job unless the pool is repo-scoped.
+
 ### Keeping cached files up to date
 
 Cached files are large and rarely change. When a new version appears:
@@ -151,3 +166,8 @@ Cached files are large and rarely change. When a new version appears:
 | `GITHUB_SCOPE` | `repo` | `repo` or `org`. |
 | `RUNNER_LABELS` | `macos,tart,arm64,macos-26-tart` | Comma-separated runner labels. |
 | `MAX_RUNS` | `0` (infinite) | Stop the loop after this many runner cycles. |
+| `GITHUB_CANCEL_RUN_ON_SHUTDOWN` | `true` | Cancel the workflow run assigned to a busy runner before VM teardown on `Ctrl+C`, `TERM`, or broken runner SSH sessions. |
+| `GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN` | `false` | Request force-cancel if the normal cancellation has not settled. This bypasses workflow conditions, so keep it opt-in for jobs with important cleanup. |
+| `RUNNER_SHUTDOWN_GRACE_SECONDS` | `0` | Maximum wait for GitHub to report that the runner is idle or deregistered before preserving the VM for manual cleanup. `0` waits indefinitely, which is the default clean shutdown behavior. |
+| `RUNNER_FORCE_CANCEL_AFTER_SECONDS` | `30` | Delay before force-cancel is attempted during shutdown. Set to `0` to disable force-cancel timing. |
+| `RUNNER_SHUTDOWN_POLL_SECONDS` | `5` | Poll interval while waiting for a canceled job to release the runner. Must be at least `1`; non-numeric or lower values fall back to `5` to avoid tight GitHub API polling. |

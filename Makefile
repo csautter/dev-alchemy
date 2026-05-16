@@ -14,7 +14,7 @@ RELEASE_ASSET_BASENAME = dev-alchemy_$(PACKAGE_VERSION)_$(GOOS)_$(GOARCH)
 
 .PHONY: build build-cli-local build-cli-target build-cli-release package-cli-target package-cli-release clean-dist \
 	test-build-runner test-build test-deploy test-provision test-deploy-windows-hyperv test-clean-testcache \
-	test-build-integration test-build-specific test-gh-runner-func-request test-gh-runner-func-delete \
+	test-build-integration test-build-specific test-macos-tart-runner test-gh-runner-func-request test-gh-runner-func-delete \
 	deploy-plan-terraform-azure-gh-runner deploy-apply-terraform-azure-gh-runner deploy-az-func-app gosec
 
 build:
@@ -85,6 +85,9 @@ test-build-integration:
 test-build-specific:
 	# Usage: make test-build-specific TEST_NAME=<name of the test>
 	cd ./pkg/build && go test -timeout 300m -v . -run $(TEST_NAME)
+
+test-macos-tart-runner:
+	bash ./.github/runners/test-create-macos-tart-runner.sh
 
 test-gh-runner-func-request:
 	# Usage:
