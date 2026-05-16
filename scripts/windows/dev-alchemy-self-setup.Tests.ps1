@@ -1,10 +1,9 @@
-$script:SetupScript = Join-Path $PSScriptRoot "dev-alchemy-self-setup.ps1"
-
 BeforeAll {
+    $setupScript = Join-Path $PSScriptRoot "dev-alchemy-self-setup.ps1"
     $previousImportOnly = $env:DEV_ALCHEMY_SELF_SETUP_IMPORT_ONLY
     try {
         $env:DEV_ALCHEMY_SELF_SETUP_IMPORT_ONLY = "1"
-        . $script:SetupScript
+        . $setupScript
     } finally {
         if ($null -eq $previousImportOnly) {
             Remove-Item Env:\DEV_ALCHEMY_SELF_SETUP_IMPORT_ONLY -ErrorAction SilentlyContinue
