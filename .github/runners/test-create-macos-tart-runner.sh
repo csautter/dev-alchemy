@@ -353,7 +353,7 @@ reset_script_state() {
 	GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN="false"
 	RUNNER_SHUTDOWN_GRACE_SECONDS="0"
 	RUNNER_FORCE_CANCEL_AFTER_SECONDS="30"
-	RUNNER_SHUTDOWN_POLL_SECONDS="0"
+	RUNNER_SHUTDOWN_POLL_SECONDS="5"
 	REQUESTED_CANCEL_RUN_ID=""
 	export GITHUB_SCOPE GITHUB_REPO GITHUB_ORG VM_BASE_IMAGE VM_CLONE_PER_RUN
 }
@@ -482,7 +482,6 @@ test_no_active_job_waits_until_busy_grace_deadline() {
 test_zero_shutdown_grace_waits_until_runner_releases() {
 	begin_test "zero-shutdown-grace-waits"
 	RUNNER_SHUTDOWN_GRACE_SECONDS="0"
-	RUNNER_SHUTDOWN_POLL_SECONDS="0"
 	set_runner_info_queue $'123\ttrue\tonline' $'123\tfalse\tonline'
 	set_date_sequence 100 100 100
 
@@ -490,6 +489,20 @@ test_zero_shutdown_grace_waits_until_runner_releases() {
 
 	assert_contains "${TEST_LOG_DIR}/output" "Runner 'runner-1' is no longer busy"
 	assert_not_contains "${TEST_LOG_DIR}/output" "runner 'runner-1' is still busy after 0s"
+}
+
+test_zero_shutdown_poll_seconds_normalizes_before_polling() {
+	begin_test "zero-shutdown-poll-normalized"
+	RUNNER_SHUTDOWN_GRACE_SECONDS="0"
+	RUNNER_SHUTDOWN_POLL_SECONDS="0"
+	set_runner_info_queue $'123\ttrue\tonline' $'123\tfalse\tonline'
+	set_date_sequence 100 100 100
+
+	wait_for_runner_to_settle "vm-1" "runner-1" "9001" >"${TEST_LOG_DIR}/output" 2>&1
+
+	assert_contains "${TEST_LOG_DIR}/output" "Runner 'runner-1' is no longer busy"
+	assert_contains "${TEST_LOG_DIR}/sleep.log" $'sleep\t5'
+	assert_not_contains "${TEST_LOG_DIR}/sleep.log" $'sleep\t0'
 }
 
 test_busy_runner_retries_job_lookup_and_cancels_race() {
@@ -646,6 +659,7 @@ run_test test_successful_cancel_signals_runner_and_stops_vm
 run_test test_runner_list_api_failure_remains_unknown
 run_test test_no_active_job_waits_until_busy_grace_deadline
 run_test test_zero_shutdown_grace_waits_until_runner_releases
+run_test test_zero_shutdown_poll_seconds_normalizes_before_polling
 run_test test_busy_runner_retries_job_lookup_and_cancels_race
 run_test test_force_cancel_requires_opt_in
 run_test test_force_cancel_failure_is_reported

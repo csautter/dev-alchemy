@@ -170,4 +170,4 @@ Cached files are large and rarely change. When a new version appears:
 | `GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN` | `false` | Request force-cancel if the normal cancellation has not settled. This bypasses workflow conditions, so keep it opt-in for jobs with important cleanup. |
 | `RUNNER_SHUTDOWN_GRACE_SECONDS` | `0` | Maximum wait for GitHub to report that the runner is idle or deregistered before preserving the VM for manual cleanup. `0` waits indefinitely, which is the default clean shutdown behavior. |
 | `RUNNER_FORCE_CANCEL_AFTER_SECONDS` | `30` | Delay before force-cancel is attempted during shutdown. Set to `0` to disable force-cancel timing. |
-| `RUNNER_SHUTDOWN_POLL_SECONDS` | `5` | Poll interval while waiting for a canceled job to release the runner. |
+| `RUNNER_SHUTDOWN_POLL_SECONDS` | `5` | Poll interval while waiting for a canceled job to release the runner. Must be at least `1`; non-numeric or lower values fall back to `5` to avoid tight GitHub API polling. |

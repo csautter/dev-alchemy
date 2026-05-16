@@ -24,7 +24,7 @@ set -e
 #   GITHUB_FORCE_CANCEL_RUN_ON_SHUTDOWN - force-cancel if normal cancel does not settle (default: false)
 #   RUNNER_SHUTDOWN_GRACE_SECONDS       - seconds to wait for cancel/deregister before preserving the VM (default: 0 = wait indefinitely)
 #   RUNNER_FORCE_CANCEL_AFTER_SECONDS   - seconds to wait before optional force-cancel (default: 30)
-#   RUNNER_SHUTDOWN_POLL_SECONDS        - seconds between runner-state polls during shutdown (default: 5)
+#   RUNNER_SHUTDOWN_POLL_SECONDS        - seconds between runner-state polls during shutdown (default: 5, minimum: 1)
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 GITHUB_SCOPE="${GITHUB_SCOPE:-repo}"
@@ -118,9 +118,27 @@ shell_number_or_default() {
 	esac
 }
 
-RUNNER_SHUTDOWN_GRACE_SECONDS="$(shell_number_or_default "$RUNNER_SHUTDOWN_GRACE_SECONDS" 0)"
-RUNNER_FORCE_CANCEL_AFTER_SECONDS="$(shell_number_or_default "$RUNNER_FORCE_CANCEL_AFTER_SECONDS" 30)"
-RUNNER_SHUTDOWN_POLL_SECONDS="$(shell_number_or_default "$RUNNER_SHUTDOWN_POLL_SECONDS" 5)"
+shell_number_at_least_or_default() {
+	local value="$1"
+	local default_value="$2"
+	local minimum_value="$3"
+
+	value="$(shell_number_or_default "$value" "$default_value")"
+	if (( 10#$value < 10#$minimum_value )); then
+		printf '%s\n' "$default_value"
+		return
+	fi
+
+	printf '%s\n' "$value"
+}
+
+normalize_shutdown_settings() {
+	RUNNER_SHUTDOWN_GRACE_SECONDS="$(shell_number_or_default "$RUNNER_SHUTDOWN_GRACE_SECONDS" 0)"
+	RUNNER_FORCE_CANCEL_AFTER_SECONDS="$(shell_number_or_default "$RUNNER_FORCE_CANCEL_AFTER_SECONDS" 30)"
+	RUNNER_SHUTDOWN_POLL_SECONDS="$(shell_number_at_least_or_default "$RUNNER_SHUTDOWN_POLL_SECONDS" 5 1)"
+}
+
+normalize_shutdown_settings
 
 escape_jq_string() {
 	local value="$1"
@@ -345,6 +363,8 @@ wait_for_runner_to_settle() {
 	local run_id="$3"
 	local start_ts now deadline force_after_ts forced runner_state_unknown runner_info runner_id runner_busy runner_status
 	local has_shutdown_deadline=false
+
+	normalize_shutdown_settings
 
 	start_ts=$(date +%s)
 	if [[ "$RUNNER_SHUTDOWN_GRACE_SECONDS" -gt 0 ]]; then
