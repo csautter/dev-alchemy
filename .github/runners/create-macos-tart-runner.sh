@@ -55,27 +55,30 @@ RUNNER_SHUTDOWN_POLL_SECONDS="${RUNNER_SHUTDOWN_POLL_SECONDS:-5}"
 BUILD_CACHE_DIR="${BUILD_CACHE_DIR:-}"
 # ───────────────────────────────────────────────────────────────────────────────
 
-# ─── Pre-flight checks ─────────────────────────────────────────────────────────
-for cmd in tart gh sshpass; do
-	if ! command -v "$cmd" &>/dev/null; then
-		echo "ERROR: '$cmd' could not be found."
-		case "$cmd" in
-			tart)     echo "  Install: brew install tart" ;;
-			gh)       echo "  Install: brew install gh" ;;
-			sshpass)  echo "  Install: brew install sshpass" ;;
-		esac
+preflight_checks() {
+	local cmd
+	for cmd in tart gh sshpass; do
+		if ! command -v "$cmd" &>/dev/null; then
+			echo "ERROR: '$cmd' could not be found."
+			case "$cmd" in
+				tart)     echo "  Install: brew install tart" ;;
+				gh)       echo "  Install: brew install gh" ;;
+				sshpass)  echo "  Install: brew install sshpass" ;;
+			esac
+			exit 1
+		fi
+	done
+}
+
+ensure_base_image_exists() {
+	if ! tart list | awk 'NR>1 && $1=="local" {print $2}' | grep -qx "${VM_BASE_IMAGE}"; then
+		echo "ERROR: Base image '${VM_BASE_IMAGE}' not found."
+		echo "  Run './prepare-tart-base.sh' first to build the golden image."
+		echo "  Or set VM_BASE_IMAGE=tahoe-base to use the upstream image directly."
 		exit 1
 	fi
-done
-
-# ─── Ensure base image exists ──────────────────────────────────────────────────
-if ! tart list | awk 'NR>1 && $1=="local" {print $2}' | grep -qx "${VM_BASE_IMAGE}"; then
-	echo "ERROR: Base image '${VM_BASE_IMAGE}' not found."
-	echo "  Run './prepare-tart-base.sh' first to build the golden image."
-	echo "  Or set VM_BASE_IMAGE=tahoe-base to use the upstream image directly."
-	exit 1
-fi
-echo "Base image '${VM_BASE_IMAGE}' present."
+	echo "Base image '${VM_BASE_IMAGE}' present."
+}
 
 # ─── SSH helper ────────────────────────────────────────────────────────────────
 # Usage: vm_ssh <ip> [ssh-args...]
@@ -655,16 +658,6 @@ EOF
 	echo "[worker-${worker_id}] Worker exited after ${run_count} run(s)."
 }
 
-# ─── Launch parallel workers ───────────────────────────────────────────────────
-if [[ "$VM_CLONE_PER_RUN" != "true" && "$RUNNER_POOL_SIZE" -gt 1 ]]; then
-	echo "ERROR: VM_CLONE_PER_RUN=false with RUNNER_POOL_SIZE>1 — all workers would share"
-	echo "       the same base VM, causing conflicts. Set VM_CLONE_PER_RUN=true."
-	exit 1
-fi
-
-WORKER_PIDS=()
-WORKER_CLEANUP_STARTED=false
-
 cleanup_all_workers() {
 	if [[ "$WORKER_CLEANUP_STARTED" == "true" ]]; then
 		return
@@ -686,21 +679,41 @@ handle_parent_signal() {
 	exit "$exit_code"
 }
 
-trap 'cleanup_all_workers' EXIT
-trap 'handle_parent_signal 130' INT
-trap 'handle_parent_signal 143' TERM
+main() {
+	preflight_checks
+	ensure_base_image_exists
 
-echo "Starting ${RUNNER_POOL_SIZE} parallel runner worker(s)..."
-for i in $(seq 1 "$RUNNER_POOL_SIZE"); do
-	run_worker "$i" &
-	worker_pid=$!
-	WORKER_PIDS+=("$worker_pid")
-	echo "Worker #${i} started (PID: ${worker_pid})"
-	# Stagger VM boots slightly to avoid simultaneous resource contention.
-	[[ "$i" -lt "$RUNNER_POOL_SIZE" ]] && sleep 3
-done
+	# ─── Launch parallel workers ───────────────────────────────────────────
+	if [[ "$VM_CLONE_PER_RUN" != "true" && "$RUNNER_POOL_SIZE" -gt 1 ]]; then
+		echo "ERROR: VM_CLONE_PER_RUN=false with RUNNER_POOL_SIZE>1 — all workers would share"
+		echo "       the same base VM, causing conflicts. Set VM_CLONE_PER_RUN=true."
+		exit 1
+	fi
 
-# Wait for all workers to finish.
-wait "${WORKER_PIDS[@]}" || true
-WORKER_PIDS=()
-echo "All ${RUNNER_POOL_SIZE} worker(s) have exited."
+	WORKER_PIDS=()
+	WORKER_CLEANUP_STARTED=false
+
+	trap 'cleanup_all_workers' EXIT
+	trap 'handle_parent_signal 130' INT
+	trap 'handle_parent_signal 143' TERM
+
+	echo "Starting ${RUNNER_POOL_SIZE} parallel runner worker(s)..."
+	local i worker_pid
+	for i in $(seq 1 "$RUNNER_POOL_SIZE"); do
+		run_worker "$i" &
+		worker_pid=$!
+		WORKER_PIDS+=("$worker_pid")
+		echo "Worker #${i} started (PID: ${worker_pid})"
+		# Stagger VM boots slightly to avoid simultaneous resource contention.
+		[[ "$i" -lt "$RUNNER_POOL_SIZE" ]] && sleep 3
+	done
+
+	# Wait for all workers to finish.
+	wait "${WORKER_PIDS[@]}" || true
+	WORKER_PIDS=()
+	echo "All ${RUNNER_POOL_SIZE} worker(s) have exited."
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
+fi

@@ -1,0 +1,37 @@
+name: Test macOS Tart Runner
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/runners/**"
+      - ".github/workflows/test-macos-tart-runner.yml"
+      - "Makefile"
+  pull_request:
+    paths:
+      - ".github/runners/**"
+      - ".github/workflows/test-macos-tart-runner.yml"
+      - "Makefile"
+
+jobs:
+  macos-tart-runner:
+    name: Validate shutdown behavior
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Check Bash syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n .github/runners/create-macos-tart-runner.sh
+          bash -n .github/runners/test-create-macos-tart-runner.sh
+
+      - name: Run shutdown behavior tests
+        shell: bash
+        run: make test-macos-tart-runner
