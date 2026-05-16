@@ -386,6 +386,21 @@ function Get-CygwinBashPath {
     return Join-Path (Get-CygwinRootDir) "bin\bash.exe"
 }
 
+function Test-SameWindowsPath {
+    param(
+        [string]$Left,
+        [string]$Right
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Left) -or [string]::IsNullOrWhiteSpace($Right)) {
+        return $false
+    }
+
+    $normalizedLeft = ([System.IO.Path]::GetFullPath($Left)).TrimEnd([char[]]@('\', '/'))
+    $normalizedRight = ([System.IO.Path]::GetFullPath($Right)).TrimEnd([char[]]@('\', '/'))
+    return $normalizedLeft.Equals($normalizedRight, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Stop-CygwinProcesses {
     param(
         [Parameter(Mandatory = $true)]
@@ -423,12 +438,85 @@ function Remove-CygwinInstallRoot {
         return
     }
 
-    Write-Output "Removing existing Cygwin root at $RootDir."
+    Write-Host "Removing existing Cygwin root at $RootDir."
     try {
         Remove-Item -LiteralPath $RootDir -Recurse -Force -ErrorAction Stop
+        return $true
     } catch {
-        throw "Unable to remove existing Cygwin root at $RootDir. Close any Cygwin processes and rerun the installer. $($_.Exception.Message)"
+        Write-Warning "Unable to remove existing Cygwin root at $RootDir. A fresh Cygwin install will use a different root. $($_.Exception.Message)"
+        return $false
     }
+}
+
+function Get-CygwinChocolateyExtraArgs {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallRoot
+    )
+
+    return @("--params", "`"/InstallDir:$InstallRoot /NoStartMenu`"")
+}
+
+function Get-CygwinAlternateInstallRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PreferredRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    $parent = Split-Path -Parent $PreferredRoot
+    $leaf = Split-Path -Leaf $PreferredRoot
+    $safeVersion = $Version -replace "[^A-Za-z0-9.-]", "-"
+    $baseCandidate = [System.IO.Path]::Combine($parent, "$leaf-$safeVersion")
+
+    if (-not (Test-Path -LiteralPath $baseCandidate)) {
+        return $baseCandidate
+    }
+
+    for ($index = 1; $index -le 20; $index++) {
+        $candidate = "$baseCandidate-$index"
+        if (-not (Test-Path -LiteralPath $candidate)) {
+            return $candidate
+        }
+    }
+
+    $timestamp = Get-Date -Format "yyyyMMddHHmmss"
+    return "$baseCandidate-$timestamp"
+}
+
+function Get-CleanCygwinInstallRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PreferredRoot,
+        [string]$ExistingRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    $targetRoot = $PreferredRoot
+    $rootsToClean = @()
+    if ($ExistingRoot) {
+        $rootsToClean += $ExistingRoot
+    }
+    if (-not (Test-SameWindowsPath -Left $ExistingRoot -Right $PreferredRoot)) {
+        $rootsToClean += $PreferredRoot
+    }
+
+    foreach ($root in $rootsToClean) {
+        if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+
+        Stop-CygwinProcesses -RootDir $root
+        $removedRoot = Remove-CygwinInstallRoot -RootDir $root
+        if ((-not $removedRoot) -and (Test-SameWindowsPath -Left $root -Right $targetRoot)) {
+            $targetRoot = Get-CygwinAlternateInstallRoot -PreferredRoot $PreferredRoot -Version $Version
+            Write-Host "Using alternate Cygwin install root at $targetRoot."
+        }
+    }
+
+    return $targetRoot
 }
 
 function Uninstall-ChocolateyPackageIfPresent {
@@ -452,8 +540,7 @@ function Ensure-CygwinChocolateyPackage {
         [Parameter(Mandatory = $true)]
         [string]$Version,
         [Parameter(Mandatory = $true)]
-        [string]$InstallRoot,
-        [string[]]$ExtraArgs = @()
+        [string]$InstallRoot
     )
 
     $installedVersion = Get-ChocolateyInstalledVersion -PackageName "cygwin"
@@ -463,7 +550,9 @@ function Ensure-CygwinChocolateyPackage {
     }
 
     if (-not $installedVersion) {
-        Ensure-ChocolateyPackage -PackageName "cygwin" -Version $Version -ExtraArgs $ExtraArgs
+        $existingRoot = Get-CygwinRootDirIfAvailable
+        $targetRoot = Get-CleanCygwinInstallRoot -PreferredRoot $InstallRoot -ExistingRoot $existingRoot -Version $Version
+        Ensure-ChocolateyPackage -PackageName "cygwin" -Version $Version -ExtraArgs (Get-CygwinChocolateyExtraArgs -InstallRoot $targetRoot)
         return
     }
 
@@ -477,14 +566,9 @@ function Ensure-CygwinChocolateyPackage {
     Uninstall-ChocolateyPackageIfPresent -PackageName "cyg-get"
     Uninstall-ChocolateyPackageIfPresent -PackageName "cygwin"
 
-    if ($existingRoot) {
-        Remove-CygwinInstallRoot -RootDir $existingRoot
-    }
-    if ($InstallRoot -ne $existingRoot) {
-        Remove-CygwinInstallRoot -RootDir $InstallRoot
-    }
+    $targetRoot = Get-CleanCygwinInstallRoot -PreferredRoot $InstallRoot -ExistingRoot $existingRoot -Version $Version
 
-    Ensure-ChocolateyPackage -PackageName "cygwin" -Version $Version -ExtraArgs $ExtraArgs
+    Ensure-ChocolateyPackage -PackageName "cygwin" -Version $Version -ExtraArgs (Get-CygwinChocolateyExtraArgs -InstallRoot $targetRoot)
 }
 
 function Test-CygwinPackageInstalled {
@@ -596,7 +680,7 @@ $nativePythonPackageName = Get-NativePythonChocolateyPackageName -Version $nativ
 Ensure-ChocolateyPackage -PackageName $nativePythonPackageName -Version $nativePythonVersion
 Assert-NativePythonAvailable
 Export-CommandDirectoryToGitHubPath -CommandName "python"
-Ensure-CygwinChocolateyPackage -Version $cygwinVersion -InstallRoot $cygwinInstallRoot -ExtraArgs @("--params", "`"/InstallDir:$cygwinInstallRoot /NoStartMenu`"")
+Ensure-CygwinChocolateyPackage -Version $cygwinVersion -InstallRoot $cygwinInstallRoot
 Ensure-ChocolateyPackage -PackageName "cyg-get" -Version $cygGetVersion
 
 if ($VirtualBox) {
