@@ -431,10 +431,17 @@ func TestAnsibleRuntimeEnvForProjectIncludesResolvedRolesPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ansibleRuntimeEnvForProject returned error: %v", err)
 	}
+	expectedRolesPath := filepath.Join(projectDir, "roles")
+	if runtimeGoos() == "windows" {
+		expectedRolesPath, err = windowsPathToCygwinPath(expectedRolesPath)
+		if err != nil {
+			t.Fatalf("failed to convert expected role path for cygwin: %v", err)
+		}
+	}
 	combined := strings.Join(entries, ";")
 	for _, required := range []string{
 		"ANSIBLE_FORCE_COLOR=true",
-		"ANSIBLE_ROLES_PATH=" + filepath.Join(projectDir, "roles"),
+		"ANSIBLE_ROLES_PATH=" + expectedRolesPath,
 	} {
 		if !strings.Contains(combined, required) {
 			t.Fatalf("expected env %q in %q", required, combined)
