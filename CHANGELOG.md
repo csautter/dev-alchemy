@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0](https://github.com/csautter/dev-alchemy/compare/v0.15.0...v0.16.0) (2026-05-17)
+
+
+### Added
+
+* ansible role source configurable ([79c6cd7](https://github.com/csautter/dev-alchemy/commit/79c6cd7c7a2369432605afb62fcdacd8a14c1157))
+* **ci:** add FTPS build cache backend ([2d0884b](https://github.com/csautter/dev-alchemy/commit/2d0884b804e32c345826b371a08d6d5fee333f33))
+* **ci:** add Hetzner S3 build cache backend ([d13c57b](https://github.com/csautter/dev-alchemy/commit/d13c57b2dc17b508092fae5b6df10432c969c02f))
+* gh actions cache - add hetzner s3 and ftp ([7080cc0](https://github.com/csautter/dev-alchemy/commit/7080cc03f6a73680d57bc2f398c4e6bb4608e578))
+* **provision:** allow role source config to set playbook ([f92d1ef](https://github.com/csautter/dev-alchemy/commit/f92d1ef4dc2912d66627ec37040dd9bce8acf07d))
+* **provision:** support configurable ansible role sources ([5482f80](https://github.com/csautter/dev-alchemy/commit/5482f8003cdb65bd03d5aecabfb0743cfc4631e0))
+* **provision:** support configurable playbook sources ([23ce7fc](https://github.com/csautter/dev-alchemy/commit/23ce7fc8e7f305aed5b707908b6882d92fd793d1))
+
+
+### Fixed
+
+* **build:** resolve Python executable for Windows ISO bootstrap ([eba7c09](https://github.com/csautter/dev-alchemy/commit/eba7c09bbd3740e0fa8f945b59c7ea115ac4e877))
+* **cache:** use portable symlink resolution for uploads ([b5ae57a](https://github.com/csautter/dev-alchemy/commit/b5ae57a1acee7db05d992c7b9cc976a8f8b979fa))
+* **ci:** show progress during FTPS build cache downloads ([80ae228](https://github.com/csautter/dev-alchemy/commit/80ae228d85a9957f54b74bbb4d9190c398504207))
+* **devcontainer:** verify PowerShell tarball checksum ([a5deb63](https://github.com/csautter/dev-alchemy/commit/a5deb63e5141f815280eed655b7a9739d45b74ee))
+* **packer:** persist ARM64 Windows EFI boot state ([b56c04a](https://github.com/csautter/dev-alchemy/commit/b56c04a58184d6be169c3bde50b57e86f2288505))
+* **packer:** refresh PATH after Windows setup provisioning ([1144bc7](https://github.com/csautter/dev-alchemy/commit/1144bc7b188b05e14f09af8586b3434d918fd2fa))
+* **packer:** restore ARM64 Windows CI boot order ([708ca62](https://github.com/csautter/dev-alchemy/commit/708ca62c8b69a20bb52c8a3727a29e3cd49df096))
+* **provision:** harden role source runtime handling ([027aa53](https://github.com/csautter/dev-alchemy/commit/027aa53e60c461ac6ac3f6bbb34bd13e2deb21d1))
+* **runners:** cancel active macos tart jobs before shutdown ([fd8f296](https://github.com/csautter/dev-alchemy/commit/fd8f296ca6e0303a8c0d56c529cee2cc4225f67f))
+* **runners:** cancel active macos tart jobs before shutdown ([1466ec9](https://github.com/csautter/dev-alchemy/commit/1466ec96b7745d2a9b7a82bb47aeb11f5fb24aab))
+* **runners:** normalize shutdown poll interval ([a8a98c8](https://github.com/csautter/dev-alchemy/commit/a8a98c8afe2283255bba79492d65ac63cc408de0))
+* **runners:** preserve busy macos tart VMs during shutdown ([089be7b](https://github.com/csautter/dev-alchemy/commit/089be7b19f673288e3fe36fd35a18e5101caefd5))
+* **runners:** preserve unknown GitHub API state during cleanup ([75d9fa7](https://github.com/csautter/dev-alchemy/commit/75d9fa763721ac784dee3d8d998d6898e50130de))
+* **runners:** report force-cancel failures during shutdown ([81a131c](https://github.com/csautter/dev-alchemy/commit/81a131c23ca308bf088697901c521b19e843f49f))
+* **runners:** wait for tart runner deregistration on shutdown ([8c94361](https://github.com/csautter/dev-alchemy/commit/8c9436176fb4bd32bf26b0b03b70ef046965513e))
+* **windows:** fall back to alternate cygwin install root ([4de65ac](https://github.com/csautter/dev-alchemy/commit/4de65acd643269af3e203bbd189e6ed527223475))
+* **windows:** reinstall cygwin cleanly on version mismatch ([1f13700](https://github.com/csautter/dev-alchemy/commit/1f137002e4e50a388ba536acff9e642112f331c4))
+* **windows:** validate Cygwin root before cleanup ([5b7c61c](https://github.com/csautter/dev-alchemy/commit/5b7c61ce6fddc66a239904ff85eaef51cf2ee58a))
+* **windows:** verify selected cygwin root before package setup ([6f01d82](https://github.com/csautter/dev-alchemy/commit/6f01d82309e01ecde5f01e00af5965065b403bd1))
+
+
+### CI
+
+* include role source fixtures in test filters ([27891c6](https://github.com/csautter/dev-alchemy/commit/27891c60a1a279bf7c455a850b5b6ff9d24b82b0))
+* validate build cache actions on changes ([b6849cf](https://github.com/csautter/dev-alchemy/commit/b6849cff42556be674dfc85250667a77596695eb))
+
 ## [0.15.0](https://github.com/csautter/dev-alchemy/compare/v0.14.0...v0.15.0) (2026-05-11)
 
 
