@@ -11,6 +11,8 @@ below when you want to run `playbooks/setup.yml` directly from the repository.
 - Use `--check` first when you want a dry run before applying changes.
 - Adjust the inventory or pass extra variables on the CLI as needed for your
   environment.
+- When using `alchemy provision`, configure additional local or Git-backed role
+  roots with [Ansible Role Sources](./ansible-role-sources.md).
 
 ## Run on localhost
 

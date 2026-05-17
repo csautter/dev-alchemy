@@ -1802,8 +1802,13 @@ func defaultIfEmpty(value string, fallback string) string {
 }
 
 func runAnsibleProvisionCommand(projectDir string, args []string, timeout time.Duration, logPrefix string) error {
+	runtimeEnv, err := ansibleRuntimeEnvForProject(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to prepare ansible role sources: %w", err)
+	}
+
 	if runtime.GOOS == "windows" {
-		return runAnsibleViaCygwinBash(projectDir, args, timeout, logPrefix)
+		return runAnsibleViaCygwinBash(projectDir, args, timeout, logPrefix, runtimeEnv)
 	}
 
 	return runCommandWithStreamingLogsWithEnv(
@@ -1811,12 +1816,12 @@ func runAnsibleProvisionCommand(projectDir string, args []string, timeout time.D
 		timeout,
 		"ansible-playbook",
 		args,
-		ansibleRuntimeEnv(),
+		runtimeEnv,
 		logPrefix,
 	)
 }
 
-func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout time.Duration, logPrefix string) error {
+func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout time.Duration, logPrefix string, runtimeEnv []string) error {
 	cygwinWorkingDir, err := windowsPathToCygwinPath(workingDir)
 	if err != nil {
 		return fmt.Errorf("failed to convert working directory to cygwin path: %w", err)
@@ -1838,7 +1843,7 @@ func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout ti
 		timeout,
 		cygwinBashExecutable,
 		[]string{"-l", "-c", bashCommand},
-		ansibleRuntimeEnv(),
+		runtimeEnv,
 		logPrefix,
 	)
 }

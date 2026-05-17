@@ -42,6 +42,9 @@ devalchemy/
   hosts, or Windows access methods.
 - Run the shared entrypoint from [`playbooks/setup.yml`](../playbooks/setup.yml)
   unless a role-specific playbook is a better fit.
+- Configure extra local or Git-backed role roots with
+  [Ansible Role Sources](./ansible-role-sources.md) when you want to develop
+  roles outside the bundled `roles/` tree.
 
 ## Customization
 
@@ -59,6 +62,10 @@ ansible-playbook playbooks/setup.yml -i inventory/localhost.yaml -e "install_doc
 
 For broader localhost, remote-host, VM, and Windows command examples, see
 [Running Playbooks](./running-playbooks.md).
+
+For role-source layering tests, see [`roles_test_1/`](../roles_test_1/),
+[`roles_test_2/`](../roles_test_2/), and
+[`playbooks/role-sources-test.yml`](../playbooks/role-sources-test.yml).
 
 The exact role set can evolve over time. For the source of truth, inspect the
 directories under [`roles/`](../roles/).

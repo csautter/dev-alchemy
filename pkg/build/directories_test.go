@@ -118,6 +118,72 @@ func TestResolveDefaultAppDataDirForOS_ReturnsErrorWhenHomeUnavailable(t *testin
 	}
 }
 
+func TestResolveDefaultConfigDirForOS_UsesOverride(t *testing.T) {
+	got, err := resolveDefaultConfigDirForOS(
+		"linux",
+		func(key string) string {
+			if key == devAlchemyConfigEnvVar {
+				return "/tmp/dev-alchemy-config"
+			}
+			return ""
+		},
+		func() (string, error) { return "/home/tester", nil },
+		func() (string, error) { return "/config", nil },
+	)
+	if err != nil {
+		t.Fatalf("resolveDefaultConfigDirForOS returned error: %v", err)
+	}
+	if got != filepath.Clean("/tmp/dev-alchemy-config") {
+		t.Fatalf("expected override path, got %q", got)
+	}
+}
+
+func TestResolveDefaultConfigDirForOS_LinuxUsesXDGConfigHome(t *testing.T) {
+	got, err := resolveDefaultConfigDirForOS(
+		"linux",
+		func(key string) string {
+			if key == "XDG_CONFIG_HOME" {
+				return "/home/tester/.config"
+			}
+			return ""
+		},
+		func() (string, error) { return "/home/tester", nil },
+		func() (string, error) { return "", nil },
+	)
+	if err != nil {
+		t.Fatalf("resolveDefaultConfigDirForOS returned error: %v", err)
+	}
+	want := filepath.Join("/home/tester/.config", devAlchemyAppName)
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+}
+
+func TestResolveDefaultConfigDirForOS_WindowsPrefersRoamingAppData(t *testing.T) {
+	got, err := resolveDefaultConfigDirForOS(
+		"windows",
+		func(key string) string {
+			switch key {
+			case "LOCALAPPDATA":
+				return `C:\Users\tester\AppData\Local`
+			case "APPDATA":
+				return `C:\Users\tester\AppData\Roaming`
+			default:
+				return ""
+			}
+		},
+		func() (string, error) { return "", nil },
+		func() (string, error) { return `C:\Users\tester\AppData\Roaming`, nil },
+	)
+	if err != nil {
+		t.Fatalf("resolveDefaultConfigDirForOS returned error: %v", err)
+	}
+	want := filepath.Join(`C:\Users\tester\AppData\Roaming`, devAlchemyAppName)
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+}
+
 func TestEnsureDirectoriesExist_CreatesPrivateDirectories(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "app", "cache")

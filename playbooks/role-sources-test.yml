@@ -1,0 +1,12 @@
+---
+- hosts:
+    - all
+    - localhost
+  gather_facts: true
+  roles:
+    - role: dev_alchemy_role_source_base
+      tags: role-source-base
+    - role: dev_alchemy_role_source_overlay
+      tags: role-source-overlay
+    - role: dev_alchemy_role_source_shared
+      tags: role-source-shared

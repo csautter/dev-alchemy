@@ -11,6 +11,7 @@ import (
 const (
 	devAlchemyAppName           = "dev-alchemy"
 	devAlchemyAppDataEnvVar     = "DEV_ALCHEMY_APP_DATA_DIR"
+	devAlchemyConfigEnvVar      = "DEV_ALCHEMY_CONFIG_DIR"
 	devAlchemyCacheEnvVar       = "DEV_ALCHEMY_CACHE_DIR"
 	devAlchemyVagrantEnvVar     = "DEV_ALCHEMY_VAGRANT_DIR"
 	devAlchemyPackerCacheEnvVar = "DEV_ALCHEMY_PACKER_CACHE_DIR"
@@ -21,6 +22,7 @@ type Directories struct {
 	WorkingDir     string
 	ProjectDir     string
 	AppDataDir     string
+	ConfigDir      string
 	CacheDir       string
 	VagrantDir     string
 	PackerCacheDir string
@@ -58,6 +60,13 @@ func (u *Directories) GetDirectories() Directories {
 		}
 		u.ProjectDir = projectDir
 	}
+	if u.ConfigDir == "" {
+		configDir, err := resolveDefaultConfigDir()
+		if err != nil {
+			log.Fatalf("Config dir could not be determined: %v", err)
+		}
+		u.ConfigDir = configDir
+	}
 	if u.CacheDir == "" {
 		u.CacheDir = filepath.Join(u.AppDataDir, "cache")
 	}
@@ -67,7 +76,7 @@ func (u *Directories) GetDirectories() Directories {
 	if u.PackerCacheDir == "" {
 		u.PackerCacheDir = filepath.Join(u.AppDataDir, "packer_cache")
 	}
-	if err := ensureDirectoriesExist(u.AppDataDir, u.CacheDir, u.VagrantDir, u.PackerCacheDir); err != nil {
+	if err := ensureDirectoriesExist(u.AppDataDir, u.ConfigDir, u.CacheDir, u.VagrantDir, u.PackerCacheDir); err != nil {
 		log.Fatalf("Managed application directories could not be created: %v", err)
 	}
 	return *u
@@ -90,6 +99,11 @@ func (u *Directories) CachePath(paths ...string) string {
 	return filepath.Join(append([]string{u.CacheDir}, paths...)...)
 }
 
+func (u *Directories) ConfigPath(paths ...string) string {
+	u.GetDirectories()
+	return filepath.Join(append([]string{u.ConfigDir}, paths...)...)
+}
+
 func (u *Directories) VagrantPath(paths ...string) string {
 	u.GetDirectories()
 	return filepath.Join(append([]string{u.VagrantDir}, paths...)...)
@@ -104,6 +118,7 @@ func (u *Directories) ManagedEnv() []string {
 	u.GetDirectories()
 	return []string{
 		devAlchemyAppDataEnvVar + "=" + u.AppDataDir,
+		devAlchemyConfigEnvVar + "=" + u.ConfigDir,
 		devAlchemyCacheEnvVar + "=" + u.CacheDir,
 		devAlchemyVagrantEnvVar + "=" + u.VagrantDir,
 		devAlchemyPackerCacheEnvVar + "=" + u.PackerCacheDir,
@@ -113,6 +128,10 @@ func (u *Directories) ManagedEnv() []string {
 
 func resolveDefaultAppDataDir() (string, error) {
 	return resolveDefaultAppDataDirForOS(runtime.GOOS, os.Getenv, os.UserHomeDir, os.UserConfigDir)
+}
+
+func resolveDefaultConfigDir() (string, error) {
+	return resolveDefaultConfigDirForOS(runtime.GOOS, os.Getenv, os.UserHomeDir, os.UserConfigDir)
 }
 
 func resolveDefaultAppDataDirForOS(
@@ -153,6 +172,47 @@ func resolveDefaultAppDataDirForOS(
 			return "", fmt.Errorf("resolve Linux home directory: %w", err)
 		}
 		return filepath.Join(homeDir, ".local", "share", devAlchemyAppName), nil
+	}
+}
+
+func resolveDefaultConfigDirForOS(
+	goos string,
+	getenv func(string) string,
+	userHomeDir func() (string, error),
+	userConfigDir func() (string, error),
+) (string, error) {
+	if override := getenv(devAlchemyConfigEnvVar); override != "" {
+		return filepath.Clean(override), nil
+	}
+
+	switch goos {
+	case "darwin":
+		homeDir, err := userHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve macOS home directory: %w", err)
+		}
+		return filepath.Join(homeDir, "Library", "Application Support", devAlchemyAppName), nil
+	case "windows":
+		if appData := getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, devAlchemyAppName), nil
+		}
+		if localAppData := getenv("LOCALAPPDATA"); localAppData != "" {
+			return filepath.Join(localAppData, devAlchemyAppName), nil
+		}
+		configDir, err := userConfigDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve Windows config directory: %w", err)
+		}
+		return filepath.Join(configDir, devAlchemyAppName), nil
+	default:
+		if xdgConfigHome := getenv("XDG_CONFIG_HOME"); xdgConfigHome != "" {
+			return filepath.Join(xdgConfigHome, devAlchemyAppName), nil
+		}
+		homeDir, err := userHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve Linux home directory: %w", err)
+		}
+		return filepath.Join(homeDir, ".config", devAlchemyAppName), nil
 	}
 }
 

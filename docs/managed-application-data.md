@@ -2,6 +2,7 @@
 
 Dev Alchemy stores VM build state, deployment state, caches, and standalone
 runtime assets outside the repository in an OS-appropriate app-data directory.
+User-editable configuration is stored in an OS-appropriate config directory.
 
 ## Default location
 
@@ -19,14 +20,29 @@ Under that root, Dev Alchemy manages:
 - `project/` for the embedded runtime project used by standalone binaries
   outside a Git checkout
 
+## Config location
+
+Dev Alchemy reads user-editable config from:
+
+- macOS: `~/Library/Application Support/dev-alchemy`
+- Windows: `%APPDATA%\dev-alchemy`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/dev-alchemy`
+
+The Ansible role-source config is
+`ansible-role-sources.yml` in that directory. See
+[Ansible Role Sources](./ansible-role-sources.md).
+
 ## Overrides and exported paths
 
 You can override the default root by setting
 `DEV_ALCHEMY_APP_DATA_DIR`.
+You can override the config directory by setting
+`DEV_ALCHEMY_CONFIG_DIR`.
 
 Dev Alchemy also exports these derived paths for helper scripts and manual
 workflows:
 
+- `DEV_ALCHEMY_CONFIG_DIR`
 - `DEV_ALCHEMY_CACHE_DIR`
 - `DEV_ALCHEMY_VAGRANT_DIR`
 - `DEV_ALCHEMY_PACKER_CACHE_DIR`
