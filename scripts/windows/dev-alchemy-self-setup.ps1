@@ -12,7 +12,7 @@ $gitVersion = "2.54.0"
 # renovate: datasource=nuget depName=make versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $makeVersion = "4.4.1"
 # renovate: datasource=nuget depName=packer versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
-$packerVersion = "1.15.0"
+$packerVersion = "1.15.3"
 # renovate: datasource=nuget depName=azure-cli versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $azureCliVersion = "2.86.0"
 # renovate: datasource=nuget depName=python313 versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
