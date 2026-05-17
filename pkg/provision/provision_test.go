@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1352,6 +1353,44 @@ func TestWindowsPathToCygwinPath_ReturnsErrorForInvalidPath(t *testing.T) {
 	_, err := windowsPathToCygwinPath(`/workspaces/dev-alchemy`)
 	if err == nil {
 		t.Fatal("expected windowsPathToCygwinPath to fail for non-windows path")
+	}
+}
+
+func TestAnsibleArgsForCygwinConvertsGeneratedWindowsPaths(t *testing.T) {
+	got, err := ansibleArgsForCygwin([]string{
+		`C:\workspace\dev-alchemy\playbooks\custom.yml`,
+		"-i",
+		`D:\inventory\hosts.yml`,
+		"--check",
+	})
+	if err != nil {
+		t.Fatalf("ansibleArgsForCygwin returned error: %v", err)
+	}
+
+	want := []string{
+		"/cygdrive/c/workspace/dev-alchemy/playbooks/custom.yml",
+		"-i",
+		"/cygdrive/d/inventory/hosts.yml",
+		"--check",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("expected %v, got %v", want, got)
+	}
+}
+
+func TestAnsibleArgsForCygwinLeavesRelativeAndCygwinPaths(t *testing.T) {
+	args := []string{
+		"./playbooks/setup.yml",
+		"-i",
+		"/cygdrive/c/inventory/hosts.yml",
+	}
+
+	got, err := ansibleArgsForCygwin(args)
+	if err != nil {
+		t.Fatalf("ansibleArgsForCygwin returned error: %v", err)
+	}
+	if !reflect.DeepEqual(got, args) {
+		t.Fatalf("expected args to remain unchanged, got %v", got)
 	}
 }
 

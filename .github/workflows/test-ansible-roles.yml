@@ -6,6 +6,8 @@ on:
     branches: [main, feat*]
     paths:
       - "roles/**"
+      - "roles_test_1/**"
+      - "roles_test_2/**"
       - "playbooks/**"
       - "inventory/**"
       - "pkg/provision/**"
@@ -23,6 +25,8 @@ on:
     branches: [main, feat*]
     paths:
       - "roles/**"
+      - "roles_test_1/**"
+      - "roles_test_2/**"
       - "playbooks/**"
       - "inventory/**"
       - "pkg/provision/**"

@@ -126,6 +126,7 @@ type ProvisionOptions struct {
 	Check                           bool
 	Verbosity                       int
 	PlaybookPath                    string
+	PlaybookPathExplicit            bool
 	InventoryPath                   string
 	ExtraArgs                       []string
 	LocalWindowsProtocol            LocalWindowsProvisionProtocol
@@ -1433,8 +1434,14 @@ func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, o
 		return nil
 	}
 
+	playbookPath, err := resolveProvisionPlaybookPath(options)
+	if err != nil {
+		_ = cleanup()
+		return nil, nil, err
+	}
+
 	args := []string{
-		resolveProvisionPlaybookPath(options),
+		playbookPath,
 		"-i",
 		ip + ",",
 		"-l",
@@ -1480,8 +1487,14 @@ func buildStaticInventoryProvisionArgsWithExtraVars(projectDir string, inventory
 		return nil
 	}
 
+	playbookPath, err := resolveProvisionPlaybookPath(options)
+	if err != nil {
+		_ = cleanup()
+		return nil, nil, err
+	}
+
 	args := []string{
-		resolveProvisionPlaybookPath(options),
+		playbookPath,
 		"-i",
 		inventoryPath,
 	}
@@ -1500,8 +1513,13 @@ func buildStaticInventoryProvisionArgsWithExtraVars(projectDir string, inventory
 }
 
 func buildStaticInventoryProvisionArgs(inventoryPath string, inventoryTarget string, options ProvisionOptions) ([]string, error) {
+	playbookPath, err := resolveProvisionPlaybookPath(options)
+	if err != nil {
+		return nil, err
+	}
+
 	args := []string{
-		resolveProvisionPlaybookPath(options),
+		playbookPath,
 		"-i",
 		inventoryPath,
 	}
@@ -1537,12 +1555,31 @@ func resolveStaticInventoryPathAndTarget(defaultInventoryPath string, defaultInv
 	return defaultInventoryPath, defaultInventoryTarget
 }
 
-func resolveProvisionPlaybookPath(options ProvisionOptions) string {
-	if playbookPath := strings.TrimSpace(options.PlaybookPath); playbookPath != "" {
-		return playbookPath
+func resolveProvisionPlaybookPath(options ProvisionOptions) (string, error) {
+	playbookPath := strings.TrimSpace(options.PlaybookPath)
+	if playbookPath != "" && (options.PlaybookPathExplicit || playbookPath != defaultProvisionPlaybook) {
+		return playbookPath, nil
 	}
 
-	return defaultProvisionPlaybook
+	directories := alchemy_build.GetDirectoriesInstance()
+	projectDir := directories.ProjectDir
+	if projectDir == "" {
+		projectDir = directories.GetDirectories().ProjectDir
+	}
+
+	configuredPlaybookPath, ok, err := resolveConfiguredProvisionPlaybookPath(projectDir)
+	if err != nil {
+		return "", err
+	}
+	if ok {
+		return configuredPlaybookPath, nil
+	}
+
+	if playbookPath != "" {
+		return playbookPath, nil
+	}
+
+	return defaultProvisionPlaybook, nil
 }
 
 func localProvisionInventory(hostOs alchemy_build.HostOsType, protocol LocalWindowsProvisionProtocol) (string, string, error) {
@@ -1802,8 +1839,13 @@ func defaultIfEmpty(value string, fallback string) string {
 }
 
 func runAnsibleProvisionCommand(projectDir string, args []string, timeout time.Duration, logPrefix string) error {
+	runtimeEnv, err := ansibleRuntimeEnvForProject(projectDir)
+	if err != nil {
+		return fmt.Errorf("failed to prepare ansible role sources: %w", err)
+	}
+
 	if runtime.GOOS == "windows" {
-		return runAnsibleViaCygwinBash(projectDir, args, timeout, logPrefix)
+		return runAnsibleViaCygwinBash(projectDir, args, timeout, logPrefix, runtimeEnv)
 	}
 
 	return runCommandWithStreamingLogsWithEnv(
@@ -1811,12 +1853,12 @@ func runAnsibleProvisionCommand(projectDir string, args []string, timeout time.D
 		timeout,
 		"ansible-playbook",
 		args,
-		ansibleRuntimeEnv(),
+		runtimeEnv,
 		logPrefix,
 	)
 }
 
-func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout time.Duration, logPrefix string) error {
+func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout time.Duration, logPrefix string, runtimeEnv []string) error {
 	cygwinWorkingDir, err := windowsPathToCygwinPath(workingDir)
 	if err != nil {
 		return fmt.Errorf("failed to convert working directory to cygwin path: %w", err)
@@ -1826,8 +1868,13 @@ func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout ti
 		return fmt.Errorf("failed to locate cygwin bash executable: %w", err)
 	}
 
-	quotedArgs := make([]string, 0, len(ansibleArgs))
-	for _, arg := range ansibleArgs {
+	cygwinArgs, err := ansibleArgsForCygwin(ansibleArgs)
+	if err != nil {
+		return err
+	}
+
+	quotedArgs := make([]string, 0, len(cygwinArgs))
+	for _, arg := range cygwinArgs {
 		quotedArgs = append(quotedArgs, bashSingleQuote(arg))
 	}
 
@@ -1838,9 +1885,55 @@ func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout ti
 		timeout,
 		cygwinBashExecutable,
 		[]string{"-l", "-c", bashCommand},
-		ansibleRuntimeEnv(),
+		runtimeEnv,
 		logPrefix,
 	)
+}
+
+func ansibleArgsForCygwin(ansibleArgs []string) ([]string, error) {
+	cygwinArgs := append([]string(nil), ansibleArgs...)
+	if len(cygwinArgs) == 0 {
+		return cygwinArgs, nil
+	}
+
+	if err := convertCygwinPathArgument(cygwinArgs, 0, "playbook path"); err != nil {
+		return nil, err
+	}
+
+	for index, arg := range cygwinArgs {
+		if index+1 >= len(cygwinArgs) {
+			continue
+		}
+		switch arg {
+		case "-i", "--inventory", "--inventory-file":
+			if err := convertCygwinPathArgument(cygwinArgs, index+1, "inventory path"); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return cygwinArgs, nil
+}
+
+func convertCygwinPathArgument(args []string, index int, label string) error {
+	if !isDriveLetterWindowsPath(args[index]) {
+		return nil
+	}
+	convertedPath, err := windowsPathToCygwinPath(args[index])
+	if err != nil {
+		return fmt.Errorf("failed to convert %s to cygwin path: %w", label, err)
+	}
+	args[index] = convertedPath
+	return nil
+}
+
+func isDriveLetterWindowsPath(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	if len(trimmed) < 2 || trimmed[1] != ':' {
+		return false
+	}
+	drive := trimmed[0]
+	return (drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')
 }
 
 func getCygwinBashExecutable() (string, error) {

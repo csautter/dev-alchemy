@@ -252,6 +252,8 @@ next level of detail:
   flows
 - [Managed Application Data](./docs/managed-application-data.md) for cache,
   runtime, and app-data locations
+- [Ansible Role Sources](./docs/ansible-role-sources.md) for layering local
+  and Git-backed role roots during provisioning
 - [Windows Ansible Access](./docs/windows-ansible-access.md) for manual WinRM
   and SSH setup on Windows targets plus OpenSSH rollback notes
 - [Example Ansible Roles](./docs/example-roles.md) for the current sample role

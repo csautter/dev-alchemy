@@ -1,0 +1,4 @@
+---
+- name: Report base role source
+  ansible.builtin.debug:
+    msg: "dev_alchemy_role_source_base from roles_test_1 on {{ ansible_facts['os_family'] | default('unknown') }}"

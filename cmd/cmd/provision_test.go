@@ -185,6 +185,9 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 	if capturedOptions.PlaybookPath != "./playbooks/bootstrap.yml" {
 		t.Fatalf("expected custom playbook path, got %q", capturedOptions.PlaybookPath)
 	}
+	if !capturedOptions.PlaybookPathExplicit {
+		t.Fatal("expected explicit playbook flag to be tracked in provision options")
+	}
 	if capturedOptions.InventoryPath != "./inventory/custom.yml" {
 		t.Fatalf("expected custom inventory path, got %q", capturedOptions.InventoryPath)
 	}
