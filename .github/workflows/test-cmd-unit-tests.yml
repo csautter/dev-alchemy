@@ -12,6 +12,8 @@ on:
       - "go.sum"
       - "pkg/build/**"
       - "pkg/oci/**"
+      - "roles_test_1/**"
+      - "roles_test_2/**"
       - "runtimeassets.go"
   pull_request:
     paths:
@@ -22,6 +24,8 @@ on:
       - "go.sum"
       - "pkg/build/**"
       - "pkg/oci/**"
+      - "roles_test_1/**"
+      - "roles_test_2/**"
       - "runtimeassets.go"
   workflow_dispatch:
 
