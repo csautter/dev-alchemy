@@ -28,7 +28,12 @@ bundled `./roles` directory. When the config file exists,
 `include_default_roles` defaults to `true`, so configured sources are placed
 before the bundled roles.
 
+Set `playbook` when this source stack should use a different default playbook
+than `./playbooks/setup.yml`. Relative playbook paths are resolved from the Dev
+Alchemy runtime project directory, matching the `--playbook` CLI flag.
+
 ```yaml
+playbook: ./playbooks/custom-setup.yml
 include_default_roles: true
 sources:
   - name: private-overrides
@@ -53,6 +58,10 @@ Git sources use `url`. Dev Alchemy clones them into
 checkouts before provisioning. Set `ref` for a branch, tag, or commit. Set
 `roles_path` when the repository stores roles in a subdirectory.
 
+If `include_default_roles` is `false`, make sure `playbook` points at an
+entrypoint whose role names exist in your configured sources, or provide all
+roles expected by the bundled `./playbooks/setup.yml`.
+
 Update behavior can be disabled for a Git source:
 
 ```yaml
@@ -71,7 +80,8 @@ The repository includes two tiny role-source folders for hand testing:
 shared role resolves from `roles_test_2`.
 
 ```yaml
-include_default_roles: true
+playbook: ./playbooks/role-sources-test.yml
+include_default_roles: false
 sources:
   - name: test-overlay
     type: local
@@ -84,5 +94,5 @@ sources:
 Then run:
 
 ```bash
-alchemy provision local --playbook ./playbooks/role-sources-test.yml --check
+alchemy provision local --check
 ```

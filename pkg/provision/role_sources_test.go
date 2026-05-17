@@ -96,6 +96,68 @@ func TestResolveAnsibleRolePathsCanDisableDefaultRoles(t *testing.T) {
 	}
 }
 
+func TestResolveProvisionPlaybookPathUsesRoleSourceConfigDefault(t *testing.T) {
+	projectDir := t.TempDir()
+	dirs := withIsolatedAlchemyDirectories(t, projectDir)
+	writeRoleSourcesConfig(t, dirs.ConfigDir, strings.Join([]string{
+		"playbook: ./playbooks/role-sources-test.yml",
+		"sources: []",
+		"",
+	}, "\n"))
+
+	playbookPath, err := resolveProvisionPlaybookPath(ProvisionOptions{
+		PlaybookPath: defaultProvisionPlaybook,
+	})
+	if err != nil {
+		t.Fatalf("resolveProvisionPlaybookPath returned error: %v", err)
+	}
+
+	want := filepath.Join(projectDir, "playbooks", "role-sources-test.yml")
+	if playbookPath != want {
+		t.Fatalf("expected configured playbook path %q, got %q", want, playbookPath)
+	}
+}
+
+func TestResolveProvisionPlaybookPathExplicitFlagOverridesRoleSourceConfig(t *testing.T) {
+	projectDir := t.TempDir()
+	dirs := withIsolatedAlchemyDirectories(t, projectDir)
+	writeRoleSourcesConfig(t, dirs.ConfigDir, strings.Join([]string{
+		"playbook: ./playbooks/role-sources-test.yml",
+		"sources: []",
+		"",
+	}, "\n"))
+
+	playbookPath, err := resolveProvisionPlaybookPath(ProvisionOptions{
+		PlaybookPath:         defaultProvisionPlaybook,
+		PlaybookPathExplicit: true,
+	})
+	if err != nil {
+		t.Fatalf("resolveProvisionPlaybookPath returned error: %v", err)
+	}
+	if playbookPath != defaultProvisionPlaybook {
+		t.Fatalf("expected explicit CLI playbook %q to win, got %q", defaultProvisionPlaybook, playbookPath)
+	}
+}
+
+func TestResolveProvisionPlaybookPathRejectsConflictingConfigAliases(t *testing.T) {
+	projectDir := t.TempDir()
+	dirs := withIsolatedAlchemyDirectories(t, projectDir)
+	writeRoleSourcesConfig(t, dirs.ConfigDir, strings.Join([]string{
+		"playbook: ./playbooks/one.yml",
+		"playbook_path: ./playbooks/two.yml",
+		"sources: []",
+		"",
+	}, "\n"))
+
+	_, err := resolveProvisionPlaybookPath(ProvisionOptions{})
+	if err == nil {
+		t.Fatal("expected conflicting playbook aliases to fail")
+	}
+	if !strings.Contains(err.Error(), "sets both playbook and playbook_path") {
+		t.Fatalf("expected alias conflict error, got: %v", err)
+	}
+}
+
 func TestResolveAnsibleRolePathsClonesGitSourceAndHonorsPullFalse(t *testing.T) {
 	projectDir := t.TempDir()
 	dirs := withIsolatedAlchemyDirectories(t, projectDir)

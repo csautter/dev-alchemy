@@ -126,6 +126,7 @@ type ProvisionOptions struct {
 	Check                           bool
 	Verbosity                       int
 	PlaybookPath                    string
+	PlaybookPathExplicit            bool
 	InventoryPath                   string
 	ExtraArgs                       []string
 	LocalWindowsProtocol            LocalWindowsProvisionProtocol
@@ -1433,8 +1434,14 @@ func buildAnsibleProvisionArgs(projectDir string, ip string, extraVars []byte, o
 		return nil
 	}
 
+	playbookPath, err := resolveProvisionPlaybookPath(options)
+	if err != nil {
+		_ = cleanup()
+		return nil, nil, err
+	}
+
 	args := []string{
-		resolveProvisionPlaybookPath(options),
+		playbookPath,
 		"-i",
 		ip + ",",
 		"-l",
@@ -1480,8 +1487,14 @@ func buildStaticInventoryProvisionArgsWithExtraVars(projectDir string, inventory
 		return nil
 	}
 
+	playbookPath, err := resolveProvisionPlaybookPath(options)
+	if err != nil {
+		_ = cleanup()
+		return nil, nil, err
+	}
+
 	args := []string{
-		resolveProvisionPlaybookPath(options),
+		playbookPath,
 		"-i",
 		inventoryPath,
 	}
@@ -1500,8 +1513,13 @@ func buildStaticInventoryProvisionArgsWithExtraVars(projectDir string, inventory
 }
 
 func buildStaticInventoryProvisionArgs(inventoryPath string, inventoryTarget string, options ProvisionOptions) ([]string, error) {
+	playbookPath, err := resolveProvisionPlaybookPath(options)
+	if err != nil {
+		return nil, err
+	}
+
 	args := []string{
-		resolveProvisionPlaybookPath(options),
+		playbookPath,
 		"-i",
 		inventoryPath,
 	}
@@ -1537,12 +1555,31 @@ func resolveStaticInventoryPathAndTarget(defaultInventoryPath string, defaultInv
 	return defaultInventoryPath, defaultInventoryTarget
 }
 
-func resolveProvisionPlaybookPath(options ProvisionOptions) string {
-	if playbookPath := strings.TrimSpace(options.PlaybookPath); playbookPath != "" {
-		return playbookPath
+func resolveProvisionPlaybookPath(options ProvisionOptions) (string, error) {
+	playbookPath := strings.TrimSpace(options.PlaybookPath)
+	if playbookPath != "" && (options.PlaybookPathExplicit || playbookPath != defaultProvisionPlaybook) {
+		return playbookPath, nil
 	}
 
-	return defaultProvisionPlaybook
+	directories := alchemy_build.GetDirectoriesInstance()
+	projectDir := directories.ProjectDir
+	if projectDir == "" {
+		projectDir = directories.GetDirectories().ProjectDir
+	}
+
+	configuredPlaybookPath, ok, err := resolveConfiguredProvisionPlaybookPath(projectDir)
+	if err != nil {
+		return "", err
+	}
+	if ok {
+		return configuredPlaybookPath, nil
+	}
+
+	if playbookPath != "" {
+		return playbookPath, nil
+	}
+
+	return defaultProvisionPlaybook, nil
 }
 
 func localProvisionInventory(hostOs alchemy_build.HostOsType, protocol LocalWindowsProvisionProtocol) (string, string, error) {

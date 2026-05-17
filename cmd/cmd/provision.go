@@ -133,7 +133,7 @@ Important Ansible options exposed directly:
   --force-winrm-uninstall For local Windows WinRM provisioning, force cleanup to disable WinRM.
   --force-ssh-uninstall   For local Windows SSH provisioning, force cleanup to disable sshd, remove SSH firewall rules, and remove the transient user without uninstalling OpenSSH Server.
   --verbosity N           Set Ansible verbosity. The default is 3, equivalent to -vvv.
-  --playbook PATH         Override the playbook path. The default is ./playbooks/setup.yml.
+  --playbook PATH         Override the playbook path. The default is ./playbooks/setup.yml unless ansible-role-sources.yml sets playbook.
   --inventory-path PATH   Override the default inventory file for local provisioning.
 
 Pass any other ansible-playbook flags after --.
@@ -159,6 +159,7 @@ Examples:
 			Check:                           check,
 			Verbosity:                       ansibleVerbosity,
 			PlaybookPath:                    strings.TrimSpace(playbookPath),
+			PlaybookPathExplicit:            cmd.Flags().Changed("playbook"),
 			InventoryPath:                   strings.TrimSpace(inventoryPath),
 			ExtraArgs:                       extraAnsibleArgs,
 			LocalWindowsProtocol:            alchemy_provision.LocalWindowsProvisionProtocol(strings.TrimSpace(localProvisionProto)),

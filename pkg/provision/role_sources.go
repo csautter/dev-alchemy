@@ -27,6 +27,8 @@ const (
 
 type ansibleRoleSourcesConfig struct {
 	IncludeDefaultRoles *bool                     `json:"include_default_roles" yaml:"include_default_roles"`
+	Playbook            string                    `json:"playbook" yaml:"playbook"`
+	PlaybookPath        string                    `json:"playbook_path" yaml:"playbook_path"`
 	Sources             []ansibleRoleSourceConfig `json:"sources" yaml:"sources"`
 }
 
@@ -55,10 +57,7 @@ func ansibleRoleSourcesConfigPath(directories *alchemy_build.Directories) string
 }
 
 func resolveAnsibleRolePaths(projectDir string) ([]string, error) {
-	directories := alchemy_build.GetDirectoriesInstance()
-	configPath := ansibleRoleSourcesConfigPath(directories)
-
-	config, exists, err := loadAnsibleRoleSourcesConfig(configPath)
+	config, configPath, exists, err := loadCurrentAnsibleRoleSourcesConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +65,7 @@ func resolveAnsibleRolePaths(projectDir string) ([]string, error) {
 		return []string{defaultAnsibleRolePath(projectDir)}, nil
 	}
 
+	directories := alchemy_build.GetDirectoriesInstance()
 	cacheRoot := directories.CachePath(ansibleRoleSourcesCacheDir)
 	if err := os.MkdirAll(cacheRoot, 0o700); err != nil {
 		return nil, fmt.Errorf("create ansible role source cache %q: %w", cacheRoot, err)
@@ -90,6 +90,53 @@ func resolveAnsibleRolePaths(projectDir string) ([]string, error) {
 	}
 
 	return rolePaths, nil
+}
+
+func resolveConfiguredProvisionPlaybookPath(projectDir string) (string, bool, error) {
+	config, configPath, exists, err := loadCurrentAnsibleRoleSourcesConfig()
+	if err != nil {
+		return "", false, err
+	}
+	if !exists {
+		return "", false, nil
+	}
+
+	playbookPath, ok, err := configuredProvisionPlaybookPath(config, configPath)
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
+		return "", false, nil
+	}
+
+	resolvedPath, err := resolveConfiguredPath(playbookPath, projectDir)
+	if err != nil {
+		return "", false, fmt.Errorf("resolve playbook path from %q: %w", configPath, err)
+	}
+	return resolvedPath, true, nil
+}
+
+func configuredProvisionPlaybookPath(config ansibleRoleSourcesConfig, configPath string) (string, bool, error) {
+	playbook := strings.TrimSpace(config.Playbook)
+	playbookPath := strings.TrimSpace(config.PlaybookPath)
+	if playbook != "" && playbookPath != "" && playbook != playbookPath {
+		return "", false, fmt.Errorf("%q sets both playbook and playbook_path to different values", configPath)
+	}
+	if playbook != "" {
+		return playbook, true, nil
+	}
+	if playbookPath != "" {
+		return playbookPath, true, nil
+	}
+	return "", false, nil
+}
+
+func loadCurrentAnsibleRoleSourcesConfig() (ansibleRoleSourcesConfig, string, bool, error) {
+	directories := alchemy_build.GetDirectoriesInstance()
+	configPath := ansibleRoleSourcesConfigPath(directories)
+
+	config, exists, err := loadAnsibleRoleSourcesConfig(configPath)
+	return config, configPath, exists, err
 }
 
 func loadAnsibleRoleSourcesConfig(configPath string) (ansibleRoleSourcesConfig, bool, error) {
