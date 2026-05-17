@@ -99,6 +99,7 @@ func TestResolveAnsibleRolePathsCanDisableDefaultRoles(t *testing.T) {
 func TestResolveProvisionPlaybookPathUsesRoleSourceConfigDefault(t *testing.T) {
 	projectDir := t.TempDir()
 	dirs := withIsolatedAlchemyDirectories(t, projectDir)
+	writeProjectFile(t, projectDir, filepath.Join("playbooks", "role-sources-test.yml"), "---\n")
 	writeRoleSourcesConfig(t, dirs.ConfigDir, strings.Join([]string{
 		"playbook: ./playbooks/role-sources-test.yml",
 		"sources: []",
@@ -115,6 +116,133 @@ func TestResolveProvisionPlaybookPathUsesRoleSourceConfigDefault(t *testing.T) {
 	want := filepath.Join(projectDir, "playbooks", "role-sources-test.yml")
 	if playbookPath != want {
 		t.Fatalf("expected configured playbook path %q, got %q", want, playbookPath)
+	}
+}
+
+func TestResolveProvisionPlaybookPathUsesLocalPlaybookSource(t *testing.T) {
+	projectDir := t.TempDir()
+	dirs := withIsolatedAlchemyDirectories(t, projectDir)
+	externalPlaybooksDir := filepath.Join(dirs.ConfigDir, "external-playbooks")
+	writeProjectFile(t, externalPlaybooksDir, "custom.yml", "---\n")
+	writeRoleSourcesConfig(t, dirs.ConfigDir, strings.Join([]string{
+		"playbook: custom.yml",
+		"include_default_playbooks: false",
+		"playbook_sources:",
+		"  - name: external-playbooks",
+		"    type: local",
+		"    path: external-playbooks",
+		"",
+	}, "\n"))
+
+	playbookPath, err := resolveProvisionPlaybookPath(ProvisionOptions{
+		PlaybookPath: defaultProvisionPlaybook,
+	})
+	if err != nil {
+		t.Fatalf("resolveProvisionPlaybookPath returned error: %v", err)
+	}
+
+	want := filepath.Join(externalPlaybooksDir, "custom.yml")
+	if playbookPath != want {
+		t.Fatalf("expected external playbook path %q, got %q", want, playbookPath)
+	}
+}
+
+func TestResolveProvisionPlaybookPathUsesPlaybooksPathFromRoleSource(t *testing.T) {
+	projectDir := t.TempDir()
+	dirs := withIsolatedAlchemyDirectories(t, projectDir)
+	sourceRoot := filepath.Join(dirs.ConfigDir, "stack")
+	writeProjectFile(t, sourceRoot, filepath.Join("roles", "placeholder", "tasks", "main.yml"), "---\n")
+	writeProjectFile(t, sourceRoot, filepath.Join("playbooks", "stack.yml"), "---\n")
+	writeRoleSourcesConfig(t, dirs.ConfigDir, strings.Join([]string{
+		"playbook: stack.yml",
+		"include_default_playbooks: false",
+		"sources:",
+		"  - name: stack",
+		"    type: local",
+		"    path: stack",
+		"    roles_path: roles",
+		"    playbooks_path: playbooks",
+		"",
+	}, "\n"))
+
+	playbookPath, err := resolveProvisionPlaybookPath(ProvisionOptions{
+		PlaybookPath: defaultProvisionPlaybook,
+	})
+	if err != nil {
+		t.Fatalf("resolveProvisionPlaybookPath returned error: %v", err)
+	}
+
+	want := filepath.Join(sourceRoot, "playbooks", "stack.yml")
+	if playbookPath != want {
+		t.Fatalf("expected playbook from source playbooks_path %q, got %q", want, playbookPath)
+	}
+}
+
+func TestResolveProvisionPlaybookPathClonesGitPlaybookSource(t *testing.T) {
+	projectDir := t.TempDir()
+	dirs := withIsolatedAlchemyDirectories(t, projectDir)
+	writeRoleSourcesConfig(t, dirs.ConfigDir, strings.Join([]string{
+		"playbook: custom.yml",
+		"include_default_playbooks: false",
+		"playbook_sources:",
+		"  - name: remote-playbooks",
+		"    type: git",
+		"    url: https://example.test/dev-alchemy-playbooks.git",
+		"    ref: main",
+		"    playbooks_path: playbooks",
+		"    pull: false",
+		"",
+	}, "\n"))
+
+	calls := fakeRoleSourceGit(t, func(_ string, _ time.Duration, _ string, args []string) (string, error) {
+		if len(args) > 0 && args[0] == "clone" {
+			checkoutDir := args[len(args)-1]
+			if err := os.MkdirAll(filepath.Join(checkoutDir, ".git"), 0o755); err != nil {
+				t.Fatalf("failed to create fake git checkout: %v", err)
+			}
+			writeProjectFile(t, checkoutDir, filepath.Join("playbooks", "custom.yml"), "---\n")
+		}
+		return "", nil
+	})
+
+	playbookPath, err := resolveProvisionPlaybookPath(ProvisionOptions{
+		PlaybookPath: defaultProvisionPlaybook,
+	})
+	if err != nil {
+		t.Fatalf("resolveProvisionPlaybookPath returned error: %v", err)
+	}
+
+	checkoutDir := filepath.Join(dirs.CacheDir, ansiblePlaybookSourcesCacheDir, "remote-playbooks")
+	want := filepath.Join(checkoutDir, "playbooks", "custom.yml")
+	if playbookPath != want {
+		t.Fatalf("expected git playbook path %q, got %q", want, playbookPath)
+	}
+	if !gitCallsContain(*calls, "|clone https://example.test/dev-alchemy-playbooks.git "+checkoutDir) {
+		t.Fatalf("expected git clone call, got %v", *calls)
+	}
+	if !gitCallsContain(*calls, checkoutDir+"|checkout main") {
+		t.Fatalf("expected checkout of configured ref, got %v", *calls)
+	}
+}
+
+func TestResolveProvisionPlaybookPathRejectsMissingConfiguredPlaybookSource(t *testing.T) {
+	projectDir := t.TempDir()
+	dirs := withIsolatedAlchemyDirectories(t, projectDir)
+	writeRoleSourcesConfig(t, dirs.ConfigDir, strings.Join([]string{
+		"playbook: custom.yml",
+		"include_default_playbooks: false",
+		"playbook_sources: []",
+		"",
+	}, "\n"))
+
+	_, err := resolveProvisionPlaybookPath(ProvisionOptions{
+		PlaybookPath: defaultProvisionPlaybook,
+	})
+	if err == nil {
+		t.Fatal("expected missing configured playbook source to fail")
+	}
+	if !strings.Contains(err.Error(), "include_default_playbooks") {
+		t.Fatalf("expected include_default_playbooks guidance, got: %v", err)
 	}
 }
 
@@ -352,6 +480,17 @@ func writeRoleSourcesConfig(t *testing.T, configDir string, content string) {
 	configPath := filepath.Join(configDir, ansibleRoleSourcesConfigFile)
 	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed to write role sources config: %v", err)
+	}
+}
+
+func writeProjectFile(t *testing.T, root string, relPath string, content string) {
+	t.Helper()
+	targetPath := filepath.Join(root, relPath)
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		t.Fatalf("failed to create fixture directory for %q: %v", relPath, err)
+	}
+	if err := os.WriteFile(targetPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write fixture file %q: %v", relPath, err)
 	}
 }
 

@@ -138,7 +138,7 @@ Important Ansible options exposed directly:
 
 Pass any other ansible-playbook flags after --.
 When --inventory-path is set, Alchemy stops forcing the default local --limit target, so pass one yourself when needed.
-Configure layered local or Git-backed role roots in the OS-specific ansible-role-sources.yml file.
+Configure layered local or Git-backed role and playbook roots in the OS-specific ansible-role-sources.yml file.
 
 Examples:
   alchemy provision local --check

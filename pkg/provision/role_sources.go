@@ -19,28 +19,33 @@ import (
 )
 
 const (
-	ansibleRoleSourcesConfigEnvVar  = "DEV_ALCHEMY_ROLE_SOURCES_CONFIG"
-	ansibleRoleSourcesConfigFile    = "ansible-role-sources.yml"
-	ansibleRoleSourcesCacheDir      = "ansible-role-sources"
-	ansibleRoleSourceGitCommandTime = 10 * time.Minute
+	ansibleRoleSourcesConfigEnvVar   = "DEV_ALCHEMY_ROLE_SOURCES_CONFIG"
+	ansibleRoleSourcesConfigFile     = "ansible-role-sources.yml"
+	ansibleRoleSourcesCacheDir       = "ansible-role-sources"
+	ansiblePlaybookSourcesCacheDir   = "ansible-playbook-sources"
+	ansibleRoleSourceGitCommandTime  = 10 * time.Minute
+	defaultAnsibleSourceSubdirectory = "."
 )
 
 type ansibleRoleSourcesConfig struct {
-	IncludeDefaultRoles *bool                     `json:"include_default_roles" yaml:"include_default_roles"`
-	Playbook            string                    `json:"playbook" yaml:"playbook"`
-	PlaybookPath        string                    `json:"playbook_path" yaml:"playbook_path"`
-	Sources             []ansibleRoleSourceConfig `json:"sources" yaml:"sources"`
+	IncludeDefaultRoles     *bool                     `json:"include_default_roles" yaml:"include_default_roles"`
+	IncludeDefaultPlaybooks *bool                     `json:"include_default_playbooks" yaml:"include_default_playbooks"`
+	Playbook                string                    `json:"playbook" yaml:"playbook"`
+	PlaybookPath            string                    `json:"playbook_path" yaml:"playbook_path"`
+	Sources                 []ansibleRoleSourceConfig `json:"sources" yaml:"sources"`
+	PlaybookSources         []ansibleRoleSourceConfig `json:"playbook_sources" yaml:"playbook_sources"`
 }
 
 type ansibleRoleSourceConfig struct {
-	Name      string `json:"name" yaml:"name"`
-	Type      string `json:"type" yaml:"type"`
-	Path      string `json:"path" yaml:"path"`
-	URL       string `json:"url" yaml:"url"`
-	Ref       string `json:"ref" yaml:"ref"`
-	RolesPath string `json:"roles_path" yaml:"roles_path"`
-	Update    string `json:"update" yaml:"update"`
-	Pull      *bool  `json:"pull" yaml:"pull"`
+	Name          string `json:"name" yaml:"name"`
+	Type          string `json:"type" yaml:"type"`
+	Path          string `json:"path" yaml:"path"`
+	URL           string `json:"url" yaml:"url"`
+	Ref           string `json:"ref" yaml:"ref"`
+	RolesPath     string `json:"roles_path" yaml:"roles_path"`
+	PlaybooksPath string `json:"playbooks_path" yaml:"playbooks_path"`
+	Update        string `json:"update" yaml:"update"`
+	Pull          *bool  `json:"pull" yaml:"pull"`
 }
 
 type roleSourceGitCommandRunner func(workingDir string, timeout time.Duration, executable string, args []string) (string, error)
@@ -106,14 +111,14 @@ func resolveConfiguredProvisionPlaybookPath(projectDir string) (string, bool, er
 		return "", false, err
 	}
 	if !ok {
-		return "", false, nil
+		if !hasConfiguredPlaybookSources(config) {
+			return "", false, nil
+		}
+		playbookPath = defaultProvisionPlaybook
 	}
 
-	resolvedPath, err := resolveConfiguredPath(playbookPath, projectDir)
-	if err != nil {
-		return "", false, fmt.Errorf("resolve playbook path from %q: %w", configPath, err)
-	}
-	return resolvedPath, true, nil
+	resolvedPath, err := resolvePlaybookPathFromConfiguredSources(projectDir, config, configPath, playbookPath)
+	return resolvedPath, true, err
 }
 
 func configuredProvisionPlaybookPath(config ansibleRoleSourcesConfig, configPath string) (string, bool, error) {
@@ -129,6 +134,21 @@ func configuredProvisionPlaybookPath(config ansibleRoleSourcesConfig, configPath
 		return playbookPath, true, nil
 	}
 	return "", false, nil
+}
+
+func hasConfiguredPlaybookSources(config ansibleRoleSourcesConfig) bool {
+	if config.IncludeDefaultPlaybooks != nil {
+		return true
+	}
+	if len(config.PlaybookSources) > 0 {
+		return true
+	}
+	for _, source := range config.Sources {
+		if strings.TrimSpace(source.PlaybooksPath) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func loadCurrentAnsibleRoleSourcesConfig() (ansibleRoleSourcesConfig, string, bool, error) {
@@ -160,6 +180,67 @@ func loadAnsibleRoleSourcesConfig(configPath string) (ansibleRoleSourcesConfig, 
 	}
 
 	return config, true, nil
+}
+
+func resolvePlaybookPathFromConfiguredSources(projectDir string, config ansibleRoleSourcesConfig, configPath string, playbookPath string) (string, error) {
+	playbookPath = strings.TrimSpace(playbookPath)
+	if filepath.IsAbs(playbookPath) {
+		return filepath.Clean(playbookPath), nil
+	}
+
+	playbookRoots, err := resolveAnsiblePlaybookSourcePaths(projectDir, config, configPath)
+	if err != nil {
+		return "", err
+	}
+
+	candidatePaths := make([]string, 0, len(playbookRoots))
+	for _, playbookRoot := range playbookRoots {
+		candidatePath := filepath.Clean(filepath.Join(playbookRoot, filepath.FromSlash(playbookPath)))
+		candidatePaths = append(candidatePaths, candidatePath)
+		if isRegularFile(candidatePath) {
+			return candidatePath, nil
+		}
+	}
+
+	return "", fmt.Errorf("playbook %q was not found in configured playbook sources: %s", playbookPath, strings.Join(candidatePaths, ", "))
+}
+
+func resolveAnsiblePlaybookSourcePaths(projectDir string, config ansibleRoleSourcesConfig, configPath string) ([]string, error) {
+	directories := alchemy_build.GetDirectoriesInstance()
+	cacheRoot := directories.CachePath(ansiblePlaybookSourcesCacheDir)
+	if err := os.MkdirAll(cacheRoot, 0o700); err != nil {
+		return nil, fmt.Errorf("create ansible playbook source cache %q: %w", cacheRoot, err)
+	}
+
+	configDir := filepath.Dir(configPath)
+	playbookPaths := make([]string, 0, len(config.PlaybookSources)+len(config.Sources)+1)
+	usedGitCacheNames := map[string]struct{}{}
+	for index, source := range config.PlaybookSources {
+		playbookPath, err := resolveAnsiblePlaybookSource(source, index, configDir, cacheRoot, usedGitCacheNames)
+		if err != nil {
+			return nil, err
+		}
+		playbookPaths = appendUniquePath(playbookPaths, playbookPath)
+	}
+	for index, source := range config.Sources {
+		if strings.TrimSpace(source.PlaybooksPath) == "" {
+			continue
+		}
+		playbookPath, err := resolveAnsiblePlaybookSource(source, index, configDir, cacheRoot, usedGitCacheNames)
+		if err != nil {
+			return nil, err
+		}
+		playbookPaths = appendUniquePath(playbookPaths, playbookPath)
+	}
+
+	if includeDefaultAnsiblePlaybooks(config) {
+		playbookPaths = appendUniquePath(playbookPaths, filepath.Clean(projectDir))
+	}
+	if len(playbookPaths) == 0 {
+		return nil, fmt.Errorf("%q must configure at least one playbook source or enable include_default_playbooks", configPath)
+	}
+
+	return playbookPaths, nil
 }
 
 func resolveAnsibleRoleSource(
@@ -210,7 +291,11 @@ func resolveLocalAnsibleRoleSource(source ansibleRoleSourceConfig, index int, co
 		return "", fmt.Errorf("invalid local ansible role source %s: path is required", roleSourceLabel(source, index))
 	}
 
-	rolePath, err := resolveConfiguredPath(source.Path, configDir)
+	sourcePath, err := resolveConfiguredPath(source.Path, configDir)
+	if err != nil {
+		return "", fmt.Errorf("invalid local ansible role source %s: %w", roleSourceLabel(source, index), err)
+	}
+	rolePath, err := ansibleSourceSubdirectoryPath(sourcePath, source.RolesPath, "roles_path")
 	if err != nil {
 		return "", fmt.Errorf("invalid local ansible role source %s: %w", roleSourceLabel(source, index), err)
 	}
@@ -231,7 +316,7 @@ func resolveGitAnsibleRoleSource(
 		return "", fmt.Errorf("invalid git ansible role source %s: url is required", roleSourceLabel(source, index))
 	}
 
-	cacheName, err := gitRoleSourceCacheName(source)
+	cacheName, err := gitSourceCacheName(source, source.RolesPath)
 	if err != nil {
 		return "", fmt.Errorf("invalid git ansible role source %s: %w", roleSourceLabel(source, index), err)
 	}
@@ -245,7 +330,7 @@ func resolveGitAnsibleRoleSource(
 		return "", fmt.Errorf("prepare git ansible role source %s: %w", roleSourceLabel(source, index), err)
 	}
 
-	rolesPath, err := gitRoleSourceRolesPath(checkoutDir, source.RolesPath)
+	rolesPath, err := ansibleSourceSubdirectoryPath(checkoutDir, source.RolesPath, "roles_path")
 	if err != nil {
 		return "", fmt.Errorf("invalid git ansible role source %s: %w", roleSourceLabel(source, index), err)
 	}
@@ -254,6 +339,83 @@ func resolveGitAnsibleRoleSource(
 	}
 
 	return rolesPath, nil
+}
+
+func resolveAnsiblePlaybookSource(
+	source ansibleRoleSourceConfig,
+	index int,
+	configDir string,
+	cacheRoot string,
+	usedGitCacheNames map[string]struct{},
+) (string, error) {
+	sourceType, err := normalizeAnsibleRoleSourceType(source)
+	if err != nil {
+		return "", fmt.Errorf("invalid ansible playbook source %s: %w", roleSourceLabel(source, index), err)
+	}
+
+	switch sourceType {
+	case "local":
+		return resolveLocalAnsiblePlaybookSource(source, index, configDir)
+	case "git":
+		return resolveGitAnsiblePlaybookSource(source, index, cacheRoot, usedGitCacheNames)
+	default:
+		return "", fmt.Errorf("invalid ansible playbook source %s: unsupported type %q", roleSourceLabel(source, index), source.Type)
+	}
+}
+
+func resolveLocalAnsiblePlaybookSource(source ansibleRoleSourceConfig, index int, configDir string) (string, error) {
+	if strings.TrimSpace(source.Path) == "" {
+		return "", fmt.Errorf("invalid local ansible playbook source %s: path is required", roleSourceLabel(source, index))
+	}
+
+	sourcePath, err := resolveConfiguredPath(source.Path, configDir)
+	if err != nil {
+		return "", fmt.Errorf("invalid local ansible playbook source %s: %w", roleSourceLabel(source, index), err)
+	}
+	playbookPath, err := ansibleSourceSubdirectoryPath(sourcePath, source.PlaybooksPath, "playbooks_path")
+	if err != nil {
+		return "", fmt.Errorf("invalid local ansible playbook source %s: %w", roleSourceLabel(source, index), err)
+	}
+	if err := validatePlaybookSourceDirectory(playbookPath); err != nil {
+		return "", fmt.Errorf("invalid local ansible playbook source %s: %w", roleSourceLabel(source, index), err)
+	}
+
+	return playbookPath, nil
+}
+
+func resolveGitAnsiblePlaybookSource(
+	source ansibleRoleSourceConfig,
+	index int,
+	cacheRoot string,
+	usedGitCacheNames map[string]struct{},
+) (string, error) {
+	if strings.TrimSpace(source.URL) == "" {
+		return "", fmt.Errorf("invalid git ansible playbook source %s: url is required", roleSourceLabel(source, index))
+	}
+
+	cacheName, err := gitSourceCacheName(source, source.PlaybooksPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid git ansible playbook source %s: %w", roleSourceLabel(source, index), err)
+	}
+	if _, exists := usedGitCacheNames[cacheName]; exists {
+		return "", fmt.Errorf("invalid git ansible playbook source %s: cache name %q is already used", roleSourceLabel(source, index), cacheName)
+	}
+	usedGitCacheNames[cacheName] = struct{}{}
+
+	checkoutDir := filepath.Join(cacheRoot, cacheName)
+	if err := ensureGitRoleSource(source, checkoutDir); err != nil {
+		return "", fmt.Errorf("prepare git ansible playbook source %s: %w", roleSourceLabel(source, index), err)
+	}
+
+	playbookPath, err := ansibleSourceSubdirectoryPath(checkoutDir, source.PlaybooksPath, "playbooks_path")
+	if err != nil {
+		return "", fmt.Errorf("invalid git ansible playbook source %s: %w", roleSourceLabel(source, index), err)
+	}
+	if err := validatePlaybookSourceDirectory(playbookPath); err != nil {
+		return "", fmt.Errorf("invalid git ansible playbook source %s: %w", roleSourceLabel(source, index), err)
+	}
+
+	return playbookPath, nil
 }
 
 func ensureGitRoleSource(source ansibleRoleSourceConfig, checkoutDir string) error {
@@ -378,18 +540,18 @@ func runGitForRoleSource(workingDir string, args ...string) error {
 	return nil
 }
 
-func gitRoleSourceRolesPath(checkoutDir string, configuredRolesPath string) (string, error) {
-	rolesPath := strings.TrimSpace(configuredRolesPath)
-	if rolesPath == "" {
-		rolesPath = "."
+func ansibleSourceSubdirectoryPath(sourceRoot string, configuredSubdirectory string, fieldName string) (string, error) {
+	subdirectory := strings.TrimSpace(configuredSubdirectory)
+	if subdirectory == "" {
+		subdirectory = defaultAnsibleSourceSubdirectory
 	}
 
-	cleanRolesPath := filepath.Clean(filepath.FromSlash(rolesPath))
-	if filepath.IsAbs(cleanRolesPath) || cleanRolesPath == ".." || strings.HasPrefix(cleanRolesPath, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("roles_path must stay inside the git checkout: %q", configuredRolesPath)
+	cleanSubdirectory := filepath.Clean(filepath.FromSlash(subdirectory))
+	if filepath.IsAbs(cleanSubdirectory) || cleanSubdirectory == ".." || strings.HasPrefix(cleanSubdirectory, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%s must stay inside the configured source: %q", fieldName, configuredSubdirectory)
 	}
 
-	return filepath.Join(checkoutDir, cleanRolesPath), nil
+	return filepath.Join(sourceRoot, cleanSubdirectory), nil
 }
 
 func validateRoleSourceDirectory(rolePath string) error {
@@ -406,8 +568,31 @@ func validateRoleSourceDirectory(rolePath string) error {
 	return nil
 }
 
+func validatePlaybookSourceDirectory(playbookPath string) error {
+	info, err := os.Stat(playbookPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("playbook path %q does not exist", playbookPath)
+		}
+		return fmt.Errorf("inspect playbook path %q: %w", playbookPath, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("playbook path %q is not a directory", playbookPath)
+	}
+	return nil
+}
+
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
 func includeDefaultAnsibleRoles(config ansibleRoleSourcesConfig) bool {
 	return config.IncludeDefaultRoles == nil || *config.IncludeDefaultRoles
+}
+
+func includeDefaultAnsiblePlaybooks(config ansibleRoleSourcesConfig) bool {
+	return config.IncludeDefaultPlaybooks == nil || *config.IncludeDefaultPlaybooks
 }
 
 func defaultAnsibleRolePath(projectDir string) string {
@@ -421,7 +606,7 @@ func roleSourceLabel(source ansibleRoleSourceConfig, index int) string {
 	return fmt.Sprintf("#%d", index+1)
 }
 
-func gitRoleSourceCacheName(source ansibleRoleSourceConfig) (string, error) {
+func gitSourceCacheName(source ansibleRoleSourceConfig, sourceSubdirectory string) (string, error) {
 	if name := strings.TrimSpace(source.Name); name != "" {
 		sanitized := sanitizeRoleSourceCacheName(name)
 		if sanitized == "" {
@@ -444,7 +629,7 @@ func gitRoleSourceCacheName(source ansibleRoleSourceConfig) (string, error) {
 	hashInput := strings.Join([]string{
 		strings.TrimSpace(source.URL),
 		strings.TrimSpace(source.Ref),
-		strings.TrimSpace(source.RolesPath),
+		strings.TrimSpace(sourceSubdirectory),
 	}, "\x00")
 	hash := sha256.Sum256([]byte(hashInput))
 	return baseName + "-" + hex.EncodeToString(hash[:])[:12], nil
