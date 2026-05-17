@@ -160,7 +160,7 @@ func loadCurrentAnsibleRoleSourcesConfig() (ansibleRoleSourcesConfig, string, bo
 }
 
 func loadAnsibleRoleSourcesConfig(configPath string) (ansibleRoleSourcesConfig, bool, error) {
-	content, err := os.ReadFile(configPath)
+	content, err := os.ReadFile(configPath) // #nosec G304 -- configPath is the documented user-selected role-source config file.
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return ansibleRoleSourcesConfig{}, false, nil
@@ -535,7 +535,7 @@ func gitRefExists(checkoutDir string, ref string) bool {
 
 func runGitForRoleSource(workingDir string, args ...string) error {
 	if _, err := runRoleSourceGitCommand(workingDir, ansibleRoleSourceGitCommandTime, "git", args); err != nil {
-		return fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
+		return fmt.Errorf("git %s failed: %w", strings.Join(sanitizeCommandArgsForLogs(args), " "), err)
 	}
 	return nil
 }

@@ -373,6 +373,23 @@ func TestResolveAnsibleRolePathsUpdatesExistingGitBranch(t *testing.T) {
 	}
 }
 
+func TestRunGitForRoleSourceRedactsURLCredentialsInErrors(t *testing.T) {
+	fakeRoleSourceGit(t, func(_ string, _ time.Duration, _ string, _ []string) (string, error) {
+		return "", errors.New("clone failed")
+	})
+
+	err := runGitForRoleSource("", "clone", "https://token@example.test/org/private.git", "/tmp/checkout")
+	if err == nil {
+		t.Fatal("expected git command error")
+	}
+	if strings.Contains(err.Error(), "token") {
+		t.Fatalf("expected credential to be redacted, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "https://***REDACTED***@example.test/org/private.git") {
+		t.Fatalf("expected redacted URL in error, got: %v", err)
+	}
+}
+
 func TestResolveAnsibleRolePathsRejectsEscapingGitRolesPath(t *testing.T) {
 	projectDir := t.TempDir()
 	dirs := withIsolatedAlchemyDirectories(t, projectDir)

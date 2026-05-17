@@ -1868,8 +1868,13 @@ func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout ti
 		return fmt.Errorf("failed to locate cygwin bash executable: %w", err)
 	}
 
-	quotedArgs := make([]string, 0, len(ansibleArgs))
-	for _, arg := range ansibleArgs {
+	cygwinArgs, err := ansibleArgsForCygwin(ansibleArgs)
+	if err != nil {
+		return err
+	}
+
+	quotedArgs := make([]string, 0, len(cygwinArgs))
+	for _, arg := range cygwinArgs {
 		quotedArgs = append(quotedArgs, bashSingleQuote(arg))
 	}
 
@@ -1883,6 +1888,52 @@ func runAnsibleViaCygwinBash(workingDir string, ansibleArgs []string, timeout ti
 		runtimeEnv,
 		logPrefix,
 	)
+}
+
+func ansibleArgsForCygwin(ansibleArgs []string) ([]string, error) {
+	cygwinArgs := append([]string(nil), ansibleArgs...)
+	if len(cygwinArgs) == 0 {
+		return cygwinArgs, nil
+	}
+
+	if err := convertCygwinPathArgument(cygwinArgs, 0, "playbook path"); err != nil {
+		return nil, err
+	}
+
+	for index, arg := range cygwinArgs {
+		if index+1 >= len(cygwinArgs) {
+			continue
+		}
+		switch arg {
+		case "-i", "--inventory", "--inventory-file":
+			if err := convertCygwinPathArgument(cygwinArgs, index+1, "inventory path"); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return cygwinArgs, nil
+}
+
+func convertCygwinPathArgument(args []string, index int, label string) error {
+	if !isDriveLetterWindowsPath(args[index]) {
+		return nil
+	}
+	convertedPath, err := windowsPathToCygwinPath(args[index])
+	if err != nil {
+		return fmt.Errorf("failed to convert %s to cygwin path: %w", label, err)
+	}
+	args[index] = convertedPath
+	return nil
+}
+
+func isDriveLetterWindowsPath(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	if len(trimmed) < 2 || trimmed[1] != ':' {
+		return false
+	}
+	drive := trimmed[0]
+	return (drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')
 }
 
 func getCygwinBashExecutable() (string, error) {
