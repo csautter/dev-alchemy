@@ -18,7 +18,7 @@ $azureCliVersion = "2.86.0"
 # renovate: datasource=nuget depName=python313 versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $nativePythonVersion = "3.13.13"
 # renovate: datasource=nuget depName=cygwin versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
-$cygwinVersion = "3.6.7"
+$cygwinVersion = "3.6.9"
 # renovate: datasource=nuget depName=cyg-get versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
 $cygGetVersion = "1.2.2"
 # renovate: datasource=nuget depName=virtualbox versioning=nuget registryUrl=https://community.chocolatey.org/api/v2/
@@ -50,6 +50,11 @@ function Test-IsAdministrator {
 }
 
 function Invoke-SelfElevated {
+    param(
+        [switch]$WithGo,
+        [switch]$VirtualBox
+    )
+
     $scriptPath = $PSCommandPath
     if (-not $scriptPath) {
         $scriptPath = $MyInvocation.MyCommand.Path
@@ -171,6 +176,43 @@ function Get-ChocolateyInstalledVersion {
     return $null
 }
 
+function Invoke-ChocolateyPackageCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Command,
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName,
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $maxAttempts = 3
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        $chocoOutput = & choco @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+
+        foreach ($line in $chocoOutput) {
+            Write-Host $line
+        }
+
+        if ($exitCode -in @(0, 1641, 3010)) {
+            Refresh-ProcessPath
+            return
+        }
+
+        $shouldRetry = $attempt -lt $maxAttempts -and (Test-ShouldRetryChocolateyCommand -OutputLines $chocoOutput)
+        if (-not $shouldRetry) {
+            throw "Chocolatey failed to $Command $PackageName $Version with exit code $exitCode."
+        }
+
+        $sleepSeconds = 5 * $attempt
+        Write-Warning "Chocolatey failed to $Command $PackageName $Version with exit code $exitCode. Retrying in $sleepSeconds seconds (attempt $($attempt + 1) of $maxAttempts)..."
+        Start-Sleep -Seconds $sleepSeconds
+    }
+}
+
 function Ensure-ChocolateyPackage {
     param(
         [Parameter(Mandatory = $true)]
@@ -182,49 +224,27 @@ function Ensure-ChocolateyPackage {
 
     $installedVersion = Get-ChocolateyInstalledVersion -PackageName $PackageName
     if ($installedVersion -eq $Version) {
-        Write-Output "$PackageName $Version is already installed."
+        Write-Host "$PackageName $Version is already installed."
         return
     }
 
     if ($installedVersion) {
-        Write-Output "$PackageName $installedVersion detected. Enforcing pinned version $Version..."
+        Write-Host "$PackageName $installedVersion detected. Enforcing pinned version $Version..."
         $command = "upgrade"
     } else {
-        Write-Output "$PackageName not found. Installing pinned version $Version..."
+        Write-Host "$PackageName not found. Installing pinned version $Version..."
         $command = "install"
     }
 
-    $args = @($command, $PackageName, "-y", "--no-progress", "--version", $Version)
+    $packageArguments = @($command, $PackageName, "-y", "--no-progress", "--version", $Version)
     if ($command -eq "upgrade") {
-        $args += "--allow-downgrade"
+        $packageArguments += "--allow-downgrade"
     }
     if ($ExtraArgs.Count -gt 0) {
-        $args += $ExtraArgs
+        $packageArguments += $ExtraArgs
     }
 
-    $maxAttempts = 3
-    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-        $chocoOutput = & choco @args 2>&1
-        $exitCode = $LASTEXITCODE
-
-        foreach ($line in $chocoOutput) {
-            Write-Output $line
-        }
-
-        if ($exitCode -in @(0, 1641, 3010)) {
-            Refresh-ProcessPath
-            return
-        }
-
-        $shouldRetry = $attempt -lt $maxAttempts -and (Test-ShouldRetryChocolateyCommand -OutputLines $chocoOutput)
-        if (-not $shouldRetry) {
-            throw "Chocolatey failed to $command $PackageName $Version with exit code $exitCode."
-        }
-
-        $sleepSeconds = 5 * $attempt
-        Write-Warning "Chocolatey failed to $command $PackageName $Version with exit code $exitCode. Retrying in $sleepSeconds seconds (attempt $($attempt + 1) of $maxAttempts)..."
-        Start-Sleep -Seconds $sleepSeconds
-    }
+    Invoke-ChocolateyPackageCommand -Command $command -PackageName $PackageName -Version $Version -Arguments $packageArguments
 }
 
 function Ensure-GoInstallRootClean {
@@ -322,7 +342,7 @@ function Test-ShouldRetryChocolateyCommand {
     )
 }
 
-function Get-CygwinRootDir {
+function Get-CygwinRootDirIfAvailable {
     $registryKeys = @(
         "HKLM:\SOFTWARE\Cygwin\setup",
         "HKLM:\SOFTWARE\WOW6432Node\Cygwin\setup"
@@ -351,47 +371,521 @@ function Get-CygwinRootDir {
         }
     }
 
+    return $null
+}
+
+function Get-CygwinRootDir {
+    $rootDir = Get-CygwinRootDirIfAvailable
+    if ($rootDir) {
+        return $rootDir
+    }
+
     throw "Unable to locate the Cygwin installation root."
 }
 
 function Get-CygwinInstalledDbPath {
-    return Join-Path (Get-CygwinRootDir) "etc\setup\installed.db"
+    param(
+        [string]$CygwinRoot
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CygwinRoot)) {
+        $CygwinRoot = Get-CygwinRootDir
+    }
+
+    return Join-Path $CygwinRoot "etc\setup\installed.db"
 }
 
 function Get-CygwinBashPath {
-    return Join-Path (Get-CygwinRootDir) "bin\bash.exe"
+    param(
+        [string]$CygwinRoot
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CygwinRoot)) {
+        $CygwinRoot = Get-CygwinRootDir
+    }
+
+    return Join-Path $CygwinRoot "bin\bash.exe"
 }
 
-function Test-CygwinPackageInstalled {
+function Get-CygwinSetupPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CygwinRoot
+    )
+
+    return Join-Path $CygwinRoot "cygwinsetup.exe"
+}
+
+function Assert-CygwinInstallRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedRoot
+    )
+
+    $resolvedRoot = Get-CygwinRootDir
+    if (-not (Test-SameWindowsPath -Left $resolvedRoot -Right $ExpectedRoot)) {
+        throw "Cygwin resolved to '$resolvedRoot' after installation, but the selected install root was '$ExpectedRoot'. Check the Cygwin registry rootdir values and rerun the installer."
+    }
+
+    $requiredPaths = @(
+        (Get-CygwinBashPath -CygwinRoot $resolvedRoot),
+        (Get-CygwinInstalledDbPath -CygwinRoot $resolvedRoot)
+    )
+    foreach ($requiredPath in $requiredPaths) {
+        if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+            throw "Cygwin install root '$resolvedRoot' is missing required file '$requiredPath'."
+        }
+    }
+
+    Write-Host "Verified Cygwin root at $resolvedRoot."
+    return $resolvedRoot
+}
+
+function Get-NormalizedWindowsPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    $normalizedPath = $fullPath.TrimEnd([char[]]@('\', '/'))
+    if (-not [string]::IsNullOrWhiteSpace($pathRoot)) {
+        $normalizedRoot = $pathRoot.TrimEnd([char[]]@('\', '/'))
+        if ($normalizedPath.Equals($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $pathRoot
+        }
+    }
+
+    return $normalizedPath
+}
+
+function Test-SameWindowsPath {
+    param(
+        [string]$Left,
+        [string]$Right
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Left) -or [string]::IsNullOrWhiteSpace($Right)) {
+        return $false
+    }
+
+    $normalizedLeft = Get-NormalizedWindowsPath -Path $Left
+    $normalizedRight = Get-NormalizedWindowsPath -Path $Right
+    return $normalizedLeft.Equals($normalizedRight, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-CygwinRemovalAllowedRoots {
+    return @(
+        $cygwinInstallRoot,
+        "C:\cygwin64",
+        "C:\cygwin",
+        "D:\cygwin"
+    )
+}
+
+function Test-CygwinRootInPreferredFamily {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    $preferredRoot = Get-NormalizedWindowsPath -Path $cygwinInstallRoot
+    $preferredParentPath = Split-Path -Parent $preferredRoot
+    if ([string]::IsNullOrWhiteSpace($preferredParentPath)) {
+        return $false
+    }
+
+    $preferredParent = Get-NormalizedWindowsPath -Path $preferredParentPath
+    $preferredLeaf = Split-Path -Leaf $preferredRoot
+    $normalizedRoot = Get-NormalizedWindowsPath -Path $RootDir
+    $candidateParentPath = Split-Path -Parent $normalizedRoot
+    if ([string]::IsNullOrWhiteSpace($candidateParentPath)) {
+        return $false
+    }
+
+    $candidateParent = Get-NormalizedWindowsPath -Path $candidateParentPath
+    $candidateLeaf = Split-Path -Leaf $normalizedRoot
+    $versionedPreferredLeafPattern = "^$([regex]::Escape($preferredLeaf))-\d"
+
+    return (
+        $candidateParent.Equals($preferredParent, [System.StringComparison]::OrdinalIgnoreCase) -and
+        (
+            $candidateLeaf.Equals($preferredLeaf, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $candidateLeaf -match $versionedPreferredLeafPattern
+        )
+    )
+}
+
+function Test-CygwinRootInRemovalAllowlist {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    foreach ($allowedRoot in (Get-CygwinRemovalAllowedRoots)) {
+        if (Test-SameWindowsPath -Left $RootDir -Right $allowedRoot) {
+            return $true
+        }
+    }
+
+    return Test-CygwinRootInPreferredFamily -RootDir $RootDir
+}
+
+function Test-WindowsPathIsDriveRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    if ([string]::IsNullOrWhiteSpace($pathRoot)) {
+        return $false
+    }
+
+    $normalizedPath = $fullPath.TrimEnd([char[]]@('\', '/'))
+    $normalizedRoot = $pathRoot.TrimEnd([char[]]@('\', '/'))
+    return $normalizedPath.Equals($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-WindowsPathDepth {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
+    if ([string]::IsNullOrWhiteSpace($pathRoot)) {
+        return 0
+    }
+
+    $relativePath = $fullPath.Substring($pathRoot.Length).Trim([char[]]@('\', '/'))
+    if ([string]::IsNullOrWhiteSpace($relativePath)) {
+        return 0
+    }
+
+    return @($relativePath -split "[\\/]" | Where-Object { $_ -ne "" }).Count
+}
+
+function Test-CygwinRootHasDeletionMarkers {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    if (-not (Test-Path -LiteralPath (Join-Path $RootDir "bin\bash.exe") -PathType Leaf)) {
+        return $false
+    }
+
+    $markerPaths = @(
+        "etc\setup\installed.db",
+        "etc\setup\setup.rc",
+        "var\log\setup.log",
+        "Cygwin.bat"
+    )
+    foreach ($markerPath in $markerPaths) {
+        if (Test-Path -LiteralPath (Join-Path $RootDir $markerPath) -PathType Leaf) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Assert-CygwinRootSafeForAutomation {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    $reasons = @()
+    $normalizedRoot = $null
+    try {
+        $normalizedRoot = Get-NormalizedWindowsPath -Path $RootDir
+    } catch {
+        $reasons += "the path could not be normalized: $($_.Exception.Message)"
+    }
+
+    if ($normalizedRoot) {
+        $isAllowedRoot = Test-CygwinRootInRemovalAllowlist -RootDir $normalizedRoot
+        if ($RootDir -notmatch "^[A-Za-z]:[\\/]") {
+            $reasons += "it is not an absolute local Windows path"
+        }
+        if (Test-WindowsPathIsDriveRoot -Path $normalizedRoot) {
+            $reasons += "it resolves to a drive root"
+        }
+        if ((Get-WindowsPathDepth -Path $normalizedRoot) -le 1 -and -not $isAllowedRoot) {
+            $reasons += "it resolves to a high-level directory"
+        }
+        if (-not $isAllowedRoot) {
+            $allowedRoots = (Get-CygwinRemovalAllowedRoots) -join ", "
+            $reasons += "it is outside the allowed Cygwin roots ($allowedRoots, or a versioned sibling of $cygwinInstallRoot)"
+        }
+        if (-not (Test-CygwinRootHasDeletionMarkers -RootDir $normalizedRoot)) {
+            $reasons += "it does not contain bin\bash.exe plus a Cygwin setup marker"
+        }
+    }
+
+    if ($reasons.Count -gt 0) {
+        throw "Refusing to automatically manage Cygwin root '$RootDir' because $($reasons -join '; '). The Cygwin registry rootdir may be stale or corrupt. Fix HKLM:\SOFTWARE\Cygwin\setup rootdir and HKLM:\SOFTWARE\WOW6432Node\Cygwin\setup rootdir if present, or manually remove the directory after verifying it is a Cygwin installation, then rerun this installer."
+    }
+}
+
+function Stop-CygwinProcesses {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RootDir) -or -not (Test-Path -LiteralPath $RootDir)) {
+        return
+    }
+
+    Assert-CygwinRootSafeForAutomation -RootDir $RootDir
+
+    $normalizedRoot = ([System.IO.Path]::GetFullPath($RootDir)).TrimEnd([char[]]@('\', '/'))
+    $rootPrefix = $normalizedRoot + "\"
+    $processes = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.ProcessId -ne $PID -and
+        $_.ExecutablePath -and
+        (
+            $_.ExecutablePath.Equals($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $_.ExecutablePath.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+        )
+    })
+
+    foreach ($process in $processes) {
+        Write-Host "Stopping Cygwin process $($process.ProcessId) ($($process.Name)) before reinstalling Cygwin."
+        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Remove-CygwinInstallRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RootDir) -or -not (Test-Path -LiteralPath $RootDir)) {
+        return
+    }
+
+    Assert-CygwinRootSafeForAutomation -RootDir $RootDir
+
+    Write-Host "Removing existing Cygwin root at $RootDir."
+    try {
+        Remove-Item -LiteralPath $RootDir -Recurse -Force -ErrorAction Stop
+        return $true
+    } catch {
+        Write-Warning "Unable to remove existing Cygwin root at $RootDir. A fresh Cygwin install will use a different root. $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Get-CygwinChocolateyExtraArgs {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallRoot
+    )
+
+    return @("--params", "`"/InstallDir:$InstallRoot /NoStartMenu`"")
+}
+
+function Get-CygwinAlternateInstallRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PreferredRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    $parent = Split-Path -Parent $PreferredRoot
+    $leaf = Split-Path -Leaf $PreferredRoot
+    $safeVersion = $Version -replace "[^A-Za-z0-9.-]", "-"
+    $baseCandidate = [System.IO.Path]::Combine($parent, "$leaf-$safeVersion")
+
+    if (-not (Test-Path -LiteralPath $baseCandidate)) {
+        return $baseCandidate
+    }
+
+    for ($index = 1; $index -le 20; $index++) {
+        $candidate = "$baseCandidate-$index"
+        if (-not (Test-Path -LiteralPath $candidate)) {
+            return $candidate
+        }
+    }
+
+    $timestamp = Get-Date -Format "yyyyMMddHHmmss"
+    return "$baseCandidate-$timestamp"
+}
+
+function Get-CleanCygwinInstallRoot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PreferredRoot,
+        [string]$ExistingRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    $targetRoot = $PreferredRoot
+    $rootsToClean = @()
+    if ($ExistingRoot) {
+        $rootsToClean += $ExistingRoot
+    }
+    if (-not (Test-SameWindowsPath -Left $ExistingRoot -Right $PreferredRoot)) {
+        $rootsToClean += $PreferredRoot
+    }
+
+    foreach ($root in $rootsToClean) {
+        if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+
+        Stop-CygwinProcesses -RootDir $root
+        $removedRoot = Remove-CygwinInstallRoot -RootDir $root
+        if ((-not $removedRoot) -and (Test-SameWindowsPath -Left $root -Right $targetRoot)) {
+            $targetRoot = Get-CygwinAlternateInstallRoot -PreferredRoot $PreferredRoot -Version $Version
+            Write-Host "Using alternate Cygwin install root at $targetRoot."
+        }
+    }
+
+    return $targetRoot
+}
+
+function Clear-CygwinRegistryRootDirs {
+    $registryKeys = @(
+        "HKLM:\SOFTWARE\Cygwin\setup",
+        "HKLM:\SOFTWARE\WOW6432Node\Cygwin\setup"
+    )
+
+    foreach ($registryKey in $registryKeys) {
+        if (Test-Path $registryKey) {
+            Write-Host "Clearing stale Cygwin registry root at $registryKey before installation."
+            Remove-Item -LiteralPath $registryKey -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Uninstall-ChocolateyPackageIfPresent {
     param(
         [Parameter(Mandatory = $true)]
         [string]$PackageName
     )
 
-    $installedDb = Get-CygwinInstalledDbPath
-    if (-not (Test-Path $installedDb)) {
+    $installedVersion = Get-ChocolateyInstalledVersion -PackageName $PackageName
+    if (-not $installedVersion) {
+        return
+    }
+
+    Write-Host "Removing $PackageName $installedVersion before reinstalling Cygwin."
+    $packageArguments = @("uninstall", $PackageName, "-y", "--no-progress")
+    Invoke-ChocolateyPackageCommand -Command "uninstall" -PackageName $PackageName -Version $installedVersion -Arguments $packageArguments
+}
+
+function Ensure-CygwinChocolateyPackage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [Parameter(Mandatory = $true)]
+        [string]$InstallRoot
+    )
+
+    $installedVersion = Get-ChocolateyInstalledVersion -PackageName "cygwin"
+    if ($installedVersion -eq $Version) {
+        Write-Host "cygwin $Version is already installed."
+        return (Assert-CygwinInstallRoot -ExpectedRoot (Get-CygwinRootDir))
+    }
+
+    if (-not $installedVersion) {
+        $existingRoot = Get-CygwinRootDirIfAvailable
+        $targetRoot = Get-CleanCygwinInstallRoot -PreferredRoot $InstallRoot -ExistingRoot $existingRoot -Version $Version
+        Clear-CygwinRegistryRootDirs
+        Ensure-ChocolateyPackage -PackageName "cygwin" -Version $Version -ExtraArgs (Get-CygwinChocolateyExtraArgs -InstallRoot $targetRoot)
+        return (Assert-CygwinInstallRoot -ExpectedRoot $targetRoot)
+    }
+
+    # The upstream Chocolatey upgrade path rewrites cygwinsetup.exe in-place and can fail on stateful runners.
+    Write-Host "cygwin $installedVersion detected. Reinstalling cleanly with pinned version $Version..."
+    $existingRoot = Get-CygwinRootDirIfAvailable
+    if ($existingRoot) {
+        Stop-CygwinProcesses -RootDir $existingRoot
+    }
+
+    Uninstall-ChocolateyPackageIfPresent -PackageName "cyg-get"
+    Uninstall-ChocolateyPackageIfPresent -PackageName "cygwin"
+
+    $targetRoot = Get-CleanCygwinInstallRoot -PreferredRoot $InstallRoot -ExistingRoot $existingRoot -Version $Version
+
+    Clear-CygwinRegistryRootDirs
+    Ensure-ChocolateyPackage -PackageName "cygwin" -Version $Version -ExtraArgs (Get-CygwinChocolateyExtraArgs -InstallRoot $targetRoot)
+    return (Assert-CygwinInstallRoot -ExpectedRoot $targetRoot)
+}
+
+function Test-CygwinPackageInstalled {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName,
+        [Parameter(Mandatory = $true)]
+        [string]$CygwinRoot
+    )
+
+    $installedDb = Get-CygwinInstalledDbPath -CygwinRoot $CygwinRoot
+    if (-not (Test-Path -LiteralPath $installedDb -PathType Leaf)) {
         throw "installed.db not found at $installedDb"
     }
 
     return Select-String -Path $installedDb -Pattern "^(?i)$([regex]::Escape($PackageName))\s" -Quiet
 }
 
+function Invoke-CygwinSetupPackageInstall {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CygwinRoot,
+        [Parameter(Mandatory = $true)]
+        [string[]]$PackageNames
+    )
+
+    $setupPath = Get-CygwinSetupPath -CygwinRoot $CygwinRoot
+    if (-not (Test-Path -LiteralPath $setupPath -PathType Leaf)) {
+        throw "Cygwin setup executable not found at $setupPath."
+    }
+
+    $packageList = $PackageNames -join ","
+    $localPackageDir = Join-Path $CygwinRoot "packages"
+    $setupArguments = @(
+        "--quiet-mode",
+        "--root `"$CygwinRoot`"",
+        "--local-package-dir `"$localPackageDir`"",
+        "--no-desktop",
+        "--no-startmenu",
+        "--packages $packageList"
+    )
+
+    Write-Host "Attempting to install Cygwin packages into ${CygwinRoot}: $packageList"
+    $process = Start-Process -FilePath $setupPath -ArgumentList $setupArguments -Wait -PassThru -WindowStyle Minimized
+    if ($process.ExitCode -ne 0) {
+        throw "Cygwin setup failed to install $packageList into $CygwinRoot with exit code $($process.ExitCode)."
+    }
+}
+
 function Ensure-CygwinPackage {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$PackageName
+        [string]$PackageName,
+        [Parameter(Mandatory = $true)]
+        [string]$CygwinRoot
     )
 
-    if (Test-CygwinPackageInstalled -PackageName $PackageName) {
-        Write-Output "$PackageName is installed."
+    if (Test-CygwinPackageInstalled -PackageName $PackageName -CygwinRoot $CygwinRoot) {
+        Write-Host "$PackageName is installed in $CygwinRoot."
         return
     }
 
-    Write-Output "$PackageName is not installed. Installing..."
-    & cyg-get $PackageName
-    if ($LASTEXITCODE -ne 0) {
-        throw "cyg-get failed to install $PackageName with exit code $LASTEXITCODE."
-    }
+    Write-Host "$PackageName is not installed in $CygwinRoot. Installing..."
+    Invoke-CygwinSetupPackageInstall -CygwinRoot $CygwinRoot -PackageNames @($PackageName)
 }
 
 function Get-CygwinPythonCommand {
@@ -401,10 +895,12 @@ function Get-CygwinPythonCommand {
 function Get-CygwinPipPackageVersion {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$PackageName
+        [string]$PackageName,
+        [Parameter(Mandatory = $true)]
+        [string]$CygwinRoot
     )
 
-    $bashExePath = Get-CygwinBashPath
+    $bashExePath = Get-CygwinBashPath -CygwinRoot $CygwinRoot
     $pythonCommand = Get-CygwinPythonCommand
     $output = & $bashExePath -lc "$pythonCommand -m pip show $PackageName 2>/dev/null"
     if ($LASTEXITCODE -ne 0) {
@@ -425,16 +921,18 @@ function Ensure-CygwinPipPackage {
         [Parameter(Mandatory = $true)]
         [string]$PackageName,
         [Parameter(Mandatory = $true)]
-        [string]$Version
+        [string]$Version,
+        [Parameter(Mandatory = $true)]
+        [string]$CygwinRoot
     )
 
-    $installedVersion = Get-CygwinPipPackageVersion -PackageName $PackageName
+    $installedVersion = Get-CygwinPipPackageVersion -PackageName $PackageName -CygwinRoot $CygwinRoot
     if ($installedVersion -eq $Version) {
         Write-Output "$PackageName $Version is already installed in Cygwin."
         return
     }
 
-    $bashExePath = Get-CygwinBashPath
+    $bashExePath = Get-CygwinBashPath -CygwinRoot $CygwinRoot
     $pythonCommand = Get-CygwinPythonCommand
     $constraint = "'" + $PackageName + "==" + $Version + "'"
 
@@ -450,54 +948,74 @@ function Ensure-CygwinPipPackage {
     }
 }
 
-if (-not (Test-IsAdministrator)) {
-    Invoke-SelfElevated
+function Show-InstalledToolVersions {
+    param(
+        [switch]$WithGo,
+        [Parameter(Mandatory = $true)]
+        [string]$CygwinRoot
+    )
+
+    $bashExePath = Get-CygwinBashPath -CygwinRoot $CygwinRoot
+    python --version
+    & $bashExePath -lc "python3 --version"
+    & $bashExePath -lc "ansible --version"
+    if ($WithGo) {
+        go version
+    }
+    git --version
+    make --version
+    packer version
+    az version
 }
 
-Ensure-ChocolateyInstalled
+function Invoke-DevAlchemySelfSetup {
+    param(
+        [switch]$WithGo,
+        [switch]$VirtualBox
+    )
 
-if ($WithGo) {
-    Ensure-GoInstallRootClean -DesiredVersion $golangVersion
-    Ensure-ChocolateyPackage -PackageName "golang" -Version $golangVersion
-    Assert-GoToolchainLayout
-} else {
-    Write-Output "Skipping Go installation because -WithGo was not specified."
+    if (-not (Test-IsAdministrator)) {
+        Invoke-SelfElevated -WithGo:$WithGo -VirtualBox:$VirtualBox
+    }
+
+    Ensure-ChocolateyInstalled
+
+    if ($WithGo) {
+        Ensure-GoInstallRootClean -DesiredVersion $golangVersion
+        Ensure-ChocolateyPackage -PackageName "golang" -Version $golangVersion
+        Assert-GoToolchainLayout
+    } else {
+        Write-Output "Skipping Go installation because -WithGo was not specified."
+    }
+    Ensure-ChocolateyPackage -PackageName "git" -Version $gitVersion
+    Ensure-ChocolateyPackage -PackageName "make" -Version $makeVersion
+    Ensure-ChocolateyPackage -PackageName "packer" -Version $packerVersion
+    Ensure-ChocolateyPackage -PackageName "azure-cli" -Version $azureCliVersion
+    $nativePythonPackageName = Get-NativePythonChocolateyPackageName -Version $nativePythonVersion
+    Ensure-ChocolateyPackage -PackageName $nativePythonPackageName -Version $nativePythonVersion
+    Assert-NativePythonAvailable
+    Export-CommandDirectoryToGitHubPath -CommandName "python"
+    $cygwinRoot = Ensure-CygwinChocolateyPackage -Version $cygwinVersion -InstallRoot $cygwinInstallRoot
+    Ensure-ChocolateyPackage -PackageName "cyg-get" -Version $cygGetVersion
+
+    if ($VirtualBox) {
+        Ensure-ChocolateyPackage -PackageName "virtualbox" -Version $virtualBoxVersion
+        Ensure-PathContains -PathEntry "C:\Program Files\Oracle\VirtualBox"
+    } else {
+        Write-Output "Skipping VirtualBox installation because -VirtualBox was not specified."
+    }
+
+    Ensure-PathContains -PathEntry "C:\Program Files\Git\bin"
+
+    foreach ($package in $cygwinPackages) {
+        Ensure-CygwinPackage -PackageName $package -CygwinRoot $cygwinRoot
+    }
+
+    Ensure-CygwinPipPackage -PackageName "ansible" -Version $ansibleVersion -CygwinRoot $cygwinRoot
+    Ensure-CygwinPipPackage -PackageName "pywinrm" -Version $pywinrmVersion -CygwinRoot $cygwinRoot
+    Show-InstalledToolVersions -WithGo:$WithGo -CygwinRoot $cygwinRoot
 }
-Ensure-ChocolateyPackage -PackageName "git" -Version $gitVersion
-Ensure-ChocolateyPackage -PackageName "make" -Version $makeVersion
-Ensure-ChocolateyPackage -PackageName "packer" -Version $packerVersion
-Ensure-ChocolateyPackage -PackageName "azure-cli" -Version $azureCliVersion
-$nativePythonPackageName = Get-NativePythonChocolateyPackageName -Version $nativePythonVersion
-Ensure-ChocolateyPackage -PackageName $nativePythonPackageName -Version $nativePythonVersion
-Assert-NativePythonAvailable
-Export-CommandDirectoryToGitHubPath -CommandName "python"
-Ensure-ChocolateyPackage -PackageName "cygwin" -Version $cygwinVersion -ExtraArgs @("--params", "`"/InstallDir:$cygwinInstallRoot /NoStartMenu`"")
-Ensure-ChocolateyPackage -PackageName "cyg-get" -Version $cygGetVersion
 
-if ($VirtualBox) {
-    Ensure-ChocolateyPackage -PackageName "virtualbox" -Version $virtualBoxVersion
-    Ensure-PathContains -PathEntry "C:\Program Files\Oracle\VirtualBox"
-} else {
-    Write-Output "Skipping VirtualBox installation because -VirtualBox was not specified."
+if ($env:DEV_ALCHEMY_SELF_SETUP_IMPORT_ONLY -ne "1") {
+    Invoke-DevAlchemySelfSetup -WithGo:$WithGo -VirtualBox:$VirtualBox
 }
-
-Ensure-PathContains -PathEntry "C:\Program Files\Git\bin"
-
-foreach ($package in $cygwinPackages) {
-    Ensure-CygwinPackage -PackageName $package
-}
-
-Ensure-CygwinPipPackage -PackageName "ansible" -Version $ansibleVersion
-Ensure-CygwinPipPackage -PackageName "pywinrm" -Version $pywinrmVersion
-
-$bashExePath = Get-CygwinBashPath
-python --version
-& $bashExePath -lc "python3 --version"
-& $bashExePath -lc "ansible --version"
-if ($WithGo) {
-    go version
-}
-git --version
-make --version
-packer version
-az version
