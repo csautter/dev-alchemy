@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "webSearch": {
+      "type": "stdio",
+      "command": "web-search-mcp-server"
+    }
+  }
+}

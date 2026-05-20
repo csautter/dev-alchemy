@@ -62,5 +62,19 @@
   "azureFunctions.projectLanguage": "Python",
   "azureFunctions.projectRuntime": "~4",
   "debug.internalConsoleOptions": "neverOpen",
-  "azureFunctions.projectLanguageModel": 2
+  "azureFunctions.projectLanguageModel": 2,
+  "chat.mcp.serverSampling": {
+    "dev-alchemy/.vscode/mcp.json: webSearch": {
+      "allowedModels": [
+        "copilot/auto",
+        "copilotcli/claude-sonnet-4.6",
+        "ollama/Ollama/deepseek-r1:7b",
+        "copilot/gemini-2.5-pro",
+        "ollama/Ollama/llama3.1:8b",
+        "ollama/Ollama/qwen2.5-coder:7b",
+        "ollama/Ollama/qwen3:4b",
+        "ollama/Ollama/qwen3:8b"
+      ]
+    }
+  }
 }

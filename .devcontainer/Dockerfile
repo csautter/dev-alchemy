@@ -2,6 +2,7 @@ FROM mcr.microsoft.com/devcontainers/go:2-1.26-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_VERSION=24.15.0
+ENV WEB_SEARCH_MCP_VERSION=0.3.2
 # renovate: datasource=custom.powershell-linux-x64 depName=PowerShell/PowerShell versioning=semver
 ENV POWERSHELL_VERSION="7.6.1"
 ENV POWERSHELL_SHA256_X64="dfc94229767921603f7c3e1cb1ac5aa931448af7496ccf657723b6278057c415"
@@ -13,10 +14,55 @@ RUN apt-get update \
         ansible \
         ca-certificates \
         curl \
+        fonts-freefont-ttf \
+        fonts-ipafont-gothic \
+        fonts-liberation \
+        fonts-noto-color-emoji \
+        fonts-tlwg-loma-otf \
+        fonts-unifont \
+        fonts-wqy-zenhei \
         gpg \
+        libasound2 \
+        libatk-bridge2.0-0 \
+        libatk1.0-0 \
+        libatspi2.0-0 \
+        libcairo-gobject2 \
+        libcairo2 \
+        libcups2 \
+        libdbus-1-3 \
+        libdbus-glib-1-2 \
+        libdrm2 \
+        libfontconfig1 \
+        libfreetype6 \
+        libgbm1 \
+        libgdk-pixbuf-2.0-0 \
+        libglib2.0-0 \
+        libgtk-3-0 \
+        libharfbuzz0b \
+        libnspr4 \
+        libnss3 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libx11-6 \
+        libx11-xcb1 \
+        libxcb-shm0 \
+        libxcb1 \
+        libxcomposite1 \
+        libxcursor1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxi6 \
+        libxkbcommon0 \
+        libxrandr2 \
+        libxrender1 \
+        libxss1 \
+        libxtst6 \
         ruby-full \
         shellcheck \
         socat \
+        xfonts-scalable \
+        xvfb \
         xz-utils \
         yq \
     && rm -rf /var/lib/apt/lists/*
@@ -49,6 +95,18 @@ RUN arch="$(dpkg --print-architecture)" \
     && node --version \
     && npm --version \
     && npx --version
+
+RUN mkdir -p /opt/web-search-mcp \
+    && curl -fsSL "https://github.com/mrkrsl/web-search-mcp/archive/refs/tags/v${WEB_SEARCH_MCP_VERSION}.tar.gz" -o /tmp/web-search-mcp.tar.gz \
+    && tar -xzf /tmp/web-search-mcp.tar.gz -C /opt/web-search-mcp --strip-components=1 \
+    && rm -f /tmp/web-search-mcp.tar.gz \
+    && cd /opt/web-search-mcp \
+    && npm ci \
+    && npx playwright install chromium firefox \
+    && npm run build \
+    && printf '%s\n' '#!/bin/sh' 'exec node /opt/web-search-mcp/dist/index.js "$@"' > /usr/local/bin/web-search-mcp-server \
+    && chmod +x /usr/local/bin/web-search-mcp-server \
+    && test -f /opt/web-search-mcp/dist/index.js
 
 RUN . /etc/os-release \
     && curl -fsSL https://apt.releases.hashicorp.com/gpg | \
