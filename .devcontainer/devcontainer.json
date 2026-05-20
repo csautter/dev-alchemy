@@ -6,8 +6,10 @@
 		"dockerfile": "Dockerfile"
 	},
 	"containerEnv": {
-    	"GOTOOLCHAIN": "auto"
-  	},
+		"GOTOOLCHAIN": "auto",
+		"OLLAMA_HOST": "http://127.0.0.1:11434",
+		"OLLAMA_UPSTREAM": "172.17.0.2:11434"
+	},
 	"mounts": [
 		"source=${localEnv:HOME}${localEnv:USERPROFILE}/.agents/skills,target=/root/.agents/skills,type=bind,consistency=cached",
 		"source=devalchemy-vscode-server-data,target=/root/.vscode-server/data,type=volume"
@@ -44,5 +46,6 @@
 	// using user root is just recommended with rootless docker
 	"remoteUser": "root",
 	"containerUser": "root",
+	"postStartCommand": "sh .devcontainer/start-ollama-socat.sh",
  	"updateRemoteUserUID": true
 }

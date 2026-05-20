@@ -16,6 +16,7 @@ RUN apt-get update \
         gpg \
         ruby-full \
         shellcheck \
+        socat \
         xz-utils \
         yq \
     && rm -rf /var/lib/apt/lists/*
