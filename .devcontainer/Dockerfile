@@ -3,10 +3,10 @@ FROM mcr.microsoft.com/devcontainers/go:2-1.26-trixie
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_VERSION=24.15.0
 # renovate: datasource=custom.powershell-linux-x64 depName=PowerShell/PowerShell versioning=semver
-ENV POWERSHELL_VERSION="7.6.1"
-ENV POWERSHELL_SHA256_X64="dfc94229767921603f7c3e1cb1ac5aa931448af7496ccf657723b6278057c415"
-# renovate: datasource=custom.powershell-linux-arm64 depName=PowerShell/PowerShell version=7.6.1 versioning=semver
-ENV POWERSHELL_SHA256_ARM64="73498813194ea0d849d5942332ee6e51657ea66da08216aa1050788d5c52b741"
+ENV POWERSHELL_VERSION="7.6.2"
+ENV POWERSHELL_SHA256_X64="6cbcfbf20e376aa62ffd91c973493c41a7a52ddfd5a5db3ff9bc12f0d0fe9292"
+# renovate: datasource=custom.powershell-linux-arm64 depName=PowerShell/PowerShell version=7.6.2 versioning=semver
+ENV POWERSHELL_SHA256_ARM64="a8d4e386dfafda385d0604045eed03ce6f3a843d45fc8f0b9588b836ca17cdb8"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
