@@ -8,7 +8,7 @@ fi
 
 # Renovate-managed version pins
 # renovate: datasource=custom.hashicorp depName=packer packageName=packer versioning=semver
-PACKER_VERSION="1.15.3"
+PACKER_VERSION="1.15.4"
 # renovate: datasource=custom.homebrew-formula depName=go packageName=go versioning=loose
 GO_VERSION="1.26.3"
 # renovate: datasource=custom.homebrew-cask depName=utm packageName=utm versioning=loose
