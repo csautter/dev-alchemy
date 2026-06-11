@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/go-getter v1.8.6
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.10.2
-	github.com/vbauerster/mpb/v8 v8.12.0
+	github.com/vbauerster/mpb/v8 v8.12.1
 	golang.org/x/sys v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 	oras.land/oras-go/v2 v2.6.0
@@ -65,7 +65,7 @@ require (
 	github.com/hashicorp/go-version v1.8.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
-	github.com/mattn/go-runewidth v0.0.20 // indirect
+	github.com/mattn/go-runewidth v0.0.23 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
