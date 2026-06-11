@@ -49,7 +49,7 @@ FFMPEG_VERSION="8.1.1"
 # renovate: datasource=custom.homebrew-formula depName=vncsnapshot packageName=vncsnapshot versioning=loose
 VNCSNAPSHOT_VERSION="1.2a"
 # renovate: datasource=custom.homebrew-formula depName=xorriso packageName=xorriso versioning=loose
-XORRISO_VERSION="1.5.8.pl01"
+XORRISO_VERSION="1.5.8.pl02"
 # renovate: datasource=custom.homebrew-formula depName=ansible packageName=ansible versioning=loose
 ANSIBLE_VERSION="13.6.0"
 # renovate: datasource=custom.homebrew-formula depName=python@3.13 packageName=python@3.13 versioning=loose
