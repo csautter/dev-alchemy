@@ -73,7 +73,9 @@
         "ollama/Ollama/llama3.1:8b",
         "ollama/Ollama/qwen2.5-coder:7b",
         "ollama/Ollama/qwen3:4b",
-        "ollama/Ollama/qwen3:8b"
+        "ollama/Ollama/qwen3:8b",
+        "copilotcli/gpt-5.4",
+        "copilot/gpt-5.4"
       ]
     }
   }
