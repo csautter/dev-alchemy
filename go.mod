@@ -10,7 +10,7 @@ require (
 	github.com/vbauerster/mpb/v8 v8.12.1
 	golang.org/x/sys v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
-	oras.land/oras-go/v2 v2.6.0
+	oras.land/oras-go/v2 v2.6.1
 )
 
 require (
