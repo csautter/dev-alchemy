@@ -64,4 +64,4 @@ RUN . /etc/os-release \
     && apt-get install -y --no-install-recommends packer \
     && rm -rf /var/lib/apt/lists/*
 
-RUN go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1
+RUN go install github.com/securego/gosec/v2/cmd/gosec@v2.27.1
