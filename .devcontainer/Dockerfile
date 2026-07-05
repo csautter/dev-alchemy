@@ -23,6 +23,7 @@ ENV TFLINT_SHA256_ARM64="6d858ca7f11858c3fe3c5e29cc746823abccb55e2d2e2da130fa7ad
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ansible \
+        apt-transport-https \
         ca-certificates \
         curl \
         gpg \
@@ -32,6 +33,23 @@ RUN apt-get update \
         xz-utils \
         yq \
     && rm -rf /var/lib/apt/lists/*
+
+RUN . /etc/os-release \
+    && case "${ID}:${VERSION_CODENAME}" in \
+        debian:trixie) azure_cli_suite="bookworm" ;; \
+        *) azure_cli_suite="${VERSION_CODENAME}" ;; \
+    esac \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -sLS https://packages.microsoft.com/keys/microsoft.asc | \
+        gpg --dearmor --yes -o /etc/apt/keyrings/microsoft.gpg \
+    && chmod go+r /etc/apt/keyrings/microsoft.gpg \
+    && printf 'Types: deb\nURIs: https://packages.microsoft.com/repos/azure-cli/\nSuites: %s\nComponents: main\nArchitectures: %s\nSigned-by: /etc/apt/keyrings/microsoft.gpg\n' \
+        "${azure_cli_suite}" "$(dpkg --print-architecture)" \
+        > /etc/apt/sources.list.d/azure-cli.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends azure-cli \
+    && rm -rf /var/lib/apt/lists/* \
+    && az version
 
 RUN arch="$(dpkg --print-architecture)" \
     && case "${arch}" in \
