@@ -50,6 +50,12 @@ User-facing surfaces must be migrated immediately when touched. This includes:
 - user-facing configuration examples
 - scripts or setup instructions that users copy and run
 
+Old repository URLs must be replaced with, or mapped to, the new Sailwright
+release URL:
+
+- Old: https://github.com/csautter/dev-alchemy
+- New: https://github.com/csautter/sailwright
+
 The CLI command name is `sailwright`. A short alias, `sail`, is supported only
 as an opt-in convenience. Users may configure it with a shell alias such as
 `alias sail=sailwright`, or install a `sail` symlink that points to the
