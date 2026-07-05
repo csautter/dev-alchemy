@@ -119,4 +119,14 @@ RUN . /etc/os-release \
         terraform \
     && rm -rf /var/lib/apt/lists/*
 
+RUN curl -fsSL https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+        gpg --dearmor --yes -o /usr/share/keyrings/trivy.gpg \
+    && chmod go+r /usr/share/keyrings/trivy.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
+        > /etc/apt/sources.list.d/trivy.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends trivy \
+    && rm -rf /var/lib/apt/lists/* \
+    && trivy --version
+
 RUN go install github.com/securego/gosec/v2/cmd/gosec@v2.27.1
