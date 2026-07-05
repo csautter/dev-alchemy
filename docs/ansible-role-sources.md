@@ -28,11 +28,17 @@ bundled `./roles` directory. When the config file exists,
 `include_default_roles` defaults to `true`, so configured sources are placed
 before the bundled roles.
 
-Set `playbook` when this source stack should use a default playbook other than
-the bundled fallback, `./playbooks/role-sources-test.yml`. Relative playbook
-paths are resolved through the configured `playbook_sources` first, then
-through the bundled Sailwright project when `include_default_playbooks` is
+Set `playbook` when this source stack should define the default entrypoint for
+bare `sailwright provision local` and VM provisioning commands. Relative
+playbook paths are resolved through the configured `playbook_sources` first,
+then through the bundled Sailwright project when `include_default_playbooks` is
 enabled. The `--playbook` CLI flag still wins when it is set.
+
+If no config playbook is available, Sailwright falls back to
+`./playbooks/role-sources-test.yml`, a small smoke/example playbook for
+role-source resolution. The broader bundled `./playbooks/setup.yml` is also an
+example entrypoint; run it explicitly with `--playbook ./playbooks/setup.yml`
+or set it as `playbook` in your config.
 
 ```yaml
 playbook: custom-setup.yml
@@ -87,7 +93,7 @@ sources:
 
 If `include_default_roles` is `false`, make sure `playbook` points at an
 entrypoint whose role names exist in your configured sources. When you override
-the CLI to run the full bundled `./playbooks/setup.yml`, Sailwright keeps the
+the CLI to run the bundled `./playbooks/setup.yml` example, Sailwright keeps the
 bundled `./roles` directory available as a fallback for those setup roles.
 
 Update behavior can be disabled for a Git source:
@@ -108,8 +114,9 @@ The repository includes two tiny role-source folders for hand testing:
 shared role resolves from `roles_test_2`.
 
 This is also the built-in CLI fallback while developing role-source resolution:
-`role-sources-test.yml` completes quickly and avoids the longer-running setup
-roles. Run the full setup explicitly with `--playbook ./playbooks/setup.yml`.
+`role-sources-test.yml` completes quickly and avoids the broader bundled setup
+example. Run that setup example explicitly with
+`--playbook ./playbooks/setup.yml`.
 
 ```yaml
 playbook: ./playbooks/role-sources-test.yml

@@ -119,12 +119,12 @@ machine instead of a managed VM:
 ```bash
 sailwright provision local --check
 sailwright provision local --proto ssh --check
-sailwright provision local --playbook ./playbooks/bootstrap.yml
+sailwright provision local --playbook ./playbooks/setup.yml --check
 sailwright provision local
 ```
 
-For platform defaults, advanced flags, and Windows cleanup behavior, use
-[Local Provisioning](./local-provisioning.md).
+For platform defaults, configured playbook resolution, advanced flags, and
+Windows cleanup behavior, use [Local Provisioning](./local-provisioning.md).
 
 ### Ubuntu role tests on Linux, WSL, Windows, or macOS
 

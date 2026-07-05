@@ -144,7 +144,7 @@ Examples:
   sailwright provision local --check
   sailwright provision local --proto ssh --check
   sailwright provision local --proto ssh --check --yes --force-ssh-uninstall
-  sailwright provision local --playbook ./playbooks/bootstrap.yml
+  sailwright provision local --playbook ./playbooks/setup.yml --check
   sailwright provision local -- --diff
   sailwright provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
   sailwright provision macos --arch arm64 --check

@@ -80,13 +80,15 @@ You can also use the built-in wrapper for host-local provisioning:
 ```bash
 sailwright provision local --check
 sailwright provision local --proto ssh --check
-sailwright provision local --playbook ./playbooks/bootstrap.yml
+sailwright provision local --playbook ./playbooks/setup.yml --check
 sailwright provision local
 ```
 
 Use this when you want the same command surface on your real workstation that
-you use for managed test targets. For platform defaults, Windows transport
-behavior, cleanup flags, and rollback steps, see
+you use for managed test targets. A bare run uses the playbook from configfile
+`ansible-role-sources.yml` when configured; otherwise it falls back to the
+bundled role-source smoke/example playbook. For platform defaults, Windows
+transport behavior, cleanup flags, and rollback steps, see
 [Local Provisioning](./docs/local-provisioning.md) and
 [Windows Ansible Access](./docs/windows-ansible-access.md). For direct
 `ansible-playbook` examples, use
@@ -214,13 +216,15 @@ Use the built-in wrapper first when you want the shared command surface:
 ```bash
 sailwright provision local --check
 sailwright provision local --proto ssh --check
-sailwright provision local --playbook ./playbooks/bootstrap.yml
+sailwright provision local --playbook ./playbooks/setup.yml --check
 sailwright provision local
 ```
 
-For more wrapper examples and platform-specific local behavior, use
-[Local Provisioning](./docs/local-provisioning.md). For direct localhost or
-remote-target `ansible-playbook` examples, use
+Configure `ansible-role-sources.yml` when you want the bare command to select
+your machine setup automatically. Without that config, it runs the bundled
+role-source smoke/example playbook. For more wrapper examples and
+platform-specific local behavior, use [Local Provisioning](./docs/local-provisioning.md).
+For direct localhost or remote-target `ansible-playbook` examples, use
 [Running Playbooks](./docs/running-playbooks.md).
 
 #### B. Test the setup in a disposable VM first
