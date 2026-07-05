@@ -104,7 +104,7 @@ You can either:
 #### Download a release binary
 
 Release assets are published on the
-[GitHub Releases page](https://github.com/csautter/dev-alchemy/releases) as
+[GitHub Releases page](https://github.com/csautter/sailwright/releases) as
 `sailwright_<version>_<os>_<arch>`.
 
 After extraction, the executable is named `sailwright` on macOS/Linux and
@@ -117,9 +117,9 @@ such as `alias sail=sailwright`, or install a `sail` symlink that points to the
 macOS / Linux example:
 
 ```bash
-TAG="$(curl -fsSL https://api.github.com/repos/csautter/dev-alchemy/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
+TAG="$(curl -fsSL https://api.github.com/repos/csautter/sailwright/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
 VERSION="${TAG#v}"
-curl -fLO "https://github.com/csautter/dev-alchemy/releases/download/${TAG}/sailwright_${VERSION}_linux_amd64.tar.gz"
+curl -fLO "https://github.com/csautter/sailwright/releases/download/${TAG}/sailwright_${VERSION}_linux_amd64.tar.gz"
 tar -xzf "sailwright_${VERSION}_linux_amd64.tar.gz"
 chmod +x ./sailwright
 ./sailwright build list
@@ -128,10 +128,10 @@ chmod +x ./sailwright
 Windows example:
 
 ```powershell
-$Release = Invoke-RestMethod "https://api.github.com/repos/csautter/dev-alchemy/releases/latest"
+$Release = Invoke-RestMethod "https://api.github.com/repos/csautter/sailwright/releases/latest"
 $Tag = $Release.tag_name
 $Version = $Tag.TrimStart("v")
-Invoke-WebRequest -OutFile "sailwright_${Version}_windows_amd64.zip" "https://github.com/csautter/dev-alchemy/releases/download/$Tag/sailwright_${Version}_windows_amd64.zip"
+Invoke-WebRequest -OutFile "sailwright_${Version}_windows_amd64.zip" "https://github.com/csautter/sailwright/releases/download/$Tag/sailwright_${Version}_windows_amd64.zip"
 Expand-Archive "sailwright_${Version}_windows_amd64.zip" -DestinationPath .
 .\sailwright.exe build list
 ```
@@ -144,8 +144,8 @@ locations and override options.
 #### Clone the repository
 
 ```bash
-git clone https://github.com/csautter/dev-alchemy.git
-cd dev-alchemy
+git clone https://github.com/csautter/sailwright.git
+cd sailwright
 ```
 
 ### 2. Install host dependencies

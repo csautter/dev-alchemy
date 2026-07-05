@@ -45,7 +45,7 @@ sources:
 
   - name: public-base
     type: git
-    url: https://github.com/csautter/dev-alchemy.git
+    url: https://github.com/csautter/sailwright.git
     ref: main
     roles_path: roles
     update: pull
@@ -95,7 +95,7 @@ Update behavior can be disabled for a Git source:
 sources:
   - name: pinned-base
     type: git
-    url: https://github.com/csautter/dev-alchemy.git
+    url: https://github.com/csautter/sailwright.git
     ref: v1.0.0
     pull: false
 ```
