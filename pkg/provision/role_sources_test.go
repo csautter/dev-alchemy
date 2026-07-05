@@ -119,6 +119,19 @@ func TestResolveProvisionPlaybookPathUsesRoleSourceConfigDefault(t *testing.T) {
 	}
 }
 
+func TestResolveProvisionPlaybookPathUsesRoleSourcesTestFallback(t *testing.T) {
+	projectDir := t.TempDir()
+	withIsolatedAlchemyDirectories(t, projectDir)
+
+	playbookPath, err := resolveProvisionPlaybookPath(ProvisionOptions{})
+	if err != nil {
+		t.Fatalf("resolveProvisionPlaybookPath returned error: %v", err)
+	}
+	if playbookPath != defaultProvisionPlaybook {
+		t.Fatalf("expected built-in default playbook %q, got %q", defaultProvisionPlaybook, playbookPath)
+	}
+}
+
 func TestResolveProvisionPlaybookPathUsesLocalPlaybookSource(t *testing.T) {
 	projectDir := t.TempDir()
 	dirs := withIsolatedAlchemyDirectories(t, projectDir)
@@ -256,14 +269,14 @@ func TestResolveProvisionPlaybookPathExplicitFlagOverridesRoleSourceConfig(t *te
 	}, "\n"))
 
 	playbookPath, err := resolveProvisionPlaybookPath(ProvisionOptions{
-		PlaybookPath:         defaultProvisionPlaybook,
+		PlaybookPath:         bundledSetupProvisionPlaybook,
 		PlaybookPathExplicit: true,
 	})
 	if err != nil {
 		t.Fatalf("resolveProvisionPlaybookPath returned error: %v", err)
 	}
-	if playbookPath != defaultProvisionPlaybook {
-		t.Fatalf("expected explicit CLI playbook %q to win, got %q", defaultProvisionPlaybook, playbookPath)
+	if playbookPath != bundledSetupProvisionPlaybook {
+		t.Fatalf("expected explicit CLI playbook %q to win, got %q", bundledSetupProvisionPlaybook, playbookPath)
 	}
 }
 
@@ -446,6 +459,76 @@ func TestAnsibleRuntimeEnvForProjectIncludesResolvedRolesPath(t *testing.T) {
 		if !strings.Contains(combined, required) {
 			t.Fatalf("expected env %q in %q", required, combined)
 		}
+	}
+}
+
+func TestAnsibleRuntimeEnvForBundledSetupPlaybookIncludesDefaultRoleFallback(t *testing.T) {
+	projectDir := t.TempDir()
+	dirs := withIsolatedAlchemyDirectories(t, projectDir)
+	configuredRolePath := filepath.Join(dirs.ConfigDir, "roles-from-config")
+	for _, path := range []string{
+		configuredRolePath,
+		filepath.Join(projectDir, "roles"),
+	} {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatalf("failed to create role path %q: %v", path, err)
+		}
+	}
+	writeRoleSourcesConfig(t, dirs.ConfigDir, strings.Join([]string{
+		"include_default_roles: false",
+		"sources:",
+		"  - type: local",
+		"    path: roles-from-config",
+		"",
+	}, "\n"))
+
+	entries, err := ansibleRuntimeEnvForProjectPlaybook(projectDir, "./playbooks/setup.yml")
+	if err != nil {
+		t.Fatalf("ansibleRuntimeEnvForProjectPlaybook returned error: %v", err)
+	}
+
+	expectedRolesPath, err := ansibleRolesPathEnvValue([]string{
+		configuredRolePath,
+		filepath.Join(projectDir, "roles"),
+	})
+	if err != nil {
+		t.Fatalf("failed to build expected roles path: %v", err)
+	}
+	combined := strings.Join(entries, ";")
+	if !strings.Contains(combined, "ANSIBLE_ROLES_PATH="+expectedRolesPath) {
+		t.Fatalf("expected setup playbook role fallback %q in %q", expectedRolesPath, combined)
+	}
+}
+
+func TestAnsibleRuntimeEnvForRoleSourcesTestPlaybookIncludesTestRoles(t *testing.T) {
+	projectDir := t.TempDir()
+	for _, path := range []string{
+		filepath.Join(projectDir, "roles"),
+		filepath.Join(projectDir, "roles_test_2"),
+		filepath.Join(projectDir, "roles_test_1"),
+	} {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatalf("failed to create role path %q: %v", path, err)
+		}
+	}
+	withIsolatedAlchemyDirectories(t, projectDir)
+
+	entries, err := ansibleRuntimeEnvForProjectPlaybook(projectDir, "./playbooks/role-sources-test.yml")
+	if err != nil {
+		t.Fatalf("ansibleRuntimeEnvForProjectPlaybook returned error: %v", err)
+	}
+
+	expectedRolesPath, err := ansibleRolesPathEnvValue([]string{
+		filepath.Join(projectDir, "roles"),
+		filepath.Join(projectDir, "roles_test_2"),
+		filepath.Join(projectDir, "roles_test_1"),
+	})
+	if err != nil {
+		t.Fatalf("failed to build expected roles path: %v", err)
+	}
+	combined := strings.Join(entries, ";")
+	if !strings.Contains(combined, "ANSIBLE_ROLES_PATH="+expectedRolesPath) {
+		t.Fatalf("expected role-source test paths %q in %q", expectedRolesPath, combined)
 	}
 }
 

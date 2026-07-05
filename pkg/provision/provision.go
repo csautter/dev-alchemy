@@ -91,13 +91,14 @@ const (
 	linuxLibvirtDomifaddrSourceAgent       = "agent"
 	linuxLibvirtDomifaddrSourceLease       = "lease"
 
-	defaultAnsibleSSHCommonArgs = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
-	defaultAnsibleVerbosity     = 3
-	maxAnsibleVerbosity         = 4
-	defaultProvisionPlaybook    = "./playbooks/setup.yml"
-	defaultUbuntuGuestPassword  = "P@ssw0rd!" // #nosec G101 -- documented default credential for disposable local/test Ubuntu guests.
-	defaultTartGuestUser        = "admin"
-	defaultTartGuestPassword    = "admin" // #nosec G101 -- documented default Tart guest credential for local testing.
+	defaultAnsibleSSHCommonArgs   = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
+	defaultAnsibleVerbosity       = 3
+	maxAnsibleVerbosity           = 4
+	defaultProvisionPlaybook      = "./playbooks/role-sources-test.yml"
+	bundledSetupProvisionPlaybook = "./playbooks/setup.yml"
+	defaultUbuntuGuestPassword    = "P@ssw0rd!" // #nosec G101 -- documented default credential for disposable local/test Ubuntu guests.
+	defaultTartGuestUser          = "admin"
+	defaultTartGuestPassword      = "admin" // #nosec G101 -- documented default Tart guest credential for local testing.
 
 	localUnixInventoryPath   = "./inventory/localhost.yaml"
 	localUnixInventoryTarget = "localhost"
@@ -1839,7 +1840,12 @@ func defaultIfEmpty(value string, fallback string) string {
 }
 
 func runAnsibleProvisionCommand(projectDir string, args []string, timeout time.Duration, logPrefix string) error {
-	runtimeEnv, err := ansibleRuntimeEnvForProject(projectDir)
+	playbookPath := ""
+	if len(args) > 0 {
+		playbookPath = args[0]
+	}
+
+	runtimeEnv, err := ansibleRuntimeEnvForProjectPlaybook(projectDir, playbookPath)
 	if err != nil {
 		return fmt.Errorf("failed to prepare ansible role sources: %w", err)
 	}

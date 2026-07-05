@@ -128,12 +128,12 @@ var provisionCmd = &cobra.Command{
 	Long: `Runs Ansible provisioning against VM targets or the current host.
 
 Important Ansible options exposed directly:
-  --check                 Run ansible-playbook with --check.
+  --check, --dry-run      Run ansible-playbook with --check.
   --proto PROTO          For local Windows provisioning, select winrm (default) or ssh.
   --force-winrm-uninstall For local Windows WinRM provisioning, force cleanup to disable WinRM.
   --force-ssh-uninstall   For local Windows SSH provisioning, force cleanup to disable sshd, remove SSH firewall rules, and remove the transient user without uninstalling OpenSSH Server.
   --verbosity N           Set Ansible verbosity. The default is 3, equivalent to -vvv.
-  --playbook PATH         Override the playbook path. The default is ./playbooks/setup.yml unless ansible-role-sources.yml sets playbook.
+  --playbook PATH         Override the playbook path. Without this flag, ansible-role-sources.yml can set the effective default; otherwise Sailwright falls back to ./playbooks/role-sources-test.yml.
   --inventory-path PATH   Override the default inventory file for local provisioning.
 
 Pass any other ansible-playbook flags after --.
@@ -282,13 +282,15 @@ func init() {
 	provisionCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	provisionCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	provisionCmd.Flags().BoolVar(&check, "check", false, "Run ansible with --check (dry-run)")
+	provisionCmd.Flags().BoolVar(&check, "dry-run", false, "Alias for --check")
 	provisionCmd.Flags().StringVar(&localProvisionProto, "proto", string(alchemy_provision.DefaultLocalWindowsProvisionProtocol()), "Local Windows provision transport: winrm or ssh")
 	provisionCmd.Flags().IntVar(&ansibleVerbosity, "verbosity", 3, "Ansible verbosity level (0-4). Default 3 is equivalent to -vvv")
-	provisionCmd.Flags().StringVar(&playbookPath, "playbook", alchemy_provision.DefaultProvisionPlaybookPath(), "Override the Ansible playbook path")
+	provisionCmd.Flags().StringVar(&playbookPath, "playbook", "", "Override the Ansible playbook path")
 	provisionCmd.Flags().StringVar(&inventoryPath, "inventory-path", "", "Override the default inventory file for local provisioning; pass -- --limit <host-pattern> if your custom inventory needs a target")
 	provisionCmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Skip confirmation prompts for operations that change local system state")
 	provisionCmd.Flags().BoolVar(&forceWinRMUninstall, "force-winrm-uninstall", false, "For local Windows provisioning, force cleanup to disable WinRM and remove transient setup after the run")
 	provisionCmd.Flags().BoolVar(&forceSSHUninstall, "force-ssh-uninstall", false, "For local Windows SSH provisioning, force cleanup to disable sshd, remove SSH firewall rules, and remove the transient Ansible user after the run without uninstalling OpenSSH Server")
+	provisionCmd.Flags().Lookup("dry-run").Hidden = true
 }
 
 func validateProvisionCommandArgs(cmd *cobra.Command, args []string) error {

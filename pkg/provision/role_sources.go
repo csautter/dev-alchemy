@@ -62,6 +62,14 @@ func ansibleRoleSourcesConfigPath(directories *alchemy_build.Directories) string
 }
 
 func resolveAnsibleRolePaths(projectDir string) ([]string, error) {
+	return resolveAnsibleRolePathsWithOptions(projectDir, false)
+}
+
+func resolveAnsibleRolePathsWithDefaultFallback(projectDir string) ([]string, error) {
+	return resolveAnsibleRolePathsWithOptions(projectDir, true)
+}
+
+func resolveAnsibleRolePathsWithOptions(projectDir string, forceDefaultRoles bool) ([]string, error) {
 	config, configPath, exists, err := loadCurrentAnsibleRoleSourcesConfig()
 	if err != nil {
 		return nil, err
@@ -87,7 +95,7 @@ func resolveAnsibleRolePaths(projectDir string) ([]string, error) {
 		rolePaths = appendUniquePath(rolePaths, rolePath)
 	}
 
-	if includeDefaultAnsibleRoles(config) {
+	if includeDefaultAnsibleRoles(config) || forceDefaultRoles {
 		rolePaths = appendUniquePath(rolePaths, defaultAnsibleRolePath(projectDir))
 	}
 	if len(rolePaths) == 0 {
@@ -691,10 +699,22 @@ func appendUniquePath(paths []string, path string) []string {
 }
 
 func ansibleRuntimeEnvForProject(projectDir string) ([]string, error) {
+	return ansibleRuntimeEnvForProjectPlaybook(projectDir, "")
+}
+
+func ansibleRuntimeEnvForProjectPlaybook(projectDir string, playbookPath string) ([]string, error) {
 	env := ansibleRuntimeEnv()
-	rolePaths, err := resolveAnsibleRolePaths(projectDir)
+	resolveRolePaths := resolveAnsibleRolePaths
+	if isBundledSetupProvisionPlaybook(projectDir, playbookPath) {
+		resolveRolePaths = resolveAnsibleRolePathsWithDefaultFallback
+	}
+
+	rolePaths, err := resolveRolePaths(projectDir)
 	if err != nil {
 		return nil, err
+	}
+	if isBundledRoleSourcesTestProvisionPlaybook(projectDir, playbookPath) {
+		rolePaths = appendRoleSourcesTestPaths(projectDir, rolePaths)
 	}
 
 	envValue, err := ansibleRolesPathEnvValue(rolePaths)
@@ -704,6 +724,39 @@ func ansibleRuntimeEnvForProject(projectDir string) ([]string, error) {
 	env = append(env, "ANSIBLE_ROLES_PATH="+envValue)
 
 	return env, nil
+}
+
+func isBundledSetupProvisionPlaybook(projectDir string, playbookPath string) bool {
+	return isBundledProvisionPlaybook(projectDir, playbookPath, bundledSetupProvisionPlaybook)
+}
+
+func isBundledRoleSourcesTestProvisionPlaybook(projectDir string, playbookPath string) bool {
+	return isBundledProvisionPlaybook(projectDir, playbookPath, defaultProvisionPlaybook)
+}
+
+func isBundledProvisionPlaybook(projectDir string, playbookPath string, bundledPlaybookPath string) bool {
+	playbookPath = strings.TrimSpace(playbookPath)
+	if playbookPath == "" {
+		return false
+	}
+
+	defaultPlaybookPath := filepath.Clean(filepath.Join(projectDir, filepath.FromSlash(bundledPlaybookPath)))
+	candidatePath := filepath.Clean(filepath.FromSlash(playbookPath))
+	if !filepath.IsAbs(candidatePath) {
+		candidatePath = filepath.Clean(filepath.Join(projectDir, candidatePath))
+	}
+
+	return candidatePath == defaultPlaybookPath
+}
+
+func appendRoleSourcesTestPaths(projectDir string, rolePaths []string) []string {
+	for _, rolePath := range []string{
+		filepath.Join(projectDir, "roles_test_2"),
+		filepath.Join(projectDir, "roles_test_1"),
+	} {
+		rolePaths = appendUniquePath(rolePaths, filepath.Clean(rolePath))
+	}
+	return rolePaths
 }
 
 func ansibleRolesPathEnvValue(rolePaths []string) (string, error) {
