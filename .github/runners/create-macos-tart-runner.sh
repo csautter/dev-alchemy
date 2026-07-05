@@ -28,7 +28,7 @@ set -e
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 GITHUB_SCOPE="${GITHUB_SCOPE:-repo}"
-GITHUB_REPO="${GITHUB_REPO:-csautter/dev-alchemy}"
+GITHUB_REPO="${GITHUB_REPO:-csautter/sailwright}"
 GITHUB_ORG="${GITHUB_ORG:-}"
 RUNNER_LABELS="${RUNNER_LABELS:-macos,tart,arm64,macos-26-tart}"
 RUNNER_NAME_BASE="${RUNNER_NAME_BASE:-$(hostname -s)-tart}"
