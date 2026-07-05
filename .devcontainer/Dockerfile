@@ -9,6 +9,16 @@ ENV POWERSHELL_VERSION="7.6.2"
 ENV POWERSHELL_SHA256_X64="6cbcfbf20e376aa62ffd91c973493c41a7a52ddfd5a5db3ff9bc12f0d0fe9292"
 # renovate: datasource=custom.powershell-linux-arm64 depName=PowerShell/PowerShell version=7.6.2 versioning=semver
 ENV POWERSHELL_SHA256_ARM64="a8d4e386dfafda385d0604045eed03ce6f3a843d45fc8f0b9588b836ca17cdb8"
+# renovate: datasource=custom.terragrunt-linux-amd64 depName=gruntwork-io/terragrunt versioning=semver
+ENV TERRAGRUNT_VERSION="1.1.0"
+ENV TERRAGRUNT_SHA256_AMD64="acdf04d4a9d480228b19bcd995df549e6e2ce2d2125fe17d514371598a59f6c1"
+# renovate: datasource=custom.terragrunt-linux-arm64 depName=gruntwork-io/terragrunt version=1.1.0 versioning=semver
+ENV TERRAGRUNT_SHA256_ARM64="8970cfcb96a96c19f436255f4881cda9d3abf7997ce5384f8dfc7395a2159be1"
+# renovate: datasource=custom.tflint-linux-amd64 depName=terraform-linters/tflint versioning=semver
+ENV TFLINT_VERSION="0.63.1"
+ENV TFLINT_SHA256_AMD64="8441a7d97df20431f19c9b9d27ff4c63e308c964e86660bc7cc0cf7bbe0725e8"
+# renovate: datasource=custom.tflint-linux-arm64 depName=terraform-linters/tflint version=0.63.1 versioning=semver
+ENV TFLINT_SHA256_ARM64="6d858ca7f11858c3fe3c5e29cc746823abccb55e2d2e2da130fa7ad7ea4eecb8"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -18,6 +28,7 @@ RUN apt-get update \
         gpg \
         ruby-full \
         shellcheck \
+        unzip \
         xz-utils \
         yq \
     && rm -rf /var/lib/apt/lists/*
@@ -55,13 +66,39 @@ RUN npm install --global "renovate@${RENOVATE_VERSION}" \
     && renovate-config-validator --version \
     && npm cache clean --force
 
+RUN arch="$(dpkg --print-architecture)" \
+    && case "${arch}" in \
+        amd64) terragrunt_arch="amd64"; terragrunt_sha256="${TERRAGRUNT_SHA256_AMD64}" ;; \
+        arm64) terragrunt_arch="arm64"; terragrunt_sha256="${TERRAGRUNT_SHA256_ARM64}" ;; \
+        *) echo "Unsupported Terragrunt architecture: ${arch}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_${terragrunt_arch}" -o /usr/local/bin/terragrunt \
+    && printf '%s  %s\n' "${terragrunt_sha256}" /usr/local/bin/terragrunt | sha256sum -c - \
+    && chmod +x /usr/local/bin/terragrunt \
+    && terragrunt --version
+
+RUN arch="$(dpkg --print-architecture)" \
+    && case "${arch}" in \
+        amd64) tflint_arch="amd64"; tflint_sha256="${TFLINT_SHA256_AMD64}" ;; \
+        arm64) tflint_arch="arm64"; tflint_sha256="${TFLINT_SHA256_ARM64}" ;; \
+        *) echo "Unsupported TFLint architecture: ${arch}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_${tflint_arch}.zip" -o /tmp/tflint.zip \
+    && printf '%s  %s\n' "${tflint_sha256}" /tmp/tflint.zip | sha256sum -c - \
+    && unzip -o /tmp/tflint.zip -d /usr/local/bin \
+    && rm -f /tmp/tflint.zip \
+    && chmod +x /usr/local/bin/tflint \
+    && tflint --version
+
 RUN . /etc/os-release \
     && curl -fsSL https://apt.releases.hashicorp.com/gpg | \
         gpg --dearmor --yes -o /usr/share/keyrings/hashicorp-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com ${VERSION_CODENAME} main" \
         > /etc/apt/sources.list.d/hashicorp.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends packer \
+    && apt-get install -y --no-install-recommends \
+        packer \
+        terraform \
     && rm -rf /var/lib/apt/lists/*
 
 RUN go install github.com/securego/gosec/v2/cmd/gosec@v2.27.1

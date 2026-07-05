@@ -20,6 +20,28 @@
     },
     {
       "customType": "regex",
+      "description": "Update Terragrunt devcontainer binary version and SHA256 pins",
+      "managerFilePatterns": [
+        "/(^|/)\\.devcontainer/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+versioning=(?<versioning>\\S+)\\s+ENV\\s+TERRAGRUNT_VERSION=\"(?<currentValue>[^\"]+)\"\\s+ENV\\s+TERRAGRUNT_SHA256_AMD64=\"(?<currentDigest>[a-f0-9]{64})\"",
+        "# renovate: datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+version=(?<currentValue>\\S+)\\s+versioning=(?<versioning>\\S+)\\s+ENV\\s+TERRAGRUNT_SHA256_ARM64=\"(?<currentDigest>[a-f0-9]{64})\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Update TFLint devcontainer zip version and SHA256 pins",
+      "managerFilePatterns": [
+        "/(^|/)\\.devcontainer/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+versioning=(?<versioning>\\S+)\\s+ENV\\s+TFLINT_VERSION=\"(?<currentValue>[^\"]+)\"\\s+ENV\\s+TFLINT_SHA256_AMD64=\"(?<currentDigest>[a-f0-9]{64})\"",
+        "# renovate: datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+version=(?<currentValue>\\S+)\\s+versioning=(?<versioning>\\S+)\\s+ENV\\s+TFLINT_SHA256_ARM64=\"(?<currentDigest>[a-f0-9]{64})\""
+      ]
+    },
+    {
+      "customType": "regex",
       "description": "Update Node.js devcontainer version pin",
       "managerFilePatterns": [
         "/(^|/)\\.devcontainer/Dockerfile$/"
@@ -209,6 +231,34 @@
         "{ \"releases\": ( $githubReleases := $type($) = \"array\" ? $ : []; $append([], $filter($map($githubReleases, function($release) { $exists($release.tag_name) and $exists($release.assets) ? ( $version := $replace($release.tag_name, /^v/, \"\"); $asset := $release.assets[name = \"powershell-\" & $version & \"-linux-arm64.tar.gz\"][0]; $type($asset.digest) = \"string\" ? { \"version\": $version, \"releaseTimestamp\": $release.published_at, \"sourceUrl\": $release.html_url, \"digest\": $replace($asset.digest, /^sha256:/, \"\"), \"isStable\": $not($release.prerelease) } : undefined ) : undefined }), function($item) { $exists($item) })) ) }"
       ]
     },
+    "terragrunt-linux-amd64": {
+      "defaultRegistryUrlTemplate": "https://api.github.com/repos/gruntwork-io/terragrunt/releases?per_page=100",
+      "format": "json",
+      "transformTemplates": [
+        "{ \"releases\": ( $githubReleases := $type($) = \"array\" ? $ : []; $append([], $filter($map($githubReleases, function($release) { $exists($release.tag_name) and $exists($release.assets) ? ( $version := $replace($release.tag_name, /^v/, \"\"); $asset := $release.assets[name = \"terragrunt_linux_amd64\"][0]; $type($asset.digest) = \"string\" ? { \"version\": $version, \"releaseTimestamp\": $release.published_at, \"sourceUrl\": $release.html_url, \"digest\": $replace($asset.digest, /^sha256:/, \"\"), \"isStable\": $not($release.prerelease) } : undefined ) : undefined }), function($item) { $exists($item) })) ) }"
+      ]
+    },
+    "terragrunt-linux-arm64": {
+      "defaultRegistryUrlTemplate": "https://api.github.com/repos/gruntwork-io/terragrunt/releases?per_page=100",
+      "format": "json",
+      "transformTemplates": [
+        "{ \"releases\": ( $githubReleases := $type($) = \"array\" ? $ : []; $append([], $filter($map($githubReleases, function($release) { $exists($release.tag_name) and $exists($release.assets) ? ( $version := $replace($release.tag_name, /^v/, \"\"); $asset := $release.assets[name = \"terragrunt_linux_arm64\"][0]; $type($asset.digest) = \"string\" ? { \"version\": $version, \"releaseTimestamp\": $release.published_at, \"sourceUrl\": $release.html_url, \"digest\": $replace($asset.digest, /^sha256:/, \"\"), \"isStable\": $not($release.prerelease) } : undefined ) : undefined }), function($item) { $exists($item) })) ) }"
+      ]
+    },
+    "tflint-linux-amd64": {
+      "defaultRegistryUrlTemplate": "https://api.github.com/repos/terraform-linters/tflint/releases?per_page=100",
+      "format": "json",
+      "transformTemplates": [
+        "{ \"releases\": ( $githubReleases := $type($) = \"array\" ? $ : []; $append([], $filter($map($githubReleases, function($release) { $exists($release.tag_name) and $exists($release.assets) ? ( $version := $replace($release.tag_name, /^v/, \"\"); $asset := $release.assets[name = \"tflint_linux_amd64.zip\"][0]; $type($asset.digest) = \"string\" ? { \"version\": $version, \"releaseTimestamp\": $release.published_at, \"sourceUrl\": $release.html_url, \"digest\": $replace($asset.digest, /^sha256:/, \"\"), \"isStable\": $not($release.prerelease) } : undefined ) : undefined }), function($item) { $exists($item) })) ) }"
+      ]
+    },
+    "tflint-linux-arm64": {
+      "defaultRegistryUrlTemplate": "https://api.github.com/repos/terraform-linters/tflint/releases?per_page=100",
+      "format": "json",
+      "transformTemplates": [
+        "{ \"releases\": ( $githubReleases := $type($) = \"array\" ? $ : []; $append([], $filter($map($githubReleases, function($release) { $exists($release.tag_name) and $exists($release.assets) ? ( $version := $replace($release.tag_name, /^v/, \"\"); $asset := $release.assets[name = \"tflint_linux_arm64.zip\"][0]; $type($asset.digest) = \"string\" ? { \"version\": $version, \"releaseTimestamp\": $release.published_at, \"sourceUrl\": $release.html_url, \"digest\": $replace($asset.digest, /^sha256:/, \"\"), \"isStable\": $not($release.prerelease) } : undefined ) : undefined }), function($item) { $exists($item) })) ) }"
+      ]
+    },
     "ubuntu-live-server-amd64": {
       "defaultRegistryUrlTemplate": "https://releases.ubuntu.com/24.04/SHA256SUMS",
       "format": "plain",
@@ -251,6 +301,26 @@
         "PowerShell/PowerShell"
       ],
       "groupName": "PowerShell devcontainer artifacts"
+    },
+    {
+      "matchDatasources": [
+        "custom.terragrunt-linux-amd64",
+        "custom.terragrunt-linux-arm64"
+      ],
+      "matchPackageNames": [
+        "gruntwork-io/terragrunt"
+      ],
+      "groupName": "Terragrunt devcontainer artifacts"
+    },
+    {
+      "matchDatasources": [
+        "custom.tflint-linux-amd64",
+        "custom.tflint-linux-arm64"
+      ],
+      "matchPackageNames": [
+        "terraform-linters/tflint"
+      ],
+      "groupName": "TFLint devcontainer artifacts"
     }
   ]
 }
