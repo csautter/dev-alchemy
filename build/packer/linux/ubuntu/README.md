@@ -1,18 +1,18 @@
 # Ubuntu Packer Templates
 
-This directory contains Packer templates used by the Dev Alchemy CLI to build Ubuntu images.
+This directory contains Packer templates used by the Sailwright CLI to build Ubuntu images.
 
 ## Build Ubuntu on Windows Hosts (Hyper-V)
 
 Use the CLI from repository root:
 
 ```powershell
-alchemy.exe install
+sailwright.exe install
 
 # build ubuntu server (Hyper-V)
-alchemy.exe build ubuntu --type server --arch amd64
+sailwright.exe build ubuntu --type server --arch amd64
 # build ubuntu desktop (Hyper-V)
-alchemy.exe build ubuntu --type desktop --arch amd64
+sailwright.exe build ubuntu --type desktop --arch amd64
 ```
 
 The Hyper-V template is [linux-ubuntu-hyperv.pkr.hcl](linux-ubuntu-hyperv.pkr.hcl).
@@ -52,10 +52,10 @@ Use the CLI from repository root:
 ```bash
 # amd64 or arm64
 arch=amd64
-alchemy install # --with-go also bootstraps the Go toolchain on macOS
-alchemy build list # shows whether the Ubuntu build artifacts are already present in the local cache
-alchemy build ubuntu --type server --arch $arch
-alchemy build ubuntu --type desktop --arch $arch
+sailwright install # --with-go also bootstraps the Go toolchain on macOS
+sailwright build list # shows whether the Ubuntu build artifacts are already present in the local cache
+sailwright build ubuntu --type server --arch $arch
+sailwright build ubuntu --type desktop --arch $arch
 ```
 
 Manual script usage:
@@ -75,11 +75,11 @@ display and acceleration settings.
 Install host dependencies first:
 
 ```bash
-alchemy install
+sailwright install
 ```
 
 This runs
-[scripts/linux/dev-alchemy-install-dependencies.sh](../../../../scripts/linux/dev-alchemy-install-dependencies.sh)
+[scripts/linux/sailwright-install-dependencies.sh](../../../../scripts/linux/sailwright-install-dependencies.sh)
 to install the Ubuntu/Debian packages needed by the Linux QEMU workflow.
 
 Use the CLI from repository root:
@@ -87,10 +87,10 @@ Use the CLI from repository root:
 ```bash
 # amd64 or arm64
 arch=amd64
-alchemy build ubuntu --type server --arch "$arch"
-alchemy build ubuntu --type desktop --arch "$arch"
-alchemy create ubuntu --type server --arch "$arch"
-alchemy start ubuntu --type server --arch "$arch"
+sailwright build ubuntu --type server --arch "$arch"
+sailwright build ubuntu --type desktop --arch "$arch"
+sailwright create ubuntu --type server --arch "$arch"
+sailwright start ubuntu --type server --arch "$arch"
 ```
 
 Manual script usage:

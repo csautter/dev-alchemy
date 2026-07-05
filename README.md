@@ -1,6 +1,6 @@
-# 🧪 devalchemy
+# Sailwright
 
-**devalchemy** is an opinionated cross-platform automation toolkit for setting
+**Sailwright** is an opinionated cross-platform automation toolkit for setting
 up, testing, and maintaining developer environments on **macOS**, **Linux**,
 and **Windows**. It combines [Ansible](https://www.ansible.com/) with
 host-specific VM and system tooling so teams can manage local machines, remote
@@ -14,7 +14,7 @@ repeatable way to:
 - test provisioning changes safely before rolling them out
 - reduce one-off scripts, tribal knowledge, and repeated support work
 
-Dev Alchemy is not a replacement for classic MDM/UEM tooling. It complements
+Sailwright is not a replacement for classic MDM/UEM tooling. It complements
 those tools by handling the developer-tooling and workflow layer that often
 remains manual, team-specific, and hard to reproduce.
 
@@ -30,7 +30,7 @@ same problems:
 - setup differences become hard to debug and reproduce
 - OS-specific scripts drift over time
 
-Dev Alchemy addresses that by keeping setup logic in versioned Ansible roles
+Sailwright addresses that by keeping setup logic in versioned Ansible roles
 and playbooks, then using host-appropriate tooling to apply and test them.
 
 ## Support Snapshot
@@ -43,7 +43,7 @@ The project currently supports these host-to-target workflows:
 | **Windows** | Managed workflows for **Ubuntu** (Hyper-V) and **Windows 11** (Hyper-V, plus VirtualBox as unstable) |
 | **Linux** | Managed workflows for **Ubuntu** and **Windows 11** with native **QEMU/KVM** via **libvirt/virt-manager**, plus direct Ansible runs and Docker-based Linux testing |
 
-This means Dev Alchemy can cover every currently supported guest OS family on a
+This means Sailwright can cover every currently supported guest OS family on a
 **macOS** host, and every currently supported family except
 **macOS** on a **Windows host** or **Linux** host.
 
@@ -51,12 +51,12 @@ Use the built-in discovery commands to see the exact combinations available on
 your current machine:
 
 ```bash
-alchemy build list
-alchemy create list
-alchemy start list
-alchemy provision list
-alchemy stop list
-alchemy destroy list
+sailwright build list
+sailwright create list
+sailwright start list
+sailwright provision list
+sailwright stop list
+sailwright destroy list
 ```
 
 > Note: macOS guests are only supported on macOS hosts due to Apple platform
@@ -64,7 +64,7 @@ alchemy destroy list
 
 ## Base Model
 
-Dev Alchemy follows a few simple ideas:
+Sailwright follows a few simple ideas:
 
 - **Ansible roles and playbooks are the source of truth** for machine setup
 - **roles stay cross-platform where possible**, with OS-specific handling where needed
@@ -78,10 +78,10 @@ VMs before applying them to real machines.
 You can also use the built-in wrapper for host-local provisioning:
 
 ```bash
-alchemy provision local --check
-alchemy provision local --proto ssh --check
-alchemy provision local --playbook ./playbooks/bootstrap.yml
-alchemy provision local
+sailwright provision local --check
+sailwright provision local --proto ssh --check
+sailwright provision local --playbook ./playbooks/bootstrap.yml
+sailwright provision local
 ```
 
 Use this when you want the same command surface on your real workstation that
@@ -105,20 +105,24 @@ You can either:
 
 Release assets are published on the
 [GitHub Releases page](https://github.com/csautter/dev-alchemy/releases) as
-`dev-alchemy_<version>_<os>_<arch>`.
+`sailwright_<version>_<os>_<arch>`.
 
-After extraction, the executable is named `alchemy` on macOS/Linux and
-`alchemy.exe` on Windows.
+After extraction, the executable is named `sailwright` on macOS/Linux and
+`sailwright.exe` on Windows.
+
+If you prefer the shorter `sail` command, create it yourself as a shell alias
+such as `alias sail=sailwright`, or install a `sail` symlink that points to the
+`sailwright` executable.
 
 macOS / Linux example:
 
 ```bash
 TAG="$(curl -fsSL https://api.github.com/repos/csautter/dev-alchemy/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
 VERSION="${TAG#v}"
-curl -fLO "https://github.com/csautter/dev-alchemy/releases/download/${TAG}/dev-alchemy_${VERSION}_linux_amd64.tar.gz"
-tar -xzf "dev-alchemy_${VERSION}_linux_amd64.tar.gz"
-chmod +x ./alchemy
-./alchemy build list
+curl -fLO "https://github.com/csautter/dev-alchemy/releases/download/${TAG}/sailwright_${VERSION}_linux_amd64.tar.gz"
+tar -xzf "sailwright_${VERSION}_linux_amd64.tar.gz"
+chmod +x ./sailwright
+./sailwright build list
 ```
 
 Windows example:
@@ -127,12 +131,12 @@ Windows example:
 $Release = Invoke-RestMethod "https://api.github.com/repos/csautter/dev-alchemy/releases/latest"
 $Tag = $Release.tag_name
 $Version = $Tag.TrimStart("v")
-Invoke-WebRequest -OutFile "dev-alchemy_${Version}_windows_amd64.zip" "https://github.com/csautter/dev-alchemy/releases/download/$Tag/dev-alchemy_${Version}_windows_amd64.zip"
-Expand-Archive "dev-alchemy_${Version}_windows_amd64.zip" -DestinationPath .
-.\alchemy.exe build list
+Invoke-WebRequest -OutFile "sailwright_${Version}_windows_amd64.zip" "https://github.com/csautter/dev-alchemy/releases/download/$Tag/sailwright_${Version}_windows_amd64.zip"
+Expand-Archive "sailwright_${Version}_windows_amd64.zip" -DestinationPath .
+.\sailwright.exe build list
 ```
 
-When you run a release binary outside a Git checkout, Dev Alchemy extracts its
+When you run a release binary outside a Git checkout, Sailwright extracts its
 embedded runtime assets into a managed app-data directory. See
 [Managed Application Data](./docs/managed-application-data.md) for the default
 locations and override options.
@@ -149,22 +153,22 @@ cd dev-alchemy
 #### macOS
 
 ```bash
-alchemy install
+sailwright install
 ```
 
 This runs
-[scripts/macos/dev-alchemy-install-dependencies.sh](./scripts/macos/dev-alchemy-install-dependencies.sh).
+[scripts/macos/sailwright-install-dependencies.sh](./scripts/macos/sailwright-install-dependencies.sh).
 
 #### Ubuntu / Debian
 
 ```bash
-alchemy install
+sailwright install
 ```
 
 This runs
-[scripts/linux/dev-alchemy-install-dependencies.sh](./scripts/linux/dev-alchemy-install-dependencies.sh).
+[scripts/linux/sailwright-install-dependencies.sh](./scripts/linux/sailwright-install-dependencies.sh).
 
-On macOS, Linux, and Windows, `alchemy install --with-go` also bootstraps the
+On macOS, Linux, and Windows, `sailwright install --with-go` also bootstraps the
 Go toolchain.
 
 #### Windows
@@ -173,30 +177,30 @@ Run the command from your normal shell. Windows will prompt for elevation
 through UAC if needed:
 
 ```powershell
-alchemy.exe install
+sailwright.exe install
 # optionally with Go and VirtualBox support:
-alchemy.exe install --with-go --virtualbox
+sailwright.exe install --with-go --virtualbox
 ```
 
 This runs
-[scripts/windows/dev-alchemy-self-setup.ps1](./scripts/windows/dev-alchemy-self-setup.ps1).
+[scripts/windows/sailwright-self-setup.ps1](./scripts/windows/sailwright-self-setup.ps1).
 
 ### 3. Discover what your host supports
 
 Start with the `list` commands before running a longer workflow:
 
 ```bash
-alchemy build list
-alchemy create list
-alchemy provision list
+sailwright build list
+sailwright create list
+sailwright provision list
 ```
 
 Use `--help` when you want the supported flags for a command:
 
 ```bash
-alchemy --help
-alchemy build --help
-alchemy provision --help
+sailwright --help
+sailwright build --help
+sailwright provision --help
 ```
 
 ### 4. Run your first useful workflow
@@ -208,10 +212,10 @@ There are two common entry paths.
 Use the built-in wrapper first when you want the shared command surface:
 
 ```bash
-alchemy provision local --check
-alchemy provision local --proto ssh --check
-alchemy provision local --playbook ./playbooks/bootstrap.yml
-alchemy provision local
+sailwright provision local --check
+sailwright provision local --proto ssh --check
+sailwright provision local --playbook ./playbooks/bootstrap.yml
+sailwright provision local
 ```
 
 For more wrapper examples and platform-specific local behavior, use
@@ -224,17 +228,17 @@ remote-target `ansible-playbook` examples, use
 Example on a supported host:
 
 ```bash
-alchemy build ubuntu --type server --arch amd64
-alchemy create ubuntu --type server --arch amd64
-alchemy provision ubuntu --type server --arch amd64 --check
-alchemy provision ubuntu --type server --arch amd64
+sailwright build ubuntu --type server --arch amd64
+sailwright create ubuntu --type server --arch amd64
+sailwright provision ubuntu --type server --arch amd64 --check
+sailwright provision ubuntu --type server --arch amd64
 ```
 
 If you are targeting Windows and remote access is not configured yet, start
 with [Windows Ansible Access](./docs/windows-ansible-access.md).
 
 When you want to share reusable build artifacts through an OCI registry instead
-of rebuilding them locally, use `alchemy push` and `alchemy pull`; see the
+of rebuilding them locally, use `sailwright push` and `sailwright pull`; see the
 [OCI build artifact registry workflow](./docs/testing-workflows.md#oci-build-artifact-registry-workflow).
 
 ## Docs Map
@@ -243,7 +247,7 @@ The root README is the fast entry point. Use these guides when you want the
 next level of detail:
 
 - [Local Provisioning](./docs/local-provisioning.md) for the
-  `alchemy provision local` wrapper, platform defaults, and Windows cleanup
+  `sailwright provision local` wrapper, platform defaults, and Windows cleanup
   flags
 - [Running Playbooks](./docs/running-playbooks.md) for direct localhost,
   remote-host, VM, and Windows `ansible-playbook` examples
@@ -284,7 +288,7 @@ Contributor License Agreement (CLA).
 
 ## 📜 License
 
-Dev Alchemy uses a dual-licensing model.
+Sailwright uses a dual-licensing model.
 
 Copyright (c) 2026 Carl-Christian Sautter.
 Open source use is licensed under AGPLv3, and commercial licensing is offered separately.
@@ -298,7 +302,7 @@ See [LICENSE.md](./LICENSE.md).
 
 ### Commercial Use
 
-If you need to use Dev Alchemy in commercial products, SaaS platforms, or
+If you need to use Sailwright in commercial products, SaaS platforms, or
 other closed-source environments without AGPL obligations, a separate
 commercial license is available.
 

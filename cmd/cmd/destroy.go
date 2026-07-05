@@ -58,10 +58,10 @@ var destroyCmd = &cobra.Command{
 Use "all" to destroy all available VM configurations for the current host OS.
 
 Examples:
-  alchemy destroy ubuntu --type server --arch amd64
-  alchemy destroy macos --arch arm64
-  alchemy destroy windows11 --arch arm64
-  alchemy destroy all
+  sailwright destroy ubuntu --type server --arch amd64
+  sailwright destroy macos --arch arm64
+  sailwright destroy windows11 --arch arm64
+  sailwright destroy all
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

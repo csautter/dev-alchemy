@@ -683,7 +683,7 @@ func ensureProvisionTargetRunning(vm alchemy_build.VirtualMachineConfig) error {
 
 	if !state.Exists {
 		return fmt.Errorf(
-			"VM for OS=%s, type=%s, arch=%s does not exist. Run `alchemy create %s` first",
+			"VM for OS=%s, type=%s, arch=%s does not exist. Run `sailwright create %s` first",
 			vm.OS,
 			vm.UbuntuType,
 			vm.Arch,
@@ -696,7 +696,7 @@ func ensureProvisionTargetRunning(vm alchemy_build.VirtualMachineConfig) error {
 			currentState = "stopped"
 		}
 		return fmt.Errorf(
-			"VM for OS=%s, type=%s, arch=%s is not running (state=%s). Run `alchemy start %s` first",
+			"VM for OS=%s, type=%s, arch=%s is not running (state=%s). Run `sailwright start %s` first",
 			vm.OS,
 			vm.UbuntuType,
 			vm.Arch,
@@ -727,12 +727,12 @@ func ensureTartVMReadyForProvision(projectDir string, vmName string, options tar
 		return "", fmt.Errorf("failed to determine whether Tart VM %q exists: %w", vmName, err)
 	}
 	if !exists {
-		return "", fmt.Errorf("Tart VM %q does not exist. Run `alchemy create macos --arch arm64` first", vmName)
+		return "", fmt.Errorf("Tart VM %q does not exist. Run `sailwright create macos --arch arm64` first", vmName)
 	}
 
 	ip, err := options.discoverIPv4(projectDir, vmName)
 	if err != nil {
-		return "", fmt.Errorf("Tart VM %q exists but is not running or has no IPv4 address yet. Start it with `alchemy start macos --arch arm64`: %w", vmName, err)
+		return "", fmt.Errorf("Tart VM %q exists but is not running or has no IPv4 address yet. Start it with `sailwright start macos --arch arm64`: %w", vmName, err)
 	}
 
 	return ip, nil

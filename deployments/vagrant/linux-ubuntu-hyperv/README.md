@@ -1,14 +1,14 @@
 # Run Ubuntu with Vagrant and Hyper-V
 
-This guide covers the Windows-host workflow for Ubuntu Hyper-V with the Dev Alchemy CLI:
+This guide covers the Windows-host workflow for Ubuntu Hyper-V with the Sailwright CLI:
 
-1. Build the box (`alchemy build`)
-2. Create/start the VM (`alchemy create`)
-3. Provision with Ansible (`alchemy provision`)
+1. Build the box (`sailwright build`)
+2. Create/start the VM (`sailwright create`)
+3. Provision with Ansible (`sailwright provision`)
 
 All commands are intended for PowerShell on a Windows host.
 
-Managed Dev Alchemy paths on Windows default to:
+Managed Sailwright paths on Windows default to:
 
 - App data root: `%LOCALAPPDATA%\dev-alchemy`
 - Build cache: `%LOCALAPPDATA%\dev-alchemy\cache`
@@ -21,7 +21,7 @@ Set `DEV_ALCHEMY_APP_DATA_DIR` if you want to override the default root.
 - Run the dependency installer from repository root in an elevated PowerShell session:
 
 ```powershell
-alchemy.exe install
+sailwright.exe install
 ```
 
 - [Vagrant](https://www.vagrantup.com/downloads)
@@ -36,9 +36,9 @@ Run from repository root:
 
 ```powershell
 # server
-alchemy.exe build ubuntu --type server --arch amd64
+sailwright.exe build ubuntu --type server --arch amd64
 # desktop
-alchemy.exe build ubuntu --type desktop --arch amd64
+sailwright.exe build ubuntu --type desktop --arch amd64
 ```
 
 Expected artifacts:
@@ -58,9 +58,9 @@ Then create/start with the wrapper:
 
 ```powershell
 # server
-alchemy.exe create ubuntu --type server --arch amd64
+sailwright.exe create ubuntu --type server --arch amd64
 # desktop
-alchemy.exe create ubuntu --type desktop --arch amd64
+sailwright.exe create ubuntu --type desktop --arch amd64
 ```
 
 Default guest credentials:
@@ -77,12 +77,12 @@ Run provisioning from repository root:
 
 ```powershell
 # server
-alchemy.exe provision ubuntu --type server --arch amd64 --check
-alchemy.exe provision ubuntu --type server --arch amd64
+sailwright.exe provision ubuntu --type server --arch amd64 --check
+sailwright.exe provision ubuntu --type server --arch amd64
 
 # desktop
-alchemy.exe provision ubuntu --type desktop --arch amd64 --check
-alchemy.exe provision ubuntu --type desktop --arch amd64
+sailwright.exe provision ubuntu --type desktop --arch amd64 --check
+sailwright.exe provision ubuntu --type desktop --arch amd64
 ```
 
 Optional `.env` / environment overrides:

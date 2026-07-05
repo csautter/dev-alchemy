@@ -297,12 +297,12 @@ You can specify the OS name, type, and architecture.
 Use "all" to build all stable VM configurations for the current host OS.
 
 Example:
-  alchemy build ubuntu --type server --arch amd64
-  alchemy build windows11 --arch arm64
-  alchemy build windows11 --arch amd64 --engine hyperv
-  alchemy build windows11 --arch amd64 --engine virtualbox
-  alchemy build all
-  alchemy build all --parallel 4
+  sailwright build ubuntu --type server --arch amd64
+  sailwright build windows11 --arch arm64
+  sailwright build windows11 --arch amd64 --engine hyperv
+  sailwright build windows11 --arch amd64 --engine virtualbox
+  sailwright build all
+  sailwright build all --parallel 4
 `,
 	Args: cobra.ExactArgs(1), // Enforce exactly one positional argument
 	Run: func(cmd *cobra.Command, args []string) {

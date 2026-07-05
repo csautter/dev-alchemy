@@ -46,11 +46,11 @@
       "description": "Update annotated custom dependency pins in Go and shell scripts",
       "managerFilePatterns": [
         "/(^|/)\\.github/runners/prepare-tart-base\\.sh$/",
-        "/(^|/)scripts/macos/dev-alchemy-install-dependencies\\.sh$/",
+        "/(^|/)scripts/macos/sailwright-install-dependencies\\.sh$/",
         "/(^|/)pkg/build/dependencies\\.go$/",
         "/(^|/)build/packer/linux/ubuntu/linux-ubuntu-(on-macos|qemu)\\.sh$/",
         "/(^|/)scripts/macos/download-virtio-win-iso\\.sh$/",
-        "/(^|/)scripts/windows/dev-alchemy-self-setup\\.ps1$/"
+        "/(^|/)scripts/windows/sailwright-self-setup\\.ps1$/"
       ],
       "matchStrings": [
         "(?:#|//)\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+packageName=(?<packageName>\\S+))?\\s+versioning=(?<versioning>\\S+)(?:\\s+registryUrl=(?<registryUrl>\\S+))?\\s+\\$?[A-Za-z0-9_]+\\s*=\\s*\"(?<currentValue>[^\"]+)\"(?:\\s+\\$?[A-Za-z0-9_]+\\s*=\\s*\"(?<currentDigest>[a-f0-9]+)\")?"

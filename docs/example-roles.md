@@ -22,7 +22,7 @@ Current example roles in the repository:
 The role-oriented parts of the repository are organized like this:
 
 ```text
-devalchemy/
+sailwright/
 ├── roles/
 │   ├── brew/
 │   ├── java/

@@ -1,13 +1,13 @@
 # Ansible Role Sources
 
-Dev Alchemy can build the Ansible role search path and default playbook path
+Sailwright can build the Ansible role search path and default playbook path
 from a small YAML config file. This lets you keep the bundled example roles as
 a fallback, layer private roles above public roles, or point provisioning at
 roles and playbooks you are actively developing.
 
 ## Config location
 
-By default, Dev Alchemy reads `ansible-role-sources.yml` from the OS-specific
+By default, Sailwright reads `ansible-role-sources.yml` from the OS-specific
 config directory:
 
 - macOS: `~/Library/Application Support/dev-alchemy/ansible-role-sources.yml`
@@ -23,14 +23,14 @@ Sources are applied in the order they appear in the file. Ansible uses the
 first matching role name it finds, so put specific override roles before base
 role collections.
 
-If the config file is missing, Dev Alchemy keeps the old behavior and uses the
+If the config file is missing, Sailwright keeps the old behavior and uses the
 bundled `./roles` directory. When the config file exists,
 `include_default_roles` defaults to `true`, so configured sources are placed
 before the bundled roles.
 
 Set `playbook` when this source stack should use a different default playbook
 than `./playbooks/setup.yml`. Relative playbook paths are resolved through the
-configured `playbook_sources` first, then through the bundled Dev Alchemy
+configured `playbook_sources` first, then through the bundled Sailwright
 project when `include_default_playbooks` is enabled. The `--playbook` CLI flag
 still wins when it is set.
 
@@ -61,7 +61,7 @@ playbook_sources:
 Local sources use `path`. Relative paths are resolved from the config file
 directory.
 
-Git sources use `url`. Dev Alchemy clones them into
+Git sources use `url`. Sailwright clones them into
 `DEV_ALCHEMY_APP_DATA_DIR/cache/ansible-role-sources/` for roles and
 `DEV_ALCHEMY_APP_DATA_DIR/cache/ansible-playbook-sources/` for playbooks, then
 updates existing checkouts before provisioning. Set `ref` for a branch, tag, or
@@ -113,14 +113,14 @@ include_default_playbooks: true
 sources:
   - name: test-overlay
     type: local
-    path: /path/to/dev-alchemy/roles_test_2
+    path: /path/to/sailwright/roles_test_2
   - name: test-base
     type: local
-    path: /path/to/dev-alchemy/roles_test_1
+    path: /path/to/sailwright/roles_test_1
 ```
 
 Then run:
 
 ```bash
-alchemy provision local --check
+sailwright provision local --check
 ```

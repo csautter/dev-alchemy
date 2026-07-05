@@ -6,7 +6,7 @@ All commands are meant to be run in a powershell terminal on a Windows host mach
 For manually prepared Windows targets outside this managed VM flow, see
 [Windows Ansible Access](../../../docs/windows-ansible-access.md).
 
-Managed Dev Alchemy paths on Windows default to:
+Managed Sailwright paths on Windows default to:
 
 - App data root: `%LOCALAPPDATA%\dev-alchemy`
 - Build cache: `%LOCALAPPDATA%\dev-alchemy\cache`
@@ -19,7 +19,7 @@ Set `DEV_ALCHEMY_APP_DATA_DIR` if you want to override the default root.
 Run the dependency installer from repository root in an elevated PowerShell session:
 
 ```powershell
-alchemy.exe install
+sailwright.exe install
 ```
 
 Ensure you have the following installed:
@@ -109,8 +109,8 @@ If `CYGWIN_TERMINAL_PATH` points to `mintty.exe`, provisioning resolves it to th
 After installing host dependencies, run provisioning from the repository root. The wrapper resolves IP address via `vagrant winrm -c ipconfig` and runs `ansible-playbook` through Cygwin.
 
 ```powershell
-alchemy.exe provision windows11 --arch amd64 --check
-alchemy.exe provision windows11 --arch amd64
+sailwright.exe provision windows11 --arch amd64 --check
+sailwright.exe provision windows11 --arch amd64
 ```
 
 ## Destroying the Vagrant Box

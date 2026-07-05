@@ -3,7 +3,7 @@
 Use this guide only when you want to manage a Windows machine over Ansible and
 the target does not already expose a supported remote transport.
 
-For most Dev Alchemy onboarding flows, the main [README](../README.md) is the
+For most Sailwright onboarding flows, the main [README](../README.md) is the
 better starting point. For the wrapper-managed localhost flow, start with
 [Local Provisioning](./local-provisioning.md). The commands below are mainly
 for:
@@ -25,14 +25,14 @@ Use only the option you actually need.
 
 ## Security note
 
-For localhost runs through `alchemy provision local`, Dev Alchemy now handles a
+For localhost runs through `sailwright provision local`, Sailwright now handles a
 temporary secure setup for you on Windows. The default WinRM mode creates a
 dedicated local admin account with a random password, enables WinRM over HTTPS
 on the loopback address for the duration of the run, and restores the prior
 WinRM state during cleanup. If the `devalchemy_ansible` account already exists,
 the WinRM flow reuses it, restores its original enabled/admin/description
 state during cleanup, and leaves the rotated password in place. The SSH alternative
-(`alchemy provision local --proto ssh`) creates or updates a temporary local
+(`sailwright provision local --proto ssh`) creates or updates a temporary local
 admin account with a temporary SSH key, enables or installs OpenSSH Server when
 needed, sets the default SSH shell to PowerShell for the run, and then restores
 the prior SSH service, firewall, authorized_keys, and shell state during
@@ -52,8 +52,8 @@ the exposure you are accepting.
 For localhost provisioning, prefer:
 
 ```powershell
-alchemy.exe provision local --check
-alchemy.exe provision local
+sailwright.exe provision local --check
+sailwright.exe provision local
 ```
 
 For manual `ansible-playbook` use, set up an encrypted WinRM listener and pass
@@ -64,9 +64,9 @@ your own credentials and connection variables to Ansible.
 For localhost provisioning through the wrapper, prefer:
 
 ```powershell
-alchemy.exe provision local --proto ssh --check
-alchemy.exe provision local --proto ssh --check --yes --force-ssh-uninstall
-alchemy.exe provision local --proto ssh
+sailwright.exe provision local --proto ssh --check
+sailwright.exe provision local --proto ssh --check --yes --force-ssh-uninstall
+sailwright.exe provision local --proto ssh
 ```
 
 The wrapper-managed `devalchemy_ansible` account is intended for automation.
@@ -90,7 +90,7 @@ which commonly breaks Ansible-over-SSH runs on Windows.
 
 ## Remove OpenSSH Server After a Wrapper Run
 
-If `alchemy provision local --proto ssh` had to install OpenSSH Server on a
+If `sailwright provision local --proto ssh` had to install OpenSSH Server on a
 machine that did not already have it, cleanup leaves the capability installed.
 When you need to roll that back manually, remove the capability yourself after
 the provisioning run:

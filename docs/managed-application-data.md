@@ -1,10 +1,13 @@
 # Managed Application Data
 
-Dev Alchemy stores VM build state, deployment state, caches, and standalone
+Sailwright stores VM build state, deployment state, caches, and standalone
 runtime assets outside the repository in an OS-appropriate app-data directory.
 User-editable configuration is stored in an OS-appropriate config directory.
 
 ## Default location
+
+These directory and environment variable names intentionally retain the
+pre-rename `dev-alchemy` / `DEV_ALCHEMY_*` compatibility contract.
 
 - macOS: `~/Library/Application Support/dev-alchemy`
 - Windows: `%LOCALAPPDATA%\dev-alchemy`
@@ -12,7 +15,7 @@ User-editable configuration is stored in an OS-appropriate config directory.
 
 ## Managed subdirectories
 
-Under that root, Dev Alchemy manages:
+Under that root, Sailwright manages:
 
 - `cache/` for downloaded files and build artifacts
 - `.vagrant/` for isolated Vagrant state
@@ -22,7 +25,7 @@ Under that root, Dev Alchemy manages:
 
 ## Config location
 
-Dev Alchemy reads user-editable config from:
+Sailwright reads user-editable config from:
 
 - macOS: `~/Library/Application Support/dev-alchemy`
 - Windows: `%APPDATA%\dev-alchemy`
@@ -39,7 +42,7 @@ You can override the default root by setting
 You can override the config directory by setting
 `DEV_ALCHEMY_CONFIG_DIR`.
 
-Dev Alchemy also exports these derived paths for helper scripts and manual
+Sailwright also exports these derived paths for helper scripts and manual
 workflows:
 
 - `DEV_ALCHEMY_CONFIG_DIR`
@@ -49,8 +52,8 @@ workflows:
 
 ## Standalone runtime assets
 
-On the first standalone run, Dev Alchemy extracts bundled scripts, playbooks,
+On the first standalone run, Sailwright extracts bundled scripts, playbooks,
 and other runtime assets into `DEV_ALCHEMY_APP_DATA_DIR/project`.
 
-Later runs keep that managed tree in sync so the standalone `alchemy` binary
+Later runs keep that managed tree in sync so the standalone `sailwright` binary
 can operate without a repository checkout.

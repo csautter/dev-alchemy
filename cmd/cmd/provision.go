@@ -137,20 +137,20 @@ Important Ansible options exposed directly:
   --inventory-path PATH   Override the default inventory file for local provisioning.
 
 Pass any other ansible-playbook flags after --.
-When --inventory-path is set, Alchemy stops forcing the default local --limit target, so pass one yourself when needed.
+When --inventory-path is set, Sailwright stops forcing the default local --limit target, so pass one yourself when needed.
 Configure layered local or Git-backed role and playbook roots in the OS-specific ansible-role-sources.yml file.
 
 Examples:
-  alchemy provision local --check
-  alchemy provision local --proto ssh --check
-  alchemy provision local --proto ssh --check --yes --force-ssh-uninstall
-  alchemy provision local --playbook ./playbooks/bootstrap.yml
-  alchemy provision local -- --diff
-  alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
-  alchemy provision macos --arch arm64 --check
-  alchemy provision windows11 --arch amd64 --check
-  alchemy provision windows11 --arch arm64 --check
-  alchemy provision ubuntu --type server --arch amd64 -- --tags java
+  sailwright provision local --check
+  sailwright provision local --proto ssh --check
+  sailwright provision local --proto ssh --check --yes --force-ssh-uninstall
+  sailwright provision local --playbook ./playbooks/bootstrap.yml
+  sailwright provision local -- --diff
+  sailwright provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
+  sailwright provision macos --arch arm64 --check
+  sailwright provision windows11 --arch amd64 --check
+  sailwright provision windows11 --arch arm64 --check
+  sailwright provision ubuntu --type server --arch amd64 -- --tags java
 `,
 	Args: validateProvisionCommandArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -174,12 +174,12 @@ Examples:
 		}
 
 		if osName == "all" {
-			return fmt.Errorf("❌ \"all\" is not supported for provision; provide one target, for example: alchemy provision windows11 --arch amd64 --check")
+			return fmt.Errorf("❌ \"all\" is not supported for provision; provide one target, for example: sailwright provision windows11 --arch amd64 --check")
 		}
 
 		if osName == "local" {
 			if cmd.Flags().Changed("arch") || cmd.Flags().Changed("type") {
-				return fmt.Errorf("❌ local provisioning does not accept --arch or --type; use `alchemy provision local [--check]`")
+				return fmt.Errorf("❌ local provisioning does not accept --arch or --type; use `sailwright provision local [--check]`")
 			}
 
 			selectedVM, ok := currentHostLocalProvisionVirtualMachineFunc()

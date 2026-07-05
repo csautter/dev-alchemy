@@ -373,11 +373,11 @@ func printOCITransferResult(action string, result alchemy_oci.TransferResult) {
 var pushCmd = &cobra.Command{
 	Use:   "push <registry>/<repository>[:tag]",
 	Short: "Push VM build artifacts to an OCI registry",
-	Long: `Pushes the final VM build artifact for a selected Dev Alchemy target to an OCI registry.
+	Long: `Pushes the final VM build artifact for a selected Sailwright target to an OCI registry.
 
 Examples:
-  alchemy push localhost:5000/dev-alchemy/ubuntu-server-amd64:qemu --plain-http --os ubuntu --type server --arch amd64
-  alchemy push ghcr.io/example/dev-alchemy/windows11-amd64:hyperv --os windows11 --arch amd64 --engine hyperv --host-os windows
+  sailwright push localhost:5000/sailwright/ubuntu-server-amd64:qemu --plain-http --os ubuntu --type server --arch amd64
+  sailwright push ghcr.io/example/sailwright/windows11-amd64:hyperv --os windows11 --arch amd64 --engine hyperv --host-os windows
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -402,11 +402,11 @@ var pushListCmd = &cobra.Command{
 var pullCmd = &cobra.Command{
 	Use:   "pull <registry>/<repository>[:tag|@digest]",
 	Short: "Pull VM build artifacts from an OCI registry",
-	Long: `Pulls the final VM build artifact for a selected Dev Alchemy target from an OCI registry.
+	Long: `Pulls the final VM build artifact for a selected Sailwright target from an OCI registry.
 
 Examples:
-  alchemy pull localhost:5000/dev-alchemy/ubuntu-server-amd64:qemu --plain-http --os ubuntu --type server --arch amd64
-  alchemy pull ghcr.io/example/dev-alchemy/windows11-amd64:hyperv --os windows11 --arch amd64 --engine hyperv --host-os windows
+  sailwright pull localhost:5000/sailwright/ubuntu-server-amd64:qemu --plain-http --os ubuntu --type server --arch amd64
+  sailwright pull ghcr.io/example/sailwright/windows11-amd64:hyperv --os windows11 --arch amd64 --engine hyperv --host-os windows
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
