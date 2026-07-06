@@ -2,7 +2,7 @@ packer {
   required_version = ">= 1.12.0"
   required_plugins {
     virtualbox = {
-      version = ">= 1.1.3"
+      version = ">= 1.1.4"
       source  = "github.com/hashicorp/virtualbox"
     }
     vagrant = {
