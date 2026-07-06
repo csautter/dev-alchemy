@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/go:2-1.26-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV NODE_VERSION=24.15.0
+ENV NODE_VERSION=24.18.0
 # renovate: datasource=npm depName=renovate versioning=npm
 ENV RENOVATE_VERSION="43.220.0"
 # renovate: datasource=custom.powershell-linux-x64 depName=PowerShell/PowerShell versioning=semver
