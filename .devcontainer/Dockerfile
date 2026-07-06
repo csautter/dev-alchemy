@@ -5,10 +5,10 @@ ENV NODE_VERSION=24.15.0
 # renovate: datasource=npm depName=renovate versioning=npm
 ENV RENOVATE_VERSION="43.220.0"
 # renovate: datasource=custom.powershell-linux-x64 depName=PowerShell/PowerShell versioning=semver
-ENV POWERSHELL_VERSION="7.6.2"
-ENV POWERSHELL_SHA256_X64="6cbcfbf20e376aa62ffd91c973493c41a7a52ddfd5a5db3ff9bc12f0d0fe9292"
-# renovate: datasource=custom.powershell-linux-arm64 depName=PowerShell/PowerShell version=7.6.2 versioning=semver
-ENV POWERSHELL_SHA256_ARM64="a8d4e386dfafda385d0604045eed03ce6f3a843d45fc8f0b9588b836ca17cdb8"
+ENV POWERSHELL_VERSION="7.6.3"
+ENV POWERSHELL_SHA256_X64="856d0765d2332377f9d7a4aea76efdfde4de51446e7738dde2dfda41dba9e2a7"
+# renovate: datasource=custom.powershell-linux-arm64 depName=PowerShell/PowerShell version=7.6.3 versioning=semver
+ENV POWERSHELL_SHA256_ARM64="7a14a385eca7dc5bedc1c8aa3d8b765f449ada30aabe5785a9fd331266eb062d"
 # renovate: datasource=custom.terragrunt-linux-amd64 depName=gruntwork-io/terragrunt versioning=semver
 ENV TERRAGRUNT_VERSION="1.1.0"
 ENV TERRAGRUNT_SHA256_AMD64="acdf04d4a9d480228b19bcd995df549e6e2ce2d2125fe17d514371598a59f6c1"
