@@ -254,7 +254,7 @@ func TestRunDeployReturnsErrorWhenCreateTargetAlreadyExists(t *testing.T) {
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("expected existing-target error, got %q", err.Error())
 	}
-	if !strings.Contains(err.Error(), "alchemy start ubuntu --type server --arch amd64") {
+	if !strings.Contains(err.Error(), "sailwright start ubuntu --type server --arch amd64") {
 		t.Fatalf("expected start hint in error, got %q", err.Error())
 	}
 }

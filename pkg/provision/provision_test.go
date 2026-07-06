@@ -2482,7 +2482,7 @@ func TestEnsureTartVMReadyForProvision_ReturnsHelpfulErrorWhenVMDoesNotExist(t *
 	if !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("expected missing-vm error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "alchemy create macos --arch arm64") {
+	if !strings.Contains(err.Error(), "sailwright create macos --arch arm64") {
 		t.Fatalf("expected create hint in error, got %v", err)
 	}
 }
@@ -2505,7 +2505,7 @@ func TestEnsureTartVMReadyForProvision_ReturnsHelpfulErrorWhenVMIsNotRunning(t *
 	if !strings.Contains(err.Error(), "is not running") {
 		t.Fatalf("expected not-running error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "alchemy start macos --arch arm64") {
+	if !strings.Contains(err.Error(), "sailwright start macos --arch arm64") {
 		t.Fatalf("expected start hint in error, got %v", err)
 	}
 }
@@ -2528,7 +2528,7 @@ func TestEnsureProvisionTargetRunning_ReturnsCreateHintWhenMissing(t *testing.T)
 	if err == nil {
 		t.Fatal("expected missing provision target to return an error")
 	}
-	if !strings.Contains(err.Error(), "alchemy create ubuntu --type server --arch arm64") {
+	if !strings.Contains(err.Error(), "sailwright create ubuntu --type server --arch arm64") {
 		t.Fatalf("expected create hint, got %v", err)
 	}
 }
@@ -2554,7 +2554,7 @@ func TestEnsureProvisionTargetRunning_ReturnsStartHintWhenStopped(t *testing.T) 
 	if !strings.Contains(err.Error(), "state=stopped") {
 		t.Fatalf("expected state in error, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "alchemy start ubuntu --type server --arch arm64") {
+	if !strings.Contains(err.Error(), "sailwright start ubuntu --type server --arch arm64") {
 		t.Fatalf("expected start hint, got %v", err)
 	}
 }

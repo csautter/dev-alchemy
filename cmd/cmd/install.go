@@ -46,7 +46,7 @@ func installCommandForHost(hostOs alchemy_build.HostOsType, projectDir string, o
 
 	switch hostOs {
 	case alchemy_build.HostOsDarwin:
-		scriptPath := filepath.Join(projectDir, "scripts", "macos", "dev-alchemy-install-dependencies.sh")
+		scriptPath := filepath.Join(projectDir, "scripts", "macos", "sailwright-install-dependencies.sh")
 		args := []string{scriptPath}
 		if options.withGo {
 			args = append(args, "--with-go")
@@ -57,7 +57,7 @@ func installCommandForHost(hostOs alchemy_build.HostOsType, projectDir string, o
 			scriptPath: scriptPath,
 		}, nil
 	case alchemy_build.HostOsWindows:
-		scriptPath := filepath.Join(projectDir, "scripts", "windows", "dev-alchemy-self-setup.ps1")
+		scriptPath := filepath.Join(projectDir, "scripts", "windows", "sailwright-self-setup.ps1")
 		args := []string{"-ExecutionPolicy", "Bypass", "-File", scriptPath}
 		if options.withGo {
 			args = append(args, "-WithGo")
@@ -71,7 +71,7 @@ func installCommandForHost(hostOs alchemy_build.HostOsType, projectDir string, o
 			scriptPath: scriptPath,
 		}, nil
 	case alchemy_build.HostOsLinux:
-		scriptPath := filepath.Join(projectDir, "scripts", "linux", "dev-alchemy-install-dependencies.sh")
+		scriptPath := filepath.Join(projectDir, "scripts", "linux", "sailwright-install-dependencies.sh")
 		args := []string{scriptPath}
 		if options.withGo {
 			args = append(args, "--with-go")

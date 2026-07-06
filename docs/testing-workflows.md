@@ -8,13 +8,13 @@ Use the cross-platform matrix in the root [README](../README.md) for a quick sup
 Most VM-backed test flows follow the same lifecycle from the repository root:
 
 ```bash
-alchemy build <osname> [--type <type>] [--arch <arch>]
-alchemy create <osname> [--type <type>] [--arch <arch>]
-alchemy start <osname> [--type <type>] [--arch <arch>]
-alchemy provision <osname> [--type <type>] [--arch <arch>] --check
-alchemy provision <osname> [--type <type>] [--arch <arch>]
-alchemy stop <osname> [--type <type>] [--arch <arch>]
-alchemy destroy <osname> [--type <type>] [--arch <arch>]
+sailwright build <osname> [--type <type>] [--arch <arch>]
+sailwright create <osname> [--type <type>] [--arch <arch>]
+sailwright start <osname> [--type <type>] [--arch <arch>]
+sailwright provision <osname> [--type <type>] [--arch <arch>] --check
+sailwright provision <osname> [--type <type>] [--arch <arch>]
+sailwright stop <osname> [--type <type>] [--arch <arch>]
+sailwright destroy <osname> [--type <type>] [--arch <arch>]
 ```
 
 - `build` creates or refreshes the reusable VM artifact.
@@ -29,21 +29,21 @@ Depending on the backend, the initial boot may happen during `create` or require
 Use the `list` subcommands to see what your current host supports:
 
 ```bash
-alchemy build list
-alchemy create list
-alchemy start list
-alchemy provision list
-alchemy stop list
-alchemy destroy list
+sailwright build list
+sailwright create list
+sailwright start list
+sailwright provision list
+sailwright stop list
+sailwright destroy list
 ```
 
 Use `--help` on the root command or any subcommand to inspect supported flags and usage details:
 
 ```bash
-alchemy --help
-alchemy create --help
-alchemy start --help
-alchemy provision --help
+sailwright --help
+sailwright create --help
+sailwright start --help
+sailwright provision --help
 ```
 
 ## OCI Build Artifact Registry Workflow
@@ -53,17 +53,17 @@ commands use the same target vocabulary as the VM workflow and a Docker-like
 reference argument:
 
 ```bash
-alchemy push list
-alchemy pull list
+sailwright push list
+sailwright pull list
 
-alchemy push localhost:5000/dev-alchemy/ubuntu-server-amd64:qemu \
+sailwright push localhost:5000/sailwright/ubuntu-server-amd64:qemu \
   --plain-http \
   --os ubuntu \
   --type server \
   --arch amd64 \
   --host-os linux
 
-alchemy pull localhost:5000/dev-alchemy/ubuntu-server-amd64:qemu \
+sailwright pull localhost:5000/sailwright/ubuntu-server-amd64:qemu \
   --plain-http \
   --os ubuntu \
   --type server \
@@ -97,7 +97,7 @@ For a local zot registry, use `--plain-http`. To run the opt-in integration test
 against that registry:
 
 ```bash
-DEV_ALCHEMY_OCI_INTEGRATION_REF=localhost:5000/dev-alchemy/integration:oci \
+DEV_ALCHEMY_OCI_INTEGRATION_REF=localhost:5000/sailwright/integration:oci \
 DEV_ALCHEMY_OCI_INTEGRATION_PLAIN_HTTP=true \
 go test ./pkg/oci -run TestOCIRegistryPushPullIntegration -count=1
 ```
@@ -106,7 +106,7 @@ The pushed artifact is an ordinary OCI artifact, so it can also be inspected
 with ORAS:
 
 ```bash
-oras manifest fetch --plain-http localhost:5000/dev-alchemy/ubuntu-server-amd64:qemu
+oras manifest fetch --plain-http localhost:5000/sailwright/ubuntu-server-amd64:qemu
 ```
 
 ## System-Agnostic Docker Workflow
@@ -117,14 +117,14 @@ Use the shared local wrapper when you want to apply the playbook to the current
 machine instead of a managed VM:
 
 ```bash
-alchemy provision local --check
-alchemy provision local --proto ssh --check
-alchemy provision local --playbook ./playbooks/bootstrap.yml
-alchemy provision local
+sailwright provision local --check
+sailwright provision local --proto ssh --check
+sailwright provision local --playbook ./playbooks/setup.yml --check
+sailwright provision local
 ```
 
-For platform defaults, advanced flags, and Windows cleanup behavior, use
-[Local Provisioning](./local-provisioning.md).
+For platform defaults, configured playbook resolution, advanced flags, and
+Windows cleanup behavior, use [Local Provisioning](./local-provisioning.md).
 
 ### Ubuntu role tests on Linux, WSL, Windows, or macOS
 
@@ -147,10 +147,10 @@ docker compose -f deployments/docker-compose/ansible/docker-compose.yml down
 Install host dependencies first:
 
 ```bash
-alchemy install
+sailwright install
 ```
 
-`alchemy install` installs the libvirt and QEMU host packages, but some
+`sailwright install` installs the libvirt and QEMU host packages, but some
 distributions still require one manual host step before the managed VM can
 boot: enable libvirt's `default` network, or grant ACL/group access to the
 system libvirt image directory if the daemon runs guests as a different user.
@@ -160,21 +160,21 @@ Build and create the Ubuntu VM:
 ```bash
 arch=amd64 # or arm64
 type=desktop # or server
-alchemy build ubuntu --arch "$arch" --type "$type"
-alchemy create ubuntu --arch "$arch" --type "$type"
+sailwright build ubuntu --arch "$arch" --type "$type"
+sailwright create ubuntu --arch "$arch" --type "$type"
 ```
 
 By default the Linux create/start/stop/destroy workflow uses the libvirt system
 connection (`qemu:///system`) so the VM attaches to libvirt's standard NAT
 network and gets outbound internet access in the common case. Managed QCOW2
 disks default to `/var/tmp/dev-alchemy/libvirt/images`, which avoids requiring a
-pre-created root-owned image directory. Alchemy creates managed image
+pre-created root-owned image directory. Sailwright creates managed image
 directories with mode `0750`; if your system libvirt daemon runs guests as a
 different user, grant access explicitly with a libvirt storage pool, group
 ownership/ACLs on `DEV_ALCHEMY_LIBVIRT_IMAGE_DIR`, or use the session connection
 below.
 
-When a VM uses a named libvirt network, Alchemy preflights it before defining or
+When a VM uses a named libvirt network, Sailwright preflights it before defining or
 starting the domain. With the default system URI this checks:
 
 ```bash
@@ -210,11 +210,11 @@ export DEV_ALCHEMY_LIBVIRT_IMAGE_DIR=/var/lib/libvirt/images/dev-alchemy
 You can then boot the created VM either from `virt-manager` or from the CLI:
 
 ```bash
-alchemy start ubuntu --arch "$arch" --type "$type"
-alchemy provision ubuntu --arch "$arch" --type "$type" --check
-alchemy provision ubuntu --arch "$arch" --type "$type"
-alchemy stop ubuntu --arch "$arch" --type "$type"
-alchemy destroy ubuntu --arch "$arch" --type "$type"
+sailwright start ubuntu --arch "$arch" --type "$type"
+sailwright provision ubuntu --arch "$arch" --type "$type" --check
+sailwright provision ubuntu --arch "$arch" --type "$type"
+sailwright stop ubuntu --arch "$arch" --type "$type"
+sailwright destroy ubuntu --arch "$arch" --type "$type"
 ```
 
 The provision wrapper discovers the libvirt guest IP with `virsh domifaddr`
@@ -242,21 +242,21 @@ Related guide:
 Install host dependencies first:
 
 ```bash
-alchemy install
+sailwright install
 ```
 
 Build and create the Windows 11 VM:
 
 ```bash
 arch=amd64 # or arm64
-alchemy build windows11 --arch "$arch" --headless
-alchemy create windows11 --arch "$arch"
+sailwright build windows11 --arch "$arch" --headless
+sailwright create windows11 --arch "$arch"
 ```
 
 You can then boot the created VM either from `virt-manager` or from the CLI:
 
 ```bash
-alchemy start windows11 --arch "$arch"
+sailwright start windows11 --arch "$arch"
 ```
 
 The lifecycle uses the same libvirt defaults as Ubuntu on Linux: `qemu:///system`
@@ -281,10 +281,10 @@ LIBVIRT_WINDOWS_ANSIBLE_PORT=5985
 Provision it from the repository root:
 
 ```bash
-alchemy provision windows11 --arch "$arch" --check
-alchemy provision windows11 --arch "$arch"
-alchemy stop windows11 --arch "$arch"
-alchemy destroy windows11 --arch "$arch"
+sailwright provision windows11 --arch "$arch" --check
+sailwright provision windows11 --arch "$arch"
+sailwright stop windows11 --arch "$arch"
+sailwright destroy windows11 --arch "$arch"
 ```
 
 The provision wrapper discovers the libvirt guest IP with `virsh domifaddr`
@@ -301,32 +301,32 @@ Related guide:
 Install host dependencies first:
 
 ```powershell
-alchemy.exe install
+sailwright.exe install
 ```
 
 Build the Ubuntu artifact:
 
 ```powershell
 # server
-alchemy.exe build ubuntu --type server --arch amd64
+sailwright.exe build ubuntu --type server --arch amd64
 # desktop
-alchemy.exe build ubuntu --type desktop --arch amd64
+sailwright.exe build ubuntu --type desktop --arch amd64
 ```
 
 Create the VM:
 
 ```powershell
 $env:VAGRANT_HYPERV_SWITCH = "Default Switch"
-alchemy.exe create ubuntu --type server --arch amd64
+sailwright.exe create ubuntu --type server --arch amd64
 # or desktop
-alchemy.exe create ubuntu --type desktop --arch amd64
+sailwright.exe create ubuntu --type desktop --arch amd64
 ```
 
 Provision it:
 
 ```powershell
-alchemy.exe provision ubuntu --type server --arch amd64 --check
-alchemy.exe provision ubuntu --type server --arch amd64
+sailwright.exe provision ubuntu --type server --arch amd64 --check
+sailwright.exe provision ubuntu --type server --arch amd64
 ```
 
 The command discovers the VM IP automatically and runs Ansible through the Windows/Cygwin wrapper.
@@ -360,7 +360,7 @@ More details:
 Install host dependencies first:
 
 ```powershell
-alchemy.exe install
+sailwright.exe install
 ```
 
 You will need a Windows ISO for the build. You can download one manually from Microsoft or use:
@@ -375,8 +375,8 @@ Build details live here:
 After the VM is running, provision it from the repository root:
 
 ```powershell
-alchemy.exe provision windows11 --arch amd64 --check
-alchemy.exe provision windows11 --arch amd64
+sailwright.exe provision windows11 --arch amd64 --check
+sailwright.exe provision windows11 --arch amd64
 ```
 
 Set WinRM credentials in project-root `.env` or the process environment:
@@ -422,7 +422,7 @@ Tart project:
 
 - https://github.com/cirruslabs/tart
 
-By default, Dev Alchemy uses the Tart image's development credentials for Ansible access (`admin` / `admin`).
+By default, Sailwright uses the Tart image's development credentials for Ansible access (`admin` / `admin`).
 Override them in `.env` if needed:
 
 ```bash
@@ -443,7 +443,7 @@ tart delete sequoia-base
 Install host dependencies first:
 
 ```bash
-alchemy install
+sailwright install
 ```
 
 Build and create the Windows 11 VM:
@@ -452,10 +452,10 @@ Build and create the Windows 11 VM:
 # arm64 requires sudo to create a custom .iso file for automated installation.
 # sudo rights are evaluated at runtime, so you can run the build command without sudo and it will ask for sudo rights only if needed.
 arch=arm64 # or amd64
-# sudo alchemy build windows11 --arch $arch --headless
-alchemy build windows11 --arch $arch --headless
+# sudo sailwright build windows11 --arch $arch --headless
+sailwright build windows11 --arch $arch --headless
 # `--headless` applies to `build`, not `create`.
-alchemy create windows11 --arch $arch
+sailwright create windows11 --arch $arch
 ```
 
 Open UTM and start the created VM.
@@ -474,8 +474,8 @@ UTM_WINDOWS_ANSIBLE_PORT=5985
 Provision it from the repository root:
 
 ```bash
-alchemy provision windows11 --arch $arch --check
-alchemy provision windows11 --arch $arch
+sailwright provision windows11 --arch $arch --check
+sailwright provision windows11 --arch $arch
 ```
 
 The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target.
@@ -499,7 +499,7 @@ Older images may still need their network switched to `Private` or an equivalent
 Install host dependencies first:
 
 ```bash
-alchemy install
+sailwright install
 ```
 
 Build and create the Ubuntu VM:
@@ -507,8 +507,8 @@ Build and create the Ubuntu VM:
 ```bash
 arch=arm64 # or amd64
 type=desktop # or server
-alchemy build ubuntu --arch $arch --type $type
-alchemy create ubuntu --arch $arch --type $type
+sailwright build ubuntu --arch $arch --type $type
+sailwright create ubuntu --arch $arch --type $type
 ```
 
 Open UTM and start the created VM.
@@ -529,8 +529,8 @@ UTM_UBUNTU_ANSIBLE_SSH_RETRIES=3
 Provision it from the repository root:
 
 ```bash
-alchemy provision ubuntu --type $type --arch $arch --check
-alchemy provision ubuntu --type $type --arch $arch
+sailwright provision ubuntu --type $type --arch $arch --check
+sailwright provision ubuntu --type $type --arch $arch
 ```
 
 The wrapper discovers the VM IP automatically from the generated UTM config and `arp -a`, then runs `ansible-playbook` with an inline inventory target.

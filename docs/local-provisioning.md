@@ -1,7 +1,14 @@
 # Local Provisioning
 
-Use `alchemy provision local` when you want to apply the repository playbooks
-to the current machine instead of a managed VM or remote host.
+Use `sailwright provision local` when you want Sailwright to run the configured
+default playbook against the current machine instead of a managed VM or remote
+host.
+
+For day-to-day machine setup, define that default in
+`ansible-role-sources.yml`. Without a configured default, Sailwright falls back
+to the bundled `./playbooks/role-sources-test.yml`, which is a quick
+role-source smoke/example playbook. To run the broader bundled example setup
+directly, pass `--playbook ./playbooks/setup.yml`.
 
 Start with the root [README](../README.md) for installation and discovery, then
 use this guide for wrapper-specific behavior and flags.
@@ -9,22 +16,23 @@ use this guide for wrapper-specific behavior and flags.
 ## Quick examples
 
 ```bash
-alchemy provision local --check
-alchemy provision local --proto ssh --check
-alchemy provision local --playbook ./playbooks/bootstrap.yml
-alchemy provision local -- --diff --tags java
-alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
-alchemy provision local --check --yes
-alchemy provision local --check --yes --force-winrm-uninstall
-alchemy provision local --proto ssh --check --yes --force-ssh-uninstall
-alchemy provision local
+sailwright provision local --check
+sailwright provision local --proto ssh --check
+sailwright provision local --playbook ./playbooks/setup.yml --check
+sailwright provision local --playbook ./playbooks/setup.yml
+sailwright provision local -- --diff --tags java
+sailwright provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
+sailwright provision local --check --yes
+sailwright provision local --check --yes --force-winrm-uninstall
+sailwright provision local --proto ssh --check --yes --force-ssh-uninstall
+sailwright provision local
 ```
 
 ## What the wrapper does
 
 - Selects a default localhost inventory for the current host OS.
-- Runs the chosen playbook through the shared `alchemy provision` command
-  surface.
+- Resolves the playbook from `--playbook`, `ansible-role-sources.yml`, or the
+  bundled role-source smoke fallback.
 - Passes extra `ansible-playbook` flags through when you place them after `--`.
 
 Use `--playbook` to point at a different playbook file. Use
@@ -72,7 +80,7 @@ Because these are significant host changes, the Windows local flow asks for
 confirmation by default. Use `--yes` to skip those CLI confirmation prompts.
 
 On Windows, local provisioning is only fully non-interactive when you start
-`alchemy` from an already elevated shell. If the current shell is not
+`sailwright` from an already elevated shell. If the current shell is not
 elevated, the privileged bootstrap and cleanup steps still trigger a UAC prompt
 before they run.
 

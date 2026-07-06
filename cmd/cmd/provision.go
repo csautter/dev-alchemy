@@ -128,29 +128,29 @@ var provisionCmd = &cobra.Command{
 	Long: `Runs Ansible provisioning against VM targets or the current host.
 
 Important Ansible options exposed directly:
-  --check                 Run ansible-playbook with --check.
+  --check, --dry-run      Run ansible-playbook with --check.
   --proto PROTO          For local Windows provisioning, select winrm (default) or ssh.
   --force-winrm-uninstall For local Windows WinRM provisioning, force cleanup to disable WinRM.
   --force-ssh-uninstall   For local Windows SSH provisioning, force cleanup to disable sshd, remove SSH firewall rules, and remove the transient user without uninstalling OpenSSH Server.
   --verbosity N           Set Ansible verbosity. The default is 3, equivalent to -vvv.
-  --playbook PATH         Override the playbook path. The default is ./playbooks/setup.yml unless ansible-role-sources.yml sets playbook.
+  --playbook PATH         Override the playbook path. Without this flag, ansible-role-sources.yml can set the effective default; otherwise Sailwright falls back to ./playbooks/role-sources-test.yml.
   --inventory-path PATH   Override the default inventory file for local provisioning.
 
 Pass any other ansible-playbook flags after --.
-When --inventory-path is set, Alchemy stops forcing the default local --limit target, so pass one yourself when needed.
+When --inventory-path is set, Sailwright stops forcing the default local --limit target, so pass one yourself when needed.
 Configure layered local or Git-backed role and playbook roots in the OS-specific ansible-role-sources.yml file.
 
 Examples:
-  alchemy provision local --check
-  alchemy provision local --proto ssh --check
-  alchemy provision local --proto ssh --check --yes --force-ssh-uninstall
-  alchemy provision local --playbook ./playbooks/bootstrap.yml
-  alchemy provision local -- --diff
-  alchemy provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
-  alchemy provision macos --arch arm64 --check
-  alchemy provision windows11 --arch amd64 --check
-  alchemy provision windows11 --arch arm64 --check
-  alchemy provision ubuntu --type server --arch amd64 -- --tags java
+  sailwright provision local --check
+  sailwright provision local --proto ssh --check
+  sailwright provision local --proto ssh --check --yes --force-ssh-uninstall
+  sailwright provision local --playbook ./playbooks/setup.yml --check
+  sailwright provision local -- --diff
+  sailwright provision local --inventory-path ./inventory/remote.yml -- --limit workstation --ask-become-pass
+  sailwright provision macos --arch arm64 --check
+  sailwright provision windows11 --arch amd64 --check
+  sailwright provision windows11 --arch arm64 --check
+  sailwright provision ubuntu --type server --arch amd64 -- --tags java
 `,
 	Args: validateProvisionCommandArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -174,12 +174,12 @@ Examples:
 		}
 
 		if osName == "all" {
-			return fmt.Errorf("❌ \"all\" is not supported for provision; provide one target, for example: alchemy provision windows11 --arch amd64 --check")
+			return fmt.Errorf("❌ \"all\" is not supported for provision; provide one target, for example: sailwright provision windows11 --arch amd64 --check")
 		}
 
 		if osName == "local" {
 			if cmd.Flags().Changed("arch") || cmd.Flags().Changed("type") {
-				return fmt.Errorf("❌ local provisioning does not accept --arch or --type; use `alchemy provision local [--check]`")
+				return fmt.Errorf("❌ local provisioning does not accept --arch or --type; use `sailwright provision local [--check]`")
 			}
 
 			selectedVM, ok := currentHostLocalProvisionVirtualMachineFunc()
@@ -282,13 +282,15 @@ func init() {
 	provisionCmd.Flags().StringVarP(&arch, "arch", "a", "amd64", "Target architecture (e.g., amd64, arm64)")
 	provisionCmd.Flags().StringVarP(&osType, "type", "t", "server", "Type of OS (e.g., server, desktop)")
 	provisionCmd.Flags().BoolVar(&check, "check", false, "Run ansible with --check (dry-run)")
+	provisionCmd.Flags().BoolVar(&check, "dry-run", false, "Alias for --check")
 	provisionCmd.Flags().StringVar(&localProvisionProto, "proto", string(alchemy_provision.DefaultLocalWindowsProvisionProtocol()), "Local Windows provision transport: winrm or ssh")
 	provisionCmd.Flags().IntVar(&ansibleVerbosity, "verbosity", 3, "Ansible verbosity level (0-4). Default 3 is equivalent to -vvv")
-	provisionCmd.Flags().StringVar(&playbookPath, "playbook", alchemy_provision.DefaultProvisionPlaybookPath(), "Override the Ansible playbook path")
+	provisionCmd.Flags().StringVar(&playbookPath, "playbook", "", "Override the Ansible playbook path")
 	provisionCmd.Flags().StringVar(&inventoryPath, "inventory-path", "", "Override the default inventory file for local provisioning; pass -- --limit <host-pattern> if your custom inventory needs a target")
 	provisionCmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Skip confirmation prompts for operations that change local system state")
 	provisionCmd.Flags().BoolVar(&forceWinRMUninstall, "force-winrm-uninstall", false, "For local Windows provisioning, force cleanup to disable WinRM and remove transient setup after the run")
 	provisionCmd.Flags().BoolVar(&forceSSHUninstall, "force-ssh-uninstall", false, "For local Windows SSH provisioning, force cleanup to disable sshd, remove SSH firewall rules, and remove the transient Ansible user after the run without uninstalling OpenSSH Server")
+	provisionCmd.Flags().Lookup("dry-run").Hidden = true
 }
 
 func validateProvisionCommandArgs(cmd *cobra.Command, args []string) error {

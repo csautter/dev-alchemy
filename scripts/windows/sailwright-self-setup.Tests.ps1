@@ -1,5 +1,5 @@
 BeforeAll {
-    $setupScript = Join-Path $PSScriptRoot "dev-alchemy-self-setup.ps1"
+    $setupScript = Join-Path $PSScriptRoot "sailwright-self-setup.ps1"
     $previousImportOnly = $env:DEV_ALCHEMY_SELF_SETUP_IMPORT_ONLY
     try {
         $env:DEV_ALCHEMY_SELF_SETUP_IMPORT_ONLY = "1"
@@ -82,7 +82,7 @@ BeforeAll {
     }
 }
 
-Describe "dev-alchemy self setup Cygwin helpers" -Skip:(-not $IsWindows) {
+Describe "sailwright self setup Cygwin helpers" -Skip:(-not $IsWindows) {
     BeforeEach {
         $script:PreferredRoot = "C:\tools\cygwin"
         $script:CygwinVersion = "3.6.9"

@@ -69,7 +69,7 @@ func RunLinuxQemuDeployOnLinux(config alchemy_build.VirtualMachineConfig) error 
 	artifactPath := linuxQemuArtifactPath(config)
 	if _, err := os.Stat(artifactPath); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("required QCOW2 build artifact is missing at %q; run `alchemy build %s` first", artifactPath, startCommandArguments(config))
+			return fmt.Errorf("required QCOW2 build artifact is missing at %q; run `sailwright build %s` first", artifactPath, startCommandArguments(config))
 		}
 		return fmt.Errorf("failed to inspect QCOW2 build artifact %q: %w", artifactPath, err)
 	}
@@ -170,7 +170,7 @@ func RunLinuxQemuStartOnLinux(config alchemy_build.VirtualMachineConfig) error {
 		return err
 	}
 	if !state.Exists {
-		return fmt.Errorf("libvirt VM %q does not exist. Run `alchemy create %s` first", linuxLibvirtDomainName(config), startCommandArguments(config))
+		return fmt.Errorf("libvirt VM %q does not exist. Run `sailwright create %s` first", linuxLibvirtDomainName(config), startCommandArguments(config))
 	}
 	if state.Running {
 		return nil
@@ -522,7 +522,7 @@ func ensureLinuxLibvirtCommandsAvailable(commands ...string) error {
 	for _, command := range commands {
 		if _, err := lookPathLinuxLibvirtCommand(command); err != nil {
 			return fmt.Errorf(
-				"required Linux libvirt command %q was not found in PATH; run `alchemy install` first or install the libvirt/QEMU host packages manually",
+				"required Linux libvirt command %q was not found in PATH; run `sailwright install` first or install the libvirt/QEMU host packages manually",
 				command,
 			)
 		}

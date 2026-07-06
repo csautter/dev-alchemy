@@ -42,7 +42,7 @@ func TestEnsureProjectDir_FallsBackToEmbeddedProject(t *testing.T) {
 	for _, relPath := range []string{
 		"ansible.cfg",
 		filepath.Join("playbooks", "setup.yml"),
-		filepath.Join("scripts", "macos", "dev-alchemy-install-dependencies.sh"),
+		filepath.Join("scripts", "macos", "sailwright-install-dependencies.sh"),
 		filepath.Join("deployments", "utm", "create-utm-vm.sh"),
 	} {
 		if _, err := os.Stat(filepath.Join(projectDir, relPath)); err != nil {
@@ -87,7 +87,7 @@ func TestEnsureEmbeddedProjectDir_MarksShellScriptsExecutableOnUnix(t *testing.T
 		t.Fatalf("ensureEmbeddedProjectDir returned error: %v", err)
 	}
 
-	info, err := os.Stat(filepath.Join(projectDir, "scripts", "macos", "dev-alchemy-install-dependencies.sh"))
+	info, err := os.Stat(filepath.Join(projectDir, "scripts", "macos", "sailwright-install-dependencies.sh"))
 	if err != nil {
 		t.Fatalf("failed to stat extracted script: %v", err)
 	}

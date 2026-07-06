@@ -138,7 +138,7 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 		rootCmd.SetArgs(nil)
 		rootCmd.SetOut(previousRootOut)
 		rootCmd.SetErr(previousRootErr)
-		for _, flagName := range []string{"arch", "type", "check", "playbook", "inventory-path", "verbosity", "proto"} {
+		for _, flagName := range []string{"arch", "type", "check", "dry-run", "playbook", "inventory-path", "verbosity", "proto"} {
 			provisionCmd.Flags().Lookup(flagName).Changed = false
 		}
 	})
@@ -161,7 +161,7 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 	rootCmd.SetArgs([]string{
 		"provision",
 		"local",
-		"--check",
+		"--dry-run",
 		"--playbook", "./playbooks/bootstrap.yml",
 		"--inventory-path", "./inventory/custom.yml",
 		"--verbosity", "1",
@@ -177,7 +177,7 @@ func TestProvisionCommandPassesThroughAnsibleArgsAfterDash(t *testing.T) {
 		t.Fatalf("expected provision command to execute successfully, got: %v", err)
 	}
 	if !capturedOptions.Check {
-		t.Fatal("expected --check to propagate into provision options")
+		t.Fatal("expected --dry-run to propagate into provision options as check mode")
 	}
 	if capturedOptions.Verbosity != 1 {
 		t.Fatalf("expected verbosity 1, got %d", capturedOptions.Verbosity)

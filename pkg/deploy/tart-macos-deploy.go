@@ -170,7 +170,7 @@ func RunTartStartOnMacOS(config alchemy_build.VirtualMachineConfig) error {
 		return err
 	}
 	if !vmState.exists {
-		return fmt.Errorf("Tart VM %q does not exist. Run `alchemy create %s` first", vmName, startCommandArguments(config))
+		return fmt.Errorf("Tart VM %q does not exist. Run `sailwright create %s` first", vmName, startCommandArguments(config))
 	}
 	if vmState.running {
 		log.Printf("Tart VM %q is already running", vmName)

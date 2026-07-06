@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This page collects rare, host-specific issues that do not affect most Dev Alchemy setups.
+This page collects rare, host-specific issues that do not affect most Sailwright setups.
 
 ## Windows: Cygwin Ansible Shadowed by a Host Installation
 
@@ -32,11 +32,11 @@ export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 ## Linux: `virsh domifaddr` Returns No IP
 
 Linux libvirt provisioning waits for `virsh domifaddr` to report a guest IPv4
-address. Alchemy checks the guest agent first, then libvirt DHCP leases. If both
+address. Sailwright checks the guest agent first, then libvirt DHCP leases. If both
 sources return no address, provisioning cannot build the temporary Ansible
 inventory.
 
-First confirm the VM is running and query the same libvirt connection Alchemy
+First confirm the VM is running and query the same libvirt connection Sailwright
 uses:
 
 ```bash

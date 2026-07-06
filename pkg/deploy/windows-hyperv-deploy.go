@@ -142,7 +142,7 @@ func RunHypervVagrantStartOnWindows(config alchemy_build.VirtualMachineConfig) e
 		return err
 	}
 	if !state.Exists {
-		return fmt.Errorf("Hyper-V VM for %s does not exist. Run `alchemy create %s` first", startCommandArguments(config), startCommandArguments(config))
+		return fmt.Errorf("Hyper-V VM for %s does not exist. Run `sailwright create %s` first", startCommandArguments(config), startCommandArguments(config))
 	}
 	if state.Running {
 		return nil

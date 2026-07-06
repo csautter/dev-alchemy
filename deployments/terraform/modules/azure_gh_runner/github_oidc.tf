@@ -47,7 +47,7 @@ resource "azuread_application_federated_identity_credential" "gh_actions_github_
   application_id = azuread_application.gh_actions_runner_broker.id
   display_name   = "github-actions"
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:csautter/dev-alchemy:ref:refs/heads/main"
+  subject        = "repo:${var.github_repository}:ref:refs/heads/main"
   audiences      = ["api://AzureADTokenExchange"]
 }
 
@@ -56,6 +56,6 @@ resource "azuread_application_federated_identity_credential" "gh_actions_github_
   application_id = azuread_application.gh_actions_runner_broker.id
   display_name   = "github-actions-pr"
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:csautter/dev-alchemy:pull_request"
+  subject        = "repo:${var.github_repository}:pull_request"
   audiences      = ["api://AzureADTokenExchange"]
 }

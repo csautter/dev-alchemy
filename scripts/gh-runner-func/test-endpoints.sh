@@ -8,7 +8,7 @@ Test Azure runner broker endpoints with Entra auth.
 Optional:
   --function-app <name>    Azure Function App name (without .azurewebsites.net)
   --api-client-id <id>     App registration client ID used as API audience
-  --repo <owner/repo>      GitHub repo (default: csautter/dev-alchemy)
+  --repo <owner/repo>      GitHub repo (default: csautter/sailwright)
   --resource-group <name>  Resource group name
   --runner-name <name>     Runner name
   --flavor <hyperv|virtualbox>  Virtualization flavor (default: hyperv)
@@ -38,7 +38,7 @@ require_cmd() {
 
 FUNCTION_APP_NAME="${FUNCTION_APP_NAME:-}"
 API_CLIENT_ID="${API_CLIENT_ID:-}"
-REPO="${REPO:-csautter/dev-alchemy}"
+REPO="${REPO:-csautter/sailwright}"
 RESOURCE_GROUP="${RESOURCE_GROUP:-}"
 RUNNER_NAME="${RUNNER_NAME:-}"
 VIRTUALIZATION_FLAVOR="${VIRTUALIZATION_FLAVOR:-hyperv}"

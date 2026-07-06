@@ -91,13 +91,14 @@ const (
 	linuxLibvirtDomifaddrSourceAgent       = "agent"
 	linuxLibvirtDomifaddrSourceLease       = "lease"
 
-	defaultAnsibleSSHCommonArgs = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
-	defaultAnsibleVerbosity     = 3
-	maxAnsibleVerbosity         = 4
-	defaultProvisionPlaybook    = "./playbooks/setup.yml"
-	defaultUbuntuGuestPassword  = "P@ssw0rd!" // #nosec G101 -- documented default credential for disposable local/test Ubuntu guests.
-	defaultTartGuestUser        = "admin"
-	defaultTartGuestPassword    = "admin" // #nosec G101 -- documented default Tart guest credential for local testing.
+	defaultAnsibleSSHCommonArgs   = "-o StrictHostKeyChecking=no -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=no -o ControlPersist=no"
+	defaultAnsibleVerbosity       = 3
+	maxAnsibleVerbosity           = 4
+	defaultProvisionPlaybook      = "./playbooks/role-sources-test.yml"
+	bundledSetupProvisionPlaybook = "./playbooks/setup.yml"
+	defaultUbuntuGuestPassword    = "P@ssw0rd!" // #nosec G101 -- documented default credential for disposable local/test Ubuntu guests.
+	defaultTartGuestUser          = "admin"
+	defaultTartGuestPassword      = "admin" // #nosec G101 -- documented default Tart guest credential for local testing.
 
 	localUnixInventoryPath   = "./inventory/localhost.yaml"
 	localUnixInventoryTarget = "localhost"
@@ -683,7 +684,7 @@ func ensureProvisionTargetRunning(vm alchemy_build.VirtualMachineConfig) error {
 
 	if !state.Exists {
 		return fmt.Errorf(
-			"VM for OS=%s, type=%s, arch=%s does not exist. Run `alchemy create %s` first",
+			"VM for OS=%s, type=%s, arch=%s does not exist. Run `sailwright create %s` first",
 			vm.OS,
 			vm.UbuntuType,
 			vm.Arch,
@@ -696,7 +697,7 @@ func ensureProvisionTargetRunning(vm alchemy_build.VirtualMachineConfig) error {
 			currentState = "stopped"
 		}
 		return fmt.Errorf(
-			"VM for OS=%s, type=%s, arch=%s is not running (state=%s). Run `alchemy start %s` first",
+			"VM for OS=%s, type=%s, arch=%s is not running (state=%s). Run `sailwright start %s` first",
 			vm.OS,
 			vm.UbuntuType,
 			vm.Arch,
@@ -727,12 +728,12 @@ func ensureTartVMReadyForProvision(projectDir string, vmName string, options tar
 		return "", fmt.Errorf("failed to determine whether Tart VM %q exists: %w", vmName, err)
 	}
 	if !exists {
-		return "", fmt.Errorf("Tart VM %q does not exist. Run `alchemy create macos --arch arm64` first", vmName)
+		return "", fmt.Errorf("Tart VM %q does not exist. Run `sailwright create macos --arch arm64` first", vmName)
 	}
 
 	ip, err := options.discoverIPv4(projectDir, vmName)
 	if err != nil {
-		return "", fmt.Errorf("Tart VM %q exists but is not running or has no IPv4 address yet. Start it with `alchemy start macos --arch arm64`: %w", vmName, err)
+		return "", fmt.Errorf("Tart VM %q exists but is not running or has no IPv4 address yet. Start it with `sailwright start macos --arch arm64`: %w", vmName, err)
 	}
 
 	return ip, nil
@@ -1839,7 +1840,12 @@ func defaultIfEmpty(value string, fallback string) string {
 }
 
 func runAnsibleProvisionCommand(projectDir string, args []string, timeout time.Duration, logPrefix string) error {
-	runtimeEnv, err := ansibleRuntimeEnvForProject(projectDir)
+	playbookPath := ""
+	if len(args) > 0 {
+		playbookPath = args[0]
+	}
+
+	runtimeEnv, err := ansibleRuntimeEnvForProjectPlaybook(projectDir, playbookPath)
 	if err != nil {
 		return fmt.Errorf("failed to prepare ansible role sources: %w", err)
 	}

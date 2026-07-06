@@ -20,6 +20,12 @@ func TestRootHelpDoesNotDuplicateGeneratedSections(t *testing.T) {
 	}
 
 	output := buf.String()
+	if !strings.Contains(output, "sailwright") {
+		t.Fatalf("expected help output to use sailwright command name, got:\n%s", output)
+	}
+	if strings.Contains(output, "Use: alchemy") || strings.Contains(output, " alchemy ") {
+		t.Fatalf("expected help output not to expose stale alchemy command name, got:\n%s", output)
+	}
 	if got := strings.Count(output, "Available Commands:"); got != 1 {
 		t.Fatalf("expected one Available Commands section, got %d in help output:\n%s", got, output)
 	}

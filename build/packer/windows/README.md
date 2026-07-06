@@ -8,11 +8,11 @@ This directory contains the Packer templates for building Windows 11 images on W
 
 - [Packer](https://www.packer.io/downloads) installed
 - Windows, macOS, or Linux host with a compatible virtualization backend
-- For repository-managed host dependencies, run `alchemy install` on macOS/Linux or `alchemy.exe install` on Windows from repo root before building.
+- For repository-managed host dependencies, run `sailwright install` on macOS/Linux or `sailwright.exe install` on Windows from repo root before building.
 
 ### Usage
 
-For manual builds on Windows, use the current Hyper-V or VirtualBox templates and point them at the managed Dev Alchemy cache.
+For manual builds on Windows, use the current Hyper-V or VirtualBox templates and point them at the managed Sailwright cache.
 
 ```powershell
 $AppDataDir = if ($env:DEV_ALCHEMY_APP_DATA_DIR) { $env:DEV_ALCHEMY_APP_DATA_DIR } else { Join-Path $env:LOCALAPPDATA "dev-alchemy" }
@@ -62,17 +62,17 @@ The process is idempotent, so you can re-run commands without issues.
 
 ```bash
 arch=arm64 # or amd64
-alchemy install
-alchemy build windows11 --arch $arch
-alchemy create windows11 --arch $arch
+sailwright install
+sailwright build windows11 --arch $arch
+sailwright create windows11 --arch $arch
 ```
 
 Start the VM in UTM, virt-manager, or via the CLI and provision it from repository root with the unified wrapper:
 
 ```bash
-alchemy start windows11 --arch $arch
-alchemy provision windows11 --arch $arch --check
-alchemy provision windows11 --arch $arch
+sailwright start windows11 --arch $arch
+sailwright provision windows11 --arch $arch --check
+sailwright provision windows11 --arch $arch
 ```
 
 Set the required WinRM credentials in project-root `.env` or process environment before provisioning:

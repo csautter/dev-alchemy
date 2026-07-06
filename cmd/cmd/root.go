@@ -8,9 +8,9 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "alchemy",
-	Short: "Alchemy CLI - build self provisioning developer environments",
-	Long:  "Alchemy is a developer tool that helps you to build self provisioning developer environments for multiple platforms with ease.",
+	Use:   "sailwright",
+	Short: "Sailwright CLI - build self provisioning developer environments",
+	Long:  "Sailwright is a developer tool that helps you to build self provisioning developer environments for multiple platforms with ease.",
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },

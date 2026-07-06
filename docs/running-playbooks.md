@@ -11,7 +11,7 @@ below when you want to run `playbooks/setup.yml` directly from the repository.
 - Use `--check` first when you want a dry run before applying changes.
 - Adjust the inventory or pass extra variables on the CLI as needed for your
   environment.
-- When using `alchemy provision`, configure additional local or Git-backed role
+- When using `sailwright provision`, configure additional local or Git-backed role
   roots with [Ansible Role Sources](./ansible-role-sources.md).
 
 ## Run on localhost
@@ -79,6 +79,6 @@ server is configured with `HKLM:\SOFTWARE\OpenSSH\DefaultShell` set to
 through `cmd.exe` instead of PowerShell.
 
 ```powershell
-$DevAlchemyPath = "C:\path\to\dev-alchemy"
-C:\\cygwin64\\bin\\bash.exe -l -c "cd $DevAlchemyPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_ssh.yml -l windows_host -e ansible_user=admin -e ansible_ssh_private_key_file=/path/to/key -e ansible_shell_type=powershell -e ansible_shell_executable=powershell.exe -vvv"
+$SailwrightPath = "C:\path\to\sailwright"
+C:\\cygwin64\\bin\\bash.exe -l -c "cd $SailwrightPath && ansible-playbook playbooks/setup.yml -i inventory/localhost_windows_ssh.yml -l windows_host -e ansible_user=admin -e ansible_ssh_private_key_file=/path/to/key -e ansible_shell_type=powershell -e ansible_shell_executable=powershell.exe -vvv"
 ```

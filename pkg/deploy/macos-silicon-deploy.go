@@ -78,7 +78,7 @@ func RunUtmStartOnMacOS(config alchemy_build.VirtualMachineConfig) error {
 		return err
 	}
 	if !state.Exists {
-		return fmt.Errorf("UTM VM %q does not exist. Run `alchemy create %s` first", utmVirtualMachineName(config), startCommandArguments(config))
+		return fmt.Errorf("UTM VM %q does not exist. Run `sailwright create %s` first", utmVirtualMachineName(config), startCommandArguments(config))
 	}
 	if state.Running {
 		log.Printf("UTM VM %q is already %s", utmVirtualMachineName(config), state.State)

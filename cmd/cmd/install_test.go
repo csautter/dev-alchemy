@@ -16,7 +16,7 @@ func TestInstallCommandForHostDarwin(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	expectedScriptPath := filepath.Join(projectDir, "scripts", "macos", "dev-alchemy-install-dependencies.sh")
+	expectedScriptPath := filepath.Join(projectDir, "scripts", "macos", "sailwright-install-dependencies.sh")
 	if spec.executable != "bash" {
 		t.Fatalf("expected bash, got %q", spec.executable)
 	}
@@ -36,7 +36,7 @@ func TestInstallCommandForHostWindows(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	expectedScriptPath := filepath.Join(projectDir, "scripts", "windows", "dev-alchemy-self-setup.ps1")
+	expectedScriptPath := filepath.Join(projectDir, "scripts", "windows", "sailwright-self-setup.ps1")
 	expectedArgs := []string{"-ExecutionPolicy", "Bypass", "-File", expectedScriptPath}
 	if spec.executable != "powershell" {
 		t.Fatalf("expected powershell, got %q", spec.executable)
@@ -57,7 +57,7 @@ func TestInstallCommandForHostWindowsWithVirtualBox(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	expectedScriptPath := filepath.Join(projectDir, "scripts", "windows", "dev-alchemy-self-setup.ps1")
+	expectedScriptPath := filepath.Join(projectDir, "scripts", "windows", "sailwright-self-setup.ps1")
 	expectedArgs := []string{"-ExecutionPolicy", "Bypass", "-File", expectedScriptPath, "-VirtualBox"}
 	if spec.executable != "powershell" {
 		t.Fatalf("expected powershell, got %q", spec.executable)
@@ -78,7 +78,7 @@ func TestInstallCommandForHostWindowsWithGo(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	expectedScriptPath := filepath.Join(projectDir, "scripts", "windows", "dev-alchemy-self-setup.ps1")
+	expectedScriptPath := filepath.Join(projectDir, "scripts", "windows", "sailwright-self-setup.ps1")
 	expectedArgs := []string{"-ExecutionPolicy", "Bypass", "-File", expectedScriptPath, "-WithGo"}
 	if !reflect.DeepEqual(spec.args, expectedArgs) {
 		t.Fatalf("expected args %v, got %v", expectedArgs, spec.args)
@@ -93,7 +93,7 @@ func TestInstallCommandForHostLinux(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	expectedScriptPath := filepath.Join(projectDir, "scripts", "linux", "dev-alchemy-install-dependencies.sh")
+	expectedScriptPath := filepath.Join(projectDir, "scripts", "linux", "sailwright-install-dependencies.sh")
 	if spec.executable != "bash" {
 		t.Fatalf("expected bash, got %q", spec.executable)
 	}
@@ -113,7 +113,7 @@ func TestInstallCommandForHostDarwinWithGo(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	expectedScriptPath := filepath.Join(projectDir, "scripts", "macos", "dev-alchemy-install-dependencies.sh")
+	expectedScriptPath := filepath.Join(projectDir, "scripts", "macos", "sailwright-install-dependencies.sh")
 	expectedArgs := []string{expectedScriptPath, "--with-go"}
 	if !reflect.DeepEqual(spec.args, expectedArgs) {
 		t.Fatalf("expected args %v, got %v", expectedArgs, spec.args)
@@ -128,7 +128,7 @@ func TestInstallCommandForHostLinuxWithGo(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	expectedScriptPath := filepath.Join(projectDir, "scripts", "linux", "dev-alchemy-install-dependencies.sh")
+	expectedScriptPath := filepath.Join(projectDir, "scripts", "linux", "sailwright-install-dependencies.sh")
 	expectedArgs := []string{expectedScriptPath, "--with-go"}
 	if !reflect.DeepEqual(spec.args, expectedArgs) {
 		t.Fatalf("expected args %v, got %v", expectedArgs, spec.args)

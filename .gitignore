@@ -61,6 +61,7 @@ env_local.hcl
 .env
 **/cookies.json
 REVIEW.md
+REVIEW_*.md
 gosec-results.sarif
 *.log
 dist/

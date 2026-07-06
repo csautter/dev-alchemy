@@ -303,7 +303,7 @@ func TestWindowsArm64UnattendIsoScriptUsesUDFCapableExtraction(t *testing.T) {
 func TestLinuxDependencyInstallerIncludesWindowsIsoExtractionTools(t *testing.T) {
 	t.Parallel()
 
-	scriptPath := "scripts/linux/dev-alchemy-install-dependencies.sh"
+	scriptPath := "scripts/linux/sailwright-install-dependencies.sh"
 	content, err := os.ReadFile(repoPath(t, scriptPath))
 	if err != nil {
 		t.Fatalf("failed to read script %q: %v", scriptPath, err)

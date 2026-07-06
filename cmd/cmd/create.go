@@ -96,10 +96,10 @@ var createCmd = &cobra.Command{
 Use "all" to create all stable VM configurations.
 
 Example:
-  alchemy create ubuntu --type server --arch amd64
-  alchemy create macos --arch arm64
-  alchemy create windows11 --arch arm64
-  alchemy create all
+  sailwright create ubuntu --type server --arch amd64
+  sailwright create macos --arch arm64
+  sailwright create windows11 --arch arm64
+  sailwright create all
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -155,7 +155,7 @@ func runDeploy(vm alchemy_build.VirtualMachineConfig) error {
 	}
 	if targetExists {
 		return fmt.Errorf(
-			"VM for %s already exists. Use `alchemy start %s` to reuse it or `alchemy destroy %s` first",
+			"VM for %s already exists. Use `sailwright start %s` to reuse it or `sailwright destroy %s` first",
 			createCommandArguments(vm),
 			createCommandArguments(vm),
 			createCommandArguments(vm),

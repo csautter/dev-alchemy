@@ -63,7 +63,7 @@ try {
 '@
 Set-Content -Path 'C:\AzureData\bootstrap.ps1' -Value $bootstrap
 EOF
-  windows_setup_command = var.virtualization_flavor == "virtualbox" ? "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1 -WithGo -VirtualBox" : "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1 -WithGo"
+  windows_setup_command = var.virtualization_flavor == "virtualbox" ? "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\sailwright-self-setup.ps1 -WithGo -VirtualBox" : "powershell.exe -ExecutionPolicy Bypass -File C:\\AzureData\\scripts\\windows\\sailwright-self-setup.ps1 -WithGo"
   refresh_path_command  = "$env:Path = @([Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User')) -join ';'"
 
 }
@@ -108,8 +108,8 @@ build {
   }
 
   provisioner "file" {
-    source      = "../../scripts/windows/dev-alchemy-self-setup.ps1"
-    destination = "C:\\AzureData\\scripts\\windows\\dev-alchemy-self-setup.ps1"
+    source      = "../../scripts/windows/sailwright-self-setup.ps1"
+    destination = "C:\\AzureData\\scripts\\windows\\sailwright-self-setup.ps1"
   }
 
   provisioner "powershell" {

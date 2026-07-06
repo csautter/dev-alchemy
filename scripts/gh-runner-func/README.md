@@ -162,8 +162,10 @@ GitHub Actions workflows authenticate using **Workload Identity Federation** (no
 
 | Federated credential | Subject |
 |----------------------|---------|
-| `github-actions`     | `repo:csautter/dev-alchemy:ref:refs/heads/main` |
-| `github-actions-pr`  | `repo:csautter/dev-alchemy:pull_request` |
+| `github-actions`     | `repo:csautter/sailwright:ref:refs/heads/main` |
+| `github-actions-pr`  | `repo:csautter/sailwright:pull_request` |
+
+Terraform builds these subjects from the `github_repository` module variable.
 
 The workflow must request the OIDC token with `permissions: id-token: write` and exchange it for an Azure AD token scoped to `api://<client-id>`.
 

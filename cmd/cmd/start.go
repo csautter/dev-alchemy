@@ -76,10 +76,10 @@ var startCmd = &cobra.Command{
 Use "all" to start all stable VM configurations for the current host OS.
 
 Examples:
-  alchemy start ubuntu --type server --arch amd64
-  alchemy start macos --arch arm64
-  alchemy start windows11 --arch arm64
-  alchemy start all
+  sailwright start ubuntu --type server --arch amd64
+  sailwright start macos --arch arm64
+  sailwright start windows11 --arch arm64
+  sailwright start all
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

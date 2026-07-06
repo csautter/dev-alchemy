@@ -68,10 +68,10 @@ var stopCmd = &cobra.Command{
 Use "all" to stop all available VM configurations for the current host OS.
 
 Examples:
-  alchemy stop ubuntu --type server --arch amd64
-  alchemy stop macos --arch arm64
-  alchemy stop windows11 --arch arm64
-  alchemy stop all
+  sailwright stop ubuntu --type server --arch amd64
+  sailwright stop macos --arch arm64
+  sailwright stop windows11 --arch arm64
+  sailwright stop all
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

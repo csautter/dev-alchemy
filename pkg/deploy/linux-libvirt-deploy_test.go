@@ -130,8 +130,8 @@ func TestEnsureLinuxLibvirtCommandsAvailable(t *testing.T) {
 	if !strings.Contains(err.Error(), `"virsh"`) {
 		t.Fatalf("expected error to mention missing virsh, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "alchemy install") {
-		t.Fatalf("expected error to recommend alchemy install, got %v", err)
+	if !strings.Contains(err.Error(), "sailwright install") {
+		t.Fatalf("expected error to recommend sailwright install, got %v", err)
 	}
 }
 

@@ -1,5 +1,5 @@
 GOSEC ?= $(shell command -v gosec 2>/dev/null || echo "$$(go env GOPATH)/bin/gosec")
-BINARY_NAME ?= alchemy
+BINARY_NAME ?= sailwright
 DIST_DIR ?= dist
 MAIN_PACKAGE ?= ./cmd/main.go
 VERSION ?= dev
@@ -10,7 +10,7 @@ RELEASE_GOARCH ?= amd64 arm64
 PACKAGE_VERSION = $(patsubst v%,%,$(VERSION))
 TARGET_BINARY_NAME = $(BINARY_NAME)$(if $(filter windows,$(GOOS)),.exe,)
 TARGET_DIST_DIR = $(DIST_DIR)/$(GOOS)-$(GOARCH)
-RELEASE_ASSET_BASENAME = dev-alchemy_$(PACKAGE_VERSION)_$(GOOS)_$(GOARCH)
+RELEASE_ASSET_BASENAME = sailwright_$(PACKAGE_VERSION)_$(GOOS)_$(GOARCH)
 
 .PHONY: build build-cli-local build-cli-target build-cli-release package-cli-target package-cli-release clean-dist \
 	test-build-runner test-build test-deploy test-provision test-deploy-windows-hyperv test-clean-testcache \
