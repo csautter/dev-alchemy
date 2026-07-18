@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/csautter/sailwright/compare/v0.16.1...v0.17.0) (2026-07-18)
+
+
+### Added
+
+* make role-sources-test.yml the default provision playbook ([41836f0](https://github.com/csautter/sailwright/commit/41836f0e1e8532f73c32643d19d50b8b185a0a7a))
+
+
+### Fixed
+
+* **terraform:** replace deprecated tflint module config key ([fa2d978](https://github.com/csautter/sailwright/commit/fa2d978f2a1889562df9de014ce6d9afaa4c58a7))
+
+
+### Changed
+
+* **rename:** rename user-facing surfaces to sailwright ([a057220](https://github.com/csautter/sailwright/commit/a0572202e436fe551eb1ae637c093a1f997da0b5))
+
+
+### Build
+
+* **devcontainer:** install azure cli ([02b73b2](https://github.com/csautter/sailwright/commit/02b73b2902d6675ccf78546aea69c2bc50020bc4))
+* **devcontainer:** install trivy and refresh terraform lockfile ([1cb9c74](https://github.com/csautter/sailwright/commit/1cb9c74a97e64673fe6708ffc5c99bee98e11989))
+
+
+### CI
+
+* **runners:** point macos tart runner at sailwright ([e80ebd7](https://github.com/csautter/sailwright/commit/e80ebd73c5d3085c74bcc191f42999dca00a6de6))
+
 ## [0.16.1](https://github.com/csautter/dev-alchemy/compare/v0.16.0...v0.16.1) (2026-05-17)
 
 
