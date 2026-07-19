@@ -69,10 +69,7 @@ TODO.md
 
 # Quick-start automation recordings (scripts/quickstart.sh default --record-dir)
 /artifact/
-*.cast
-*.vnc.mp4
-*.typescript
 
-# Website terminal demo: keep the generated cast, ignore vendored player assets
-!demo/quickstart.cast
+# Website terminal demo: ignore vendored player assets (demo/quickstart.cast is
+# tracked on purpose, alongside demo/quickstart.gif)
 demo/vendor/
