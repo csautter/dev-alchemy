@@ -250,21 +250,6 @@ sailwright provision ubuntu --type server --arch amd64
 If you are targeting Windows and remote access is not configured yet, start
 with [Windows Ansible Access](./docs/windows-ansible-access.md).
 
-To run that entire disposable-VM flow (install → build → create → start →
-provision) as a single, recorded command — useful for automated testing — use
-the quick-start automation:
-
-```bash
-make quickstart
-# or: bash ./scripts/quickstart.sh --os ubuntu --type server --arch amd64
-```
-
-It records both the terminal session and the VM's graphical display. See
-[Automated Quick-Start](./docs/testing-workflows.md#automated-quick-start-recorded-end-to-end-run).
-
-For a short, embeddable terminal demo of this flow (an asciinema-player cast that
-types the commands out), see [demo/](./demo/) and `make demo`.
-
 When you want to share reusable build artifacts through an OCI registry instead
 of rebuilding them locally, use `sailwright push` and `sailwright pull`; see the
 [OCI build artifact registry workflow](./docs/testing-workflows.md#oci-build-artifact-registry-workflow).
@@ -282,6 +267,7 @@ next level of detail:
 - [Testing Workflows](./docs/testing-workflows.md#oci-build-artifact-registry-workflow)
   for OCI artifact registry push/pull and host-specific VM and Docker test
   flows
+- [Automated Quick-Start](./docs/testing-workflows.md#automated-quick-start-recorded-end-to-end-run).
 - [Managed Application Data](./docs/managed-application-data.md) for cache,
   runtime, and app-data locations
 - [Ansible Role Sources](./docs/ansible-role-sources.md) for layering local
