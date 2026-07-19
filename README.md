@@ -20,7 +20,14 @@ remains manual, team-specific, and hard to reproduce.
 
 > _"Transform your system into a dev powerhouse with a touch of automation magic."_
 
-![Sailwright quick-start demo: install, build, create, start, and provision a VM](./demo/quickstart.gif)
+<p align="center">
+  <img src="./demo/quickstart.gif" width="49%" alt="Sailwright quick-start: install, build, create, start, and provision a VM" />
+  <img src="./demo/vm-build.gif" width="49%" alt="The VM autoinstall running unattended during the build" />
+</p>
+
+<p align="center"><sub>Left: the real quick-start commands. Right: a real, unattended VM build
+(Ubuntu autoinstall) — no clicks, fully automated. See <a href="./demo/">demo/</a> and
+<code>make demo-build-video</code>.</sub></p>
 
 ## Why It Helps
 

@@ -19,6 +19,12 @@ source (see [../.github/workflows/generate-demo.yml](../.github/workflows/genera
 | [`fetch-player.sh`](fetch-player.sh) | Download a pinned player into `vendor/` (gitignored) |
 | `quickstart.gif` | Rendered GIF for the GitHub README (JS players don't run there) |
 | [`render-gif.sh`](render-gif.sh) | Render `quickstart.cast` → `quickstart.gif` via `agg` |
+| `vm-build.mp4` / `vm-build.gif` | Curated clip of the **real** VM build (shown beside the terminal) |
+| [`process-build-video.sh`](process-build-video.sh) | Turn a raw build recording into `vm-build.mp4` + `.gif` |
+
+The page ([`index.html`](index.html)) shows the terminal cast and the VM-build
+video **side by side** — the commands on the left, the unattended VM build on the
+right.
 
 ## Regenerate
 
@@ -47,6 +53,37 @@ loss; it is skipped with a warning if `gifsicle` is missing). On Debian/Ubuntu:
 ```bash
 sudo apt-get install -y fonts-dejavu-core fonts-noto-color-emoji fontconfig gifsicle
 ```
+
+## VM-build video
+
+`vm-build.mp4` / `vm-build.gif` are a curated clip of the **real** VM build — the
+Ubuntu autoinstall running unattended during `sailwright build`. Unlike the
+terminal cast (which is generated), this is a real recording, so it must be
+produced on a Linux + KVM host:
+
+```bash
+# 1) Produce the raw recording on a KVM host. `sailwright build` records the
+#    QEMU screen at 1 fps; make quickstart collects it into artifact/.
+make quickstart
+#    -> artifact/build-ubuntu-server-amd64.vnc.mp4
+#    (the KVM CI job in test-quickstart-linux.yml also uploads *.vnc.mp4)
+
+# 2) Turn that 1 fps slideshow into a short, smooth, web-ready clip:
+make demo-build-video
+#    -> demo/vm-build.mp4  (website <video>)
+#    -> demo/vm-build.gif  (README)
+```
+
+`process-build-video.sh` speeds up, scales, and trims the source, then encodes an
+H.264 mp4 and a palette-optimised GIF (`gifsicle -O3 --colors 256`). Requires
+`ffmpeg` (a project dependency) and `gifsicle`. Tune it via `DEMO_BUILD_ARGS`,
+e.g. to trim the boot tail and speed it up more:
+
+```bash
+make demo-build-video DEMO_BUILD_ARGS="--speed 16 --start 8 --width 720"
+```
+
+Run `bash demo/process-build-video.sh --help` for all flags.
 
 ## Preview locally
 
