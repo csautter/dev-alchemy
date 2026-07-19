@@ -133,7 +133,9 @@ fi
 if [[ "${RECORD}" == "true" && "${QUICKSTART_IN_RECORDING:-}" != "1" ]]; then
 	mkdir -p "${RECORD_DIR}"
 	export QUICKSTART_IN_RECORDING=1
-	child_cmd="$(printf '%q ' "$0" "${ORIG_ARGS[@]}")"
+	# Expand ORIG_ARGS defensively: on bash < 4.4 `"${arr[@]}"` on an empty
+	# array trips `set -u`, which would break a no-arg invocation.
+	child_cmd="$(printf '%q ' "$0" ${ORIG_ARGS[@]+"${ORIG_ARGS[@]}"})"
 	if command -v asciinema >/dev/null 2>&1; then
 		cast="${RECORD_DIR}/quickstart-${slug}.cast"
 		echo "🎬 Recording terminal session to ${cast} (asciinema)"
@@ -247,9 +249,25 @@ start_vm_recording() {
 	FRAME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/quickstart-vnc.XXXXXX")"
 	VNC_OUT="${RECORD_DIR}/quickstart-${slug}.vnc.mp4"
 	banner "Starting VM display recording of ${domain} (${target}) -> ${VNC_OUT}"
-	# Movie mode: 1 fps, capped so a stuck run cannot fill the disk (~10h at 1fps).
-	vncsnapshot -quiet -fps 1 -count 36000 "${target}" "${FRAME_DIR}/frame.jpg" >/dev/null 2>&1 &
+	# Drive the 1 fps capture ourselves — one vncsnapshot call per numbered
+	# frame — instead of relying on vncsnapshot's movie mode, whose multi-frame
+	# filename handling is unreliable (a name without a counter overwrites a
+	# single file). Mirrors pkg/build/vnc_recording.go, which also loops single
+	# snapshots. Capped so a stuck run cannot fill the disk (~10h at 1 fps).
+	vnc_capture_loop "${target}" "${FRAME_DIR}" &
 	VNC_PID=$!
+}
+
+# Background frame grabber for start_vm_recording. Writes zero-padded,
+# lexically-sortable frames so ffmpeg's glob picks them up in order.
+vnc_capture_loop() {
+	local target="$1" frame_dir="$2" i=0 frame
+	while [[ ${i} -lt 36000 ]]; do
+		printf -v frame '%s/frame-%06d.jpg' "${frame_dir}" "${i}"
+		vncsnapshot -quiet "${target}" "${frame}" >/dev/null 2>&1 || true
+		i=$((i + 1))
+		sleep 1
+	done
 }
 
 stop_vm_recording() {
@@ -282,10 +300,26 @@ collect_build_recordings() {
 	[[ -n "${START_MARKER:-}" && -e "${START_MARKER}" ]] || return 0
 	command -v find >/dev/null 2>&1 || return 0
 
-	local roots=() r mp4 dest n=0
-	[[ -n "${DEV_ALCHEMY_CACHE_DIR:-}" ]] && roots+=("${DEV_ALCHEMY_CACHE_DIR}")
-	[[ -n "${DEV_ALCHEMY_APP_DATA_DIR:-}" ]] && roots+=("${DEV_ALCHEMY_APP_DATA_DIR}/cache")
-	roots+=("${HOME}/.local/share/dev-alchemy/cache" "${project_root}/.dev-alchemy/cache")
+	local raw_roots=() roots=() r canon seen dup mp4 dest n=0
+	[[ -n "${DEV_ALCHEMY_CACHE_DIR:-}" ]] && raw_roots+=("${DEV_ALCHEMY_CACHE_DIR}")
+	[[ -n "${DEV_ALCHEMY_APP_DATA_DIR:-}" ]] && raw_roots+=("${DEV_ALCHEMY_APP_DATA_DIR}/cache")
+	raw_roots+=("${HOME}/.local/share/dev-alchemy/cache" "${project_root}/.dev-alchemy/cache")
+
+	# De-duplicate roots that resolve to the same directory. In CI several of
+	# these env-derived paths point at the same cache dir (e.g. CACHE_DIR ==
+	# APP_DATA_DIR/cache == project_root/.dev-alchemy/cache); without this each
+	# build recording would be copied — and mis-numbered — once per alias.
+	for r in "${raw_roots[@]}"; do
+		canon="$(realpath -m "${r}" 2>/dev/null || echo "${r}")"
+		dup="false"
+		for seen in ${roots[@]+"${roots[@]}"}; do
+			[[ "${seen}" == "${canon}" ]] && {
+				dup="true"
+				break
+			}
+		done
+		[[ "${dup}" == "true" ]] || roots+=("${canon}")
+	done
 
 	mkdir -p "${RECORD_DIR}"
 	for r in "${roots[@]}"; do

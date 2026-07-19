@@ -109,9 +109,13 @@ ffmpeg -hide_banner -loglevel warning -y \
 echo "Wrote ${mp4_out} ($(wc -c <"${mp4_out}") bytes)."
 
 # --- gif (two-pass palette for quality) -------------------------------------
-tmp_palette="$(mktemp "${TMPDIR:-/tmp}/vm-build-palette.XXXXXX").png"
-tmp_gif="$(mktemp "${TMPDIR:-/tmp}/vm-build.XXXXXX").gif"
-trap 'rm -f "${tmp_palette}" "${tmp_gif}"' EXIT
+# mktemp creates the extensionless file; keep that name too so the trap cleans
+# up both it and the suffixed path ffmpeg actually writes.
+tmp_palette_base="$(mktemp "${TMPDIR:-/tmp}/vm-build-palette.XXXXXX")"
+tmp_palette="${tmp_palette_base}.png"
+tmp_gif_base="$(mktemp "${TMPDIR:-/tmp}/vm-build.XXXXXX")"
+tmp_gif="${tmp_gif_base}.gif"
+trap 'rm -f "${tmp_palette_base}" "${tmp_palette}" "${tmp_gif_base}" "${tmp_gif}"' EXIT
 
 gif_filters="setpts=PTS/${SPEED},scale=${GIF_WIDTH}:-2:flags=lanczos,fps=${GIF_FPS}"
 ffmpeg -hide_banner -loglevel warning -y \
