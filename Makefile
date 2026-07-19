@@ -15,7 +15,7 @@ RELEASE_ASSET_BASENAME = sailwright_$(PACKAGE_VERSION)_$(GOOS)_$(GOARCH)
 .PHONY: build build-cli-local build-cli-target build-cli-release package-cli-target package-cli-release clean-dist \
 	test-build-runner test-build test-deploy test-provision test-deploy-windows-hyperv test-clean-testcache \
 	test-build-integration test-build-specific test-macos-tart-runner test-gh-runner-func-request test-gh-runner-func-delete \
-	deploy-plan-terraform-azure-gh-runner deploy-apply-terraform-azure-gh-runner deploy-az-func-app gosec quickstart
+	deploy-plan-terraform-azure-gh-runner deploy-apply-terraform-azure-gh-runner deploy-az-func-app gosec quickstart demo demo-gif
 
 # Quick-start automation: run the full install->build->create->start->provision
 # lifecycle for one target and record it (terminal + VM display).
@@ -148,6 +148,14 @@ deploy-az-func-app:
 
 quickstart:
 	bash ./scripts/quickstart.sh --os $(OS) --type $(TYPE) --arch $(ARCH) $(QUICKSTART_ARGS)
+
+# Regenerate the website terminal demo cast from demo/quickstart.demo.
+demo:
+	python3 demo/generate_cast.py --output demo/quickstart.cast
+
+# Render the demo cast to demo/quickstart.gif (for the README) via agg.
+demo-gif:
+	bash demo/render-gif.sh
 
 gosec:
 	@if [ ! -x "$(GOSEC)" ]; then \

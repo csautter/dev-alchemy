@@ -20,6 +20,8 @@ remains manual, team-specific, and hard to reproduce.
 
 > _"Transform your system into a dev powerhouse with a touch of automation magic."_
 
+![Sailwright quick-start demo: install, build, create, start, and provision a VM](./demo/quickstart.gif)
+
 ## Why It Helps
 
 Without a shared automation baseline, cross-platform teams usually run into the
@@ -252,6 +254,9 @@ make quickstart
 
 It records both the terminal session and the VM's graphical display. See
 [Automated Quick-Start](./docs/testing-workflows.md#automated-quick-start-recorded-end-to-end-run).
+
+For a short, embeddable terminal demo of this flow (an asciinema-player cast that
+types the commands out), see [demo/](./demo/) and `make demo`.
 
 When you want to share reusable build artifacts through an OCI registry instead
 of rebuilding them locally, use `sailwright push` and `sailwright pull`; see the

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sailwright quick-start demo</title>
+
+    <!-- asciinema-player assets (run ./fetch-player.sh to populate vendor/). -->
+    <link rel="stylesheet" href="vendor/asciinema-player.css" />
+
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        background: #0d1117;
+        color: #c9d1d9;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      h1 { font-size: 1.1rem; font-weight: 600; margin: 0; opacity: 0.85; }
+      #demo { width: min(900px, 94vw); }
+    </style>
+  </head>
+  <body>
+    <h1>Sailwright — from zero to a provisioned VM</h1>
+    <div id="demo"></div>
+
+    <script src="vendor/asciinema-player.min.js"></script>
+    <script>
+      AsciinemaPlayer.create("quickstart.cast", document.getElementById("demo"), {
+        autoPlay: true,
+        loop: true,
+        // Compress the pauses baked into the cast so playback stays snappy.
+        idleTimeLimit: 1.5,
+        cols: 100,
+        rows: 28,
+        theme: "asciinema",
+        terminalFontSize: "14px",
+        poster: "npt:0:02",
+      });
+    </script>
+  </body>
+</html>
