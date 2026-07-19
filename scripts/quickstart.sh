@@ -139,7 +139,17 @@ if [[ "${RECORD}" == "true" && "${QUICKSTART_IN_RECORDING:-}" != "1" ]]; then
 	if command -v asciinema >/dev/null 2>&1; then
 		cast="${RECORD_DIR}/quickstart-${slug}.cast"
 		echo "🎬 Recording terminal session to ${cast} (asciinema)"
-		exec asciinema rec --overwrite --command "${child_cmd}" "${cast}"
+		# `asciinema rec` exits 0 whenever the recording itself succeeds,
+		# regardless of the recorded command's exit status (verified with
+		# asciinema 2.4.0), so it can't be `exec`'d directly like the
+		# `script` fallback below. Smuggle the real exit code out via a
+		# file the recorded shell writes to once the child finishes.
+		rc_file="$(mktemp "${TMPDIR:-/tmp}/quickstart-rc.XXXXXX")"
+		trap 'rm -f "${rc_file}"' EXIT
+		recorded_cmd="${child_cmd}; echo \$? >$(printf '%q' "${rc_file}")"
+		asciinema rec --overwrite --command "${recorded_cmd}" "${cast}"
+		rc="$(cat "${rc_file}" 2>/dev/null)"
+		exit "${rc:-1}"
 	elif command -v script >/dev/null 2>&1; then
 		typescript="${RECORD_DIR}/quickstart-${slug}.typescript"
 		echo "🎬 Recording terminal session to ${typescript} (asciinema not found; using 'script')."
