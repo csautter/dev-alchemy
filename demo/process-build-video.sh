@@ -101,7 +101,7 @@ echo "  speed x${SPEED}, mp4 ${WIDTH}px@${FPS}fps, gif ${GIF_WIDTH}px@${GIF_FPS}
 # --- mp4 --------------------------------------------------------------------
 # setpts=PTS/SPEED speeds playback; -r resamples to a smooth output frame rate.
 ffmpeg -hide_banner -loglevel warning -y \
-	"${trim_args[@]}" -i "${INPUT}" \
+	${trim_args[@]+"${trim_args[@]}"} -i "${INPUT}" \
 	-vf "setpts=PTS/${SPEED},scale=${WIDTH}:-2:flags=lanczos" \
 	-r "${FPS}" \
 	-c:v libx264 -preset veryfast -crf 28 -pix_fmt yuv420p -movflags +faststart -an \
@@ -119,12 +119,12 @@ trap 'rm -f "${tmp_palette_base}" "${tmp_palette}" "${tmp_gif_base}" "${tmp_gif}
 
 gif_filters="setpts=PTS/${SPEED},scale=${GIF_WIDTH}:-2:flags=lanczos,fps=${GIF_FPS}"
 ffmpeg -hide_banner -loglevel warning -y \
-	"${trim_args[@]}" -i "${INPUT}" \
+	${trim_args[@]+"${trim_args[@]}"} -i "${INPUT}" \
 	-vf "${gif_filters},palettegen=stats_mode=diff" \
 	-frames:v 1 -update 1 \
 	"${tmp_palette}"
 ffmpeg -hide_banner -loglevel warning -y \
-	"${trim_args[@]}" -i "${INPUT}" -i "${tmp_palette}" \
+	${trim_args[@]+"${trim_args[@]}"} -i "${INPUT}" -i "${tmp_palette}" \
 	-lavfi "${gif_filters}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3" \
 	"${tmp_gif}"
 
