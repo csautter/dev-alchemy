@@ -140,6 +140,27 @@ the `.vnc.mp4` and `.cast`/`.typescript` recordings as artifacts. The e2e job
 defaults to pulling a prebuilt Ubuntu OCI artifact and running with
 `--skip-build` to keep runtime bounded.
 
+## Website Terminal Demo
+
+A short, polished terminal demo that shows the real quick-start commands being
+**typed** — for embedding on the website via
+[asciinema-player](https://github.com/asciinema/asciinema-player) — lives in
+[demo/](../demo/). The cast is generated (not recorded), so it stays short,
+clean, and reproducible:
+
+```bash
+make demo   # regenerate demo/quickstart.cast from demo/quickstart.demo
+```
+
+Edit [demo/quickstart.demo](../demo/quickstart.demo) to change the script; CI
+([.github/workflows/generate-demo.yml](../.github/workflows/generate-demo.yml))
+fails if the committed cast is out of date. See [demo/README.md](../demo/README.md)
+for the embed snippet and local preview instructions.
+
+The top-level README embeds a GIF rendered from the same cast (asciinema-player
+JS cannot run in a GitHub README). Refresh it with `make demo-gif` after changing
+the demo.
+
 ## OCI Build Artifact Registry Workflow
 
 Final build artifacts can be pushed to, and pulled from, an OCI registry. The

@@ -72,3 +72,7 @@ TODO.md
 *.cast
 *.vnc.mp4
 *.typescript
+
+# Website terminal demo: keep the generated cast, ignore vendored player assets
+!demo/quickstart.cast
+demo/vendor/
