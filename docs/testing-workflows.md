@@ -69,6 +69,7 @@ Run it through the Makefile:
 make quickstart
 make quickstart TYPE=desktop ARCH=amd64
 make quickstart QUICKSTART_ARGS="--keep"
+make quickstart QUICKSTART_ARGS="--no-cache"   # force a rebuild
 ```
 
 Or call the script directly:
@@ -86,6 +87,7 @@ Flags:
 | `--arch ARCH` | `amd64`/`arm64` (default `amd64`) |
 | `--skip-install` | Skip `sailwright install` when dependencies are already present |
 | `--skip-build` | Skip `sailwright build` and reuse an existing/pulled artifact |
+| `--no-cache` | Force a rebuild even if the build artifact already exists (passed to `sailwright build`) |
 | `--keep` | Leave the VM running instead of `stop` + `destroy` |
 | `--no-record` | Disable all recording |
 | `--record-dir DIR` | Output directory for recordings (default `./artifact`) |

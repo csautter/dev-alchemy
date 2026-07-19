@@ -15,7 +15,7 @@ RELEASE_ASSET_BASENAME = sailwright_$(PACKAGE_VERSION)_$(GOOS)_$(GOARCH)
 .PHONY: build build-cli-local build-cli-target build-cli-release package-cli-target package-cli-release clean-dist \
 	test-build-runner test-build test-deploy test-provision test-deploy-windows-hyperv test-clean-testcache \
 	test-build-integration test-build-specific test-macos-tart-runner test-gh-runner-func-request test-gh-runner-func-delete \
-	deploy-plan-terraform-azure-gh-runner deploy-apply-terraform-azure-gh-runner deploy-az-func-app gosec quickstart demo demo-gif
+	deploy-plan-terraform-azure-gh-runner deploy-apply-terraform-azure-gh-runner deploy-az-func-app gosec quickstart demo demo-gif demo-build-video
 
 # Quick-start automation: run the full install->build->create->start->provision
 # lifecycle for one target and record it (terminal + VM display).
@@ -156,6 +156,13 @@ demo:
 # Render the demo cast to demo/quickstart.gif (for the README) via agg.
 demo-gif:
 	bash demo/render-gif.sh
+
+# Turn a raw VM-build recording (artifact/build-<slug>.vnc.mp4) into
+# demo/vm-build.mp4 + demo/vm-build.gif. Pass extra flags via DEMO_BUILD_ARGS,
+# e.g. `make demo-build-video DEMO_BUILD_ARGS="--speed 16 --start 5"`.
+DEMO_BUILD_ARGS ?=
+demo-build-video:
+	bash demo/process-build-video.sh $(DEMO_BUILD_ARGS)
 
 gosec:
 	@if [ ! -x "$(GOSEC)" ]; then \

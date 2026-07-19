@@ -27,6 +27,7 @@ TYPE="server"
 ARCH="amd64"
 SKIP_INSTALL="false"
 SKIP_BUILD="false"
+NO_CACHE="false"
 KEEP="false"
 RECORD="true"
 RECORD_DIR="./artifact"
@@ -43,6 +44,7 @@ Options:
   --arch ARCH        Architecture: amd64|arm64 (default: amd64)
   --skip-install     Skip `sailwright install` (dependencies already present)
   --skip-build       Skip `sailwright build` (reuse an existing/pulled artifact)
+  --no-cache         Force a rebuild even if the build artifact already exists
   --keep             Do not stop+destroy the VM at the end (leave it for inspection)
   --no-record        Disable all recording (plain run)
   --record-dir DIR   Directory for recording artifacts (default: ./artifact)
@@ -51,6 +53,7 @@ Options:
 Examples:
   scripts/quickstart.sh
   scripts/quickstart.sh --type desktop --keep
+  scripts/quickstart.sh --no-cache
   scripts/quickstart.sh --skip-install --skip-build --record-dir ./artifact
 EOF
 }
@@ -78,6 +81,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--skip-build)
 		SKIP_BUILD="true"
+		shift
+		;;
+	--no-cache)
+		NO_CACHE="true"
 		shift
 		;;
 	--keep)
@@ -337,9 +344,17 @@ fi
 
 if [[ "${SKIP_BUILD}" != "true" ]]; then
 	banner "Step: build ${OS} artifact"
-	sail build "${OS}" "${CARGS[@]}"
+	build_args=("${CARGS[@]}")
+	if [[ "${NO_CACHE}" == "true" ]]; then
+		build_args+=(--no-cache)
+		echo "♻️  --no-cache: forcing a rebuild even if the artifact exists."
+	fi
+	sail build "${OS}" "${build_args[@]}"
 else
 	echo "⏭️  Skipping build (--skip-build)."
+	if [[ "${NO_CACHE}" == "true" ]]; then
+		warn "--no-cache has no effect with --skip-build (build is skipped)."
+	fi
 fi
 
 banner "Step: create ${OS} VM"
