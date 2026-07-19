@@ -53,8 +53,11 @@ else
 	fi
 fi
 
-tmp_gif="$(mktemp "${TMPDIR:-/tmp}/quickstart-gif.XXXXXX").gif"
-trap 'rm -f "${tmp_gif}"' EXIT
+# mktemp creates the extensionless file; keep that name too so the trap cleans
+# up both it and the suffixed path agg actually writes.
+tmp_gif_base="$(mktemp "${TMPDIR:-/tmp}/quickstart-gif.XXXXXX")"
+tmp_gif="${tmp_gif_base}.gif"
+trap 'rm -f "${tmp_gif_base}" "${tmp_gif}"' EXIT
 
 echo "Rendering ${cast} -> ${gif} ..."
 "${AGG}" \
