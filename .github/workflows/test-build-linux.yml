@@ -108,7 +108,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -244,7 +244,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -356,7 +356,7 @@ jobs:
       server-id: ${{ steps.provision.outputs.server_id }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Provision amd64 Hetzner runner
         id: provision
@@ -380,7 +380,7 @@ jobs:
       server-id: ${{ steps.provision.outputs.server_id }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Provision arm64 Hetzner runner
         id: provision
@@ -449,7 +449,7 @@ jobs:
                {"local-path":"./.dev-alchemy/cache/windows/virtio-win.iso"}]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -609,7 +609,7 @@ jobs:
                {"local-path":"./.dev-alchemy/cache/qemu-efi-aarch64_all.deb"}]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -754,7 +754,7 @@ jobs:
             arch: arm64
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -794,7 +794,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Wait for amd64 Hetzner build to leave queue
         id: watch_queue
@@ -886,7 +886,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Wait for arm64 Hetzner build to leave queue
         id: watch_queue
@@ -978,7 +978,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Delete amd64 Hetzner runner
         if: needs.provision-hetzner-linux-amd64-runner.outputs.server-id != ''
@@ -1000,7 +1000,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Delete arm64 Hetzner runner
         if: needs.provision-hetzner-linux-arm64-runner.outputs.server-id != ''
