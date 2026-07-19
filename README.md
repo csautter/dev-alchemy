@@ -241,6 +241,18 @@ sailwright provision ubuntu --type server --arch amd64
 If you are targeting Windows and remote access is not configured yet, start
 with [Windows Ansible Access](./docs/windows-ansible-access.md).
 
+To run that entire disposable-VM flow (install → build → create → start →
+provision) as a single, recorded command — useful for automated testing — use
+the quick-start automation:
+
+```bash
+make quickstart
+# or: bash ./scripts/quickstart.sh --os ubuntu --type server --arch amd64
+```
+
+It records both the terminal session and the VM's graphical display. See
+[Automated Quick-Start](./docs/testing-workflows.md#automated-quick-start-recorded-end-to-end-run).
+
 When you want to share reusable build artifacts through an OCI registry instead
 of rebuilding them locally, use `sailwright push` and `sailwright pull`; see the
 [OCI build artifact registry workflow](./docs/testing-workflows.md#oci-build-artifact-registry-workflow).

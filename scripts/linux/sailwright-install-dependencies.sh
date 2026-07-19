@@ -88,6 +88,7 @@ install_hashicorp_apt_repo() {
 install_linux_packages() {
 	local packages=(
 		ansible
+		asciinema
 		curl
 		ffmpeg
 		gpg

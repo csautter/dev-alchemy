@@ -15,7 +15,16 @@ RELEASE_ASSET_BASENAME = sailwright_$(PACKAGE_VERSION)_$(GOOS)_$(GOARCH)
 .PHONY: build build-cli-local build-cli-target build-cli-release package-cli-target package-cli-release clean-dist \
 	test-build-runner test-build test-deploy test-provision test-deploy-windows-hyperv test-clean-testcache \
 	test-build-integration test-build-specific test-macos-tart-runner test-gh-runner-func-request test-gh-runner-func-delete \
-	deploy-plan-terraform-azure-gh-runner deploy-apply-terraform-azure-gh-runner deploy-az-func-app gosec
+	deploy-plan-terraform-azure-gh-runner deploy-apply-terraform-azure-gh-runner deploy-az-func-app gosec quickstart
+
+# Quick-start automation: run the full install->build->create->start->provision
+# lifecycle for one target and record it (terminal + VM display).
+# Override with OS=, TYPE=, ARCH=, or pass extra flags via QUICKSTART_ARGS,
+# e.g. `make quickstart TYPE=desktop QUICKSTART_ARGS="--keep"`.
+OS ?= ubuntu
+TYPE ?= server
+ARCH ?= amd64
+QUICKSTART_ARGS ?=
 
 build:
 	go build ./...
@@ -136,6 +145,9 @@ deploy-az-func-app:
 	# make deploy-az-func-app FUNCTION_APP_NAME=<function-app-name>
 	cd ./scripts/gh-runner-func/ && \
 	func azure functionapp publish $(FUNCTION_APP_NAME)
+
+quickstart:
+	bash ./scripts/quickstart.sh --os $(OS) --type $(TYPE) --arch $(ARCH) $(QUICKSTART_ARGS)
 
 gosec:
 	@if [ ! -x "$(GOSEC)" ]; then \

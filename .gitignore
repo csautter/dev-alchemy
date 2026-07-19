@@ -66,3 +66,9 @@ gosec-results.sarif
 *.log
 dist/
 TODO.md
+
+# Quick-start automation recordings (scripts/quickstart.sh default --record-dir)
+/artifact/
+*.cast
+*.vnc.mp4
+*.typescript
