@@ -1,0 +1,48 @@
+# Sailwright quick-start demo — source for demo/generate_cast.py
+# Regenerate the cast after editing this file with:  make demo
+#
+# Syntax:
+#   $ <cmd>        a command typed at the prompt (char-by-char), then "run"
+#   > <text>       one line of that command's output ('>' alone = a blank line)
+#   pause <sec>    insert a pause, in seconds (e.g. pause 0.8)
+#   # ...          a comment (ignored)
+#
+# The commands are the real Sailwright quick-start lifecycle
+# (see scripts/quickstart.sh). Output is condensed from a real run for a
+# short, readable demo — it is representative, not executed.
+
+pause 0.6
+
+$ sailwright install
+> 🔧 Running dependency installer for host OS: debian
+> Installing ffmpeg, libvirt, qemu, ansible, packer … ✓
+pause 0.5
+
+$ sailwright build ubuntu --type server --arch amd64
+> 🔧 Building VM for OS: ubuntu, Type: server, Architecture: amd64, Engine: qemu
+> KVM acceleration probe succeeded; using hardware acceleration.
+> packer build … done
+> ✓ artifact ready: qemu-ubuntu-server-packer-amd64.qcow2
+pause 0.5
+
+$ sailwright create ubuntu --type server --arch amd64
+> 🔧 Creating VM for OS: ubuntu, Architecture: amd64, Type: server
+> Command finished successfully: qemu-img convert … ✓
+> Command finished successfully: virsh define ubuntu-server-amd64-dev-alchemy ✓
+pause 0.4
+
+$ sailwright start ubuntu --type server --arch amd64
+> 🔧 Starting VM for OS: ubuntu, Type: server, Architecture: amd64
+> Command finished successfully: virsh start ubuntu-server-amd64-dev-alchemy ✓
+pause 0.5
+
+$ sailwright provision ubuntu --type server --arch amd64 --check
+> 🔧 Provisioning (check / dry-run) …
+> PLAY RECAP   ok=12   changed=0   failed=0     (preview)
+pause 0.5
+
+$ sailwright provision ubuntu --type server --arch amd64
+> 🔧 Provisioning …
+> PLAY RECAP   ok=12   changed=7   failed=0
+> ✅ Environment ready.
+pause 1.4

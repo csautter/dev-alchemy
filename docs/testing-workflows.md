@@ -46,6 +46,11 @@ sailwright start --help
 sailwright provision --help
 ```
 
+For the fully automated, single-command, recorded end-to-end run of the whole
+lifecycle (`install -> build -> create -> start -> provision --check ->
+provision -> (stop -> destroy)`), see
+[Automated Quick-Start](quickstart-automation.md).
+
 ## OCI Build Artifact Registry Workflow
 
 Final build artifacts can be pushed to, and pulled from, an OCI registry. The

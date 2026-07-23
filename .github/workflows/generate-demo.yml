@@ -1,0 +1,100 @@
+name: Generate Website Demo Cast
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "demo/quickstart.demo"
+      - "demo/generate_cast.py"
+      - "demo/quickstart.cast"
+      - ".github/workflows/generate-demo.yml"
+  pull_request:
+    paths:
+      - "demo/quickstart.demo"
+      - "demo/generate_cast.py"
+      - "demo/quickstart.cast"
+      - ".github/workflows/generate-demo.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  demo-cast:
+    name: Regenerate and check demo cast
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Regenerate demo cast
+        run: make demo
+
+      - name: Validate asciinema v2 cast
+        run: |
+          python3 - <<'PY'
+          import json
+          with open("demo/quickstart.cast", encoding="utf-8") as f:
+              lines = f.readlines()
+          header = json.loads(lines[0])
+          assert header["version"] == 2, header
+          events = [json.loads(l) for l in lines[1:]]
+          assert all(isinstance(e, list) and len(e) == 3 and e[1] == "o" for e in events)
+          times = [e[0] for e in events]
+          assert times == sorted(times), "event timestamps are not monotonic"
+          print(f"OK: {len(events)} events, ~{times[-1]:.1f}s")
+          PY
+
+      - name: Fail if the committed cast is stale
+        run: |
+          if ! git diff --exit-code -- demo/quickstart.cast; then
+            echo "::error::demo/quickstart.cast is out of date. Run 'make demo' and commit the result." >&2
+            exit 1
+          fi
+
+      - name: Upload demo cast artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: quickstart-demo-cast
+          path: demo/quickstart.cast
+          if-no-files-found: error
+          retention-days: 7
+
+  # Re-render the README GIF from the cast. Manual-only: agg/font rendering is not
+  # byte-deterministic, so this refreshes the asset (as an artifact) rather than
+  # drift-checking it. Download the artifact and commit it when you want to update
+  # demo/quickstart.gif.
+  demo-gif:
+    name: Render demo GIF
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install fonts (monospace + colour emoji) and gifsicle
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-dejavu-core fonts-noto-color-emoji fontconfig gifsicle
+
+      - name: Render GIF (downloads agg via render-gif.sh)
+        run: make demo-gif
+
+      - name: Upload demo GIF artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: quickstart-demo-gif
+          path: demo/quickstart.gif
+          if-no-files-found: error
+          retention-days: 7

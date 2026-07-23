@@ -66,3 +66,10 @@ gosec-results.sarif
 *.log
 dist/
 TODO.md
+
+# Quick-start automation recordings (scripts/quickstart.sh default --record-dir)
+/artifact/
+
+# Website terminal demo: ignore vendored player assets (demo/quickstart.cast is
+# tracked on purpose, alongside demo/quickstart.gif)
+demo/vendor/

@@ -20,6 +20,15 @@ remains manual, team-specific, and hard to reproduce.
 
 > _"Transform your system into a dev powerhouse with a touch of automation magic."_
 
+<p align="center">
+  <img src="./demo/quickstart.gif" width="49%" alt="Sailwright quick-start: install, build, create, start, and provision a VM" />
+  <img src="./demo/vm-build.gif" width="49%" alt="The VM autoinstall running unattended during the build" />
+</p>
+
+<p align="center"><sub>Left: the real quick-start commands. Right: a real, unattended VM build
+(Ubuntu autoinstall) — no clicks, fully automated. See <a href="./demo/">demo/</a> and
+<code>make demo-build-video</code>.</sub></p>
+
 ## Why It Helps
 
 Without a shared automation baseline, cross-platform teams usually run into the
@@ -258,6 +267,10 @@ next level of detail:
 - [Testing Workflows](./docs/testing-workflows.md#oci-build-artifact-registry-workflow)
   for OCI artifact registry push/pull and host-specific VM and Docker test
   flows
+- [Automated Quick-Start](./docs/quickstart-automation.md) for the recorded,
+  single-command end-to-end run of the full VM lifecycle
+- [Demo Recordings](./docs/demo-recordings.md) for how the quick-start
+  recordings and website terminal demo are produced
 - [Managed Application Data](./docs/managed-application-data.md) for cache,
   runtime, and app-data locations
 - [Ansible Role Sources](./docs/ansible-role-sources.md) for layering local
