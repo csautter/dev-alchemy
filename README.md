@@ -18,6 +18,11 @@ Sailwright is not a replacement for classic MDM/UEM tooling. It complements
 those tools by handling the developer-tooling and workflow layer that often
 remains manual, team-specific, and hard to reproduce.
 
+Unlike raw `ansible-playbook` runs, chezmoi, Nix/Devbox, or devcontainers,
+Sailwright pairs Ansible with disposable, host-specific VM build/provision
+tooling so the same playbooks can be tested against real macOS/Linux/Windows
+targets before they ever touch a developer's machine.
+
 > _"Transform your system into a dev powerhouse with a touch of automation magic."_
 
 <p align="center">
@@ -28,6 +33,17 @@ remains manual, team-specific, and hard to reproduce.
 <p align="center"><sub>Left: the real quick-start commands. Right: a real, unattended VM build
 (Ubuntu autoinstall) — no clicks, fully automated. See <a href="./demo/">demo/</a> and
 <code>make demo-build-video</code>.</sub></p>
+
+## Quick Start
+
+```bash
+TAG="$(curl -fsSL https://api.github.com/repos/csautter/sailwright/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
+curl -fLO "https://github.com/csautter/sailwright/releases/download/${TAG}/sailwright_${TAG#v}_linux_amd64.tar.gz" && tar -xzf sailwright_*_linux_amd64.tar.gz
+./sailwright install && ./sailwright build list
+```
+
+See [🚀 Getting Started](#-getting-started) below for macOS/Windows steps,
+cloning the repo instead, and running your first full workflow.
 
 ## Why It Helps
 
