@@ -215,6 +215,6 @@ if (-not [bool]$state.FirewallRuleExisted) {
 }
 
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force
-$null = Ensure-ManagedLocalUserForProvisioning $userName $securePassword 'Dev Alchemy Ansible acct' $administratorsGroupName
+$null = Ensure-ManagedLocalUserForProvisioning $userName $securePassword 'Sailwright Ansible acct' $administratorsGroupName
 
 Write-Output 'Local Windows provision bootstrap completed.'
