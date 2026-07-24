@@ -1,4 +1,4 @@
-# Dev Alchemy – Commercial License Agreement
+# Sailwright – Commercial License Agreement
 
 **Copyright (c) 2026 Carl-Christian Sautter**  
 All rights reserved.
@@ -9,10 +9,10 @@ All rights reserved.
 
 This Commercial License (“License”) grants the Licensee the right to:
 
-1. Use, modify, and distribute **Dev Alchemy** in commercial products or services.
-2. Integrate Dev Alchemy into **closed-source** or proprietary software.
-3. Operate Dev Alchemy in a **SaaS environment** without releasing source code under AGPLv3.
-4. Redistribute Dev Alchemy as part of internal or external systems in accordance with this License.
+1. Use, modify, and distribute **Sailwright** in commercial products or services.
+2. Integrate Sailwright into **closed-source** or proprietary software.
+3. Operate Sailwright in a **SaaS environment** without releasing source code under AGPLv3.
+4. Redistribute Sailwright as part of internal or external systems in accordance with this License.
 
 > This license applies **only** upon acceptance and payment of the agreed commercial license fees.
 
@@ -24,7 +24,7 @@ Licensee may **not**:
 
 - Sub-license or transfer the software beyond the terms of this License without explicit written permission.
 - Remove or modify copyright notices.
-- Claim ownership of Dev Alchemy or its trademarks.
+- Claim ownership of Sailwright or its trademarks.
 
 > All other uses not explicitly permitted by this License remain governed by the AGPLv3.
 
@@ -32,7 +32,7 @@ Licensee may **not**:
 
 ## 3. Support and Maintenance (Optional)
 
-Depending on the agreement, Dev Alchemy may include:
+Depending on the agreement, Sailwright may include:
 
 - Technical support
 - Bug fixes
@@ -45,7 +45,7 @@ Support and maintenance terms must be agreed separately.
 
 ## 4. Intellectual Property & Patents
 
-- Dev Alchemy and its contributors retain **all copyrights, trademarks, and patents**.
+- Sailwright and its contributors retain **all copyrights, trademarks, and patents**.
 - Licensee receives no patent rights except those explicitly granted under this License.
 - Licensee may not assert any patent claims against the software or its use in accordance with this License.
 
@@ -59,18 +59,18 @@ It will terminate automatically without notice if the Licensee breaches any cond
 
 Upon termination, the Licensee must:
 
-- Cease all commercial use of Dev Alchemy.
-- Destroy all copies of Dev Alchemy distributed under this License.
+- Cease all commercial use of Sailwright.
+- Destroy all copies of Sailwright distributed under this License.
 
 ---
 
 ## 6. Warranty Disclaimer & Limitation of Liability
 
-Dev Alchemy is provided **“as is”**.  
+Sailwright is provided **“as is”**.  
 
 The Licensor makes no warranties, express or implied, including but not limited to fitness for a particular purpose or non-infringement.  
 
-The Licensor is not liable for any damages resulting from the use of Dev Alchemy.
+The Licensor is not liable for any damages resulting from the use of Sailwright.
 
 ---
 
