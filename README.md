@@ -270,6 +270,22 @@ When you want to share reusable build artifacts through an OCI registry instead
 of rebuilding them locally, use `sailwright push` and `sailwright pull`; see the
 [OCI build artifact registry workflow](./docs/testing-workflows.md#oci-build-artifact-registry-workflow).
 
+## Trust & Privilege Model
+
+Sailwright collects no telemetry and phones home to nothing: it makes no
+network calls except the ones you explicitly ask for (release/self-update
+downloads, OCI registry push/pull, and the Ansible/VM/network operations your
+playbooks define).
+
+Elevation is scoped and temporary rather than "run everything as root/admin."
+On Windows, `sailwright provision local` creates a dedicated local admin
+account with a random or rotated password, enables WinRM-over-HTTPS or SSH
+only on the loopback address for the duration of the run, and restores the
+prior WinRM/SSH/firewall state during cleanup — see
+[Windows Ansible Access](./docs/windows-ansible-access.md#security-note) for
+the exact mechanism. On macOS/Linux, install and provisioning scripts prompt
+for `sudo` only for the specific steps that need it.
+
 ## Docs Map
 
 The root README is the fast entry point. Use these guides when you want the
