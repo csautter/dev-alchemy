@@ -76,6 +76,7 @@ jobs:
       - build
     permissions:
       contents: write
+      id-token: write
     env:
       VERSION: ${{ inputs.version }}
 
@@ -90,6 +91,17 @@ jobs:
         run: |
           checksum_file="dist/sailwright_${VERSION#v}_checksums.txt"
           sha256sum dist/* > "${checksum_file}"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign checksums (keyless)
+        run: |
+          checksum_file="dist/sailwright_${VERSION#v}_checksums.txt"
+          cosign sign-blob --yes \
+            --output-signature "${checksum_file}.sig" \
+            --output-certificate "${checksum_file}.pem" \
+            "${checksum_file}"
 
       - name: Upload release assets
         env:
