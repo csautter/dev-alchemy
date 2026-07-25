@@ -492,7 +492,7 @@ Write-TemporarySshdConfig $sshdConfigPath $sshPortString
 Write-Output ('Wrote a temporary loopback-only sshd_config for this provisioning run on port ' + $sshPortString + '.')
 
 $securePassword = ConvertTo-SecureString -String $passwordPlain -AsPlainText -Force
-$localUser = Ensure-ManagedLocalUserForProvisioning $userName $securePassword 'Dev Alchemy Ansible acct' $administratorsGroupName
+$localUser = Ensure-ManagedLocalUserForProvisioning $userName $securePassword 'Sailwright Ansible acct' $administratorsGroupName
 Ensure-LocalUserProfile $userName $securePassword ([string]$localUser.SID.Value)
 
 Write-Output 'Installing the temporary SSH public key for Windows OpenSSH logins.'

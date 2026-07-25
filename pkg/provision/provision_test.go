@@ -448,7 +448,7 @@ func TestLocalWindowsProvisionBootstrapPowerShellHandlesMissingWSManPaths(t *tes
 	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "UserWasAdministrator = [bool]$userState.WasAdministrator") {
 		t.Fatal("expected bootstrap state to capture prior local administrator membership")
 	}
-	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "Dev Alchemy Ansible acct") {
+	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "Sailwright Ansible acct") {
 		t.Fatal("expected bootstrap script to use a Windows-safe local user description")
 	}
 	if !strings.Contains(localWindowsWinRMProvisionBootstrapPowerShell, "S-1-5-32-544") {

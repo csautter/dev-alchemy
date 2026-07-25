@@ -43,10 +43,10 @@ func manifestAnnotations(vm alchemy_build.VirtualMachineConfig) map[string]strin
 		ocispec.AnnotationTitle:              "dev-alchemy-" + slug,
 		ocispec.AnnotationCreated:            time.Now().UTC().Format(time.RFC3339),
 		ocispec.AnnotationVendor:             "dev-alchemy",
-		ocispec.AnnotationDescription:        "Dev Alchemy VM build artifacts",
+		ocispec.AnnotationDescription:        "Sailwright VM build artifacts",
 		ocispec.AnnotationDocumentation:      "https://github.com/csautter/dev-alchemy",
 		ocispec.AnnotationSource:             "https://github.com/csautter/dev-alchemy",
-		ocispec.AnnotationAuthors:            "Dev Alchemy",
+		ocispec.AnnotationAuthors:            "Sailwright",
 		ocispec.AnnotationRefName:            slug,
 		AnnotationVMOS:                       vm.OS,
 		AnnotationVMType:                     vm.UbuntuType,
@@ -110,7 +110,7 @@ func validateManifestForPull(ctx context.Context, manifest ocispec.Manifest, vm 
 func validateManifestTarget(manifest ocispec.Manifest, vm alchemy_build.VirtualMachineConfig) error {
 	annotations := manifest.Annotations
 	if annotations == nil {
-		return errors.New("OCI artifact manifest is missing Dev Alchemy target annotations")
+		return errors.New("OCI artifact manifest is missing Sailwright target annotations")
 	}
 
 	checks := manifestTargetChecks(vm)
